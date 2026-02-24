@@ -193,12 +193,7 @@ a:hover { opacity: 0.8; }
   width: 100%;
   height: 100%;
   z-index: 0;
-  opacity: 0.12;
   pointer-events: none;
-  transition: opacity 0.4s;
-}
-.ascii-bg:hover .ascii-canvas {
-  opacity: 0.25;
 }
 
 /* canvas.js handles background */
@@ -578,7 +573,7 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
           const animAlpha = animFn(x, y, frame, cols, rows);
           
           // Base: always low opacity (0.08-0.15), animation boosts to bright
-          const baseAlpha = 0.08 + Math.sin(cell.phase + frame * cell.noiseSpeed) * 0.04;
+          const baseAlpha = 0.12 + Math.sin(cell.phase + frame * cell.noiseSpeed) * 0.06;
           const animBoost = animAlpha * coherence * 0.85; // up to 0.85 extra
           const alpha = baseAlpha + animBoost;
           
