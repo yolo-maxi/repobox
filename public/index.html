@@ -606,145 +606,300 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 <script src="/canvas.js"></script>
 <canvas id="fish-bg" style="position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;"></canvas>
 <script>
-// Ambient ASCII fish swimming across the background
+// Ambient ASCII fish — full char grid, fish are brightness masks
 (function() {
   const canvas = document.getElementById('fish-bg');
   const ctx = canvas.getContext('2d');
   const fontSize = 7;
   const charW = fontSize * 0.6;
+  const bgChars = '{}[]<>|/\\+-=.:;~^*#@$&01'.split('');
   
-  // Fish ASCII art templates (each is an array of strings)
-  const fishTemplates = [
-    // Small fish ~8x4
-    [
-      '   /\\___',
-      '  < o   >--<',
-      '   \\/---',
-    ],
-    // Medium fish ~14x5
-    [
-      '      /\\',
-      '     /  \\___',
-      ' ___/  o    >--<<',
-      '     \\  /---',
-      '      \\/',
-    ],
-    // Jellyfish ~8x7
-    [
-      '  .--.',
-      ' /    \\',
-      '|  ()  |',
-      ' \\    /',
-      '  )  (',
-      ' /|  |\\',
-      '  |  |',
-    ],
-    // Tiny fish ~6x3
-    [
-      '  __',
-      '><  >=>',
-      '  --',
-    ],
-    // Whale ~18x6
-    [
-      '        .---.___',
-      '     __/  o     \\',
-      '    /            \\___',
-      '    \\     ___    /',
-      '     \\__/   \\__/',
-      '              ||',
-    ],
-    // Simple fish ~10x3
-    [
-      '  /\\_____',
-      ' <  o    >=<',
-      '  \\/-----',
-    ],
+  // Fish defined as animation frames (arrays of strings)
+  // Space = transparent, any char = brightness mask
+  const fishTypes = [
+    { // Large fish with tail animation — ~36x13
+      frames: [
+        [
+          '              ______                ',
+          '          ___/      \\___            ',
+          '     ____/    o         \\___        ',
+          '    /                      \\____    ',
+          '   /                           \\__ /',
+          '  |                              \\/  ',
+          '  |                              /\\  ',
+          '   \\                           /-- \\',
+          '    \\____                 ____/      ',
+          '         \\___       ___/             ',
+          '             \\_____/                 ',
+        ],
+        [
+          '              ______                ',
+          '          ___/      \\___            ',
+          '     ____/    o         \\___        ',
+          '    /                      \\____    ',
+          '   /                           \\__  ',
+          '  |                              >--<',
+          '   \\                           /--  ',
+          '    \\____                 ____/      ',
+          '         \\___       ___/             ',
+          '             \\_____/                 ',
+        ],
+        [
+          '              ______                ',
+          '          ___/      \\___            ',
+          '     ____/    o         \\___        ',
+          '    /                      \\____    ',
+          '   /                           \\__ \\',
+          '  |                              \\/  ',
+          '  |                              /\\  ',
+          '   \\                           /-- /',
+          '    \\____                 ____/      ',
+          '         \\___       ___/             ',
+          '             \\_____/                 ',
+        ],
+      ],
+      speed: [0.2, 0.35],
+    },
+    { // Medium rounded fish — ~25x9
+      frames: [
+        [
+          '         .-----.        ',
+          '       /    o    \\      ',
+          '     /             \\    ',
+          '    |               |\\  ',
+          '    |               | >-',
+          '    |               |/  ',
+          '     \\             /    ',
+          '       \\_________/      ',
+        ],
+        [
+          '         .-----.        ',
+          '       /    o    \\      ',
+          '     /             \\    ',
+          '    |               |\\ ',
+          '    |               >>--',
+          '    |               |/ ',
+          '     \\             /    ',
+          '       \\_________/      ',
+        ],
+      ],
+      speed: [0.25, 0.5],
+    },
+    { // Jellyfish — ~20x14, tentacles animate
+      frames: [
+        [
+          '      _______       ',
+          '    /~~~~~~~~~\\     ',
+          '   |  ()    () |    ',
+          '   |     __     |   ',
+          '    \\_________/    ',
+          '     | |  | |      ',
+          '     | |  | |      ',
+          '     | |  | |      ',
+          '      \\|  |/       ',
+          '       |  |        ',
+          '       |  |        ',
+          '       \\  /        ',
+        ],
+        [
+          '      _______       ',
+          '    /~~~~~~~~~\\     ',
+          '   |  ()    () |    ',
+          '   |     __     |   ',
+          '    \\_________/    ',
+          '    \\  |  |  /     ',
+          '     | |  | |      ',
+          '     | |  | |      ',
+          '     |/    \\|      ',
+          '      |    |       ',
+          '      |    |       ',
+          '       \\  /        ',
+        ],
+        [
+          '      _______       ',
+          '    /~~~~~~~~~\\     ',
+          '   |  ()    () |    ',
+          '   |     __     |   ',
+          '    \\_________/    ',
+          '     | |  | |      ',
+          '    /  |  |  \\     ',
+          '     | |  | |      ',
+          '      \\|  |/       ',
+          '       |  |        ',
+          '        \\/         ',
+        ],
+      ],
+      speed: [0.08, 0.15], // jellyfish are slow
+    },
+    { // Small darting fish — ~18x5
+      frames: [
+        [
+          '     /\\____      ',
+          '    /  o    \\___  ',
+          '   |         >==>',
+          '    \\___    /---  ',
+          '        \\__/      ',
+        ],
+        [
+          '     /\\____      ',
+          '    /  o    \\___  ',
+          '   |         >=>-',
+          '    \\___    /---  ',
+          '        \\__/      ',
+        ],
+      ],
+      speed: [0.4, 0.7], // fast
+    },
   ];
   
-  let fish = [];
-  const MAX_FISH = 8;
+  // Background char grid
+  let cols, rows, bgGrid;
   
-  function spawnFish() {
-    const tmpl = fishTemplates[Math.floor(Math.random() * fishTemplates.length)];
-    const w = Math.max(...tmpl.map(l => l.length));
-    const h = tmpl.length;
-    const direction = Math.random() < 0.7 ? 1 : -1; // mostly left-to-right
+  function initGrid() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols = Math.ceil(canvas.width / charW);
+    rows = Math.ceil(canvas.height / fontSize);
+    bgGrid = [];
+    for (let y = 0; y < rows; y++) {
+      bgGrid[y] = [];
+      for (let x = 0; x < cols; x++) {
+        bgGrid[y][x] = bgChars[Math.floor(Math.random() * bgChars.length)];
+      }
+    }
+  }
+  
+  // Active fish
+  let creatures = [];
+  const MAX_CREATURES = 6;
+  
+  function spawnCreature() {
+    const type = fishTypes[Math.floor(Math.random() * fishTypes.length)];
+    const frame0 = type.frames[0];
+    const w = Math.max(...frame0.map(l => l.length));
+    const h = frame0.length;
+    const dir = Math.random() < 0.7 ? 1 : -1;
+    const speed = (type.speed[0] + Math.random() * (type.speed[1] - type.speed[0])) * dir;
     
     return {
-      tmpl: direction === 1 ? tmpl : tmpl.map(l => 
-        l.split('').reverse().join('')
-          .replace(/\(/g, 'TEMP').replace(/\)/g, '(').replace(/TEMP/g, ')')
-          .replace(/</g, 'TEMP').replace(/>/g, '<').replace(/TEMP/g, '>')
-          .replace(/\//g, 'TEMP').replace(/\\/g, '/').replace(/TEMP/g, '\\')
-          .replace(/\[/g, 'TEMP').replace(/\]/g, '[').replace(/TEMP/g, ']')
-      ),
-      x: direction === 1 ? -w * charW - 20 : canvas.width + 20,
-      y: Math.random() * (canvas.height - h * fontSize * 1.5),
-      speed: (0.15 + Math.random() * 0.4) * direction,
+      type,
+      x: dir === 1 ? -w - 5 : cols + 5,
+      y: Math.floor(Math.random() * (rows - h - 2)) + 1,
       w, h,
-      alpha: 0.06 + Math.random() * 0.07, // subtle but visible: 0.06-0.13
+      speed,
+      dir,
+      frameIdx: 0,
+      frameTimer: 0,
       wobblePhase: Math.random() * Math.PI * 2,
-      wobbleSpeed: 0.01 + Math.random() * 0.02,
     };
   }
   
-  // Initial fish spread across screen
-  for (let i = 0; i < MAX_FISH; i++) {
-    const f = spawnFish();
-    f.x = Math.random() * canvas.width; // start scattered
-    fish.push(f);
+  // Scatter initial creatures across screen
+  for (let i = 0; i < MAX_CREATURES; i++) {
+    const c = spawnCreature();
+    c.x = Math.floor(Math.random() * (cols - c.w));
+    creatures.push(c);
   }
   
-  let frame = 0;
+  let tick = 0;
   
-  function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+  function mirrorLine(line) {
+    return line.split('').reverse().join('')
+      .replace(/\(/g, '\x01').replace(/\)/g, '(').replace(/\x01/g, ')')
+      .replace(/</g, '\x01').replace(/>/g, '<').replace(/\x01/g, '>')
+      .replace(/\//g, '\x01').replace(/\\/g, '/').replace(/\x01/g, '\\')
+      .replace(/\[/g, '\x01').replace(/\]/g, '[').replace(/\x01/g, ']');
   }
   
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.font = `${fontSize}px JetBrains Mono, monospace`;
     
-    for (const f of fish) {
-      // Gentle vertical wobble
-      const wobbleY = Math.sin(f.wobblePhase + frame * f.wobbleSpeed) * 8;
+    // Build brightness map: start with base
+    // We'll just iterate the grid and check each cell
+    
+    // Slowly swap background chars
+    if (tick % 3 === 0) {
+      const rx = Math.floor(Math.random() * cols);
+      const ry = Math.floor(Math.random() * rows);
+      if (bgGrid[ry]) bgGrid[ry][rx] = bgChars[Math.floor(Math.random() * bgChars.length)];
+    }
+    
+    // Update creatures
+    for (let i = creatures.length - 1; i >= 0; i--) {
+      const c = creatures[i];
       
-      ctx.fillStyle = `rgba(79, 195, 247, ${f.alpha})`;
-      
-      for (let row = 0; row < f.tmpl.length; row++) {
-        const line = f.tmpl[row];
-        for (let col = 0; col < line.length; col++) {
-          if (line[col] !== ' ') {
-            ctx.fillText(
-              line[col],
-              f.x + col * charW,
-              f.y + wobbleY + row * fontSize
-            );
-          }
-        }
+      // Advance animation frame every ~15 ticks
+      c.frameTimer++;
+      if (c.frameTimer > 15) {
+        c.frameTimer = 0;
+        c.frameIdx = (c.frameIdx + 1) % c.type.frames.length;
       }
       
       // Move
-      f.x += f.speed;
+      c.x += c.speed;
       
       // Respawn when off screen
-      const totalW = f.w * charW + 40;
-      if (f.speed > 0 && f.x > canvas.width + 20) {
-        Object.assign(f, spawnFish());
-      } else if (f.speed < 0 && f.x < -totalW) {
-        Object.assign(f, spawnFish());
+      if (c.dir === 1 && c.x > cols + 5) {
+        creatures[i] = spawnCreature();
+      } else if (c.dir === -1 && c.x < -c.w - 5) {
+        creatures[i] = spawnCreature();
       }
     }
     
-    frame++;
+    // Keep population up
+    while (creatures.length < MAX_CREATURES) {
+      creatures.push(spawnCreature());
+    }
+    
+    // Render grid
+    const baseAlpha = 0.04;
+    
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        let brightness = 0;
+        
+        // Check all creatures
+        for (const c of creatures) {
+          const frame = c.type.frames[c.frameIdx];
+          const wobbleY = Math.sin(c.wobblePhase + tick * 0.02) * 1.5;
+          const cy = Math.round(c.y + wobbleY);
+          const cx = Math.round(c.x);
+          
+          const fy = y - cy;
+          const fx = c.dir === 1 ? (x - cx) : (cx + c.w - 1 - x);
+          
+          if (fy >= 0 && fy < frame.length && fx >= 0 && fx < frame[fy].length) {
+            const ch = frame[fy][fx];
+            if (ch !== ' ') {
+              // Different brightness for different parts
+              if (ch === 'o' || ch === 'O' || ch === '(' || ch === ')') {
+                brightness = Math.max(brightness, 0.9); // eyes
+              } else if (ch === '>' || ch === '<' || ch === '=' || ch === '-') {
+                brightness = Math.max(brightness, 0.5); // tail
+              } else {
+                brightness = Math.max(brightness, 0.7); // body
+              }
+            }
+          }
+        }
+        
+        const alpha = baseAlpha + brightness * 0.12;
+        
+        if (alpha > 0.01) {
+          ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
+          ctx.fillText(bgGrid[y]?.[x] || '.', x * charW, y * fontSize + fontSize);
+        }
+      }
+    }
+    
+    tick++;
     requestAnimationFrame(draw);
   }
   
-  resize();
+  initGrid();
   draw();
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', initGrid);
 })();
 </script>
 </body>
