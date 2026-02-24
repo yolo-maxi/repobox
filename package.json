@@ -8,7 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@upstash/redis": "^1.36.2",
+    "ioredis": "^5.9.3",
     "next": "^15",
     "react": "^19",
     "react-dom": "^19"
