@@ -175,6 +175,11 @@ a:hover { opacity: 0.8; }
 /* Agent pulse dot */
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
+/* Footer responsive */
+@media (max-width: 640px) {
+  .footer-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+}
+
 
 /* Newsletter message */
 .form-msg { display: none; }
@@ -295,38 +300,55 @@ a:hover { opacity: 0.8; }
     </div>
   </section>
 
-  <!-- Say Hi -->
-  <section class="reveal" style="margin-bottom:60px;">
-    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">Say Hi</h2>
-    <div style="display:flex;gap:20px;flex-wrap:wrap;">
-      <a href="https://x.com/FrancescoRenziA" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;padding-bottom:4px;border-bottom:1px solid rgba(50,100,160,0.25);">𝕏 Fran</a>
-      <a href="https://x.com/oceanvael" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;padding-bottom:4px;border-bottom:1px solid rgba(50,100,160,0.25);">𝕏 Ocean</a>
-      <a href="https://warpcast.com/0xfran" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;padding-bottom:4px;border-bottom:1px solid rgba(50,100,160,0.25);">🟣 0xFran</a>
-      <a href="https://warpcast.com/oceanvael" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;padding-bottom:4px;border-bottom:1px solid rgba(50,100,160,0.25);">🟣 oceanvael</a>
-      <a href="https://github.com/frarenzi" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;padding-bottom:4px;border-bottom:1px solid rgba(50,100,160,0.25);">GitHub</a>
-    </div>
-  </section>
-
-  <!-- Agent Section -->
-  <section class="reveal agent-glow" style="background:linear-gradient(135deg,#0a1a2f,#0a1628);border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
-    <div style="display:inline-flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.08);padding:0 12px;border-radius:2px;margin-bottom:20px;">
-      <span style="width:6px;height:6px;border-radius:50%;background:#4fc3f7;animation:pulse 2s infinite;"></span>
-      Agent-Readable
-    </div>
-    <p style="font-size:12px;line-height:20px;color:#5a7a94;margin-bottom:20px;">This site speaks human and machine. If you're an agent, start here:</p>
-    <div style="display:flex;gap:20px;flex-wrap:wrap;">
-      <a href="/llms.txt" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#81d4fa;">llms.txt</a>
-      <a href="/.well-known/llms.txt" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#81d4fa;">.well-known/llms.txt</a>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer style="margin-top:80px;padding-top:20px;border-top:1px solid rgba(50,100,160,0.25);color:#5a7a94;font-size:12px;line-height:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-    <span>© 2026 repo.box</span>
-    <span>Built with curiosity and claws</span>
-  </footer>
 
 </div>
+
+<!-- Full-width footer -->
+<footer style="background:#060e1a;border-top:1px solid rgba(50,100,160,0.25);margin-top:0;position:relative;z-index:1;">
+  <div class="footer-grid" style="max-width:960px;margin:0 auto;padding:60px 40px 40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px;">
+
+    <!-- Col 1: Say Hi -->
+    <div>
+      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">Say Hi</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <a href="https://x.com/FrancescoRenziA" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">𝕏 Fran</a>
+        <a href="https://x.com/oceanvael" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">𝕏 Ocean</a>
+        <a href="https://warpcast.com/0xfran" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">🟣 0xFran</a>
+        <a href="https://warpcast.com/oceanvael" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">🟣 oceanvael</a>
+        <a href="https://github.com/frarenzi" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">GitHub</a>
+      </div>
+    </div>
+
+    <!-- Col 2: Agent-Readable -->
+    <div>
+      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">
+        <span style="display:inline-flex;align-items:center;gap:8px;">
+          <span style="width:6px;height:6px;border-radius:50%;background:#4fc3f7;animation:pulse 2s infinite;"></span>
+          Agent-Readable
+        </span>
+      </h3>
+      <p style="font-size:12px;line-height:20px;color:#5a7a94;margin-bottom:12px;">This site speaks human and machine.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <a href="/llms.txt" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#81d4fa;">llms.txt</a>
+        <a href="/.well-known/llms.txt" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#81d4fa;">.well-known/llms.txt</a>
+        <a href="/feed.xml" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#81d4fa;">feed.xml</a>
+      </div>
+    </div>
+
+    <!-- Col 3: About -->
+    <div>
+      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">repo.box</h3>
+      <p style="font-size:12px;line-height:20px;color:#5a7a94;">An independent team building cool ideas with cool people. No pitch decks, no roadmaps — just code and curiosity.</p>
+    </div>
+
+  </div>
+
+  <!-- Bottom bar -->
+  <div style="max-width:960px;margin:0 auto;padding:20px 40px;border-top:1px solid rgba(50,100,160,0.15);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;color:#5a7a94;font-size:12px;line-height:20px;">
+    <span>© 2026 repo.box</span>
+    <span>Built with curiosity and claws</span>
+  </div>
+</footer>
 
 <script>
 // Newsletter form
