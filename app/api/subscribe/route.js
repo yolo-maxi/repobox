@@ -10,6 +10,7 @@ export async function POST(request) {
     const result = await addSubscriber(email.toLowerCase())
     return NextResponse.json(result)
   } catch (e) {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    console.error('Subscribe error:', e)
+    return NextResponse.json({ error: e.message || 'Server error' }, { status: 500 })
   }
 }
