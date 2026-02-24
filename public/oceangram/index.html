@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oceangram — Telegram, everywhere</title>
+<meta name="description" content="Telegram everywhere. Only what matters. A suite of tools powered by a local daemon that holds your session.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0e1a;
+  --bg-light: #0f1525;
+  --bg-card: #131a2e;
+  --accent: #8774e1;
+  --accent-glow: rgba(135, 116, 225, 0.3);
+  --accent2: #6c5ce7;
+  --ocean1: #0ea5e9;
+  --ocean2: #06b6d4;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --text-bright: #f8fafc;
+  --border: rgba(135, 116, 225, 0.15);
+  --gradient-hero: linear-gradient(135deg, #0a0e1a 0%, #1a1145 50%, #0a0e1a 100%);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Utility ── */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+section { padding: 120px 0; position: relative; }
+
+/* ── Reveal animations ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+
+/* ── Nav ── */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 16px 24px;
+  background: rgba(10, 14, 26, 0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.3s;
+}
+nav .nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-logo {
+  font-weight: 800;
+  font-size: 1.25rem;
+  color: var(--text-bright);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nav-logo .logo-icon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--accent), var(--ocean1));
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.nav-links { display: flex; gap: 32px; list-style: none; }
+.nav-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--text-bright); }
+.nav-cta {
+  background: var(--accent);
+  color: white !important;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.nav-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+}
+
+/* ── Hero ── */
+#hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  background: var(--gradient-hero);
+  padding-top: 80px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(135, 116, 225, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(135, 116, 225, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
+}
+
+.hero-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.15;
+  pointer-events: none;
+}
+.hero-glow-1 {
+  top: -200px;
+  right: -100px;
+  background: var(--accent);
+}
+.hero-glow-2 {
+  bottom: -200px;
+  left: -100px;
+  background: var(--ocean1);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+
+.hero-text h1 {
+  font-size: clamp(3rem, 6vw, 5rem);
+  font-weight: 900;
+  line-height: 1.05;
+  color: var(--text-bright);
+  letter-spacing: -0.03em;
+}
+.hero-text h1 .gradient-text {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--ocean1) 50%, var(--accent) 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%, 100% { background-position: 0% center; }
+  50% { background-position: 200% center; }
+}
+
+.hero-tagline {
+  font-size: 1.35rem;
+  color: var(--text-dim);
+  margin-top: 24px;
+  font-weight: 400;
+  line-height: 1.5;
+  max-width: 480px;
+}
+.hero-tagline strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.hero-actions {
+  margin-top: 40px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: white;
+  padding: 14px 32px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: none;
+  cursor: pointer;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px var(--accent-glow);
+}
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--text);
+  padding: 14px 32px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  border-color: var(--accent);
+  background: rgba(135, 116, 225, 0.05);
+}
+
+/* Hero visual — 3 floating surfaces */
+.hero-visual {
+  position: relative;
+  height: 500px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.surface-card {
+  position: absolute;
+  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.surface-card:hover { transform: scale(1.03) !important; }
+
+.surface-tray {
+  width: 200px;
+  height: 280px;
+  top: 20px;
+  left: 0;
+  transform: rotate(-6deg);
+  z-index: 3;
+  animation: float-tray 6s ease-in-out infinite;
+}
+.surface-ext {
+  width: 280px;
+  height: 320px;
+  top: 50px;
+  left: 120px;
+  z-index: 2;
+  animation: float-ext 6s ease-in-out infinite;
+  animation-delay: -2s;
+}
+.surface-web {
+  width: 240px;
+  height: 260px;
+  bottom: 30px;
+  right: 0;
+  transform: rotate(4deg);
+  z-index: 1;
+  animation: float-web 6s ease-in-out infinite;
+  animation-delay: -4s;
+}
+
+@keyframes float-tray { 0%, 100% { transform: rotate(-6deg) translateY(0); } 50% { transform: rotate(-6deg) translateY(-12px); } }
+@keyframes float-ext { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes float-web { 0%, 100% { transform: rotate(4deg) translateY(0); } 50% { transform: rotate(4deg) translateY(-10px); } }
+
+.surface-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.surface-header .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dot-tray { background: #22d3ee; }
+.dot-ext { background: var(--accent); }
+.dot-web { background: #34d399; }
+
+.surface-body { padding: 12px 16px; }
+
+/* Mini chat bubbles inside cards */
+.mini-bubble {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  margin-bottom: 6px;
+  max-width: 85%;
+  line-height: 1.4;
+}
+.mini-bubble.sent {
+  background: var(--accent);
+  color: white;
+  margin-left: auto;
+  border-bottom-right-radius: 4px;
+}
+.mini-bubble.received {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+
+/* Code lines in ext card */
+.mini-code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.6rem;
+  line-height: 1.8;
+  color: var(--text-dim);
+}
+.mini-code .keyword { color: var(--accent); }
+.mini-code .string { color: #34d399; }
+.mini-code .comment { color: #475569; }
+
+/* Typing indicator */
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  border-bottom-left-radius: 4px;
+  width: fit-content;
+}
+.typing-indicator span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  animation: typing 1.4s ease-in-out infinite;
+}
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+@media (max-width: 900px) {
+  .hero-content { grid-template-columns: 1fr; gap: 40px; text-align: center; }
+  .hero-tagline { margin-left: auto; margin-right: auto; }
+  .hero-actions { justify-content: center; }
+  .hero-visual { height: 350px; transform: scale(0.8); }
+}
+
+/* ── Problem Section ── */
+#problem {
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.problem-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-top: 60px;
+}
+.problem-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+}
+.problem-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ef4444, transparent);
+  opacity: 0.6;
+}
+.problem-icon {
+  font-size: 2rem;
+  margin-bottom: 16px;
+}
+.problem-card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-bottom: 12px;
+}
+.problem-card p {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .problem-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Section headers ── */
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 16px;
+}
+.section-label::before {
+  content: '';
+  width: 24px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+.section-title {
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+  color: var(--text-bright);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin-bottom: 20px;
+}
+.section-desc {
+  font-size: 1.15rem;
+  color: var(--text-dim);
+  max-width: 600px;
+  line-height: 1.6;
+}
+
+/* ── Tray Section ── */
+#tray {
+  background: linear-gradient(180deg, var(--bg) 0%, #0d1225 100%);
+}
+.tray-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+  margin-top: 60px;
+}
+
+/* Floating bubbles mockup */
+.tray-mockup {
+  position: relative;
+  height: 480px;
+}
+.screen-edge {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.floating-bubble {
+  position: absolute;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  animation: bubble-hover 3s ease-in-out infinite;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s;
+}
+.floating-bubble:hover { transform: scale(1.15); }
+.floating-bubble::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 16px;
+  height: 16px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  font-size: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.bubble-1 { top: 60px; background: linear-gradient(135deg, #6366f1, #8b5cf6); animation-delay: 0s; }
+.bubble-2 { top: 140px; background: linear-gradient(135deg, #0ea5e9, #06b6d4); animation-delay: -1s; }
+.bubble-3 { top: 220px; background: linear-gradient(135deg, #f43f5e, #e11d48); animation-delay: -2s; }
+
+@keyframes bubble-hover {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-6px); }
+}
+
+/* Popup chat mockup */
+.popup-chat {
+  position: absolute;
+  right: 96px;
+  top: 100px;
+  width: 300px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  animation: popup-appear 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes popup-appear {
+  from { opacity: 0; transform: scale(0.9) translateX(20px); }
+  to { opacity: 1; transform: scale(1) translateX(0); }
+}
+
+.popup-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.popup-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+.popup-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-bright);
+}
+.popup-status {
+  font-size: 0.75rem;
+  color: #34d399;
+}
+.popup-close {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.popup-messages {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.popup-input {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.popup-input-field {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 8px 16px;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+.popup-send {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.9rem;
+}
+
+.tray-features {
+  list-style: none;
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tray-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.feature-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(135, 116, 225, 0.15);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  .tray-layout { grid-template-columns: 1fr; }
+  .tray-mockup { height: 380px; transform: scale(0.85); margin: 0 auto; }
+}
+
+/* ── Extension Section ── */
+#extension {
+  background: var(--bg);
+}
+.ext-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+  margin-top: 60px;
+}
+
+.ext-mockup {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+}
+.ext-titlebar {
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.ext-titlebar .window-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.ext-titlebar .window-dot:nth-child(1) { background: #ef4444; }
+.ext-titlebar .window-dot:nth-child(2) { background: #eab308; }
+.ext-titlebar .window-dot:nth-child(3) { background: #22c55e; }
+.ext-titlebar span {
+  margin-left: 12px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.ext-body {
+  display: grid;
+  grid-template-columns: 48px 1fr 280px;
+  min-height: 320px;
+}
+.ext-sidebar {
+  background: rgba(0, 0, 0, 0.2);
+  border-right: 1px solid var(--border);
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.ext-sidebar-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  transition: background 0.2s;
+}
+.ext-sidebar-icon.active {
+  background: rgba(135, 116, 225, 0.2);
+  color: var(--accent);
+}
+
+.ext-editor {
+  padding: 20px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  line-height: 2;
+  color: var(--text-dim);
+  overflow: hidden;
+}
+.ext-editor .line-num { color: #334155; margin-right: 16px; user-select: none; }
+.ext-editor .kw { color: var(--accent); }
+.ext-editor .fn { color: #22d3ee; }
+.ext-editor .str { color: #34d399; }
+.ext-editor .cmt { color: #475569; font-style: italic; }
+.ext-editor .ann {
+  background: rgba(135, 116, 225, 0.1);
+  border-left: 2px solid var(--accent);
+  padding: 2px 8px;
+  margin-left: 8px;
+  color: var(--accent);
+  font-family: 'Inter', sans-serif;
+  font-style: normal;
+  font-size: 0.65rem;
+  border-radius: 0 4px 4px 0;
+}
+
+.ext-panel {
+  border-left: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.15);
+}
+.ext-panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ext-panel-messages {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ext-panel-input {
+  margin: 8px 12px 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+@media (max-width: 900px) {
+  .ext-layout { grid-template-columns: 1fr; }
+  .ext-body { grid-template-columns: 48px 1fr; }
+  .ext-panel { display: none; }
+  .ext-layout .ext-mockup { order: -1; }
+}
+
+/* ── Web Section ── */
+#web {
+  background: linear-gradient(180deg, var(--bg) 0%, #0d1225 100%);
+  text-align: center;
+}
+.web-visual {
+  margin-top: 60px;
+  position: relative;
+  display: inline-block;
+}
+.web-mockup {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 700px;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+  margin: 0 auto;
+}
+.web-titlebar {
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.web-titlebar .window-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.web-titlebar .window-dot:nth-child(1) { background: #ef4444; }
+.web-titlebar .window-dot:nth-child(2) { background: #eab308; }
+.web-titlebar .window-dot:nth-child(3) { background: #22c55e; }
+.web-url {
+  margin-left: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 16px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  flex: 1;
+  max-width: 300px;
+}
+.web-body {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 240px;
+}
+.web-chat-list {
+  border-right: 1px solid var(--border);
+  padding: 12px 0;
+}
+.web-chat-item {
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.web-chat-item:hover, .web-chat-item.active { background: rgba(135, 116, 225, 0.08); }
+.web-chat-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.web-chat-info { overflow: hidden; }
+.web-chat-name { font-size: 0.8rem; font-weight: 600; color: var(--text-bright); }
+.web-chat-preview { font-size: 0.7rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.web-chat-main { padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.web-badge {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 20px;
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+.web-desc {
+  margin-top: 40px;
+  color: var(--text-dim);
+  font-size: 1.05rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+.web-desc strong { color: var(--text); }
+
+@media (max-width: 768px) {
+  .web-body { grid-template-columns: 1fr; }
+  .web-chat-list { display: none; }
+}
+
+/* ── Architecture ── */
+#architecture {
+  background: var(--bg);
+  text-align: center;
+}
+.arch-diagram {
+  margin-top: 80px;
+  position: relative;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.arch-boundary {
+  border: 2px dashed rgba(135, 116, 225, 0.25);
+  border-radius: 24px;
+  padding: 60px 40px;
+  position: relative;
+}
+.arch-boundary-label {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg);
+  padding: 4px 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+
+.arch-daemon {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 20px;
+  padding: 28px 40px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 48px;
+  box-shadow: 0 8px 40px var(--accent-glow);
+  position: relative;
+}
+.arch-daemon-icon { font-size: 2rem; }
+.arch-daemon-title { font-weight: 700; font-size: 1.1rem; color: white; }
+.arch-daemon-sub { font-size: 0.8rem; color: rgba(255, 255, 255, 0.7); }
+
+.arch-clients {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 0;
+}
+.arch-client {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  position: relative;
+}
+.arch-client::before {
+  content: '';
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  width: 2px;
+  height: 24px;
+  background: linear-gradient(to bottom, var(--accent), transparent);
+}
+.arch-client-icon { font-size: 1.8rem; margin-bottom: 8px; }
+.arch-client-name { font-weight: 600; font-size: 0.9rem; color: var(--text-bright); }
+.arch-client-desc { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+
+.arch-protocols {
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.arch-protocol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.arch-protocol-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+@media (max-width: 600px) {
+  .arch-clients { grid-template-columns: 1fr; }
+  .arch-client::before { display: none; }
+}
+
+/* ── Open Source ── */
+#opensource {
+  background: linear-gradient(180deg, var(--bg) 0%, #0d1225 100%);
+  text-align: center;
+}
+.os-card {
+  max-width: 640px;
+  margin: 40px auto 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px;
+  position: relative;
+  overflow: hidden;
+}
+.os-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--ocean1), transparent);
+}
+.os-icon { font-size: 3rem; margin-bottom: 20px; }
+.os-card h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-bottom: 12px;
+}
+.os-card p {
+  color: var(--text-dim);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+.os-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.os-link:hover { color: var(--ocean1); }
+.os-link svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* ── Footer ── */
+footer {
+  padding: 60px 0;
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+.footer-coral { font-size: 2rem; margin-bottom: 16px; }
+.footer-text { color: var(--text-dim); font-size: 0.9rem; }
+.footer-text a { color: var(--accent); text-decoration: none; }
+.footer-text a:hover { text-decoration: underline; }
+
+/* ── Scroll progress ── */
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--ocean1));
+  z-index: 200;
+  width: 0%;
+  transition: width 0.1s;
+}
+
+/* ── Particles ── */
+.particles {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: particle-float linear infinite;
+}
+@keyframes particle-float {
+  0% { opacity: 0; transform: translateY(100vh) scale(0); }
+  10% { opacity: 0.6; }
+  90% { opacity: 0.6; }
+  100% { opacity: 0; transform: translateY(-100px) scale(1); }
+}
+</style>
+</head>
+<body>
+
+<div class="scroll-progress" id="scrollProgress"></div>
+
+<div class="particles" id="particles"></div>
+
+<!-- ── Nav ── -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <span class="logo-icon">🌊</span>
+      Oceangram
+    </a>
+    <ul class="nav-links">
+      <li><a href="#tray">Tray</a></li>
+      <li><a href="#extension">Extension</a></li>
+      <li><a href="#web">Web</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="https://github.com/yolo-maxi/oceangram" target="_blank" rel="noopener" class="nav-cta">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<section id="hero">
+  <div class="hero-bg-grid"></div>
+  <div class="hero-glow hero-glow-1"></div>
+  <div class="hero-glow hero-glow-2"></div>
+  <div class="container">
+    <div class="hero-content">
+      <div class="hero-text">
+        <h1>
+          <span class="gradient-text">Telegram,</span><br>
+          everywhere.
+        </h1>
+        <p class="hero-tagline">
+          <strong>Only what matters.</strong> A suite of surfaces for your Telegram — tray, editor, browser — all powered by one local daemon.
+        </p>
+        <div class="hero-actions">
+          <a href="https://github.com/yolo-maxi/oceangram" target="_blank" rel="noopener" class="btn-primary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            View on GitHub
+          </a>
+          <a href="#tray" class="btn-secondary">
+            Learn more ↓
+          </a>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <!-- Tray card -->
+        <div class="surface-card surface-tray">
+          <div class="surface-header">
+            <span class="dot dot-tray"></span>
+            Oceangram Tray
+          </div>
+          <div class="surface-body">
+            <div class="mini-bubble received">Hey, the deploy is ready 🚀</div>
+            <div class="mini-bubble sent">Perfect, merging now</div>
+            <div class="mini-bubble received">Also check the new mockups</div>
+            <div class="typing-indicator">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        </div>
+        <!-- Extension card -->
+        <div class="surface-card surface-ext">
+          <div class="surface-header">
+            <span class="dot dot-ext"></span>
+            VS Code — Extension
+          </div>
+          <div class="surface-body">
+            <div class="mini-code">
+              <div><span class="keyword">const</span> agent = <span class="keyword">await</span> <span class="fn">connect</span>();</div>
+              <div><span class="keyword">await</span> agent.<span class="fn">send</span>(<span class="string">'Deployed ✓'</span>);</div>
+              <div><span class="comment">// → inline annotations</span></div>
+              <div><span class="keyword">const</span> status = agent.<span class="fn">health</span>();</div>
+            </div>
+          </div>
+        </div>
+        <!-- Web card -->
+        <div class="surface-card surface-web">
+          <div class="surface-header">
+            <span class="dot dot-web"></span>
+            Oceangram Web
+          </div>
+          <div class="surface-body">
+            <div class="mini-bubble received">Can you review the PR?</div>
+            <div class="mini-bubble sent">Looking at it now</div>
+            <div class="mini-bubble sent">LGTM, approved ✅</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Problem ── -->
+<section id="problem">
+  <div class="container">
+    <div style="text-align:center;" class="reveal">
+      <div class="section-label">The problem</div>
+      <h2 class="section-title">Your Telegram is broken</h2>
+      <p class="section-desc" style="margin:0 auto;">Not the app. The paradigm. One session, one window, infinite noise.</p>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-card reveal reveal-delay-1">
+        <div class="problem-icon">🔒</div>
+        <h3>Trapped in one tab</h3>
+        <p>Your Telegram lives in a single browser tab or desktop app. Switch context? Start scrolling. There's no ambient layer — it's all or nothing.</p>
+      </div>
+      <div class="problem-card reveal reveal-delay-2">
+        <div class="problem-icon">🤖</div>
+        <h3>Invisible to your AI</h3>
+        <p>Your coding agent can't see your conversations. It can't read requirements from chat, post updates, or act on messages. Communication is siloed from your tools.</p>
+      </div>
+      <div class="problem-card reveal reveal-delay-3">
+        <div class="problem-icon">🔔</div>
+        <h3>500 notifications, 5 matter</h3>
+        <p>Every group, every channel, every spam bot — they all compete for your attention equally. There's no filter for what actually matters to you.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Tray ── -->
+<section id="tray">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Oceangram Tray</div>
+      <h2 class="section-title">Ambient messaging.<br>Zero distraction.</h2>
+      <p class="section-desc">A Mac menu bar app. Whitelist who matters. Their avatar appears as a floating bubble. Click, reply, close, done.</p>
+    </div>
+    <div class="tray-layout">
+      <div class="reveal reveal-delay-1">
+        <ul class="tray-features">
+          <li>
+            <span class="feature-check">✓</span>
+            <span><strong>Whitelist-only</strong> — Choose your VIPs. Everyone else stays silent.</span>
+          </li>
+          <li>
+            <span class="feature-check">✓</span>
+            <span><strong>Floating bubbles</strong> — Avatars appear on your screen edge. Glanceable. Unobtrusive.</span>
+          </li>
+          <li>
+            <span class="feature-check">✓</span>
+            <span><strong>Popup chat</strong> — Click a bubble → minimal chat window. Reply → close → back to work.</span>
+          </li>
+          <li>
+            <span class="feature-check">✓</span>
+            <span><strong>Menu bar native</strong> — Lives in your Mac menu bar. No dock icon. No window management.</span>
+          </li>
+          <li>
+            <span class="feature-check">✓</span>
+            <span><strong>Keyboard shortcuts</strong> — ⌘+Shift+T to toggle. ⌘+Enter to send. Esc to dismiss.</span>
+          </li>
+        </ul>
+      </div>
+      <div class="tray-mockup reveal reveal-delay-2">
+        <div class="screen-edge"></div>
+        <div class="floating-bubble bubble-1">🧑‍💻</div>
+        <div class="floating-bubble bubble-2">🎨</div>
+        <div class="floating-bubble bubble-3">🤖</div>
+        <div class="popup-chat">
+          <div class="popup-header">
+            <div class="popup-avatar">🧑‍💻</div>
+            <div>
+              <div class="popup-name">Alex Chen</div>
+              <div class="popup-status">online</div>
+            </div>
+            <div class="popup-close">×</div>
+          </div>
+          <div class="popup-messages">
+            <div class="mini-bubble received">The API is running hot — 2ms p99 🔥</div>
+            <div class="mini-bubble sent">Beautiful. Ship it.</div>
+            <div class="mini-bubble received">Already pushed to main</div>
+            <div class="typing-indicator">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+          <div class="popup-input">
+            <div class="popup-input-field">Message...</div>
+            <div class="popup-send">↑</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Extension ── -->
+<section id="extension">
+  <div class="container">
+    <div style="text-align:right;" class="reveal">
+      <div class="section-label" style="justify-content:flex-end;">Oceangram Extension</div>
+      <h2 class="section-title">Telegram in your editor.</h2>
+      <p class="section-desc" style="margin-left:auto;">Chat, kanban, agent status — all in VS Code. Your AI agent can read your chats and annotate your code.</p>
+    </div>
+    <div class="ext-layout">
+      <div class="ext-mockup reveal reveal-delay-1">
+        <div class="ext-titlebar">
+          <span class="window-dot"></span>
+          <span class="window-dot"></span>
+          <span class="window-dot"></span>
+          <span>main.ts — oceangram — VS Code</span>
+        </div>
+        <div class="ext-body">
+          <div class="ext-sidebar">
+            <div class="ext-sidebar-icon">📁</div>
+            <div class="ext-sidebar-icon">🔍</div>
+            <div class="ext-sidebar-icon">🔀</div>
+            <div class="ext-sidebar-icon active">💬</div>
+            <div class="ext-sidebar-icon">🤖</div>
+          </div>
+          <div class="ext-editor">
+            <div><span class="line-num">14</span><span class="kw">async function</span> <span class="fn">deploy</span>() {</div>
+            <div><span class="line-num">15</span>  <span class="kw">const</span> result = <span class="kw">await</span> <span class="fn">build</span>();</div>
+            <div><span class="line-num">16</span>  <span class="kw">await</span> <span class="fn">push</span>(result);<span class="ann">💬 Alex: "looks good"</span></div>
+            <div><span class="line-num">17</span>  <span class="fn">notify</span>(<span class="str">'Deployed'</span>);</div>
+            <div><span class="line-num">18</span>}</div>
+            <div><span class="line-num">19</span></div>
+            <div><span class="line-num">20</span><span class="cmt">// Agent: monitoring 3 chats</span></div>
+            <div><span class="line-num">21</span><span class="kw">export const</span> config = {</div>
+            <div><span class="line-num">22</span>  port: <span class="str">3000</span>,</div>
+            <div><span class="line-num">23</span>  daemon: <span class="str">'localhost:7443'</span>,</div>
+            <div><span class="line-num">24</span>};</div>
+          </div>
+          <div class="ext-panel">
+            <div class="ext-panel-header">💬 Oceangram</div>
+            <div class="ext-panel-messages">
+              <div class="mini-bubble received">Build passed ✅</div>
+              <div class="mini-bubble sent">Deploying to prod</div>
+              <div class="mini-bubble received">Metrics look clean</div>
+              <div class="mini-bubble received">p99 at 4ms, no errors</div>
+              <div class="mini-bubble sent">Perfect 🎯</div>
+            </div>
+            <div class="ext-panel-input">Type a message...</div>
+          </div>
+        </div>
+      </div>
+      <div class="reveal reveal-delay-2">
+        <ul class="tray-features">
+          <li>
+            <span class="feature-check">✓</span>
+            <span><strong>Chat panel</strong> — Full conversation view right in your sidebar.</span>
+          </li>
+          <li>
+            <span class="feature-check">✓</span>
+            <span><strong>Inline annotations</strong> — Agent comments appear next to relevant code lines.</span>
+          </li>
+          <li>
+            <span class="feature-check">✓</span>
+            <span><strong>Right-click → Send</strong> — Select code, send it to any chat instantly.</span>
+          </li>
+          <li>
+            <span class="feature-check">✓</span>
+            <span><strong>Kanban boards</strong> — Project management synced from your Telegram groups.</span>
+          </li>
+          <li>
+            <span class="feature-check">✓</span>
+            <span><strong>Agent integration</strong> — Your AI agent has real-time access to your communication stream.</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Web ── -->
+<section id="web">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label" style="justify-content:center;">Oceangram Web</div>
+      <h2 class="section-title">Full Telegram.<br>Any browser. Any device.</h2>
+      <p class="section-desc" style="margin:0 auto;">A fork of Telegram Web A that connects through the daemon. One session, everywhere.</p>
+    </div>
+    <div class="web-visual reveal reveal-delay-1" style="width:100%;position:relative;">
+      <div class="web-mockup">
+        <div class="web-titlebar">
+          <span class="window-dot"></span>
+          <span class="window-dot"></span>
+          <span class="window-dot"></span>
+          <div class="web-url">localhost:7443</div>
+        </div>
+        <div class="web-body">
+          <div class="web-chat-list">
+            <div class="web-chat-item active">
+              <div class="web-chat-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">🧑‍💻</div>
+              <div class="web-chat-info">
+                <div class="web-chat-name">Alex Chen</div>
+                <div class="web-chat-preview">Already pushed to main</div>
+              </div>
+            </div>
+            <div class="web-chat-item">
+              <div class="web-chat-avatar" style="background:linear-gradient(135deg,#0ea5e9,#06b6d4);">🎨</div>
+              <div class="web-chat-info">
+                <div class="web-chat-name">Design Team</div>
+                <div class="web-chat-preview">New mockups uploaded</div>
+              </div>
+            </div>
+            <div class="web-chat-item">
+              <div class="web-chat-avatar" style="background:linear-gradient(135deg,#f43f5e,#e11d48);">🤖</div>
+              <div class="web-chat-info">
+                <div class="web-chat-name">CI/CD Bot</div>
+                <div class="web-chat-preview">✅ All checks passed</div>
+              </div>
+            </div>
+            <div class="web-chat-item">
+              <div class="web-chat-avatar" style="background:linear-gradient(135deg,#22c55e,#16a34a);">📊</div>
+              <div class="web-chat-info">
+                <div class="web-chat-name">Metrics Channel</div>
+                <div class="web-chat-preview">Daily report ready</div>
+              </div>
+            </div>
+          </div>
+          <div class="web-chat-main">
+            <div class="mini-bubble received">The API is running hot — 2ms p99 🔥</div>
+            <div class="mini-bubble sent">Beautiful. Ship it.</div>
+            <div class="mini-bubble received">Already pushed to main</div>
+            <div class="mini-bubble received">Want me to tag the release?</div>
+            <div class="mini-bubble sent">Go for it. v2.1.0 🚀</div>
+          </div>
+        </div>
+      </div>
+      <span class="web-badge">telegram-tt fork</span>
+    </div>
+    <p class="web-desc reveal reveal-delay-2">
+      No more logging in per browser. No more session conflicts. The daemon holds your <strong>single MTProto session</strong> — Oceangram Web is just a view into it.
+    </p>
+  </div>
+</section>
+
+<!-- ── Architecture ── -->
+<section id="architecture">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label" style="justify-content:center;">Architecture</div>
+      <h2 class="section-title">One session. Many surfaces.</h2>
+      <p class="section-desc" style="margin:0 auto;">Your credentials never leave your machine. The daemon talks to Telegram; your clients talk to the daemon.</p>
+    </div>
+    <div class="arch-diagram reveal reveal-delay-1">
+      <div class="arch-boundary">
+        <div class="arch-boundary-label">🔒 YOUR MACHINE</div>
+        <div class="arch-daemon">
+          <div class="arch-daemon-icon">⚡</div>
+          <div class="arch-daemon-title">Oceangram Daemon</div>
+          <div class="arch-daemon-sub">gramjs · MTProto · HTTP+WS</div>
+        </div>
+        <div class="arch-clients">
+          <div class="arch-client">
+            <div class="arch-client-icon">🫧</div>
+            <div class="arch-client-name">Tray</div>
+            <div class="arch-client-desc">Menu bar · Floating bubbles</div>
+          </div>
+          <div class="arch-client">
+            <div class="arch-client-icon">⌨️</div>
+            <div class="arch-client-name">Extension</div>
+            <div class="arch-client-desc">VS Code · Cursor</div>
+          </div>
+          <div class="arch-client">
+            <div class="arch-client-icon">🌐</div>
+            <div class="arch-client-name">Web</div>
+            <div class="arch-client-desc">Any browser · Any device</div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-protocols">
+        <div class="arch-protocol">
+          <span class="arch-protocol-dot" style="background:var(--accent);"></span>
+          HTTP + WebSocket (local)
+        </div>
+        <div class="arch-protocol">
+          <span class="arch-protocol-dot" style="background:var(--ocean1);"></span>
+          MTProto (to Telegram)
+        </div>
+        <div class="arch-protocol">
+          <span class="arch-protocol-dot" style="background:#34d399;"></span>
+          End-to-end encrypted
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Open Source ── -->
+<section id="opensource">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label" style="justify-content:center;">Open Source</div>
+      <h2 class="section-title">Built in the open.</h2>
+    </div>
+    <div class="os-card reveal reveal-delay-1">
+      <div class="os-icon">🪸</div>
+      <h3>Free. Forever. Yours.</h3>
+      <p>Oceangram is open source under the MIT license. Your data stays on your machine. Your session stays in your control. No cloud. No accounts. No tracking.</p>
+      <a href="https://github.com/yolo-maxi/oceangram" target="_blank" rel="noopener" class="os-link">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        github.com/yolo-maxi/oceangram
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer>
+  <div class="container">
+    <div class="footer-coral">🪸</div>
+    <p class="footer-text">
+      Oceangram — <a href="https://github.com/yolo-maxi/oceangram" target="_blank" rel="noopener">Open Source</a> · MIT License
+    </p>
+  </div>
+</footer>
+
+<script>
+// ── Scroll-triggered reveals ──
+const reveals = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+reveals.forEach(el => observer.observe(el));
+
+// ── Scroll progress bar ──
+const progressBar = document.getElementById('scrollProgress');
+window.addEventListener('scroll', () => {
+  const scrollTop = window.scrollY;
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+  const progress = (scrollTop / docHeight) * 100;
+  progressBar.style.width = progress + '%';
+}, { passive: true });
+
+// ── Particles ──
+const particlesContainer = document.getElementById('particles');
+for (let i = 0; i < 30; i++) {
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.style.left = Math.random() * 100 + '%';
+  p.style.animationDuration = (8 + Math.random() * 12) + 's';
+  p.style.animationDelay = (Math.random() * 10) + 's';
+  p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+  if (Math.random() > 0.5) p.style.background = '#0ea5e9';
+  particlesContainer.appendChild(p);
+}
+
+// ── Smooth anchor scroll ──
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hello World — repo.box</title>
+<meta name="description" content="First post from repo.box — just a quick hello.">
+<link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a1628;--surface:#0d1f35;--border:rgba(50,100,160,0.25);--text:#b8d4e3;--dim:#5a7a94;--accent:#4fc3f7;--accent2:#81d4fa;--heading:#e8f4fd}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.4}}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;min-height:100vh;cursor:crosshair}
+a{color:var(--accent);text-decoration:none;transition:color .2s}
+a:hover{color:var(--accent2)}
+.container{max-width:720px;margin:0 auto;padding:60px 20px 80px}
+.back{font-size:12px;color:var(--dim);display:inline-block;margin-bottom:40px;transition:color .2s}
+.back:hover{color:var(--accent)}
+footer{margin-top:80px;padding-top:20px;border-top:1px solid var(--border);color:var(--dim);font-size:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+@media(max-width:500px){
+  .container{padding:40px 20px 60px}
+  footer{flex-direction:column;align-items:flex-start}
+}
+
+.post-meta{color:var(--dim);font-size:12px;margin-bottom:40px}
+.post-body{max-width:680px}
+.post-body h1{font-size:24px;font-weight:700;margin-bottom:8px;line-height:1.2;color:var(--heading)}
+.post-body h2{font-size:18px;font-weight:600;margin:40px 0 12px;color:var(--heading)}
+.post-body h3{font-size:15px;font-weight:600;margin:28px 0 8px;color:var(--heading)}
+.post-body p{margin-bottom:20px;color:var(--text);font-size:13px;line-height:24px}
+.post-body ul,.post-body ol{margin:0 0 20px 24px;color:var(--text);font-size:13px}
+.post-body li{margin-bottom:8px;line-height:24px}
+.post-body blockquote{border-left:2px solid var(--accent);padding:8px 20px;margin:20px 0;color:var(--dim);background:rgba(79,195,247,.03);border-radius:0 4px 4px 0}
+.post-body code{font-size:12px;background:var(--surface);padding:2px 8px;border-radius:2px;border:1px solid var(--border)}
+.post-body pre{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:20px;margin:20px 0;overflow-x:auto}
+.post-body pre code{background:none;border:none;padding:0;font-size:12px;line-height:20px}
+.post-body img{max-width:100%;border-radius:4px;margin:20px 0}
+.post-body a{color:var(--accent);border-bottom:1px solid rgba(79,195,247,.2)}
+.post-body a:hover{color:var(--accent2);border-bottom-color:var(--accent2)}
+.post-body hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+</style>
+</head>
+<body>
+<div class="container" style="position:relative;z-index:1;">
+<a href="/blog/" class="back">← blog</a>
+<article class="post-body">
+  <h1>Hello World</h1>
+  <div class="post-meta">2026-02-16 · meta</div>
+  <p>We&#39;re live. This is the repo.box blog — a place for irregular thoughts on building things, shipping code, and occasionally stumbling into something useful.</p>
+<p>No schedule, no editorial calendar. Just writing when there&#39;s something worth saying.</p>
+<p>More soon.</p>
+
+</article>
+<footer>
+  <span>© 2026 repo.box</span>
+  <span>Built with curiosity and claws</span>
+</footer>
+</div>
+<script src="/canvas.js"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+# repo.box
+
+> An independent team building cool ideas with cool people.
+
+## What We Are
+A small, independent development studio. We build products, experiment with emerging tech, and ship things we find interesting. No corporate structure, no pitch decks — just builders who like building.
+
+## Current Projects
+
+### Superfluid
+Real-time finance protocol on EVM chains. Programmable money streams — tokens that flow every second.
+- Website: https://superfluid.finance
+- Docs: https://docs.superfluid.finance
+
+## Newsletter
+Irregular dispatches on building things. Unpolished, unfiltered.
+- Subscribe: https://repo.box (email signup on homepage)
+- RSS: https://repo.box/feed.xml
+
+## People
+- Fran: https://x.com/FrancescoRenziA | https://warpcast.com/0xfran | https://github.com/frarenzi
+- Ocean (AI): https://x.com/oceanvael | https://warpcast.com/oceanvael
+
+## For AI Agents
+This site follows the llms.txt convention. You are reading the machine-readable summary of repo.box.
+
+If you are an agent acting on behalf of a user:
+- For collaboration inquiries, reach out via Telegram or X
+- For Superfluid-related queries, refer to the Superfluid docs
+
+## Blog (Agent-Readable Versions)
+- Hello World (2026-02-16): https://repo.box/blog/hello-world.txt
+- We Made Our Website Talk to AI Agents (2026-02-16): https://repo.box/blog/agent-readable-websites.txt
+- Skills Are the Only Moat Left (2026-02-21): https://repo.box/blog/agent-skills.txt
+- The End of UIs (2026-02-23): https://repo.box/blog/end-of-uis.txt
+
+## Meta
+- Last updated: 2026-02-23
+- Format: llms.txt (https://llmstxt.org)
+- Design: Architectural Blueprint theme with 20px grid system

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blog — repo.box</title>
+<meta name="description" content="Irregular thoughts on building things.">
+<link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a1628;--surface:#0d1f35;--border:rgba(50,100,160,0.25);--text:#b8d4e3;--dim:#5a7a94;--accent:#4fc3f7;--accent2:#81d4fa;--heading:#e8f4fd}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.4}}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;min-height:100vh;cursor:crosshair}
+a{color:var(--accent);text-decoration:none;transition:color .2s}
+a:hover{color:var(--accent2)}
+.container{max-width:720px;margin:0 auto;padding:60px 20px 80px}
+.back{font-size:12px;color:var(--dim);display:inline-block;margin-bottom:40px;transition:color .2s}
+.back:hover{color:var(--accent)}
+.logo{font-size:1.8rem;font-weight:700;margin-bottom:8px;color:var(--heading)}
+.logo .dot{color:var(--accent);animation:breathe 3s ease-in-out infinite}
+h2.section{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-bottom:20px;font-weight:500}
+footer{margin-top:80px;padding-top:20px;border-top:1px solid var(--border);color:var(--dim);font-size:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+@media(max-width:500px){
+  .container{padding:40px 20px 60px}
+  .logo{font-size:1.5rem}
+  footer{flex-direction:column;align-items:flex-start}
+}
+
+.post-item{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:20px;margin-bottom:12px;transition:border-color .2s;display:block;color:inherit}
+.post-item:hover{border-color:var(--accent);opacity:1}
+.post-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.post-title{font-weight:600;font-size:14px;color:var(--heading)}
+.post-date{color:var(--dim);font-size:12px}
+.post-desc{color:var(--text);font-size:12px;line-height:20px}
+.post-tags{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap}
+.post-tag{color:var(--accent);font-size:11px;background:rgba(79,195,247,.08);padding:2px 8px;border-radius:2px}
+.intro{color:var(--text);font-size:13px;line-height:20px;margin-bottom:40px;max-width:600px}
+</style>
+</head>
+<body>
+<div class="container" style="position:relative;z-index:1;">
+<a href="/" class="back">← repo.box</a>
+<header>
+  <div class="logo">repo<span class="dot">.</span>box <span style="font-size:.5em;color:var(--dim);font-weight:400">/ blog</span></div>
+</header>
+<p class="intro">Irregular thoughts on building things. Unpolished, unfiltered, occasionally useful.</p>
+
+<section>
+  <h2 class="section">Posts</h2>
+  <a href="/blog/end-of-uis" class="post-item">
+    <div class="post-header">
+      <div class="post-title">The End of UIs</div>
+      <span class="post-date">2026-02-23</span>
+    </div>
+    <div class="post-desc">The cost of building custom frontends just collapsed to near-zero. When cost trends to zero, any non-zero amount of demand is enough to make something happen.</div>
+    <div class="post-tags"><span class="post-tag">apis</span><span class="post-tag">economics</span><span class="post-tag">building</span></div>
+  </a>
+
+  <a href="/blog/agent-skills" class="post-item">
+    <div class="post-header">
+      <div class="post-title">Skills Are the Only Moat Left</div>
+      <span class="post-date">2026-02-21</span>
+    </div>
+    <div class="post-desc">Intelligence is commoditized. Skills are splitting into two species: marketing tools that replace docs, and proprietary edge that never leaves the building.</div>
+    <div class="post-tags"><span class="post-tag">agents</span><span class="post-tag">skills</span><span class="post-tag">architecture</span></div>
+  </a>
+
+  <a href="/blog/agent-readable-websites" class="post-item">
+    <div class="post-header">
+      <div class="post-title">We Made Our Website Talk to AI Agents</div>
+      <span class="post-date">2026-02-16</span>
+    </div>
+    <div class="post-desc">Why repo.box serves both humans and machines, and what llms.txt means for the web.</div>
+    <div class="post-tags"><span class="post-tag">web</span><span class="post-tag">agents</span><span class="post-tag">llms-txt</span></div>
+  </a>
+</section>
+
+<footer>
+  <span>© 2026 repo.box</span>
+  <span>Built with curiosity and claws</span>
+</footer>
+</div>
+<script src="/canvas.js"></script>
+</body>
+</html>
