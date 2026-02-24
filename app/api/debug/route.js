@@ -1,17 +1,20 @@
 import { NextResponse } from 'next/server'
+import Redis from 'ioredis'
 
-export function GET() {
+export async function GET() {
   const url = process.env.KV_REDIS_URL || ''
-  // Show scheme + host portion only (mask password)
-  const match = url.match(/^(rediss?):\/\/([^:]+):([^@]+)@(.+)$/)
-  if (match) {
-    return NextResponse.json({
-      scheme: match[1],
-      user: match[2],
-      password_len: match[3].length,
-      host_port: match[4],
-      full_len: url.length,
+
+  try {
+    const r = new Redis(url, {
+      connectTimeout: 5000,
+      maxRetriesPerRequest: 1,
+      retryStrategy: () => null,  // don't retry
     })
+
+    const pong = await r.ping()
+    await r.quit()
+    return NextResponse.json({ status: 'connected', pong })
+  } catch (e) {
+    return NextResponse.json({ status: 'error', message: e.message, code: e.code })
   }
-  return NextResponse.json({ raw_prefix: url.slice(0, 15), len: url.length })
 }
