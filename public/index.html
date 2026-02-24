@@ -454,102 +454,99 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
         return Math.max(0, combined);
       },
       bricks: (() => {
-        // Brick wall with gaps, bricks fall to fill them
-        // Each brick is 3 chars wide: [ ]
-        const BW = 3; // brick width in chars
-        let wall = [], falling = [], lastCols = 0, lastRows = 0, lastFrame = -1;
+        // Brick wall building up from bottom. No holes. Bricks stack logically.
+        const BW = 3; // brick width in chars: [ ]
+        // heights[col] = how many rows tall this column is (from bottom)
+        let heights = [], falling = [], lastCols = 0, lastRows = 0, lastFrame = -1, brickCols = 0;
         
         function init(cols, rows) {
-          const brickCols = Math.floor(cols / BW);
-          // Build wall from bottom up, ~60-80% filled, with random gaps
-          wall = Array.from({length: rows}, () => new Array(brickCols).fill(0));
-          // Fill bottom 60% of rows
-          const wallStart = Math.floor(rows * 0.4);
-          for (let r = wallStart; r < rows; r++) {
-            for (let b = 0; b < brickCols; b++) {
-              // Staggered pattern: offset every other row
-              const offset = (r % 2 === 0) ? 0 : 1;
-              // ~75% chance of brick, creating natural gaps
-              wall[r][b] = Math.random() < 0.75 ? 1 : 0;
-            }
-          }
-          // Create some deliberate holes (columns with gaps)
-          for (let i = 0; i < Math.floor(brickCols * 0.3); i++) {
-            const col = Math.floor(Math.random() * brickCols);
-            const row = wallStart + Math.floor(Math.random() * (rows - wallStart));
-            wall[row][col] = 0;
+          brickCols = Math.floor(cols / BW);
+          // Initial wall: uneven heights, taller in middle, shorter at edges
+          heights = new Array(brickCols).fill(0);
+          for (let b = 0; b < brickCols; b++) {
+            // Base shape: gentle hill with variation
+            const center = brickCols / 2;
+            const dist = Math.abs(b - center) / center; // 0 at center, 1 at edge
+            const baseH = Math.floor((1 - dist * 0.6) * rows * 0.5);
+            const variation = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
+            heights[b] = Math.max(1, Math.min(rows - 2, baseH + variation));
           }
           falling = [];
         }
         
-        function findGap(rows, brickCols) {
-          // Find a gap (0) in the wall that has support below (bottom row or brick below)
-          for (let r = rows - 1; r >= 0; r--) {
-            for (let b = 0; b < brickCols; b++) {
-              if (wall[r][b] === 0 && (r === rows - 1 || wall[r + 1]?.[b] === 1)) {
-                return { col: b, targetRow: r };
-              }
-            }
+        function findTarget() {
+          // Pick a column to add a brick on top — prefer shorter columns
+          // but also some randomness
+          let minH = Infinity;
+          for (let b = 0; b < brickCols; b++) minH = Math.min(minH, heights[b]);
+          // Candidates: columns within 2 of the shortest
+          const candidates = [];
+          for (let b = 0; b < brickCols; b++) {
+            if (heights[b] <= minH + 2) candidates.push(b);
           }
-          return null;
+          return candidates[Math.floor(Math.random() * candidates.length)];
         }
         
         return (x, y, frame, cols, rows) => {
-          const brickCols = Math.floor(cols / BW);
-          
           if (cols !== lastCols || rows !== lastRows) {
             lastCols = cols; lastRows = rows;
             init(cols, rows);
             lastFrame = -1;
           }
           
-          // Update once per frame
           if (frame !== lastFrame) {
             lastFrame = frame;
             
-            // Spawn a falling brick every ~50 frames
-            if (frame % 50 === 0 && falling.length < 2) {
-              const gap = findGap(rows, brickCols);
-              if (gap) {
-                falling.push({ col: gap.col, y: -1, targetRow: gap.targetRow });
+            // Spawn a new falling brick every ~40 frames
+            if (frame % 40 === 0 && falling.length < 2) {
+              const col = findTarget();
+              if (col !== undefined) {
+                const targetRow = rows - 1 - heights[col]; // row where it will land
+                if (targetRow > 0) {
+                  falling.push({ col, y: -1, targetRow });
+                }
               }
             }
             
-            // Move falling bricks down every 4 frames
-            if (frame % 4 === 0) {
+            // Move falling bricks every 3 frames
+            if (frame % 3 === 0) {
               for (let i = falling.length - 1; i >= 0; i--) {
                 const f = falling[i];
                 f.y++;
                 if (f.y >= f.targetRow) {
-                  wall[f.targetRow][f.col] = 1;
+                  f.y = f.targetRow;
+                  heights[f.col]++;
                   falling.splice(i, 1);
                 }
               }
             }
+            
+            // Reset wall when it gets too tall (loop the animation)
+            if (heights.every(h => h >= rows - 1)) {
+              init(cols, rows);
+            }
           }
           
-          // Render: which brick column is this char in?
+          // Render
           const bCol = Math.floor(x / BW);
-          const bx = x % BW; // position within brick (0=[ 1=space 2=])
+          if (bCol >= brickCols) return 0;
           
-          // Check falling bricks
+          // Stagger odd rows by half a brick
+          const staggered = (y % 2 === 1);
+          const sx = staggered ? ((x + Math.floor(BW / 2)) % (brickCols * BW)) : x;
+          const sBCol = Math.floor(sx / BW);
+          const sBx = sx % BW;
+          
+          // Check falling bricks (no stagger for falling — they drop straight)
           for (const f of falling) {
             if (f.col === bCol && Math.floor(f.y) === y) {
-              // Draw brick chars: [ ]
-              return (bx === 0 || bx === BW - 1) ? 1.0 : 0.6;
+              return (sBx === 0 || sBx === BW - 1) ? 1.0 : 0.6;
             }
           }
           
-          // Check wall
-          if (y >= 0 && y < rows && bCol < brickCols && wall[y]?.[bCol]) {
-            // Stagger: offset odd rows by half a brick
-            const staggered = (y % 2 === 1);
-            const sx = staggered ? (x + Math.floor(BW / 2)) % cols : x;
-            const sBCol = Math.floor(sx / BW);
-            const sBx = sx % BW;
-            if (wall[y]?.[sBCol]) {
-              return (sBx === 0 || sBx === BW - 1) ? 0.7 : 0.4;
-            }
+          // Check wall: this row is filled if y >= (rows - heights[sBCol])
+          if (sBCol < brickCols && y >= rows - heights[sBCol]) {
+            return (sBx === 0 || sBx === BW - 1) ? 0.7 : 0.4;
           }
           
           return 0;
