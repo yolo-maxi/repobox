@@ -1,24 +1,15 @@
 import { NextResponse } from 'next/server'
-import Redis from 'ioredis'
 
-export async function GET() {
-  const url = process.env.KV_REDIS_URL || ''
-
-  // Try with TLS
-  try {
-    const r = new Redis(url, {
-      tls: {},
-      connectTimeout: 5000,
-      maxRetriesPerRequest: 1,
-      retryStrategy: () => null,
-    })
-
-    const pong = await r.ping()
-    await r.set('repobox:test', 'hello')
-    const val = await r.get('repobox:test')
-    await r.quit()
-    return NextResponse.json({ status: 'connected_tls', pong, testVal: val })
-  } catch (e) {
-    return NextResponse.json({ status: 'tls_error', message: e.message })
+export function GET() {
+  // Find ALL redis/kv related env vars
+  const keys = Object.keys(process.env).filter(k =>
+    k.includes('KV') || k.includes('REDIS') || k.includes('UPSTASH') || k.includes('STORAGE')
+  )
+  const result = {}
+  for (const k of keys) {
+    const v = process.env[k] || ''
+    result[k] = v.slice(0, 40) + (v.length > 40 ? '...' : '')
   }
+  result._total_env_count = Object.keys(process.env).length
+  return NextResponse.json(result)
 }
