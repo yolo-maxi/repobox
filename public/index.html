@@ -852,45 +852,46 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
       creatures.push(spawnCreature());
     }
     
-    // Render grid
-    const baseAlpha = 0.05;
+    // Render: only draw cells within creature bounding boxes (perf optimization)
+    // First pass: build a Set of lit cells
+    const litCells = new Map(); // key "x,y" -> brightness
     
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
-        let brightness = 0;
-        
-        // Check all creatures
-        for (const c of creatures) {
-          const frame = c.type.frames[c.frameIdx];
-          const wobbleY = Math.sin(c.wobblePhase + tick * 0.02) * 1.5;
-          const cy = Math.round(c.y + wobbleY);
-          const cx = Math.round(c.x);
+    for (const c of creatures) {
+      const frame = c.type.frames[c.frameIdx];
+      const wobbleY = Math.sin(c.wobblePhase + tick * 0.02) * 1.5;
+      const cy = Math.round(c.y + wobbleY);
+      const cx = Math.round(c.x);
+      
+      for (let fy = 0; fy < frame.length; fy++) {
+        const line = frame[fy];
+        for (let fx = 0; fx < line.length; fx++) {
+          const ch = line[fx];
+          if (ch === ' ') continue;
           
-          const fy = y - cy;
-          const fx = c.dir === 1 ? (x - cx) : (cx + c.w - 1 - x);
+          const gx = c.dir === 1 ? cx + fx : cx + c.w - 1 - fx;
+          const gy = cy + fy;
           
-          if (fy >= 0 && fy < frame.length && fx >= 0 && fx < frame[fy].length) {
-            const ch = frame[fy][fx];
-            if (ch !== ' ') {
-              // Different brightness for different parts
-              if (ch === 'o' || ch === 'O' || ch === '(' || ch === ')') {
-                brightness = Math.max(brightness, 0.9); // eyes
-              } else if (ch === '>' || ch === '<' || ch === '=' || ch === '-') {
-                brightness = Math.max(brightness, 0.5); // tail
-              } else {
-                brightness = Math.max(brightness, 0.7); // body
-              }
-            }
-          }
-        }
-        
-        const alpha = baseAlpha + brightness * 0.35;
-        
-        if (alpha > 0.01) {
-          ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
-          ctx.fillText(bgGrid[y]?.[x] || '.', x * charW, y * fontSize + fontSize);
+          if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
+          
+          let b;
+          if (ch === 'o' || ch === 'O') b = 0.9;
+          else if (ch === '>' || ch === '<' || ch === '=' || ch === '-') b = 0.5;
+          else b = 0.7;
+          
+          const key = gy * cols + gx;
+          const prev = litCells.get(key) || 0;
+          if (b > prev) litCells.set(key, b);
         }
       }
+    }
+    
+    // Draw only lit cells
+    for (const [key, brightness] of litCells) {
+      const x = key % cols;
+      const y = (key - x) / cols;
+      const alpha = 0.05 + brightness * 0.35;
+      ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
+      ctx.fillText(bgGrid[y]?.[x] || '.', x * charW, y * fontSize + fontSize);
     }
     
     tick++;
