@@ -231,7 +231,7 @@ a:hover { opacity: 0.8; }
     <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">Things We've Shipped</h2>
 
     <a href="https://superfluid.finance" target="_blank" style="text-decoration:none;color:inherit;display:block;">
-      <div class="project-card ascii-bg" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
+      <div class="project-card ascii-bg" data-ascii-anim="wave" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
         <canvas class="ascii-canvas"></canvas>
         <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
         <div style="position:relative;z-index:2;">
@@ -244,7 +244,7 @@ a:hover { opacity: 0.8; }
       </div>
     </a>
 
-    <div class="project-card ascii-bg" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
+    <div class="project-card ascii-bg" data-ascii-anim="pulse" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
       <canvas class="ascii-canvas"></canvas>
       <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
       <div style="position:relative;z-index:2;">
@@ -408,23 +408,34 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
 </script>
 <script>
-// ASCII flowing background for project cards
+// ASCII chaos→coherence animation for project cards
 (function() {
   const chars = '{}[]<>|/\\+-=.:;~^*#@$&01'.split('');
+  const waveChars = '~≈∿∾≋'.split(''); // Special chars for wave animation
   const fontSize = 10;
+  const charWidth = fontSize * 0.6;
   const canvases = document.querySelectorAll('.ascii-canvas');
 
-  canvases.forEach((canvas, idx) => {
+  canvases.forEach((canvas) => {
     const ctx = canvas.getContext('2d');
+    const card = canvas.closest('.ascii-bg');
+    const animType = card?.dataset.asciiAnim || 'wave';
+    
     let cols, rows, grid, frame = 0;
+    let coherence = 0; // 0 = chaos, 1 = full coherence
+    let targetCoherence = 0;
+    
+    // Hover tracking
+    card?.addEventListener('mouseenter', () => { targetCoherence = 1; });
+    card?.addEventListener('mouseleave', () => { targetCoherence = 0; });
 
     function resize() {
       const rect = canvas.parentElement.getBoundingClientRect();
       canvas.width = rect.width;
       canvas.height = rect.height;
-      cols = Math.ceil(canvas.width / (fontSize * 0.6));
+      cols = Math.ceil(canvas.width / charWidth);
       rows = Math.ceil(canvas.height / fontSize);
-      // Initialize grid with random chars and phases
+      
       grid = [];
       for (let y = 0; y < rows; y++) {
         grid[y] = [];
@@ -432,32 +443,67 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
           grid[y][x] = {
             char: chars[Math.floor(Math.random() * chars.length)],
             phase: Math.random() * Math.PI * 2,
-            speed: 0.02 + Math.random() * 0.03,
-            drift: Math.random() * 0.005, // horizontal wave
+            noiseSpeed: 0.02 + Math.random() * 0.03,
           };
         }
       }
     }
 
+    // Animation functions return alpha (0-1) for each cell
+    const animations = {
+      wave: (x, y, frame, cols, rows) => {
+        // Horizontal flowing sine waves
+        const waveY = rows / 2 + Math.sin(frame * 0.05 + x * 0.2) * (rows * 0.3);
+        const dist = Math.abs(y - waveY);
+        return Math.max(0, 1 - dist / 3);
+      },
+      pulse: (x, y, frame, cols, rows) => {
+        // Expanding rings from center
+        const cx = cols / 2, cy = rows / 2;
+        const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+        const ring = (frame * 0.15) % (Math.max(cols, rows) * 0.7);
+        const ringDist = Math.abs(dist - ring);
+        return Math.max(0, 1 - ringDist / 2);
+      }
+    };
+
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.font = `${fontSize}px JetBrains Mono, monospace`;
+      
+      // Smooth coherence transition
+      coherence += (targetCoherence - coherence) * 0.08;
+
+      const animFn = animations[animType] || animations.wave;
 
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           const cell = grid[y][x];
-          // Flowing wave: brightness varies by position + time
-          const wave = Math.sin(cell.phase + frame * cell.speed + x * 0.15 + y * 0.1);
-          const brightness = 0.15 + (wave + 1) * 0.35; // 0.15 to 0.85
-          const alpha = brightness;
-
-          // Occasionally swap character
-          if (Math.random() < 0.003) {
+          
+          // Chaos: random flicker based on noise
+          const noiseAlpha = 0.15 + (Math.sin(cell.phase + frame * cell.noiseSpeed) + 1) * 0.35;
+          
+          // Coherent: animation-driven alpha
+          const animAlpha = animFn(x, y, frame, cols, rows);
+          
+          // Blend chaos→coherence
+          const alpha = noiseAlpha * (1 - coherence) + animAlpha * coherence;
+          
+          // Character: use wave chars when coherent wave animation
+          let char = cell.char;
+          if (coherence > 0.5 && animType === 'wave' && animAlpha > 0.3) {
+            char = waveChars[Math.floor(Math.random() * waveChars.length)];
+          }
+          
+          // Random char swap in chaos mode
+          if (coherence < 0.5 && Math.random() < 0.003) {
             cell.char = chars[Math.floor(Math.random() * chars.length)];
           }
 
-          ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
-          ctx.fillText(cell.char, x * fontSize * 0.6, y * fontSize + fontSize);
+          if (alpha > 0.05) {
+            ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
+            ctx.fillText(char, x * charWidth, y * fontSize + fontSize);
+          }
         }
       }
 
@@ -468,7 +514,6 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     resize();
     draw();
 
-    // Debounced resize
     let resizeTimer;
     new ResizeObserver(() => {
       clearTimeout(resizeTimer);
