@@ -416,75 +416,48 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
   canvases.forEach((canvas, idx) => {
     const ctx = canvas.getContext('2d');
-    let cols, rows, drops, frame = 0;
-    const charWidth = fontSize * 0.6;
+    let cols, rows, grid, frame = 0;
 
     function resize() {
       const rect = canvas.parentElement.getBoundingClientRect();
       canvas.width = rect.width;
       canvas.height = rect.height;
-      cols = Math.ceil(canvas.width / charWidth);
+      cols = Math.ceil(canvas.width / (fontSize * 0.6));
       rows = Math.ceil(canvas.height / fontSize);
-      
-      // Matrix rain: each column has a drop with trail
-      drops = [];
-      for (let x = 0; x < cols; x++) {
-        drops[x] = {
-          y: Math.random() * rows * -1, // start above screen
-          speed: 0.3 + Math.random() * 0.5,
-          trail: 4 + Math.floor(Math.random() * 8), // trail length
-          chars: [], // characters in the trail
-        };
-        // Pre-fill trail characters
-        for (let i = 0; i < drops[x].trail + 1; i++) {
-          drops[x].chars[i] = chars[Math.floor(Math.random() * chars.length)];
+      // Initialize grid with random chars and phases
+      grid = [];
+      for (let y = 0; y < rows; y++) {
+        grid[y] = [];
+        for (let x = 0; x < cols; x++) {
+          grid[y][x] = {
+            char: chars[Math.floor(Math.random() * chars.length)],
+            phase: Math.random() * Math.PI * 2,
+            speed: 0.02 + Math.random() * 0.03,
+            drift: Math.random() * 0.005, // horizontal wave
+          };
         }
       }
     }
 
     function draw() {
-      // Fade previous frame (creates trail effect)
-      ctx.fillStyle = 'rgba(13, 31, 53, 0.15)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.font = `${fontSize}px JetBrains Mono, monospace`;
 
-      for (let x = 0; x < cols; x++) {
-        const drop = drops[x];
-        const headY = Math.floor(drop.y);
-        
-        // Draw the trail
-        for (let i = 0; i <= drop.trail; i++) {
-          const y = headY - i;
-          if (y >= 0 && y < rows) {
-            // Head is brightest, fades down the trail
-            const brightness = i === 0 ? 1.0 : Math.max(0, 1 - (i / drop.trail) * 0.9);
-            // Head is white-ish, trail is blue
-            if (i === 0) {
-              ctx.fillStyle = `rgba(180, 230, 255, ${brightness})`;
-            } else {
-              ctx.fillStyle = `rgba(79, 195, 247, ${brightness * 0.7})`;
-            }
-            ctx.fillText(drop.chars[i], x * charWidth, y * fontSize + fontSize);
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const cell = grid[y][x];
+          // Flowing wave: brightness varies by position + time
+          const wave = Math.sin(cell.phase + frame * cell.speed + x * 0.15 + y * 0.1);
+          const brightness = 0.15 + (wave + 1) * 0.35; // 0.15 to 0.85
+          const alpha = brightness;
+
+          // Occasionally swap character
+          if (Math.random() < 0.003) {
+            cell.char = chars[Math.floor(Math.random() * chars.length)];
           }
-        }
-        
-        // Move drop down
-        drop.y += drop.speed;
-        
-        // Randomly change head character
-        if (Math.random() < 0.1) {
-          drop.chars[0] = chars[Math.floor(Math.random() * chars.length)];
-        }
-        
-        // Reset when fully off screen
-        if (headY - drop.trail > rows) {
-          drop.y = Math.random() * -10 - 5;
-          drop.speed = 0.3 + Math.random() * 0.5;
-          // Shuffle trail chars
-          for (let i = 0; i < drop.chars.length; i++) {
-            drop.chars[i] = chars[Math.floor(Math.random() * chars.length)];
-          }
+
+          ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
+          ctx.fillText(cell.char, x * fontSize * 0.6, y * fontSize + fontSize);
         }
       }
 
