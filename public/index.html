@@ -454,77 +454,62 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
         return Math.max(0, combined);
       },
       tetris: (() => {
-        // Tetris: pieces fall and stack at the bottom
-        let pieces = [], landed = [], lastCols = 0, lastRows = 0;
+        let pieces = [], landed = [], lastCols = 0, lastRows = 0, lastFrame = -1;
         const shapes = [
-          [[1,1],[1,1]], // O
-          [[1,1,1,1]],  // I
-          [[1,1,0],[0,1,1]], // S
-          [[0,1,1],[1,1,0]], // Z
-          [[1,1,1],[0,1,0]], // T
-          [[1,1,1],[1,0,0]], // L
-          [[1,1,1],[0,0,1]], // J
+          [[1,1],[1,1]],
+          [[1,1,1,1]],
+          [[1,1,0],[0,1,1]],
+          [[0,1,1],[1,1,0]],
+          [[1,1,1],[0,1,0]],
+          [[1,1,1],[1,0,0]],
+          [[1,1,1],[0,0,1]],
         ];
         
-        function spawnPiece(cols, rows) {
+        function spawn(cols) {
           const shape = shapes[Math.floor(Math.random() * shapes.length)];
-          return {
-            x: Math.floor(Math.random() * (cols - 4)),
-            y: -shape.length,
-            shape,
-            speed: 0.08 + Math.random() * 0.06,
-            acc: 0,
-          };
+          return { x: Math.floor(Math.random() * (cols - 4)), y: -shape.length, shape };
         }
         
         return (x, y, frame, cols, rows) => {
-          // Reset on resize
           if (cols !== lastCols || rows !== lastRows) {
             lastCols = cols; lastRows = rows;
-            landed = new Array(rows).fill(null).map(() => new Array(cols).fill(0));
-            pieces = [spawnPiece(cols, rows)];
+            landed = Array.from({length: rows}, () => new Array(cols).fill(0));
+            pieces = [spawn(cols)];
+            lastFrame = -1;
           }
           
-          // Spawn new pieces occasionally
-          if (frame % 30 === 0 && pieces.length < 3) {
-            pieces.push(spawnPiece(cols, rows));
-          }
-          
-          // Update pieces
-          if (frame % 2 === 0) {
-            for (let i = pieces.length - 1; i >= 0; i--) {
-              const p = pieces[i];
-              p.acc += p.speed;
-              if (p.acc >= 1) {
-                p.acc = 0;
+          // Update ONCE per frame (guard with lastFrame)
+          if (frame !== lastFrame) {
+            lastFrame = frame;
+            
+            // Spawn every ~90 frames
+            if (frame % 90 === 0 && pieces.length < 2) pieces.push(spawn(cols));
+            
+            // Move pieces every 8 frames
+            if (frame % 8 === 0) {
+              for (let i = pieces.length - 1; i >= 0; i--) {
+                const p = pieces[i];
                 p.y++;
-                // Check if landed
                 let land = false;
                 for (let sy = 0; sy < p.shape.length; sy++) {
                   for (let sx = 0; sx < p.shape[sy].length; sx++) {
                     if (!p.shape[sy][sx]) continue;
                     const py = Math.floor(p.y) + sy;
                     const px = p.x + sx;
-                    if (py >= rows - 1 || (py >= 0 && py < rows - 1 && landed[py + 1]?.[px])) {
-                      land = true;
-                    }
+                    if (py >= rows - 1 || (py >= 0 && landed[py + 1]?.[px])) land = true;
                   }
                 }
                 if (land) {
-                  // Stamp into landed grid
                   for (let sy = 0; sy < p.shape.length; sy++) {
                     for (let sx = 0; sx < p.shape[sy].length; sx++) {
                       if (!p.shape[sy][sx]) continue;
                       const py = Math.floor(p.y) + sy;
                       const px = p.x + sx;
-                      if (py >= 0 && py < rows && px >= 0 && px < cols) {
-                        landed[py][px] = 1;
-                      }
+                      if (py >= 0 && py < rows && px >= 0 && px < cols) landed[py][px] = 1;
                     }
                   }
                   pieces.splice(i, 1);
-                  
-                  // Clear full rows (shift down)
+                  // Clear full rows
                   for (let r = rows - 1; r >= 0; r--) {
                     if (landed[r].every(v => v)) {
                       landed.splice(r, 1);
@@ -536,10 +521,8 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
             }
           }
           
-          // Check if this cell is lit
-          // Landed blocks
+          // Render: check this cell
           if (y >= 0 && y < rows && landed[y]?.[x]) return 0.8;
-          // Falling pieces
           for (const p of pieces) {
             for (let sy = 0; sy < p.shape.length; sy++) {
               for (let sx = 0; sx < p.shape[sy].length; sx++) {
