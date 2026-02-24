@@ -604,5 +604,148 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 })();
 </script>
 <script src="/canvas.js"></script>
+<canvas id="fish-bg" style="position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;"></canvas>
+<script>
+// Ambient ASCII fish swimming across the background
+(function() {
+  const canvas = document.getElementById('fish-bg');
+  const ctx = canvas.getContext('2d');
+  const fontSize = 7;
+  const charW = fontSize * 0.6;
+  
+  // Fish ASCII art templates (each is an array of strings)
+  const fishTemplates = [
+    // Small fish ~8x4
+    [
+      '   /\\___',
+      '  < o   >--<',
+      '   \\/---',
+    ],
+    // Medium fish ~14x5
+    [
+      '      /\\',
+      '     /  \\___',
+      ' ___/  o    >--<<',
+      '     \\  /---',
+      '      \\/',
+    ],
+    // Jellyfish ~8x7
+    [
+      '  .--.',
+      ' /    \\',
+      '|  ()  |',
+      ' \\    /',
+      '  )  (',
+      ' /|  |\\',
+      '  |  |',
+    ],
+    // Tiny fish ~6x3
+    [
+      '  __',
+      '><  >=>',
+      '  --',
+    ],
+    // Whale ~18x6
+    [
+      '        .---.___',
+      '     __/  o     \\',
+      '    /            \\___',
+      '    \\     ___    /',
+      '     \\__/   \\__/',
+      '              ||',
+    ],
+    // Simple fish ~10x3
+    [
+      '  /\\_____',
+      ' <  o    >=<',
+      '  \\/-----',
+    ],
+  ];
+  
+  let fish = [];
+  const MAX_FISH = 8;
+  
+  function spawnFish() {
+    const tmpl = fishTemplates[Math.floor(Math.random() * fishTemplates.length)];
+    const w = Math.max(...tmpl.map(l => l.length));
+    const h = tmpl.length;
+    const direction = Math.random() < 0.7 ? 1 : -1; // mostly left-to-right
+    
+    return {
+      tmpl: direction === 1 ? tmpl : tmpl.map(l => 
+        l.split('').reverse().join('')
+          .replace(/\(/g, 'TEMP').replace(/\)/g, '(').replace(/TEMP/g, ')')
+          .replace(/</g, 'TEMP').replace(/>/g, '<').replace(/TEMP/g, '>')
+          .replace(/\//g, 'TEMP').replace(/\\/g, '/').replace(/TEMP/g, '\\')
+          .replace(/\[/g, 'TEMP').replace(/\]/g, '[').replace(/TEMP/g, ']')
+      ),
+      x: direction === 1 ? -w * charW - 20 : canvas.width + 20,
+      y: Math.random() * (canvas.height - h * fontSize * 1.5),
+      speed: (0.15 + Math.random() * 0.4) * direction,
+      w, h,
+      alpha: 0.04 + Math.random() * 0.06, // very subtle: 0.04-0.10
+      wobblePhase: Math.random() * Math.PI * 2,
+      wobbleSpeed: 0.01 + Math.random() * 0.02,
+    };
+  }
+  
+  // Initial fish spread across screen
+  for (let i = 0; i < MAX_FISH; i++) {
+    const f = spawnFish();
+    f.x = Math.random() * canvas.width; // start scattered
+    fish.push(f);
+  }
+  
+  let frame = 0;
+  
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = `${fontSize}px JetBrains Mono, monospace`;
+    
+    for (const f of fish) {
+      // Gentle vertical wobble
+      const wobbleY = Math.sin(f.wobblePhase + frame * f.wobbleSpeed) * 8;
+      
+      ctx.fillStyle = `rgba(79, 195, 247, ${f.alpha})`;
+      
+      for (let row = 0; row < f.tmpl.length; row++) {
+        const line = f.tmpl[row];
+        for (let col = 0; col < line.length; col++) {
+          if (line[col] !== ' ') {
+            ctx.fillText(
+              line[col],
+              f.x + col * charW,
+              f.y + wobbleY + row * fontSize
+            );
+          }
+        }
+      }
+      
+      // Move
+      f.x += f.speed;
+      
+      // Respawn when off screen
+      const totalW = f.w * charW + 40;
+      if (f.speed > 0 && f.x > canvas.width + 20) {
+        Object.assign(f, spawnFish());
+      } else if (f.speed < 0 && f.x < -totalW) {
+        Object.assign(f, spawnFish());
+      }
+    }
+    
+    frame++;
+    requestAnimationFrame(draw);
+  }
+  
+  resize();
+  draw();
+  window.addEventListener('resize', resize);
+})();
+</script>
 </body>
 </html>
