@@ -186,6 +186,21 @@ a:hover { opacity: 0.8; }
 .form-msg.success { display: block; color: #4fc3f7; }
 .form-msg.error { display: block; color: #ff4444; }
 
+/* ASCII background canvases */
+.ascii-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.12;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+.ascii-bg:hover .ascii-canvas {
+  opacity: 0.25;
+}
+
 /* canvas.js handles background */
 </style>
 </head>
@@ -216,23 +231,29 @@ a:hover { opacity: 0.8; }
     <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">Things We've Shipped</h2>
 
     <a href="https://superfluid.finance" target="_blank" style="text-decoration:none;color:inherit;display:block;">
-      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
+      <div class="project-card ascii-bg" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
+        <canvas class="ascii-canvas"></canvas>
         <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-          <div style="font-weight:600;font-size:16px;line-height:20px;color:#e8f4fd;">Superfluid</div>
-          <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.08);padding:0 12px;border-radius:2px;">defi</span>
+        <div style="position:relative;z-index:2;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+            <div style="font-weight:600;font-size:16px;line-height:20px;color:#e8f4fd;">Superfluid</div>
+            <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.08);padding:0 12px;border-radius:2px;">defi</span>
+          </div>
+          <div style="font-size:12px;line-height:20px;color:#5a7a94;">Real-time finance protocol. Money that flows every second, not in chunks.</div>
         </div>
-        <div style="font-size:12px;line-height:20px;color:#5a7a94;">Real-time finance protocol. Money that flows every second, not in chunks.</div>
       </div>
     </a>
 
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
+    <div class="project-card ascii-bg" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
+      <canvas class="ascii-canvas"></canvas>
       <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-        <div style="font-weight:600;font-size:16px;line-height:20px;color:#e8f4fd;">More coming...</div>
-        <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.08);padding:0 12px;border-radius:2px;">soon</span>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+          <div style="font-weight:600;font-size:16px;line-height:20px;color:#e8f4fd;">More coming...</div>
+          <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.08);padding:0 12px;border-radius:2px;">soon</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#5a7a94;">We're always cooking. Check back or subscribe below.</div>
       </div>
-      <div style="font-size:12px;line-height:20px;color:#5a7a94;">We're always cooking. Check back or subscribe below.</div>
     </div>
   </section>
 
@@ -385,6 +406,76 @@ const observer = new IntersectionObserver((entries) => {
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
 
+</script>
+<script>
+// ASCII flowing background for project cards
+(function() {
+  const chars = '{}[]<>|/\\+-=.:;~^*#@$&01'.split('');
+  const fontSize = 10;
+  const canvases = document.querySelectorAll('.ascii-canvas');
+
+  canvases.forEach((canvas, idx) => {
+    const ctx = canvas.getContext('2d');
+    let cols, rows, grid, frame = 0;
+
+    function resize() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      cols = Math.ceil(canvas.width / (fontSize * 0.6));
+      rows = Math.ceil(canvas.height / fontSize);
+      // Initialize grid with random chars and phases
+      grid = [];
+      for (let y = 0; y < rows; y++) {
+        grid[y] = [];
+        for (let x = 0; x < cols; x++) {
+          grid[y][x] = {
+            char: chars[Math.floor(Math.random() * chars.length)],
+            phase: Math.random() * Math.PI * 2,
+            speed: 0.02 + Math.random() * 0.03,
+            drift: Math.random() * 0.005, // horizontal wave
+          };
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = `${fontSize}px JetBrains Mono, monospace`;
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const cell = grid[y][x];
+          // Flowing wave: brightness varies by position + time
+          const wave = Math.sin(cell.phase + frame * cell.speed + x * 0.15 + y * 0.1);
+          const brightness = 0.15 + (wave + 1) * 0.35; // 0.15 to 0.85
+          const alpha = brightness;
+
+          // Occasionally swap character
+          if (Math.random() < 0.003) {
+            cell.char = chars[Math.floor(Math.random() * chars.length)];
+          }
+
+          ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
+          ctx.fillText(cell.char, x * fontSize * 0.6, y * fontSize + fontSize);
+        }
+      }
+
+      frame++;
+      requestAnimationFrame(draw);
+    }
+
+    resize();
+    draw();
+
+    // Debounced resize
+    let resizeTimer;
+    new ResizeObserver(() => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(resize, 200);
+    }).observe(canvas.parentElement);
+  });
+})();
 </script>
 <script src="/canvas.js"></script>
 </body>
