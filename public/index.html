@@ -239,7 +239,7 @@ a:hover { opacity: 0.8; }
       </div>
     </a>
 
-    <div class="project-card ascii-bg" data-ascii-anim="tetris" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
+    <div class="project-card ascii-bg" data-ascii-anim="bricks" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
       <canvas class="ascii-canvas"></canvas>
       <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
       <div style="position:relative;z-index:2;">
@@ -453,84 +453,105 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
         const combined = (w1 + w2 + w3) / 1.8; // -1 to 1
         return Math.max(0, combined);
       },
-      tetris: (() => {
-        let pieces = [], landed = [], lastCols = 0, lastRows = 0, lastFrame = -1;
-        const shapes = [
-          [[1,1],[1,1]],
-          [[1,1,1,1]],
-          [[1,1,0],[0,1,1]],
-          [[0,1,1],[1,1,0]],
-          [[1,1,1],[0,1,0]],
-          [[1,1,1],[1,0,0]],
-          [[1,1,1],[0,0,1]],
-        ];
+      bricks: (() => {
+        // Brick wall with gaps, bricks fall to fill them
+        // Each brick is 3 chars wide: [ ]
+        const BW = 3; // brick width in chars
+        let wall = [], falling = [], lastCols = 0, lastRows = 0, lastFrame = -1;
         
-        function spawn(cols) {
-          const shape = shapes[Math.floor(Math.random() * shapes.length)];
-          return { x: Math.floor(Math.random() * (cols - 4)), y: -shape.length, shape };
+        function init(cols, rows) {
+          const brickCols = Math.floor(cols / BW);
+          // Build wall from bottom up, ~60-80% filled, with random gaps
+          wall = Array.from({length: rows}, () => new Array(brickCols).fill(0));
+          // Fill bottom 60% of rows
+          const wallStart = Math.floor(rows * 0.4);
+          for (let r = wallStart; r < rows; r++) {
+            for (let b = 0; b < brickCols; b++) {
+              // Staggered pattern: offset every other row
+              const offset = (r % 2 === 0) ? 0 : 1;
+              // ~75% chance of brick, creating natural gaps
+              wall[r][b] = Math.random() < 0.75 ? 1 : 0;
+            }
+          }
+          // Create some deliberate holes (columns with gaps)
+          for (let i = 0; i < Math.floor(brickCols * 0.3); i++) {
+            const col = Math.floor(Math.random() * brickCols);
+            const row = wallStart + Math.floor(Math.random() * (rows - wallStart));
+            wall[row][col] = 0;
+          }
+          falling = [];
+        }
+        
+        function findGap(rows, brickCols) {
+          // Find a gap (0) in the wall that has support below (bottom row or brick below)
+          for (let r = rows - 1; r >= 0; r--) {
+            for (let b = 0; b < brickCols; b++) {
+              if (wall[r][b] === 0 && (r === rows - 1 || wall[r + 1]?.[b] === 1)) {
+                return { col: b, targetRow: r };
+              }
+            }
+          }
+          return null;
         }
         
         return (x, y, frame, cols, rows) => {
+          const brickCols = Math.floor(cols / BW);
+          
           if (cols !== lastCols || rows !== lastRows) {
             lastCols = cols; lastRows = rows;
-            landed = Array.from({length: rows}, () => new Array(cols).fill(0));
-            pieces = [spawn(cols)];
+            init(cols, rows);
             lastFrame = -1;
           }
           
-          // Update ONCE per frame (guard with lastFrame)
+          // Update once per frame
           if (frame !== lastFrame) {
             lastFrame = frame;
             
-            // Spawn every ~90 frames
-            if (frame % 90 === 0 && pieces.length < 2) pieces.push(spawn(cols));
+            // Spawn a falling brick every ~50 frames
+            if (frame % 50 === 0 && falling.length < 2) {
+              const gap = findGap(rows, brickCols);
+              if (gap) {
+                falling.push({ col: gap.col, y: -1, targetRow: gap.targetRow });
+              }
+            }
             
-            // Move pieces every 8 frames
-            if (frame % 8 === 0) {
-              for (let i = pieces.length - 1; i >= 0; i--) {
-                const p = pieces[i];
-                p.y++;
-                let land = false;
-                for (let sy = 0; sy < p.shape.length; sy++) {
-                  for (let sx = 0; sx < p.shape[sy].length; sx++) {
-                    if (!p.shape[sy][sx]) continue;
-                    const py = Math.floor(p.y) + sy;
-                    const px = p.x + sx;
-                    if (py >= rows - 1 || (py >= 0 && landed[py + 1]?.[px])) land = true;
-                  }
-                }
-                if (land) {
-                  for (let sy = 0; sy < p.shape.length; sy++) {
-                    for (let sx = 0; sx < p.shape[sy].length; sx++) {
-                      if (!p.shape[sy][sx]) continue;
-                      const py = Math.floor(p.y) + sy;
-                      const px = p.x + sx;
-                      if (py >= 0 && py < rows && px >= 0 && px < cols) landed[py][px] = 1;
-                    }
-                  }
-                  pieces.splice(i, 1);
-                  // Clear full rows
-                  for (let r = rows - 1; r >= 0; r--) {
-                    if (landed[r].every(v => v)) {
-                      landed.splice(r, 1);
-                      landed.unshift(new Array(cols).fill(0));
-                    }
-                  }
+            // Move falling bricks down every 4 frames
+            if (frame % 4 === 0) {
+              for (let i = falling.length - 1; i >= 0; i--) {
+                const f = falling[i];
+                f.y++;
+                if (f.y >= f.targetRow) {
+                  wall[f.targetRow][f.col] = 1;
+                  falling.splice(i, 1);
                 }
               }
             }
           }
           
-          // Render: check this cell
-          if (y >= 0 && y < rows && landed[y]?.[x]) return 0.8;
-          for (const p of pieces) {
-            for (let sy = 0; sy < p.shape.length; sy++) {
-              for (let sx = 0; sx < p.shape[sy].length; sx++) {
-                if (!p.shape[sy][sx]) continue;
-                if (Math.floor(p.y) + sy === y && p.x + sx === x) return 1.0;
-              }
+          // Render: which brick column is this char in?
+          const bCol = Math.floor(x / BW);
+          const bx = x % BW; // position within brick (0=[ 1=space 2=])
+          
+          // Check falling bricks
+          for (const f of falling) {
+            if (f.col === bCol && Math.floor(f.y) === y) {
+              // Draw brick chars: [ ]
+              return (bx === 0 || bx === BW - 1) ? 1.0 : 0.6;
             }
           }
+          
+          // Check wall
+          if (y >= 0 && y < rows && bCol < brickCols && wall[y]?.[bCol]) {
+            // Stagger: offset odd rows by half a brick
+            const staggered = (y % 2 === 1);
+            const sx = staggered ? (x + Math.floor(BW / 2)) % cols : x;
+            const sBCol = Math.floor(sx / BW);
+            const sBx = sx % BW;
+            if (wall[y]?.[sBCol]) {
+              return (sBx === 0 || sBx === BW - 1) ? 0.7 : 0.4;
+            }
+          }
+          
           return 0;
         };
       })()
