@@ -801,6 +801,22 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     creatures.push(c);
   }
   
+  // Pre-render static bg grid to offscreen canvas (1 drawImage vs 9000 fillText)
+  let bgLayer = null;
+  function renderBgLayer() {
+    bgLayer = document.createElement('canvas');
+    bgLayer.width = canvas.width;
+    bgLayer.height = canvas.height;
+    const bgCtx = bgLayer.getContext('2d');
+    bgCtx.font = `${fontSize}px JetBrains Mono, monospace`;
+    bgCtx.fillStyle = 'rgba(79, 195, 247, 0.05)';
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        bgCtx.fillText(bgGrid[y][x], x * charW, y * fontSize + fontSize);
+      }
+    }
+  }
+  
   let tick = 0;
   
   function mirrorLine(line) {
@@ -813,17 +829,11 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw cached background grid (1 call instead of 9000)
+    if (bgLayer) ctx.drawImage(bgLayer, 0, 0);
+    
     ctx.font = `${fontSize}px JetBrains Mono, monospace`;
-    
-    // Build brightness map: start with base
-    // We'll just iterate the grid and check each cell
-    
-    // Slowly swap background chars
-    if (tick % 3 === 0) {
-      const rx = Math.floor(Math.random() * cols);
-      const ry = Math.floor(Math.random() * rows);
-      if (bgGrid[ry]) bgGrid[ry][rx] = bgChars[Math.floor(Math.random() * bgChars.length)];
-    }
     
     // Update creatures
     for (let i = creatures.length - 1; i >= 0; i--) {
@@ -899,8 +909,9 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   }
   
   initGrid();
+  renderBgLayer();
   draw();
-  window.addEventListener('resize', initGrid);
+  window.addEventListener('resize', () => { initGrid(); renderBgLayer(); });
 })();
 </script>
 </body>
