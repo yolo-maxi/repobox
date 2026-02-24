@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server'
 import { verifyToken } from '../../../lib/token'
-import store from '../../../lib/store'
+import { getLeaderboard, addLeaderboardEntry, usedTokens } from '../../../lib/store'
 
 const GAME_TICK_MS = 125
 
-export function GET(request) {
-  const { searchParams } = new URL(request.url)
-  const full = searchParams.get('full') === '1'
-  const rows = [...store.leaderboard].sort((a, b) => b.score - a.score || (a.ts > b.ts ? 1 : -1))
-  return NextResponse.json({ ok: true, rows: full ? rows : rows.slice(0, 20) })
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const full = searchParams.get('full') === '1'
+    const rows = await getLeaderboard(full)
+    return NextResponse.json({ ok: true, rows })
+  } catch (e) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
 }
 
 export async function POST(request) {
@@ -23,15 +27,11 @@ export async function POST(request) {
     if (!token || !ts)
       return NextResponse.json({ error: 'Missing game token. Nice try 🐍' }, { status: 403 })
 
-    try {
-      if (!verifyToken(token, ts))
-        return NextResponse.json({ error: 'Invalid token. Play the game! 🎮' }, { status: 403 })
-    } catch {
-      return NextResponse.json({ error: 'Bad token format' }, { status: 403 })
-    }
+    if (!verifyToken(token, ts))
+      return NextResponse.json({ error: 'Invalid token. Play the game! 🎮' }, { status: 403 })
 
     const tokenKey = token.slice(0, 16)
-    if (store.usedTokens.has(tokenKey))
+    if (usedTokens.has(tokenKey))
       return NextResponse.json({ error: 'Token already used.' }, { status: 403 })
 
     const elapsed = Date.now() - Number(ts)
@@ -41,18 +41,15 @@ export async function POST(request) {
     if (elapsed > 600_000)
       return NextResponse.json({ error: 'Token expired. Start a new game.' }, { status: 403 })
 
-    store.usedTokens.add(tokenKey)
-    if (store.usedTokens.size > 10000) {
-      const arr = [...store.usedTokens]; arr.splice(0, 5000)
-      store.usedTokens.clear(); arr.forEach(t => store.usedTokens.add(t))
+    usedTokens.add(tokenKey)
+    if (usedTokens.size > 10000) {
+      const arr = [...usedTokens]; arr.splice(0, 5000)
+      usedTokens.clear(); arr.forEach(t => usedTokens.add(t))
     }
 
-    store.leaderboard.push({ name: cleanName, score: Math.floor(numScore), ts: new Date().toISOString() })
-    store.leaderboard.sort((a, b) => b.score - a.score || (a.ts > b.ts ? 1 : -1))
-    if (store.leaderboard.length > 200) store.leaderboard.length = 200
-
-    return NextResponse.json({ ok: true })
-  } catch {
-    return NextResponse.json({ error: 'Bad request' }, { status: 400 })
+    const result = await addLeaderboardEntry(cleanName, Math.floor(numScore))
+    return NextResponse.json(result)
+  } catch (e) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }

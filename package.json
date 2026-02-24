@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "ioredis": "^5.9.3",
     "next": "^15",
     "react": "^19",
     "react-dom": "^19"

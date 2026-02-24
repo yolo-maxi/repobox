@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import store from '../../../lib/store'
+import { addSubscriber } from '../../../lib/store'
 
 export async function POST(request) {
   try {
@@ -7,13 +7,9 @@ export async function POST(request) {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
     }
-    const lower = email.toLowerCase()
-    if (store.subscribers.find(s => s.email === lower)) {
-      return NextResponse.json({ ok: true, msg: 'Already subscribed' })
-    }
-    store.subscribers.push({ email: lower, ts: new Date().toISOString() })
-    return NextResponse.json({ ok: true })
-  } catch {
-    return NextResponse.json({ error: 'Bad request' }, { status: 400 })
+    const result = await addSubscriber(email.toLowerCase())
+    return NextResponse.json(result)
+  } catch (e) {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
