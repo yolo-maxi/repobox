@@ -612,9 +612,14 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   const ctx = canvas.getContext('2d');
   const fontSize = 7;
   const charW = fontSize * 0.6;
-  const bgChars = '{}[]<>|/\\+-=.:;~^*#@$&01'.split('');
   
   let cols, rows, bgGrid, bgLayer;
+  let wpText = '';
+  
+  // Load Bitcoin whitepaper for the background grid
+  fetch('/whitepaper.txt')
+    .then(r => r.text())
+    .then(t => { wpText = t.replace(/\s+/g, ' ').trim(); if (bgGrid) rebuildBgLayer(); });
   
   function initGrid() {
     const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, window.innerHeight);
@@ -623,10 +628,32 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     cols = Math.ceil(canvas.width / charW);
     rows = Math.ceil(docH / fontSize);
     bgGrid = [];
+    let idx = 0;
     for (let y = 0; y < rows; y++) {
       bgGrid[y] = [];
       for (let x = 0; x < cols; x++) {
-        bgGrid[y][x] = bgChars[Math.floor(Math.random() * bgChars.length)];
+        if (wpText.length > 0) {
+          bgGrid[y][x] = wpText[idx % wpText.length];
+          idx++;
+        } else {
+          bgGrid[y][x] = String.fromCharCode(33 + Math.floor(Math.random() * 94));
+        }
+      }
+    }
+    rebuildBgLayer();
+  }
+  
+  function rebuildBgLayer() {
+    if (!cols || !rows) return;
+    // Rebuild grid text if whitepaper loaded after initial grid
+    if (wpText.length > 0) {
+      let idx = 0;
+      for (let y = 0; y < rows; y++) {
+        if (!bgGrid[y]) bgGrid[y] = [];
+        for (let x = 0; x < cols; x++) {
+          bgGrid[y][x] = wpText[idx % wpText.length];
+          idx++;
+        }
       }
     }
     // Pre-render background to offscreen canvas
@@ -635,7 +662,7 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     bgLayer.height = canvas.height;
     const bgCtx = bgLayer.getContext('2d');
     bgCtx.font = `${fontSize}px JetBrains Mono, monospace`;
-    bgCtx.fillStyle = 'rgba(79, 195, 247, 0.025)'; // darker bg for more contrast
+    bgCtx.fillStyle = 'rgba(79, 195, 247, 0.025)';
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
         bgCtx.fillText(bgGrid[y][x], x * charW, y * fontSize + fontSize);
@@ -648,19 +675,16 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   let frames = null;
   let fW = 0, fH = 0, totalFrames = 0;
   const jellies = [];
-  const MAX_JELLIES = 12;
-  const SPAWN_INTERVAL = 90; // frames between spawn attempts (~1.5s)
+  const MAX_JELLIES = 25;
+  const SPAWN_INTERVAL = 45; // frames between spawn attempts (~0.75s)
   
-  // Movement direction: ~1 o'clock = 30° from vertical = 60° from horizontal
-  // In screen coords: dx = sin(30°) = 0.5, dy = -cos(30°) = -0.866
-  const moveAngle = Math.PI / 6; // 30° from vertical
-  const moveDirX = Math.sin(moveAngle);  // 0.5 (rightward)
-  const moveDirY = -Math.cos(moveAngle); // -0.866 (upward)
+  // Base movement direction: ~1 o'clock = 30° from vertical
+  const moveAngle = Math.PI / 6;
+  const moveDirX = Math.sin(moveAngle);
+  const moveDirY = -Math.cos(moveAngle);
   
-  // Rotation for rendering: +70° clockwise
-  const rot = 70 * Math.PI / 180;
-  const cosR = Math.cos(rot);
-  const sinR = Math.sin(rot);
+  // Base rotation: +70° clockwise (per-jelly variation added in makeJelly)
+  const baseRot = 70 * Math.PI / 180;
   
   fetch('/jellyfish.json')
     .then(r => r.json())
@@ -669,13 +693,17 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
       totalFrames = frames.length;
       fH = frames[0].length;
       fW = frames[0][0].length;
-      // Initial batch
-      for (let i = 0; i < 4; i++) jellies.push(makeJelly(true));
+      // Initial batch — spread across the page
+      for (let i = 0; i < 12; i++) jellies.push(makeJelly(true));
     });
   
   function makeJelly(initial) {
-    const scale = 0.35 + Math.random() * 0.65;
-    // Rotated bounding box is larger than original
+    const scale = 0.15 + Math.random() * 0.85; // wider range: tiny to large
+    // Per-jellyfish rotation: base ±25°
+    const rot = baseRot + (Math.random() - 0.5) * (50 * Math.PI / 180);
+    const cosR = Math.cos(rot);
+    const sinR = Math.sin(rot);
+    // Rotated bounding box
     const diagW = Math.ceil(Math.abs(fW * cosR) + Math.abs(fH * sinR)) * scale;
     const diagH = Math.ceil(Math.abs(fW * sinR) + Math.abs(fH * cosR)) * scale;
     
@@ -703,14 +731,13 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     const coastSpeed = burstSpeed * 0.15; // slow drift between pulses
     
     return {
-      x, y, scale, diagW, diagH,
+      x, y, scale, diagW, diagH, cosR, sinR,
       burstSpeed, coastSpeed,
       frameOffset: Math.floor(Math.random() * totalFrames),
-      maxAlpha: 0.15 + scale * 0.45,
+      maxAlpha: 0.1 + scale * 0.5,
       phase: Math.random() * Math.PI * 2,
       swayAmp: 0.2 + Math.random() * 0.3,
       swayFreq: 0.003 + Math.random() * 0.004,
-      // Track previous frame brightness sum to detect contraction
       prevBrightSum: 0,
       contracting: false,
     };
@@ -786,9 +813,9 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
           const relX = (gx - drawX) / j.scale;
           const relY = (gy - drawY) / j.scale;
           
-          // Inverse rotate to find source pixel
-          const srcX = Math.floor(relX * cosR + relY * sinR + cx);
-          const srcY = Math.floor(-relX * sinR + relY * cosR + cy);
+          // Inverse rotate to find source pixel (per-jelly rotation)
+          const srcX = Math.floor(relX * j.cosR + relY * j.sinR + cx);
+          const srcY = Math.floor(-relX * j.sinR + relY * j.cosR + cy);
           
           if (srcX < 0 || srcX >= fW || srcY < 0 || srcY >= fH) continue;
           
