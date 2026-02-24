@@ -207,7 +207,7 @@ a:hover { opacity: 0.8; }
 <div class="reg-mark reg-bl"></div>
 <div class="reg-mark reg-br"></div>
 
-<div class="max-w-[720px] mx-auto" style="padding:80px 40px 100px; position:relative; z-index:1;">
+<div class="max-w-[720px] mx-auto" style="padding:80px 40px 100px; position:relative; z-index:2;">
 
   <!-- Header -->
   <header style="margin-bottom:60px;">
@@ -320,7 +320,7 @@ a:hover { opacity: 0.8; }
 </div>
 
 <!-- Full-width footer -->
-<footer style="background:#060e1a;border-top:1px solid rgba(50,100,160,0.25);margin-top:0;position:relative;z-index:1;">
+<footer style="background:#060e1a;border-top:1px solid rgba(50,100,160,0.25);margin-top:0;position:relative;z-index:2;">
   <div class="footer-grid" style="max-width:960px;margin:0 auto;padding:60px 40px 40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px;">
 
     <!-- Col 1: Say Hi -->
@@ -604,162 +604,24 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 })();
 </script>
 <script src="/canvas.js"></script>
-<canvas id="fish-bg" style="position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;"></canvas>
+<canvas id="bg-canvas" style="position:absolute;top:0;left:0;width:100%;z-index:1;pointer-events:none;"></canvas>
 <script>
-// Ambient ASCII fish — full char grid, fish are brightness masks
+// Ambient ASCII background: char grid + single large hot air balloon drifting slowly
 (function() {
-  const canvas = document.getElementById('fish-bg');
+  const canvas = document.getElementById('bg-canvas');
   const ctx = canvas.getContext('2d');
-  const fontSize = 8;
+  const fontSize = 7;
   const charW = fontSize * 0.6;
   const bgChars = '{}[]<>|/\\+-=.:;~^*#@$&01'.split('');
   
-  // Fish defined as animation frames (arrays of strings)
-  // Space = transparent, any char = brightness mask
-  const fishTypes = [
-    { // Large fish with tail animation — ~36x13
-      frames: [
-        [
-          '              ______                ',
-          '          ___/      \\___            ',
-          '     ____/    o         \\___        ',
-          '    /                      \\____    ',
-          '   /                           \\__ /',
-          '  |                              \\/  ',
-          '  |                              /\\  ',
-          '   \\                           /-- \\',
-          '    \\____                 ____/      ',
-          '         \\___       ___/             ',
-          '             \\_____/                 ',
-        ],
-        [
-          '              ______                ',
-          '          ___/      \\___            ',
-          '     ____/    o         \\___        ',
-          '    /                      \\____    ',
-          '   /                           \\__  ',
-          '  |                              >--<',
-          '   \\                           /--  ',
-          '    \\____                 ____/      ',
-          '         \\___       ___/             ',
-          '             \\_____/                 ',
-        ],
-        [
-          '              ______                ',
-          '          ___/      \\___            ',
-          '     ____/    o         \\___        ',
-          '    /                      \\____    ',
-          '   /                           \\__ \\',
-          '  |                              \\/  ',
-          '  |                              /\\  ',
-          '   \\                           /-- /',
-          '    \\____                 ____/      ',
-          '         \\___       ___/             ',
-          '             \\_____/                 ',
-        ],
-      ],
-      speed: [0.2, 0.35],
-    },
-    { // Medium rounded fish — ~25x9
-      frames: [
-        [
-          '         .-----.        ',
-          '       /    o    \\      ',
-          '     /             \\    ',
-          '    |               |\\  ',
-          '    |               | >-',
-          '    |               |/  ',
-          '     \\             /    ',
-          '       \\_________/      ',
-        ],
-        [
-          '         .-----.        ',
-          '       /    o    \\      ',
-          '     /             \\    ',
-          '    |               |\\ ',
-          '    |               >>--',
-          '    |               |/ ',
-          '     \\             /    ',
-          '       \\_________/      ',
-        ],
-      ],
-      speed: [0.25, 0.5],
-    },
-    { // Jellyfish — ~20x14, tentacles animate
-      frames: [
-        [
-          '      _______       ',
-          '    /~~~~~~~~~\\     ',
-          '   |  ()    () |    ',
-          '   |     __     |   ',
-          '    \\_________/    ',
-          '     | |  | |      ',
-          '     | |  | |      ',
-          '     | |  | |      ',
-          '      \\|  |/       ',
-          '       |  |        ',
-          '       |  |        ',
-          '       \\  /        ',
-        ],
-        [
-          '      _______       ',
-          '    /~~~~~~~~~\\     ',
-          '   |  ()    () |    ',
-          '   |     __     |   ',
-          '    \\_________/    ',
-          '    \\  |  |  /     ',
-          '     | |  | |      ',
-          '     | |  | |      ',
-          '     |/    \\|      ',
-          '      |    |       ',
-          '      |    |       ',
-          '       \\  /        ',
-        ],
-        [
-          '      _______       ',
-          '    /~~~~~~~~~\\     ',
-          '   |  ()    () |    ',
-          '   |     __     |   ',
-          '    \\_________/    ',
-          '     | |  | |      ',
-          '    /  |  |  \\     ',
-          '     | |  | |      ',
-          '      \\|  |/       ',
-          '       |  |        ',
-          '        \\/         ',
-        ],
-      ],
-      speed: [0.08, 0.15], // jellyfish are slow
-    },
-    { // Small darting fish — ~18x5
-      frames: [
-        [
-          '     /\\____      ',
-          '    /  o    \\___  ',
-          '   |         >==>',
-          '    \\___    /---  ',
-          '        \\__/      ',
-        ],
-        [
-          '     /\\____      ',
-          '    /  o    \\___  ',
-          '   |         >=>-',
-          '    \\___    /---  ',
-          '        \\__/      ',
-        ],
-      ],
-      speed: [0.4, 0.7], // fast
-    },
-  ];
-  
-  // Background char grid
-  let cols, rows, bgGrid;
+  let cols, rows, bgGrid, bgLayer;
   
   function initGrid() {
+    const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, window.innerHeight);
     canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.height = docH;
     cols = Math.ceil(canvas.width / charW);
-    rows = Math.ceil(canvas.height / fontSize);
+    rows = Math.ceil(docH / fontSize);
     bgGrid = [];
     for (let y = 0; y < rows; y++) {
       bgGrid[y] = [];
@@ -767,49 +629,13 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
         bgGrid[y][x] = bgChars[Math.floor(Math.random() * bgChars.length)];
       }
     }
-  }
-  
-  // Active fish
-  let creatures = [];
-  const MAX_CREATURES = 6;
-  
-  function spawnCreature() {
-    const type = fishTypes[Math.floor(Math.random() * fishTypes.length)];
-    const frame0 = type.frames[0];
-    const w = Math.max(...frame0.map(l => l.length));
-    const h = frame0.length;
-    const dir = Math.random() < 0.7 ? 1 : -1;
-    const speed = (type.speed[0] + Math.random() * (type.speed[1] - type.speed[0])) * dir;
-    
-    return {
-      type,
-      x: dir === 1 ? -w - 5 : cols + 5,
-      y: Math.floor(Math.random() * (rows - h - 2)) + 1,
-      w, h,
-      speed,
-      dir,
-      frameIdx: 0,
-      frameTimer: 0,
-      wobblePhase: Math.random() * Math.PI * 2,
-    };
-  }
-  
-  // Scatter initial creatures across screen
-  for (let i = 0; i < MAX_CREATURES; i++) {
-    const c = spawnCreature();
-    c.x = Math.floor(Math.random() * (cols - c.w));
-    creatures.push(c);
-  }
-  
-  // Pre-render static bg grid to offscreen canvas (1 drawImage vs 9000 fillText)
-  let bgLayer = null;
-  function renderBgLayer() {
+    // Pre-render background to offscreen canvas
     bgLayer = document.createElement('canvas');
     bgLayer.width = canvas.width;
     bgLayer.height = canvas.height;
     const bgCtx = bgLayer.getContext('2d');
     bgCtx.font = `${fontSize}px JetBrains Mono, monospace`;
-    bgCtx.fillStyle = 'rgba(79, 195, 247, 0.05)';
+    bgCtx.fillStyle = 'rgba(79, 195, 247, 0.025)'; // darker bg for more contrast
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
         bgCtx.fillText(bgGrid[y][x], x * charW, y * fontSize + fontSize);
@@ -817,91 +643,163 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     }
   }
   
-  let tick = 0;
+  // Animated jellyfish — multiple instances from video brightness frames
+  // Rotated +70° (jellyfish tilted), moving in bursts toward ~1 o'clock (up-right ~30° from vertical)
+  let frames = null;
+  let fW = 0, fH = 0, totalFrames = 0;
+  const jellies = [];
+  const MAX_JELLIES = 12;
+  const SPAWN_INTERVAL = 90; // frames between spawn attempts (~1.5s)
   
-  function mirrorLine(line) {
-    return line.split('').reverse().join('')
-      .replace(/\(/g, '\x01').replace(/\)/g, '(').replace(/\x01/g, ')')
-      .replace(/</g, '\x01').replace(/>/g, '<').replace(/\x01/g, '>')
-      .replace(/\//g, '\x01').replace(/\\/g, '/').replace(/\x01/g, '\\')
-      .replace(/\[/g, '\x01').replace(/\]/g, '[').replace(/\x01/g, ']');
+  // Movement direction: ~1 o'clock = 30° from vertical = 60° from horizontal
+  // In screen coords: dx = sin(30°) = 0.5, dy = -cos(30°) = -0.866
+  const moveAngle = Math.PI / 6; // 30° from vertical
+  const moveDirX = Math.sin(moveAngle);  // 0.5 (rightward)
+  const moveDirY = -Math.cos(moveAngle); // -0.866 (upward)
+  
+  // Rotation for rendering: +70° clockwise
+  const rot = 70 * Math.PI / 180;
+  const cosR = Math.cos(rot);
+  const sinR = Math.sin(rot);
+  
+  fetch('/jellyfish.json')
+    .then(r => r.json())
+    .then(data => {
+      frames = data;
+      totalFrames = frames.length;
+      fH = frames[0].length;
+      fW = frames[0][0].length;
+      // Initial batch
+      for (let i = 0; i < 4; i++) jellies.push(makeJelly(true));
+    });
+  
+  function makeJelly(initial) {
+    const scale = 0.35 + Math.random() * 0.65;
+    // Rotated bounding box is larger than original
+    const diagW = Math.ceil(Math.abs(fW * cosR) + Math.abs(fH * sinR)) * scale;
+    const diagH = Math.ceil(Math.abs(fW * sinR) + Math.abs(fH * cosR)) * scale;
+    
+    // Spawn from bottom-left area, drift toward upper-right
+    let x, y;
+    if (initial) {
+      x = Math.random() * cols;
+      y = Math.random() * rows;
+    } else {
+      // Spawn off-screen: bottom or left edge
+      if (Math.random() < 0.6) {
+        // Bottom edge
+        x = Math.random() * cols;
+        y = rows + Math.random() * 20;
+      } else {
+        // Left edge
+        x = -diagW - Math.random() * 20;
+        y = rows * 0.3 + Math.random() * rows * 0.7;
+      }
+    }
+    
+    // Burst movement: jellyfish contract to move, then coast
+    // We'll track animation frame and derive burst from contraction phase
+    const burstSpeed = (0.06 + Math.random() * 0.06) * (0.5 + scale * 0.5);
+    const coastSpeed = burstSpeed * 0.15; // slow drift between pulses
+    
+    return {
+      x, y, scale, diagW, diagH,
+      burstSpeed, coastSpeed,
+      frameOffset: Math.floor(Math.random() * totalFrames),
+      maxAlpha: 0.15 + scale * 0.45,
+      phase: Math.random() * Math.PI * 2,
+      swayAmp: 0.2 + Math.random() * 0.3,
+      swayFreq: 0.003 + Math.random() * 0.004,
+      // Track previous frame brightness sum to detect contraction
+      prevBrightSum: 0,
+      contracting: false,
+    };
   }
+  
+  let tick = 0;
+  let lastSpawn = 0;
   
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw cached background grid (1 call instead of 9000)
     if (bgLayer) ctx.drawImage(bgLayer, 0, 0);
+    
+    if (!frames) { requestAnimationFrame(draw); tick++; return; }
     
     ctx.font = `${fontSize}px JetBrains Mono, monospace`;
     
-    // Update creatures
-    for (let i = creatures.length - 1; i >= 0; i--) {
-      const c = creatures[i];
-      
-      // Advance animation frame every ~15 ticks
-      c.frameTimer++;
-      if (c.frameTimer > 15) {
-        c.frameTimer = 0;
-        c.frameIdx = (c.frameIdx + 1) % c.type.frames.length;
-      }
-      
-      // Move
-      c.x += c.speed;
-      
-      // Respawn when off screen
-      if (c.dir === 1 && c.x > cols + 5) {
-        creatures[i] = spawnCreature();
-      } else if (c.dir === -1 && c.x < -c.w - 5) {
-        creatures[i] = spawnCreature();
-      }
+    // Spawn new jellyfish periodically
+    if (tick - lastSpawn > SPAWN_INTERVAL && jellies.length < MAX_JELLIES) {
+      jellies.push(makeJelly(false));
+      lastSpawn = tick;
     }
     
-    // Keep population up
-    while (creatures.length < MAX_CREATURES) {
-      creatures.push(spawnCreature());
-    }
-    
-    // Render: only draw cells within creature bounding boxes (perf optimization)
-    // First pass: build a Set of lit cells
-    const litCells = new Map(); // key "x,y" -> brightness
-    
-    for (const c of creatures) {
-      const frame = c.type.frames[c.frameIdx];
-      const wobbleY = Math.sin(c.wobblePhase + tick * 0.02) * 1.5;
-      const cy = Math.round(c.y + wobbleY);
-      const cx = Math.round(c.x);
+    for (let ji = jellies.length - 1; ji >= 0; ji--) {
+      const j = jellies[ji];
       
-      for (let fy = 0; fy < frame.length; fy++) {
-        const line = frame[fy];
-        for (let fx = 0; fx < line.length; fx++) {
-          const ch = line[fx];
-          if (ch === ' ') continue;
-          
-          const gx = c.dir === 1 ? cx + fx : cx + c.w - 1 - fx;
-          const gy = cy + fy;
-          
-          if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
-          
-          let b;
-          if (ch === 'o' || ch === 'O') b = 0.9;
-          else if (ch === '>' || ch === '<' || ch === '=' || ch === '-') b = 0.5;
-          else b = 0.7;
-          
-          const key = gy * cols + gx;
-          const prev = litCells.get(key) || 0;
-          if (b > prev) litCells.set(key, b);
+      // Current animation frame
+      const fi = Math.floor((tick * 0.12 + j.frameOffset) % totalFrames);
+      const frame = frames[fi];
+      
+      // Detect contraction: compare brightness of current vs previous frame
+      // When the jellyfish contracts, the bright area shrinks → brightness sum drops
+      const prevFi = (fi - 1 + totalFrames) % totalFrames;
+      // Sample a few rows near the bell to detect contraction cheaply
+      let curSum = 0, prevSum = 0;
+      const sampleRows = [Math.floor(fH * 0.2), Math.floor(fH * 0.3), Math.floor(fH * 0.4)];
+      for (const sy of sampleRows) {
+        for (let sx = 0; sx < fW; sx += 3) {
+          curSum += frame[sy][sx];
+          prevSum += frames[prevFi][sy][sx];
         }
       }
-    }
-    
-    // Draw only lit cells
-    for (const [key, brightness] of litCells) {
-      const x = key % cols;
-      const y = (key - x) / cols;
-      const alpha = 0.05 + brightness * 0.35;
-      ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
-      ctx.fillText(bgGrid[y]?.[x] || '.', x * charW, y * fontSize + fontSize);
+      j.contracting = curSum < prevSum * 0.98; // bell is shrinking
+      
+      // Burst movement on contraction, coast otherwise
+      const speed = j.contracting ? j.burstSpeed : j.coastSpeed;
+      j.x += moveDirX * speed;
+      j.y += moveDirY * speed;
+      
+      // Gentle perpendicular sway
+      const sway = Math.sin(tick * j.swayFreq + j.phase) * j.swayAmp;
+      const drawX = j.x + sway * moveDirY; // perpendicular to movement
+      const drawY = j.y - sway * moveDirX;
+      
+      // Remove when fully off screen
+      if (drawY + j.diagH < -20 || drawX > cols + 20 || drawX + j.diagW < -20 || drawY > rows + 20) {
+        jellies.splice(ji, 1);
+        continue;
+      }
+      
+      // Render rotated jellyfish via inverse rotation sampling
+      // For each grid cell in the bounding box, find the source pixel
+      const cx = fW / 2; // center of original image
+      const cy = fH / 2;
+      
+      const startGx = Math.max(0, Math.floor(drawX - j.diagW / 2));
+      const endGx = Math.min(cols, Math.ceil(drawX + j.diagW / 2));
+      const startGy = Math.max(0, Math.floor(drawY - j.diagH / 2));
+      const endGy = Math.min(rows, Math.ceil(drawY + j.diagH / 2));
+      
+      for (let gy = startGy; gy < endGy; gy++) {
+        for (let gx = startGx; gx < endGx; gx++) {
+          // Grid position relative to jellyfish center
+          const relX = (gx - drawX) / j.scale;
+          const relY = (gy - drawY) / j.scale;
+          
+          // Inverse rotate to find source pixel
+          const srcX = Math.floor(relX * cosR + relY * sinR + cx);
+          const srcY = Math.floor(-relX * sinR + relY * cosR + cy);
+          
+          if (srcX < 0 || srcX >= fW || srcY < 0 || srcY >= fH) continue;
+          
+          const b = frame[srcY][srcX];
+          if (b > 0.08) {
+            const alpha = b * j.maxAlpha;
+            ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
+            ctx.fillText(bgGrid[gy]?.[gx] || '.', gx * charW, gy * fontSize + fontSize);
+          }
+        }
+      }
     }
     
     tick++;
@@ -909,9 +807,10 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   }
   
   initGrid();
-  renderBgLayer();
   draw();
-  window.addEventListener('resize', () => { initGrid(); renderBgLayer(); });
+  window.addEventListener('resize', () => { initGrid(); });
+  // Re-init when page finishes loading (height may change)
+  window.addEventListener('load', () => { setTimeout(initGrid, 100); });
 })();
 </script>
 </body>
