@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server'
 
 export function GET() {
-  const keys = Object.keys(process.env).filter(k => k.includes('KV') || k.includes('REDIS') || k.includes('UPSTASH'))
-  const info = {}
-  for (const k of keys) {
-    const v = process.env[k] || ''
-    info[k] = v.startsWith('redis') ? v.slice(0, 30) + '...' : v.slice(0, 20) + '...'
+  const url = process.env.KV_REDIS_URL || ''
+  // Show scheme + host portion only (mask password)
+  const match = url.match(/^(rediss?):\/\/([^:]+):([^@]+)@(.+)$/)
+  if (match) {
+    return NextResponse.json({
+      scheme: match[1],
+      user: match[2],
+      password_len: match[3].length,
+      host_port: match[4],
+      full_len: url.length,
+    })
   }
-  return NextResponse.json(info)
+  return NextResponse.json({ raw_prefix: url.slice(0, 15), len: url.length })
 }
