@@ -853,7 +853,7 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     }
     
     // Render grid
-    const baseAlpha = 0.04;
+    const baseAlpha = 0.03;
     
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
@@ -884,7 +884,7 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
           }
         }
         
-        const alpha = baseAlpha + brightness * 0.12;
+        const alpha = baseAlpha + brightness * 0.25;
         
         if (alpha > 0.01) {
           ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
