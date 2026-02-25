@@ -210,17 +210,20 @@ a:hover { opacity: 0.8; }
 
 <div class="max-w-[720px] mx-auto" style="padding:80px 40px 100px; position:relative; z-index:2;">
 
-  <!-- Header -->
-  <header style="margin-bottom:60px;">
-    <div class="font-mono font-bold" style="font-size:40px;line-height:60px;margin-bottom:20px;">repo<span class="logo-dot">.</span>box</div>
-    <p style="font-size:16px;line-height:20px;color:#5a7a94;max-width:500px;">An independent team building cool ideas with cool people.</p>
+  <!-- Hero -->
+  <header style="margin-bottom:0; min-height:70vh; display:flex; flex-direction:column; justify-content:center;">
+    <div class="font-mono font-bold" style="font-size:56px;line-height:1.1;margin-bottom:24px;">repo<span class="logo-dot">.</span>box</div>
+    <p style="font-size:18px;line-height:28px;color:#5a7a94;max-width:500px;margin-bottom:48px;">An independent team building cool ideas with cool people.</p>
+    <p style="font-size:15px;line-height:24px;color:#8eafc4;max-width:560px;">
+      We're a small crew that likes to ship. We build products, experiment with new tech, 
+      and occasionally stumble into something useful. No pitch decks, no roadmaps — just code and curiosity.
+    </p>
+    <div style="margin-top:60px; color:#253a4f; font-size:11px; letter-spacing:0.15em; text-transform:uppercase; font-family:'JetBrains Mono',monospace;">
+      ↓ scroll
+    </div>
   </header>
 
-  <!-- Intro -->
-  <p class="reveal" style="font-size:16px;line-height:20px;color:#8eafc4;max-width:600px;margin-bottom:60px;">
-    We're a small crew that likes to ship. We build products, experiment with new tech, 
-    and occasionally stumble into something useful. No pitch decks, no roadmaps — just code and curiosity.
-  </p>
+  <div style="height:80px;"></div>
 
   <!-- Projects -->
   <section class="reveal" style="margin-bottom:60px;">
@@ -699,7 +702,9 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     });
   
   function makeJelly(initial) {
-    const scale = 0.15 + Math.random() * 0.85; // wider range: tiny to large
+    // Scale: mostly 0.15–1.0, but occasionally (10% chance) a big one up to 1.8×
+    const r = Math.random();
+    const scale = r < 0.9 ? (0.15 + r * 0.94) : (1.0 + Math.random() * 0.8);
     // Per-jellyfish rotation: base ±25°
     const rot = baseRot + (Math.random() - 0.5) * (50 * Math.PI / 180);
     const cosR = Math.cos(rot);
@@ -748,6 +753,10 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   let tick = 0;
   let lastSpawn = 0;
   
+  // === Deep ocean elements ===
+  
+  // Removed: plankton, bubbles, light rays — didn't look good
+  
   // Cursor tracking (in grid coordinates)
   let mouseGx = -1000, mouseGy = -1000;
   const CURSOR_GLOW_RADIUS = 12; // grid cells
@@ -768,6 +777,8 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     if (bgLayer) ctx.drawImage(bgLayer, 0, 0);
     
     ctx.font = `${fontSize}px JetBrains Mono, monospace`;
+    
+    // (ocean elements removed — jellyfish are enough)
     
     // Cursor glow: brighten grid chars near mouse
     if (mouseGx > -500) {
@@ -945,7 +956,6 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   initGrid();
   draw();
   window.addEventListener('resize', () => { initGrid(); });
-  // Re-init when page finishes loading (height may change)
   window.addEventListener('load', () => { setTimeout(initGrid, 100); });
 })();
 </script>
