@@ -619,8 +619,6 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 768;
   const fontSize = isMobile ? 10 : 7;  // bigger chars = fewer cells = less work
   const charW = fontSize * 0.6;
-  const targetFPS = isMobile ? 20 : 60;
-  const frameInterval = 1000 / targetFPS;
   let lastFrameTime = 0;
   
   let cols, rows, bgGrid, bgLayer;
@@ -696,6 +694,9 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   // Base rotation: +70° clockwise (per-jelly variation added in makeJelly)
   const baseRot = 70 * Math.PI / 180;
   
+  // Pre-rendered jellyfish frames as offscreen canvases
+  let frameCanvases = []; // one offscreen canvas per animation frame
+  
   fetch('/jellyfish.json')
     .then(r => r.json())
     .then(data => {
@@ -703,7 +704,10 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
       totalFrames = frames.length;
       fH = frames[0].length;
       fW = frames[0][0].length;
-      // Initial batch — spread across the page
+      
+      // No pre-rendered canvases needed — jellyfish modulate the background grid directly
+      
+      // Initial batch
       const initialCount = isMobile ? 3 : 12;
       for (let i = 0; i < initialCount; i++) jellies.push(makeJelly(true));
     });
@@ -779,13 +783,7 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     mouseGx = -1000; mouseGy = -1000;
   });
   
-  function draw(timestamp) {
-    // Throttle on mobile
-    if (isMobile && timestamp - lastFrameTime < frameInterval) {
-      requestAnimationFrame(draw);
-      return;
-    }
-    lastFrameTime = timestamp;
+  function draw() {
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (bgLayer) ctx.drawImage(bgLayer, 0, 0);
@@ -927,38 +925,52 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
         continue;
       }
       
-      // Cursor proximity glow boost for jellyfish
+      // Render jellyfish by modulating background grid brightness
+      // For each grid cell covered by the jellyfish, sample brightness and redraw the char brighter
+      
+      // Cursor glow boost
       let glowBoost = 1;
-      const jellyDist = Math.sqrt((drawX - mouseGx) ** 2 + (drawY - mouseGy) ** 2);
-      if (jellyDist < CURSOR_GLOW_RADIUS * 2) {
-        glowBoost = 1 + (1 - jellyDist / (CURSOR_GLOW_RADIUS * 2)) * 1.5;
+      if (!isMobile) {
+        const jellyDist = Math.sqrt((drawX - mouseGx) ** 2 + (drawY - mouseGy) ** 2);
+        if (jellyDist < CURSOR_GLOW_RADIUS * 2) {
+          glowBoost = 1 + (1 - jellyDist / (CURSOR_GLOW_RADIUS * 2)) * 1.5;
+        }
       }
       
-      // Render rotated jellyfish via inverse rotation sampling
-      const cx = fW / 2;
-      const cy = fH / 2;
+      // Bounding box in grid coords
+      const scaledW = fW * j.scale;
+      const scaledH = fH * j.scale;
+      const halfW = scaledW / 2;
+      const halfH = scaledH / 2;
       
-      const startGx = Math.max(0, Math.floor(drawX - diagW / 2));
-      const endGx = Math.min(cols, Math.ceil(drawX + diagW / 2));
-      const startGy = Math.max(0, Math.floor(drawY - diagH / 2));
-      const endGy = Math.min(rows, Math.ceil(drawY + diagH / 2));
+      // Scan grid cells in the bounding box area
+      const gxMin = Math.max(0, Math.floor(drawX - halfW - 2));
+      const gxMax = Math.min(cols, Math.ceil(drawX + halfW + 2));
+      const gyMin = Math.max(0, Math.floor(drawY - halfH - 2));
+      const gyMax = Math.min(rows, Math.ceil(drawY + halfH + 2));
       
-      for (let gy = startGy; gy < endGy; gy++) {
-        for (let gx = startGx; gx < endGx; gx++) {
-          const relX = (gx - drawX) / j.scale;
-          const relY = (gy - drawY) / j.scale;
+      for (let gy = gyMin; gy < gyMax; gy++) {
+        for (let gx = gxMin; gx < gxMax; gx++) {
+          // Transform grid position to jellyfish frame coordinates (with rotation)
+          const relX = gx - drawX;
+          const relY = gy - drawY;
+          // Inverse rotation to get frame-local coords
+          const localX = relX * j.cosR + relY * j.sinR;
+          const localY = -relX * j.sinR + relY * j.cosR;
+          // Scale to frame pixel coords
+          const fx = Math.floor(localX / j.scale + fW / 2);
+          const fy = Math.floor(localY / j.scale + fH / 2);
           
-          const srcX = Math.floor(relX * j.cosR + relY * j.sinR + cx);
-          const srcY = Math.floor(-relX * j.sinR + relY * j.cosR + cy);
+          if (fx < 0 || fx >= fW || fy < 0 || fy >= fH) continue;
+          const brightness = frame[fy][fx];
+          if (brightness < 0.08) continue;
           
-          if (srcX < 0 || srcX >= fW || srcY < 0 || srcY >= fH) continue;
+          const alpha = brightness * j.maxAlpha * glowBoost;
+          if (alpha < 0.02) continue;
           
-          const b = frame[srcY][srcX];
-          if (b > 0.08) {
-            const alpha = Math.min(b * j.maxAlpha * glowBoost, 0.9);
-            ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
-            ctx.fillText(bgGrid[gy]?.[gx] || '.', gx * charW, gy * fontSize + fontSize);
-          }
+          const ch = bgGrid[gy]?.[gx] || '.';
+          ctx.fillStyle = `rgba(79, 195, 247, ${Math.min(alpha, 0.9)})`;
+          ctx.fillText(ch, gx * charW, gy * fontSize + fontSize);
         }
       }
     }
