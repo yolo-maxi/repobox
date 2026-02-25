@@ -610,12 +610,18 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 <script src="/canvas.js"></script>
 <canvas id="bg-canvas" style="position:absolute;top:0;left:0;width:100%;z-index:1;pointer-events:none;"></canvas>
 <script>
-// Ambient ASCII background: char grid + single large hot air balloon drifting slowly
+// Ambient ASCII background: char grid + jellyfish
 (function() {
   const canvas = document.getElementById('bg-canvas');
   const ctx = canvas.getContext('2d');
-  const fontSize = 7;
+  
+  // Mobile detection & performance scaling
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 768;
+  const fontSize = isMobile ? 10 : 7;  // bigger chars = fewer cells = less work
   const charW = fontSize * 0.6;
+  const targetFPS = isMobile ? 20 : 60;
+  const frameInterval = 1000 / targetFPS;
+  let lastFrameTime = 0;
   
   let cols, rows, bgGrid, bgLayer;
   let wpText = '';
@@ -679,8 +685,8 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   let frames = null;
   let fW = 0, fH = 0, totalFrames = 0;
   const jellies = [];
-  const MAX_JELLIES = 25;
-  const SPAWN_INTERVAL = 45; // frames between spawn attempts (~0.75s)
+  const MAX_JELLIES = isMobile ? 6 : 25;
+  const SPAWN_INTERVAL = isMobile ? 120 : 45;
   
   // Base movement direction: ~1 o'clock = 30° from vertical
   const moveAngle = Math.PI / 6;
@@ -698,7 +704,8 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
       fH = frames[0].length;
       fW = frames[0][0].length;
       // Initial batch — spread across the page
-      for (let i = 0; i < 12; i++) jellies.push(makeJelly(true));
+      const initialCount = isMobile ? 3 : 12;
+      for (let i = 0; i < initialCount; i++) jellies.push(makeJelly(true));
     });
   
   function makeJelly(initial) {
@@ -772,7 +779,14 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     mouseGx = -1000; mouseGy = -1000;
   });
   
-  function draw() {
+  function draw(timestamp) {
+    // Throttle on mobile
+    if (isMobile && timestamp - lastFrameTime < frameInterval) {
+      requestAnimationFrame(draw);
+      return;
+    }
+    lastFrameTime = timestamp;
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (bgLayer) ctx.drawImage(bgLayer, 0, 0);
     
@@ -780,8 +794,8 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     
     // (ocean elements removed — jellyfish are enough)
     
-    // Cursor glow: brighten grid chars near mouse
-    if (mouseGx > -500) {
+    // Cursor glow: brighten grid chars near mouse (desktop only)
+    if (!isMobile && mouseGx > -500) {
       const glowR2 = CURSOR_GLOW_RADIUS * CURSOR_GLOW_RADIUS;
       const gxMin = Math.max(0, Math.floor(mouseGx - CURSOR_GLOW_RADIUS));
       const gxMax = Math.min(cols, Math.ceil(mouseGx + CURSOR_GLOW_RADIUS));
