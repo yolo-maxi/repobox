@@ -713,16 +713,9 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
       x = Math.random() * cols;
       y = Math.random() * rows;
     } else {
-      // Spawn off-screen: bottom or left edge
-      if (Math.random() < 0.6) {
-        // Bottom edge
-        x = Math.random() * cols;
-        y = rows + Math.random() * 20;
-      } else {
-        // Left edge
-        x = -diagW - Math.random() * 20;
-        y = rows * 0.3 + Math.random() * rows * 0.7;
-      }
+      // Spawn from bottom edge (they only go up)
+      x = Math.random() * cols;
+      y = rows + Math.random() * 30;
     }
     
     // Burst movement: jellyfish contract to move, then coast
@@ -730,9 +723,17 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     const burstSpeed = (0.06 + Math.random() * 0.06) * (0.5 + scale * 0.5);
     const coastSpeed = burstSpeed * 0.15; // slow drift between pulses
     
+    // Heading: roughly straight up (±20° variation within the ±30° limit)
+    const heading = -Math.PI / 2 + (Math.random() - 0.5) * 0.7;
+    
     return {
-      x, y, scale, diagW, diagH, cosR, sinR,
+      x, y, scale,
+      heading,       // current movement direction
+      renderRot: rot, // visual rotation (smoothly follows heading + offset)
+      cosR, sinR,    // cached for rendering (updated when renderRot changes)
       burstSpeed, coastSpeed,
+      speed: coastSpeed, // current speed (ramps up on flee)
+      fleeing: 0,    // frames of flee remaining
       frameOffset: Math.floor(Math.random() * totalFrames),
       maxAlpha: 0.1 + scale * 0.5,
       phase: Math.random() * Math.PI * 2,
@@ -746,13 +747,49 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
   let tick = 0;
   let lastSpawn = 0;
   
+  // Cursor tracking (in grid coordinates)
+  let mouseGx = -1000, mouseGy = -1000;
+  const CURSOR_GLOW_RADIUS = 12; // grid cells
+  const JELLY_FLEE_RADIUS = 18;  // grid cells — detection range
+  const JELLY_FLEE_FORCE = 0.8;  // impulse strength
+  
+  document.addEventListener('mousemove', (e) => {
+    const scrollY = window.scrollY || window.pageYOffset;
+    mouseGx = e.clientX / charW;
+    mouseGy = (e.clientY + scrollY) / fontSize;
+  });
+  document.addEventListener('mouseleave', () => {
+    mouseGx = -1000; mouseGy = -1000;
+  });
+  
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (bgLayer) ctx.drawImage(bgLayer, 0, 0);
     
-    if (!frames) { requestAnimationFrame(draw); tick++; return; }
-    
     ctx.font = `${fontSize}px JetBrains Mono, monospace`;
+    
+    // Cursor glow: brighten grid chars near mouse
+    if (mouseGx > -500) {
+      const glowR2 = CURSOR_GLOW_RADIUS * CURSOR_GLOW_RADIUS;
+      const gxMin = Math.max(0, Math.floor(mouseGx - CURSOR_GLOW_RADIUS));
+      const gxMax = Math.min(cols, Math.ceil(mouseGx + CURSOR_GLOW_RADIUS));
+      const gyMin = Math.max(0, Math.floor(mouseGy - CURSOR_GLOW_RADIUS));
+      const gyMax = Math.min(rows, Math.ceil(mouseGy + CURSOR_GLOW_RADIUS));
+      for (let gy = gyMin; gy < gyMax; gy++) {
+        for (let gx = gxMin; gx < gxMax; gx++) {
+          const dx = gx - mouseGx, dy = gy - mouseGy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < glowR2) {
+            const intensity = 1 - Math.sqrt(d2) / CURSOR_GLOW_RADIUS;
+            const alpha = 0.03 + intensity * 0.18;
+            ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
+            ctx.fillText(bgGrid[gy]?.[gx] || '.', gx * charW, gy * fontSize + fontSize);
+          }
+        }
+      }
+    }
+    
+    if (!frames) { requestAnimationFrame(draw); tick++; return; }
     
     // Spawn new jellyfish periodically
     if (tick - lastSpawn > SPAWN_INTERVAL && jellies.length < MAX_JELLIES) {
@@ -768,9 +805,7 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
       const frame = frames[fi];
       
       // Detect contraction: compare brightness of current vs previous frame
-      // When the jellyfish contracts, the bright area shrinks → brightness sum drops
       const prevFi = (fi - 1 + totalFrames) % totalFrames;
-      // Sample a few rows near the bell to detect contraction cheaply
       let curSum = 0, prevSum = 0;
       const sampleRows = [Math.floor(fH * 0.2), Math.floor(fH * 0.3), Math.floor(fH * 0.4)];
       for (const sy of sampleRows) {
@@ -779,41 +814,114 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
           prevSum += frames[prevFi][sy][sx];
         }
       }
-      j.contracting = curSum < prevSum * 0.98; // bell is shrinking
+      j.contracting = curSum < prevSum * 0.98;
       
-      // Burst movement on contraction, coast otherwise
-      const speed = j.contracting ? j.burstSpeed : j.coastSpeed;
-      j.x += moveDirX * speed;
-      j.y += moveDirY * speed;
+      // Cursor flee: rotate toward "away from cursor" direction, then thrust forward
+      const dxCursor = j.x - mouseGx;
+      const dyCursor = j.y - mouseGy;
+      const distCursor = Math.sqrt(dxCursor * dxCursor + dyCursor * dyCursor);
+      const MAX_TURN = 0.05; // ~3° per frame max turn rate (±30° over ~10 frames)
+      
+      // Absolute heading limits: jellyfish can only face within ±30° of straight up (-PI/2)
+      const BASE_HEADING = -Math.PI / 2; // straight up
+      const HEADING_LIMIT = Math.PI / 6; // ±30°
+      
+      if (distCursor < JELLY_FLEE_RADIUS && distCursor > 0.1) {
+        // Desired heading: away from cursor
+        const desiredHeading = Math.atan2(dyCursor, dxCursor);
+        // Clamp desired heading to allowed range
+        let clampedDesired = desiredHeading;
+        let diffFromBase = clampedDesired - BASE_HEADING;
+        while (diffFromBase > Math.PI) diffFromBase -= 2 * Math.PI;
+        while (diffFromBase < -Math.PI) diffFromBase += 2 * Math.PI;
+        if (diffFromBase > HEADING_LIMIT) clampedDesired = BASE_HEADING + HEADING_LIMIT;
+        if (diffFromBase < -HEADING_LIMIT) clampedDesired = BASE_HEADING - HEADING_LIMIT;
+        
+        // Turn toward clamped desired heading
+        let diff = clampedDesired - j.heading;
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+        const turn = Math.max(-MAX_TURN, Math.min(MAX_TURN, diff));
+        j.heading += turn;
+        j.fleeing = 30;
+        j.frameOffset += 0.5;
+      }
+      
+      // Determine speed: fleeing > contracting burst > coast
+      let speed;
+      if (j.fleeing > 0) {
+        speed = j.burstSpeed * 2.5; // panicked speed
+        j.fleeing--;
+      } else {
+        speed = j.contracting ? j.burstSpeed : j.coastSpeed;
+      }
+      
+      // Move forward along heading
+      j.x += Math.cos(j.heading) * speed;
+      j.y += Math.sin(j.heading) * speed;
+      
+      // Gradually steer heading back toward default direction when not fleeing
+      if (j.fleeing <= 0) {
+        const defaultHeading = -Math.PI / 2 + (Math.sin(tick * 0.001 + j.phase) * 0.15); // ~straight up with tiny drift
+        let diff = defaultHeading - j.heading;
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+        j.heading += diff * 0.02;
+      }
+      // Hard clamp: never exceed ±30° from straight up
+      {
+        let diffFromUp = j.heading - (-Math.PI / 2);
+        while (diffFromUp > Math.PI) diffFromUp -= 2 * Math.PI;
+        while (diffFromUp < -Math.PI) diffFromUp += 2 * Math.PI;
+        const LIMIT = Math.PI / 6;
+        if (diffFromUp > LIMIT) j.heading = -Math.PI / 2 + LIMIT;
+        if (diffFromUp < -LIMIT) j.heading = -Math.PI / 2 - LIMIT;
+      }
+      
+      // Update visual rotation to follow heading (with offset to match jellyfish image orientation)
+      // The jellyfish image points "up" in source, so renderRot maps heading to visual angle
+      j.renderRot = j.heading + Math.PI / 2 + baseRot - 0.3; // tune offset to look right
+      j.cosR = Math.cos(j.renderRot);
+      j.sinR = Math.sin(j.renderRot);
       
       // Gentle perpendicular sway
       const sway = Math.sin(tick * j.swayFreq + j.phase) * j.swayAmp;
-      const drawX = j.x + sway * moveDirY; // perpendicular to movement
-      const drawY = j.y - sway * moveDirX;
+      const perpX = -Math.sin(j.heading); // perpendicular to heading
+      const perpY = Math.cos(j.heading);
+      const drawX = j.x + sway * perpX;
+      const drawY = j.y + sway * perpY;
+      
+      // Recalc bounding box from current rotation
+      const diagW = Math.ceil(Math.abs(fW * j.cosR) + Math.abs(fH * j.sinR)) * j.scale;
+      const diagH = Math.ceil(Math.abs(fW * j.sinR) + Math.abs(fH * j.cosR)) * j.scale;
       
       // Remove when fully off screen
-      if (drawY + j.diagH < -20 || drawX > cols + 20 || drawX + j.diagW < -20 || drawY > rows + 20) {
+      if (drawY + diagH < -20 || drawX > cols + 20 || drawX + diagW < -20 || drawY > rows + 20) {
         jellies.splice(ji, 1);
         continue;
       }
       
+      // Cursor proximity glow boost for jellyfish
+      let glowBoost = 1;
+      const jellyDist = Math.sqrt((drawX - mouseGx) ** 2 + (drawY - mouseGy) ** 2);
+      if (jellyDist < CURSOR_GLOW_RADIUS * 2) {
+        glowBoost = 1 + (1 - jellyDist / (CURSOR_GLOW_RADIUS * 2)) * 1.5;
+      }
+      
       // Render rotated jellyfish via inverse rotation sampling
-      // For each grid cell in the bounding box, find the source pixel
-      const cx = fW / 2; // center of original image
+      const cx = fW / 2;
       const cy = fH / 2;
       
-      const startGx = Math.max(0, Math.floor(drawX - j.diagW / 2));
-      const endGx = Math.min(cols, Math.ceil(drawX + j.diagW / 2));
-      const startGy = Math.max(0, Math.floor(drawY - j.diagH / 2));
-      const endGy = Math.min(rows, Math.ceil(drawY + j.diagH / 2));
+      const startGx = Math.max(0, Math.floor(drawX - diagW / 2));
+      const endGx = Math.min(cols, Math.ceil(drawX + diagW / 2));
+      const startGy = Math.max(0, Math.floor(drawY - diagH / 2));
+      const endGy = Math.min(rows, Math.ceil(drawY + diagH / 2));
       
       for (let gy = startGy; gy < endGy; gy++) {
         for (let gx = startGx; gx < endGx; gx++) {
-          // Grid position relative to jellyfish center
           const relX = (gx - drawX) / j.scale;
           const relY = (gy - drawY) / j.scale;
           
-          // Inverse rotate to find source pixel (per-jelly rotation)
           const srcX = Math.floor(relX * j.cosR + relY * j.sinR + cx);
           const srcY = Math.floor(-relX * j.sinR + relY * j.cosR + cy);
           
@@ -821,7 +929,7 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
           
           const b = frame[srcY][srcX];
           if (b > 0.08) {
-            const alpha = b * j.maxAlpha;
+            const alpha = Math.min(b * j.maxAlpha * glowBoost, 0.9);
             ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
             ctx.fillText(bgGrid[gy]?.[gx] || '.', gx * charW, gy * fontSize + fontSize);
           }
