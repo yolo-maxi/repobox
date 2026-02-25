@@ -243,6 +243,20 @@ a:hover { opacity: 0.8; }
       </div>
     </a>
 
+    <a href="https://beamr.repo.box" target="_blank" style="text-decoration:none;color:inherit;display:block;">
+      <div class="project-card ascii-bg" data-ascii-anim="network" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
+        <canvas class="ascii-canvas"></canvas>
+        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+        <div style="position:relative;z-index:2;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+            <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">Beamr Viz</div>
+            <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 12px;border-radius:2px;font-weight:600;">analytics</span>
+          </div>
+          <div style="font-size:12px;line-height:20px;color:#b8d4e3;">Detailed stats and network visualization for $BEAMR's streaming tipping system.</div>
+        </div>
+      </div>
+    </a>
+
     <div class="project-card ascii-bg" data-ascii-anim="bricks" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
       <canvas class="ascii-canvas"></canvas>
       <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
@@ -457,6 +471,75 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
         const combined = (w1 + w2 + w3) / 1.8; // -1 to 1
         return Math.max(0, combined);
       },
+      network: (() => {
+        // Random slim lines appearing at random angles, fading after ~90 frames (~1.5s)
+        let lines = [], lastCols = 0, lastRows = 0, lastFrame = -1;
+        const LIFE = 90; // frames (~1.5s at 60fps)
+        const MAX_LINES = 8;
+        const SPAWN_RATE = 12; // new line every N frames
+        
+        return (x, y, frame, cols, rows) => {
+          if (cols !== lastCols || rows !== lastRows) {
+            lastCols = cols; lastRows = rows;
+            lines = [];
+          }
+          
+          if (frame !== lastFrame) {
+            lastFrame = frame;
+            // Remove dead lines
+            lines = lines.filter(l => frame - l.born < LIFE);
+            // Spawn new line
+            if (frame % SPAWN_RATE === 0 && lines.length < MAX_LINES) {
+              // Line must cross the box edge-to-edge: pick a random point inside,
+              // a random angle, then extend in both directions until hitting edges
+              const angle = Math.random() * Math.PI;
+              const cx = cols * 0.1 + Math.random() * cols * 0.8;
+              const cy = rows * 0.1 + Math.random() * rows * 0.8;
+              const dx = Math.cos(angle), dy = Math.sin(angle);
+              // Extend to box edges in both directions
+              let tMin = -Infinity, tMax = Infinity;
+              if (Math.abs(dx) > 0.001) {
+                const t1 = -cx / dx, t2 = (cols - cx) / dx;
+                tMin = Math.max(tMin, Math.min(t1, t2));
+                tMax = Math.min(tMax, Math.max(t1, t2));
+              }
+              if (Math.abs(dy) > 0.001) {
+                const t1 = -cy / dy, t2 = (rows - cy) / dy;
+                tMin = Math.max(tMin, Math.min(t1, t2));
+                tMax = Math.min(tMax, Math.max(t1, t2));
+              }
+              lines.push({
+                x1: cx + dx * tMin, y1: cy + dy * tMin,
+                x2: cx + dx * tMax, y2: cy + dy * tMax,
+                born: frame,
+              });
+            }
+          }
+          
+          let brightness = 0;
+          for (const l of lines) {
+            const age = (frame - l.born) / LIFE; // 0→1
+            // Fade in fast, fade out slow
+            const alpha = age < 0.15 ? age / 0.15 : 1 - (age - 0.15) / 0.85;
+            if (alpha <= 0) continue;
+            
+            // Distance from point to line segment
+            const ex = l.x2 - l.x1, ey = l.y2 - l.y1;
+            const len2 = ex * ex + ey * ey;
+            if (len2 < 0.01) continue;
+            const t = Math.max(0, Math.min(1, ((x - l.x1) * ex + (y - l.y1) * ey) / len2));
+            const px = l.x1 + t * ex, py = l.y1 + t * ey;
+            const dist = Math.sqrt((x - px) * (x - px) + (y - py) * (y - py));
+            
+            if (dist < 0.8) {
+              const lineBright = (1 - dist / 0.8) * 0.7 * alpha;
+              brightness = Math.max(brightness, lineBright);
+            }
+          }
+          
+          return brightness;
+        };
+      })(),
       bricks: (() => {
         // Brick wall building up from bottom. No holes. Bricks stack logically.
         const BW = 3; // brick width in chars: [ ]
