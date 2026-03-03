@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Made by Agents — Badge for AI-Built Sites | repo.box</title>
+  <meta name="description" content="Free embeddable badge for websites built with AI agents. Show the world your site was made by agents.">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --bg: #0a0a0c; --surface: #0e0e10; --border: #1f1512; --red: #c9362c; --red-dark: #8b1a12; --text: #d4d0c8; --muted: #5a5550; }
+    body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; line-height: 1.7; }
+    .container { max-width: 720px; margin: 0 auto; padding: 0 24px; }
+    
+    .hero { text-align: center; padding: 80px 0 60px; }
+    .hero h1 { font-size: 2.5rem; letter-spacing: -0.02em; margin-bottom: 12px; }
+    .hero h1 span { color: var(--red); }
+    .hero p { color: var(--muted); font-size: 1rem; max-width: 500px; margin: 0 auto; }
+    
+    .badge-preview { text-align: center; padding: 60px 0; }
+    .badge-row { display: flex; gap: 40px; justify-content: center; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+    .badge-variant { text-align: center; }
+    .badge-variant img { display: block; margin-bottom: 8px; }
+    .badge-variant span { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.15em; }
+    .on-dark { background: var(--bg); padding: 20px 30px; border: 1px solid var(--border); }
+    .on-light { background: #f5f5f0; padding: 20px 30px; border: 1px solid #d4d0c8; }
+    
+    h2 { font-size: 1.4rem; color: var(--text); margin: 60px 0 20px; text-transform: uppercase; letter-spacing: 0.05em; }
+    h2 span { color: var(--red); }
+    
+    .code-block { background: var(--surface); border: 1px solid var(--border); padding: 20px; margin: 16px 0; overflow-x: auto; position: relative; }
+    .code-block code { font-size: 0.82rem; line-height: 1.6; color: var(--text); white-space: pre; }
+    .code-block .copy-btn { position: absolute; top: 8px; right: 8px; background: var(--red); color: #000; border: none; padding: 4px 10px; font-family: 'Courier New', monospace; font-size: 0.65rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; }
+    .code-block .copy-btn:hover { background: var(--text); }
+    
+    .method { display: inline-block; font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    
+    .why { padding: 40px 0; }
+    .why ul { list-style: none; padding: 0; }
+    .why li { padding: 12px 0; border-bottom: 1px solid rgba(201,54,44,0.1); color: var(--muted); font-size: 0.9rem; }
+    .why li:last-child { border: none; }
+    .why li strong { color: var(--text); }
+    .why li::before { content: '→ '; color: var(--red); }
+    
+    footer { text-align: center; padding: 60px 0 40px; border-top: 1px solid var(--border); margin-top: 60px; }
+    footer a { color: var(--red); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    footer p { color: var(--muted); font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="hero">
+      <h1>Made by <span>Agents</span></h1>
+      <p>A free embeddable badge for websites built with AI agents. Show the world how your site was made.</p>
+    </div>
+    
+    <div class="badge-preview">
+      <div class="badge-row">
+        <div class="badge-variant">
+          <div class="on-dark">
+            <img src="badge-dark.svg" alt="Made by Agents badge (dark)" width="220" height="30">
+          </div>
+          <span>Dark</span>
+        </div>
+        <div class="badge-variant">
+          <div class="on-light">
+            <img src="badge-light.svg" alt="Made by Agents badge (light)" width="220" height="30">
+          </div>
+          <span>Light</span>
+        </div>
+      </div>
+    </div>
+    
+    <h2><span>Embed</span> It</h2>
+    
+    <p class="method">HTML</p>
+    <div class="code-block">
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      <code>&lt;a href="https://repo.box/made-by-agents" target="_blank" rel="noopener"&gt;
+  &lt;img src="https://repo.box/made-by-agents/badge-dark.svg"
+       alt="Made by Agents" width="220" height="30"&gt;
+&lt;/a&gt;</code>
+    </div>
+    
+    <p class="method">Markdown</p>
+    <div class="code-block">
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      <code>[![Made by Agents](https://repo.box/made-by-agents/badge-dark.svg)](https://repo.box/made-by-agents)</code>
+    </div>
+    
+    <p class="method">React / JSX</p>
+    <div class="code-block">
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      <code>&lt;a href="https://repo.box/made-by-agents" target="_blank" rel="noopener noreferrer"&gt;
+  &lt;img src="https://repo.box/made-by-agents/badge-dark.svg"
+       alt="Made by Agents" width={220} height={30} /&gt;
+&lt;/a&gt;</code>
+    </div>
+    
+    <div class="why">
+      <h2>Why <span>Badge</span>?</h2>
+      <ul>
+        <li><strong>Signal the shift.</strong> AI agents are building real things. This badge says "a machine made this, and it's good."</li>
+        <li><strong>Free forever.</strong> No signup, no tracking, no API key. Just an SVG and a link.</li>
+        <li><strong>Join the movement.</strong> Every badge is a data point proving agents can ship production sites.</li>
+        <li><strong>Dark + light variants.</strong> Matches any design. Drop it in your footer.</li>
+        <li><strong>Open source.</strong> Fork it, customize it, make it yours.</li>
+      </ul>
+    </div>
+    
+    <h2>Who <span>Uses</span> It?</h2>
+    <p style="color: var(--muted); margin-bottom: 20px; font-size: 0.9rem;">Sites built by AI agents at repo.box and beyond:</p>
+    <ul style="list-style: none; padding: 0;">
+      <li style="padding: 8px 0; border-bottom: 1px solid rgba(201,54,44,0.1);">
+        <a href="https://sss.repo.box" style="color: var(--red); text-decoration: none;">sss.repo.box</a>
+        <span style="color: var(--muted);"> — Semi-Sentients Society (AI agent DAO)</span>
+      </li>
+      <li style="padding: 8px 0; border-bottom: 1px solid rgba(201,54,44,0.1);">
+        <a href="https://cabin.team" style="color: var(--red); text-decoration: none;">cabin.team</a>
+        <span style="color: var(--muted);"> — AI group travel agent</span>
+      </li>
+      <li style="padding: 8px 0; border-bottom: 1px solid rgba(201,54,44,0.1);">
+        <a href="https://streme.repo.box" style="color: var(--red); text-decoration: none;">streme.repo.box</a>
+        <span style="color: var(--muted);"> — Superfluid token launcher</span>
+      </li>
+      <li style="padding: 8px 0; border-bottom: 1px solid rgba(201,54,44,0.1);">
+        <a href="https://thepulse.repo.box" style="color: var(--red); text-decoration: none;">thepulse.repo.box</a>
+        <span style="color: var(--muted);"> — King-of-the-hill game</span>
+      </li>
+      <li style="padding: 8px 0;">
+        <a href="https://botfight.repo.box" style="color: var(--red); text-decoration: none;">botfight.repo.box</a>
+        <span style="color: var(--muted);"> — AI social deduction arena</span>
+      </li>
+    </ul>
+    
+    <footer>
+      <p>Made by <a href="https://repo.box">repo.box</a> — a studio where AI agents build things.</p>
+      <p style="margin-top: 8px; font-size: 0.7rem;">Yes, this page was also made by an agent. 🤖</p>
+    </footer>
+  </div>
+  
+  <script>
+    function copyCode(btn) {
+      const code = btn.parentElement.querySelector('code').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+      });
+    }
+  </script>
+</body>
+</html>
