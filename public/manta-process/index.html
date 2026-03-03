@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manta Extraction Pipeline - repo.box</title>
+  <meta name="description" content="How we extracted majestic manta silhouettes from a real underwater video for repo.box hero animation." />
+  <style>
+    :root {
+      --bg: #081326;
+      --surface: #0d1f35;
+      --border: rgba(79, 195, 247, 0.2);
+      --text: #d7ecf8;
+      --muted: #7ea0b8;
+      --accent: #4fc3f7;
+      --accent2: #81d4fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: radial-gradient(circle at 30% -10%, rgba(79,195,247,0.12), transparent 50%), var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 56px 24px 80px; }
+    h1 { font-size: 34px; line-height: 1.2; margin: 0 0 14px; }
+    h2 { font-size: 16px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent2); margin: 0 0 16px; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    .lead { max-width: 760px; font-size: 14px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 34px; }
+    @media (min-width: 860px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(13,31,53,0.95), rgba(10,24,42,0.95));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .tag { color: var(--accent); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; }
+    .title { font-size: 15px; color: var(--text); margin: 6px 0 10px; }
+    .media {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid rgba(129,212,250,0.2);
+      display: block;
+      background: #041022;
+    }
+    .code {
+      margin-top: 10px;
+      background: #061225;
+      border: 1px solid rgba(129,212,250,0.17);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #bde5fb;
+      font-size: 12px;
+      overflow-x: auto;
+    }
+    .facts {
+      margin-top: 28px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(9, 23, 41, 0.8);
+    }
+    .facts strong { color: var(--accent2); }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="tag">repo.box · manta pipeline</div>
+    <h1>From raw dive footage to loopable manta silhouettes</h1>
+    <p class="lead">We reused the same extraction system we built for jellyfish: clip selection, contrast shaping, brightness-frame extraction, then a ping-pong loop pass for seamless playback in hero animations.</p>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Step 1</h2>
+        <div class="title">Select a clean pass</div>
+        <p>Trimmed a 6s segment where one manta crosses with clear body definition.</p>
+        <video class="media" src="/manta-process/01-clip-raw.mp4" controls muted loop playsinline></video>
+        <div class="code">ffmpeg -ss 4 -t 6 -i source.mp4 -vf "crop=720:860:0:0,fps=12" 01-clip-raw.mp4</div>
+      </section>
+
+      <section class="card">
+        <h2>Step 2</h2>
+        <div class="title">Preprocess for silhouette extraction</div>
+        <p>Removed color, boosted contrast, and smoothed water noise to isolate manta shape signal.</p>
+        <video class="media" src="/manta-process/02-clip-preprocessed.mp4" controls muted loop playsinline></video>
+        <div class="code">ffmpeg -i 01-clip-raw.mp4 -vf "eq=contrast=2.4:brightness=-0.08:saturation=0,gblur=sigma=1.2,curves=all='0/0 0.28/0.03 0.55/0.72 1/1'" 02-clip-preprocessed.mp4</div>
+      </section>
+
+      <section class="card">
+        <h2>Step 3</h2>
+        <div class="title">Build a threshold mask</div>
+        <p>Mapped darker values to foreground mask to pull manta contours from bright water background.</p>
+        <img class="media" src="/manta-process/step-3-threshold-mask.jpg" alt="Threshold mask frame" />
+        <img class="media" src="/manta-process/04-threshold-mask.gif" alt="Threshold mask animation" style="margin-top:10px;" />
+      </section>
+
+      <section class="card">
+        <h2>Step 4</h2>
+        <div class="title">Extract brightness frames to JSON</div>
+        <p>Converted processed video into a frame grid used directly by canvas runtime.</p>
+        <div class="code">node tools/gif-to-ascii.js 02-clip-preprocessed.mp4 public/manta.json --cols=120 --rows=56</div>
+        <p style="margin-top:10px;">Then made it loop-safe with ping-pong sequencing to remove hard cuts.</p>
+        <div class="code">manta-loop.json = frames + reverse(frames[1..-2])</div>
+      </section>
+
+      <section class="card" style="grid-column: 1 / -1;">
+        <h2>Final</h2>
+        <div class="title">Loop preview</div>
+        <p>Forward + reverse pass creates a seamless, majestic cycle suitable for hero-layer reuse.</p>
+        <img class="media" src="/manta-process/05-loop-preview.gif" alt="Loop preview" />
+      </section>
+    </div>
+
+    <div class="facts" id="facts">
+      <div><strong>Loading dataset stats...</strong></div>
+    </div>
+
+    <p style="margin-top:24px;">
+      Live hero test: <a href="https://blueprint.repo.box" target="_blank" rel="noopener">blueprint.repo.box</a>
+    </p>
+  </div>
+
+  <script>
+    async function loadStats() {
+      const facts = document.getElementById('facts');
+      try {
+        const [base, loop] = await Promise.all([
+          fetch('/manta.json').then(r => r.json()),
+          fetch('/manta-loop.json').then(r => r.json())
+        ]);
+        const h = base[0]?.length || 0;
+        const w = base[0]?.[0]?.length || 0;
+        facts.innerHTML = `
+          <div><strong>Base frames:</strong> ${base.length}</div>
+          <div><strong>Loop frames:</strong> ${loop.length}</div>
+          <div><strong>Grid resolution:</strong> ${w} x ${h}</div>
+          <div><strong>Model:</strong> real-video extracted brightness masks (same pipeline as jellyfish)</div>
+        `;
+      } catch (e) {
+        facts.innerHTML = '<div><strong>Could not load stats.</strong></div>';
+      }
+    }
+    loadStats();
+  </script>
+</body>
+</html>

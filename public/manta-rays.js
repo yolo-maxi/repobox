@@ -184,7 +184,7 @@
 
   async function init() {
     try {
-      const res = await fetch('/manta.json', { cache: 'force-cache' });
+      const res = await fetch('/manta-loop.json', { cache: 'force-cache' });
       if (!res.ok) return;
       frames = await res.json();
       if (!Array.isArray(frames) || !frames.length) return;
