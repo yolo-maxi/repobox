@@ -179,6 +179,7 @@ a:hover { opacity: 0.8; }
 }
 
 /* Agent pulse dot */
+@keyframes ticker-slide { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
 /* Footer responsive */
@@ -227,6 +228,9 @@ a:hover { opacity: 0.8; }
   opacity: 1;
 }
 
+
+/* Hide scrollbar on horizontal card row */
+div[style*="scroll-snap-type"]::-webkit-scrollbar { display: none; }
 </style>
 </head>
 <body>
@@ -300,74 +304,48 @@ a:hover { opacity: 0.8; }
   </section>
 
 
-  <!-- Case Studies -->
+  <!-- Case Studies — horizontal scrollable cards -->
   <section class="reveal" style="margin-bottom:60px;">
-    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">Transformation Stories</h2>
+    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">What We Build</h2>
 
-    <div class="project-card ascii-bg" data-ascii-anim="wave" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
-      <canvas class="ascii-canvas"></canvas>
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">Oceangram</div>
-          <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 12px;border-radius:2px;font-weight:600;">telegram</span>
+    <div style="display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding-bottom:8px;scrollbar-width:none;">
+
+      <div style="flex:0 0 280px;scroll-snap-align:start;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+          <div style="font-weight:700;font-size:15px;color:#ffffff;">Oceangram</div>
+          <span style="font-size:11px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 10px;border-radius:2px;font-weight:600;">telegram</span>
         </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">
-          From basic chat idea → universal Telegram client with VS Code extension, Mac tray app, and 60+ API endpoints
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;line-height:16px;">
-          <div style="color:#5a7a94;">
-            <span style="color:#4fc3f7;">Before:</span> Single-surface chat prototype
-            <span style="color:#5a7a94;margin:0 8px;">→</span>
-            <span style="color:#4fc3f7;">After:</span> Universal client + developer tools
-          </div>
-          <a href="https://github.com/yolo-maxi/oceangram" target="_blank" style="color:#81d4fa;font-weight:600;">v0.9.0 release</a>
+        <div style="font-size:12px;line-height:18px;color:#b8d4e3;margin-bottom:14px;">Universal Telegram client with VS Code extension, Mac tray app, and 60+ API endpoints.</div>
+        <div style="font-size:11px;line-height:16px;color:#5a7a94;">
+          <span style="color:#4fc3f7;">Before:</span> Chat prototype<br>
+          <span style="color:#4fc3f7;">After:</span> Universal client + dev tools
         </div>
       </div>
-    </div>
 
-    <div class="project-card ascii-bg" data-ascii-anim="network" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
-      <canvas class="ascii-canvas"></canvas>
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">Cabin</div>
-          <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 12px;border-radius:2px;font-weight:600;">travel</span>
+      <div style="flex:0 0 280px;scroll-snap-align:start;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+          <div style="font-weight:700;font-size:15px;color:#ffffff;">Cabin</div>
+          <span style="font-size:11px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 10px;border-radius:2px;font-weight:600;">travel</span>
         </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">
-          From group travel pain point → AI flight agent with real search API, multi-language support, and USDC payments
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;line-height:16px;">
-          <div style="color:#5a7a94;">
-            <span style="color:#4fc3f7;">Before:</span> Manual flight coordination
-            <span style="color:#5a7a94;margin:0 8px;">→</span>
-            <span style="color:#4fc3f7;">After:</span> Automated group booking in chat
-          </div>
-          <a href="https://cabin.team" target="_blank" style="color:#81d4fa;font-weight:600;">cabin.team</a>
+        <div style="font-size:12px;line-height:18px;color:#b8d4e3;margin-bottom:14px;">AI flight agent with real search API, multi-language support, and USDC payments.</div>
+        <div style="font-size:11px;line-height:16px;color:#5a7a94;">
+          <span style="color:#4fc3f7;">Before:</span> Manual flight coordination<br>
+          <span style="color:#4fc3f7;">After:</span> Group booking in chat
         </div>
       </div>
-    </div>
 
-    <div class="project-card ascii-bg" data-ascii-anim="bricks" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
-      <canvas class="ascii-canvas"></canvas>
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">SSS</div>
-          <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 12px;border-radius:2px;font-weight:600;">crypto</span>
+      <div style="flex:0 0 280px;scroll-snap-align:start;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+          <div style="font-weight:700;font-size:15px;color:#ffffff;">SSS</div>
+          <span style="font-size:11px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 10px;border-radius:2px;font-weight:600;">crypto</span>
         </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">
-          From AI verification concept → complete agent registry with smart contracts, verification flows, and token launches
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;line-height:16px;">
-          <div style="color:#5a7a94;">
-            <span style="color:#4fc3f7;">Before:</span> Agent identity problem
-            <span style="color:#5a7a94;margin:0 8px;">→</span>
-            <span style="color:#4fc3f7;">After:</span> Verified agent ecosystem + DeFi
-          </div>
-          <a href="/blog/agent-skills.html" target="_blank" style="color:#81d4fa;font-weight:600;">design docs</a>
+        <div style="font-size:12px;line-height:18px;color:#b8d4e3;margin-bottom:14px;">Agent registry with smart contracts, verification flows, and token launches on Base.</div>
+        <div style="font-size:11px;line-height:16px;color:#5a7a94;">
+          <span style="color:#4fc3f7;">Before:</span> Agent identity problem<br>
+          <span style="color:#4fc3f7;">After:</span> Verified agent ecosystem + DeFi
         </div>
       </div>
+
     </div>
   </section>
   <!-- Ethos -->
@@ -382,21 +360,7 @@ a:hover { opacity: 0.8; }
   </section>
 
 
-  <!-- Build in Public -->
-  <section class="reveal" style="margin-bottom:60px;">
-    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">
-      <span style="display:inline-flex;align-items:center;gap:8px;">
-        <span style="width:6px;height:6px;border-radius:50%;background:#4fc3f7;animation:pulse 2s infinite;"></span>
-        Latest Shipped
-      </span>
-    </h2>
-    
-    <div id="changelog-container" style="min-height:200px;">
-      <div style="padding:20px;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;text-align:center;">
-        <div style="color:#5a7a94;font-size:12px;line-height:20px;">Loading recent updates...</div>
-      </div>
-    </div>
-  </section>
+
   <!-- Writing -->
   <section class="reveal" style="margin-bottom:60px;">
     <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">Writing</h2>
@@ -496,6 +460,10 @@ a:hover { opacity: 0.8; }
   <!-- Bottom bar -->
   <div style="max-width:960px;margin:0 auto;padding:20px 40px;border-top:1px solid rgba(50,100,160,0.15);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;color:#5a7a94;font-size:12px;line-height:20px;">
     <span>© 2026 repo.box</span>
+    <span id="footer-shipped" style="display:inline-flex;align-items:center;gap:8px;overflow:hidden;max-width:400px;">
+      <span style="width:6px;height:6px;border-radius:50%;background:#4fc3f7;animation:pulse 2s infinite;flex-shrink:0;"></span>
+      <span id="shipped-ticker" style="white-space:nowrap;animation:ticker-slide 20s linear infinite;">loading...</span>
+    </span>
     <span>very unserious builders doing very serious work</span>
   </div>
 </footer>
@@ -503,65 +471,22 @@ a:hover { opacity: 0.8; }
 <script>
 // Newsletter form
 
-// Changelog loader
-async function loadChangelog() {
+// Footer shipped ticker
+async function loadShippedTicker() {
   try {
-    const response = await fetch('/data/changelog.json');
-    if (!response.ok) throw new Error('Failed to load changelog');
-    
-    const data = await response.json();
-    const container = document.getElementById('changelog-container');
-    
-    if (data.count === 0) {
-      container.innerHTML = '<div style="padding:20px;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;text-align:center;"><div style="color:#5a7a94;font-size:12px;line-height:20px;">No recent updates</div></div>';
-      return;
-    }
-    
-    const entries = data.entries.slice(0, 6); // Show latest 6
-    const html = entries.map(entry => {
-      const date = new Date(entry.date);
-      const relativeTime = getRelativeTime(date);
-      const typeIcon = entry.type === 'commit' ? '🔧' : '✨';
-      const projectBadge = entry.project;
-      
-      return `
-        <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:16px;margin-bottom:8px;transition:border-color 0.2s;">
-          <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="font-size:14px;">${typeIcon}</span>
-              <div style="font-weight:600;font-size:14px;line-height:20px;color:#e8f4fd;">${entry.title}</div>
-            </div>
-            <span style="font-size:11px;line-height:16px;color:#4fc3f7;background:rgba(79,195,247,0.1);padding:0 8px;border-radius:2px;font-weight:500;">${projectBadge}</span>
-          </div>
-          <div style="font-size:11px;line-height:16px;color:#5a7a94;">${relativeTime}</div>
-        </div>
-      `;
-    }).join('');
-    
-    container.innerHTML = html;
-    
-  } catch (error) {
-    console.error('Error loading changelog:', error);
-    document.getElementById('changelog-container').innerHTML = '<div style="padding:20px;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;text-align:center;"><div style="color:#5a7a94;font-size:12px;line-height:20px;">Failed to load updates</div></div>';
-  }
+    const res = await fetch('/data/changelog.json');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.entries || data.entries.length === 0) return;
+    const items = data.entries.slice(0, 8).map(e => {
+      const icon = e.type === 'commit' ? '🔧' : '✨';
+      return icon + ' ' + e.project + ': ' + e.title;
+    });
+    const ticker = document.getElementById('shipped-ticker');
+    if (ticker) ticker.textContent = items.join('    ·    ');
+  } catch (_) {}
 }
-
-function getRelativeTime(date) {
-  const now = new Date();
-  const diffMs = now - date;
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
-  
-  if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-  if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-  if (diffMinutes > 0) return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
-  return 'Just now';
-}
-
-// Load changelog on page load
-window.addEventListener('load', loadChangelog);
+window.addEventListener('load', loadShippedTicker);
 document.getElementById('signup-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = e.target.querySelector('button');
