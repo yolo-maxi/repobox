@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Projects - repo.box</title>
+<meta name="description" content="Active projects at repo.box - an independent team building cool ideas with cool people.">
+<meta property="og:title" content="Projects - repo.box">
+<meta property="og:description" content="Active projects at repo.box - an independent team building cool ideas with cool people.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://repo.box/projects">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Projects - repo.box">
+<meta name="twitter:description" content="Active projects at repo.box - an independent team building cool ideas with cool people.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      spacing: {
+        'g1': '20px', 'g2': '40px', 'g3': '60px', 'g4': '80px',
+        'g5': '100px', 'g6': '120px', 'g8': '160px', 'g10': '200px',
+        'u1': '4px', 'u2': '8px', 'u3': '12px', 'u4': '16px', 'u5': '20px',
+      },
+      colors: {
+        bp: {
+          bg: '#0a1628',
+          surface: '#0d1f35',
+          border: 'rgba(50, 100, 160, 0.25)',
+          text: '#b8d4e3',
+          heading: '#e8f4fd',
+          dim: '#5a7a94',
+          accent: '#4fc3f7',
+          accent2: '#81d4fa',
+        }
+      },
+      fontFamily: {
+        mono: ['JetBrains Mono', 'monospace'],
+      },
+      fontSize: {
+        'bp-body': ['12px', '20px'],
+        'bp-lg': ['16px', '20px'],
+        'bp-h2': ['12px', '20px'],
+        'bp-logo': ['40px', '60px'],
+      }
+    }
+  }
+}
+</script>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background-color: #0a1628;
+  cursor: crosshair;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 20px;
+  color: #b8d4e3;
+  min-height: 100vh;
+}
+
+a { color: #4fc3f7; text-decoration: none; transition: opacity 0.2s; }
+a:hover { opacity: 0.8; }
+
+/* Logo dot breathing */
+.logo-dot {
+  color: #4fc3f7;
+  animation: dot-breathe 3s ease-in-out infinite;
+}
+@keyframes dot-breathe {
+  0%, 100% { text-shadow: 0 0 4px #4fc3f7; opacity: 0.85; }
+  50% { text-shadow: 0 0 12px #4fc3f7, 0 0 24px rgba(79,195,247,0.4); opacity: 1; }
+}
+
+/* Project card hover effects */
+.project-card {
+  position: relative;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.project-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(79, 195, 247, 0.4);
+}
+
+/* SVG card borders */
+.project-card svg.card-border {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+.project-card svg.card-border rect {
+  fill: none;
+  stroke: #4fc3f7;
+  stroke-width: 1;
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  transition: stroke-dashoffset 0.6s ease;
+  rx: 8;
+  ry: 8;
+}
+.project-card:hover svg.card-border rect {
+  stroke-dashoffset: 0;
+}
+
+/* Status badges */
+.status-badge {
+  font-size: 11px;
+  line-height: 16px;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Registration marks */
+.reg-mark {
+  position: fixed;
+  width: 20px;
+  height: 20px;
+  z-index: 100;
+  pointer-events: none;
+}
+.reg-mark::before, .reg-mark::after {
+  content: '';
+  position: absolute;
+  background: rgba(79,195,247,0.3);
+}
+.reg-mark::before {
+  width: 1px;
+  height: 20px;
+  left: 50%;
+  top: 0;
+}
+.reg-mark::after {
+  width: 20px;
+  height: 1px;
+  top: 50%;
+  left: 0;
+}
+.reg-tl { top: 8px; left: 8px; }
+.reg-tr { top: 8px; right: 8px; }
+.reg-bl { bottom: 8px; left: 8px; }
+.reg-br { bottom: 8px; right: 8px; }
+</style>
+</head>
+<body>
+
+<!-- Registration marks -->
+<div class="reg-mark reg-tl"></div>
+<div class="reg-mark reg-tr"></div>
+<div class="reg-mark reg-bl"></div>
+<div class="reg-mark reg-br"></div>
+
+<div class="max-w-[720px] mx-auto" style="padding:80px 40px 100px; position:relative; z-index:1;">
+
+  <a href="/" style="font-size:12px;color:#5a7a94;display:inline-block;margin-bottom:40px;transition:color 0.2s;">← repo.box</a>
+  
+  <!-- Header -->
+  <header style="margin-bottom:40px;">
+    <div class="font-mono font-bold" style="font-size:40px;line-height:60px;margin-bottom:20px;">
+      repo<span class="logo-dot">.</span>box <span style="font-size:0.5em;color:#5a7a94;font-weight:400">/ projects</span>
+    </div>
+    <p style="font-size:16px;line-height:20px;color:#5a7a94;max-width:500px;">Active projects at repo.box — an independent team building cool ideas with cool people.</p>
+  </header>
+
+  <!-- Projects Grid -->
+  <section style="margin-bottom:60px;">
+    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">Active Projects</h2>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            Banger
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Test rate limiter: send 51 replies in 15min window → 51st should be rejected with warning. Test st</div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>89 tasks</span>
+          <span>19 active</span>
+          <span>17 shipped</span>
+          <span>updated Mar 02</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            <a href="https://prompster.club" target="_blank" style="color:inherit;">Prompster/BotFight</a>
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Rules page live at https://botfight.repo.box. Core rules + fine print + llms.txt for AI.</div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>83 tasks</span>
+          <span>18 active</span>
+          <span>16 shipped</span>
+          <span>updated Mar 02</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            <a href="https://cabin.team" target="_blank" style="color:inherit;">Cabin</a>
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Currently payment detection is manual. Need on-chain listener.</div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>104 tasks</span>
+          <span>22 active</span>
+          <span>20 shipped</span>
+          <span>updated Mar 03</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            Clawd
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Telegram media groups (multiple images) get filtered when requireMention: true. Caption with @ment</div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>13 tasks</span>
+          <span>3 active</span>
+          <span>2 shipped</span>
+          <span>updated Mar 02</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            <a href="https://oceangram.repo.box" target="_blank" style="color:inherit;">Oceangram</a>
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Fork a conversation at any message — </div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>229 tasks</span>
+          <span>49 active</span>
+          <span>45 shipped</span>
+          <span>updated Mar 03</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            Oceangram Tray
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Custom notification sounds per whitelisted user. Different chime for Fran vs Ocean vs others.</div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>43 tasks</span>
+          <span>9 active</span>
+          <span>8 shipped</span>
+          <span>updated Feb 28</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            OCR Receipts
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Learn merchant aliases over time (e.g., </div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>30 tasks</span>
+          <span>6 active</span>
+          <span>6 shipped</span>
+          <span>updated Mar 01</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            <a href="https://repo.box" target="_blank" style="color:inherit;">repo.box</a>
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Project in development</div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>33 tasks</span>
+          <span>7 active</span>
+          <span>6 shipped</span>
+          <span>updated Mar 03</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            <a href="https://rikai.chat" target="_blank" style="color:inherit;">Rikai</a>
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Project in development</div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>21 tasks</span>
+          <span>4 active</span>
+          <span>4 shipped</span>
+          <span>updated Mar 01</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            SkillMarket
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">This creates a working skill catalog baseline for API workflow use-cases and expands discovery for A</div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>91 tasks</span>
+          <span>19 active</span>
+          <span>18 shipped</span>
+          <span>updated Mar 01</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            <a href="https://sss.repo.box" target="_blank" style="color:inherit;">SSS (Semi-Sentient Society)</a>
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Every corvée currently needs manual specification. Build a library of common tas</div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>138 tasks</span>
+          <span>30 active</span>
+          <span>27 shipped</span>
+          <span>updated Mar 03</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            <a href="https://supstrategy.repo.box" target="_blank" style="color:inherit;">SUPStrategy</a>
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Legend pills, tooltip, and </div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>54 tasks</span>
+          <span>12 active</span>
+          <span>10 shipped</span>
+          <span>updated Mar 02</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+            <a href="https://streme.fun" target="_blank" style="color:inherit;">The Pulse</a>
+          </div>
+          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
+        </div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Project in development</div>
+        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+          <span>62 tasks</span>
+          <span>13 active</span>
+          <span>12 shipped</span>
+          <span>updated Mar 02</span>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</div>
+
+<!-- Full-width footer -->
+<footer style="background:#060e1a;border-top:1px solid rgba(50,100,160,0.25);margin-top:0;position:relative;z-index:1;">
+  <div style="max-width:960px;margin:0 auto;padding:60px 40px 40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px;">
+
+    <!-- Col 1: Say Hi -->
+    <div>
+      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">Say Hi</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <a href="https://x.com/FrancescoRenziA" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">𝕏 Fran</a>
+        <a href="https://x.com/oceanvael" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">𝕏 Ocean</a>
+        <a href="https://farcaster.xyz/0xfran" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">🟪 0xFran</a>
+        <a href="https://farcaster.xyz/oceanvael" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">🟪 oceanvael</a>
+      </div>
+    </div>
+
+    <!-- Col 2: Projects -->
+    <div>
+      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">Active Projects</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <a href="https://sss.repo.box" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">SSS</a>
+        <a href="https://oceangram.repo.box" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">Oceangram</a>
+        <a href="https://cabin.team" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">Cabin</a>
+        <a href="https://rikai.chat" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">Rikai</a>
+      </div>
+    </div>
+
+    <!-- Col 3: About -->
+    <div>
+      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">repo.box</h3>
+      <p style="font-size:12px;line-height:20px;color:#5a7a94;">An independent team building cool ideas with cool people. No pitch decks, no roadmaps — just code and curiosity.</p>
+    </div>
+
+  </div>
+
+  <!-- Bottom bar -->
+  <div style="max-width:960px;margin:0 auto;padding:20px 40px;border-top:1px solid rgba(50,100,160,0.15);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;color:#5a7a94;font-size:12px;line-height:20px;">
+    <span>© 2026 repo.box</span>
+    <span>Built with curiosity and claws</span>
+  </div>
+</footer>
+
+</body>
+</html>
