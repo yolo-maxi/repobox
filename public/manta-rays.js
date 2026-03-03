@@ -16,10 +16,15 @@
   let startTs = null;
   let hasRun = false;
 
+  let frames = null;
+  let frameCanvases = null;
+  let frameW = 0;
+  let frameH = 0;
+
   const isMobile = window.innerWidth < 900;
   const fleetSize = isMobile ? 3 : 4;
-  const sizeRangeVW = [0.20, 0.30]; // requested: about 20/30vw
-  const baseDurationMs = isMobile ? 9200 : 9800; // majestic + slow
+  const sizeRangeVW = [0.20, 0.30];
+  const baseDurationMs = isMobile ? 9800 : 10500;
 
   const mantas = [];
 
@@ -38,95 +43,97 @@
 
   function buildFleet() {
     mantas.length = 0;
-
-    // Slightly above center so they cross behind logotype/text elegantly.
-    const centerY = height * (isMobile ? 0.45 : 0.43);
+    const centerY = height * (isMobile ? 0.46 : 0.43);
 
     for (let i = 0; i < fleetSize; i++) {
-      const depth = i / Math.max(1, fleetSize - 1); // front/back variation
+      const depth = i / Math.max(1, fleetSize - 1);
       const sizeVW = sizeRangeVW[0] + Math.random() * (sizeRangeVW[1] - sizeRangeVW[0]);
       const w = width * sizeVW * (1 - depth * 0.08);
-      const h = w * 0.38;
+      const h = w * (frameH / frameW);
 
       mantas.push({
         w,
         h,
-        startX: -w - i * (width * 0.09),
+        startX: -w - i * (width * 0.08),
         endX: width + w + i * (width * 0.03),
-        y: centerY + (i - (fleetSize - 1) / 2) * (height * 0.07),
+        y: centerY + (i - (fleetSize - 1) / 2) * (height * 0.08),
         phase: Math.random() * Math.PI * 2,
-        flapFreq: 0.34 + Math.random() * 0.16, // very slow wing beats
-        alpha: 0.20 - depth * 0.07,
-        glow: 0.18 - depth * 0.06,
-        blur: depth * 0.7,
-        delayMs: i * 620,
-        durationMs: baseDurationMs + i * 420,
-        driftAmp: 4 + Math.random() * 5,
+        alpha: 0.95 - depth * 0.25,
+        glow: 0.2 - depth * 0.08,
+        delayMs: i * 680,
+        durationMs: baseDurationMs + i * 460,
+        driftAmp: 4 + Math.random() * 4,
+        frameRateScale: 0.84 + Math.random() * 0.12, // slower cadence than source
       });
     }
   }
 
-  function drawManta(m, x, ts) {
-    const t = ts / 1000;
-    const flap = Math.sin(t * (Math.PI * 2) * m.flapFreq + m.phase);
-    const wingLift = flap * (m.h * 0.12);
-    const bodyRoll = Math.sin(t * 0.7 + m.phase) * 0.035;
-    const tailSway = Math.sin(t * (Math.PI * 2) * (m.flapFreq * 0.7) + m.phase) * (m.h * 0.15);
+  function preprocessFrames() {
+    frameH = frames[0].length;
+    frameW = frames[0][0].length;
 
-    const y = m.y + Math.sin(t * 0.85 + m.phase) * m.driftAmp;
+    frameCanvases = frames.map((frame) => {
+      const c = document.createElement('canvas');
+      c.width = frameW;
+      c.height = frameH;
+      const cctx = c.getContext('2d');
+      const img = cctx.createImageData(frameW, frameH);
+
+      let p = 0;
+      for (let y = 0; y < frameH; y++) {
+        for (let x = 0; x < frameW; x++) {
+          const v = frame[y][x];
+          // Source has bright water + darker manta. Convert to dark-subject mask.
+          let a = Math.max(0, (0.68 - v) / 0.68);
+          a = Math.pow(a, 1.55);
+
+          // Kill background noise aggressively.
+          if (a < 0.11) a = 0;
+
+          img.data[p++] = 115;   // R
+          img.data[p++] = 196;   // G
+          img.data[p++] = 244;   // B
+          img.data[p++] = Math.round(a * 255);
+        }
+      }
+
+      cctx.putImageData(img, 0, 0);
+      return c;
+    });
+  }
+
+  function drawManta(m, ts, localProgress) {
+    const t = ts / 1000;
+    const eased = localProgress < 0.5
+      ? 4 * localProgress * localProgress * localProgress
+      : 1 - Math.pow(-2 * localProgress + 2, 3) / 2;
+
+    const x = m.startX + (m.endX - m.startX) * eased;
+    const y = m.y + Math.sin(t * 0.75 + m.phase) * m.driftAmp;
+
+    const fi = Math.floor((ts * 0.012 * m.frameRateScale) % frameCanvases.length);
+    const sprite = frameCanvases[fi];
 
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(bodyRoll);
 
-    if (m.blur > 0.01) {
-      ctx.filter = `blur(${m.blur}px)`;
-    }
+    // Slightly bank the manta for cinematic feel.
+    const bank = Math.sin(t * 0.45 + m.phase) * 0.045;
+    ctx.rotate(bank);
 
-    // Soft aura for epic, underwater feel.
-    ctx.beginPath();
-    ctx.ellipse(0, 0, m.w * 0.52, m.h * 0.48, 0, 0, Math.PI * 2);
-    const aura = ctx.createRadialGradient(0, 0, m.h * 0.08, 0, 0, m.w * 0.62);
-    aura.addColorStop(0, `rgba(129, 212, 250, ${m.glow})`);
-    aura.addColorStop(1, 'rgba(79, 195, 247, 0)');
-    ctx.fillStyle = aura;
-    ctx.fill();
+    // Glow/atmosphere.
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = m.glow;
+    ctx.drawImage(sprite, -m.w * 0.55, -m.h * 0.55, m.w * 1.1, m.h * 1.1);
 
-    // Main wings + body silhouette.
-    ctx.beginPath();
-    ctx.moveTo(-m.w * 0.50, 0);
-    ctx.bezierCurveTo(-m.w * 0.34, -m.h * 0.70 - wingLift, -m.w * 0.13, -m.h * 0.44, 0, -m.h * 0.17);
-    ctx.bezierCurveTo(m.w * 0.13, -m.h * 0.44, m.w * 0.34, -m.h * 0.70 - wingLift, m.w * 0.50, 0);
-    ctx.bezierCurveTo(m.w * 0.34, m.h * 0.70 + wingLift, m.w * 0.13, m.h * 0.44, 0, m.h * 0.17);
-    ctx.bezierCurveTo(-m.w * 0.13, m.h * 0.44, -m.w * 0.34, m.h * 0.70 + wingLift, -m.w * 0.50, 0);
-    ctx.closePath();
-
-    const wingGrad = ctx.createLinearGradient(-m.w * 0.56, 0, m.w * 0.56, 0);
-    wingGrad.addColorStop(0, `rgba(36, 96, 140, ${m.alpha * 0.95})`);
-    wingGrad.addColorStop(0.5, `rgba(108, 190, 234, ${m.alpha})`);
-    wingGrad.addColorStop(1, `rgba(36, 96, 140, ${m.alpha * 0.95})`);
-    ctx.fillStyle = wingGrad;
-    ctx.fill();
-
-    // Spine highlight.
-    ctx.beginPath();
-    ctx.moveTo(-m.w * 0.16, 0);
-    ctx.quadraticCurveTo(0, -m.h * 0.08, m.w * 0.16, 0);
-    ctx.strokeStyle = `rgba(190, 235, 255, ${m.alpha * 0.75})`;
-    ctx.lineWidth = Math.max(1.2, m.w * 0.004);
-    ctx.stroke();
-
-    // Elegant tail.
-    ctx.beginPath();
-    ctx.moveTo(-m.w * 0.50, m.h * 0.02);
-    ctx.bezierCurveTo(-m.w * 0.62, m.h * 0.16 + tailSway, -m.w * 0.76, m.h * 0.18 + tailSway, -m.w * 0.92, m.h * 0.03 + tailSway);
-    ctx.strokeStyle = `rgba(151, 220, 255, ${m.alpha * 0.75})`;
-    ctx.lineWidth = Math.max(1.5, m.w * 0.008);
-    ctx.lineCap = 'round';
-    ctx.stroke();
+    // Main body.
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = m.alpha;
+    ctx.drawImage(sprite, -m.w * 0.5, -m.h * 0.5, m.w, m.h);
 
     ctx.restore();
-    ctx.filter = 'none';
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   function animate(ts) {
@@ -145,14 +152,7 @@
       }
 
       const p = Math.min(1, local / m.durationMs);
-      // very smooth start/end for awe vibe
-      const eased = p < 0.5
-        ? 4 * p * p * p
-        : 1 - Math.pow(-2 * p + 2, 3) / 2;
-
-      const x = m.startX + (m.endX - m.startX) * eased;
-      drawManta(m, x, ts);
-
+      drawManta(m, ts, p);
       if (p < 1) allDone = false;
     }
 
@@ -163,17 +163,16 @@
 
     hasRun = true;
 
-    // One-shot and done.
-    canvas.style.transition = 'opacity 1000ms ease';
+    canvas.style.transition = 'opacity 1200ms ease';
     canvas.style.opacity = '0';
     setTimeout(() => {
       ctx.clearRect(0, 0, width, height);
       canvas.classList.remove('active');
-    }, 1050);
+    }, 1250);
   }
 
   function runOnce() {
-    if (hasRun) return;
+    if (hasRun || !frameCanvases) return;
     resize();
     buildFleet();
     canvas.classList.add('active');
@@ -183,12 +182,26 @@
     rafId = requestAnimationFrame(animate);
   }
 
-  window.addEventListener('load', () => {
-    // Let page settle first, then majestic pass.
-    setTimeout(runOnce, 1100);
-  }, { once: true });
+  async function init() {
+    try {
+      const res = await fetch('/manta.json', { cache: 'force-cache' });
+      if (!res.ok) return;
+      frames = await res.json();
+      if (!Array.isArray(frames) || !frames.length) return;
+      preprocessFrames();
 
-  window.addEventListener('resize', () => {
-    if (!hasRun) resize();
-  }, { passive: true });
+      window.addEventListener('load', () => {
+        setTimeout(runOnce, 1100);
+      }, { once: true });
+
+      window.addEventListener('resize', () => {
+        if (!hasRun) resize();
+      }, { passive: true });
+    } catch (_) {
+      // silently ignore if asset unavailable
+    }
+  }
+
+  resize();
+  init();
 })();
