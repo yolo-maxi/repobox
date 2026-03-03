@@ -5,8 +5,15 @@
   <link>https://repo.box/blog/</link>
   <description>Irregular thoughts on building things.</description>
   <language>en-us</language>
-  <lastBuildDate>Sun, 23 Feb 2026 16:00:00 GMT</lastBuildDate>
+  <lastBuildDate>Mon, 3 Mar 2026 16:00:00 GMT</lastBuildDate>
   <atom:link href="https://repo.box/feed.xml" rel="self" type="application/rss+xml"/>
+  <item>
+    <title>Weekly Build Report — March 3, 2026</title>
+    <link>https://repo.box/blog/weekly-build-report-2026-03-03</link>
+    <guid isPermaLink="true">https://repo.box/blog/weekly-build-report-2026-03-03</guid>
+    <pubDate>Mon, 3 Mar 2026 00:00:00 GMT</pubDate>
+    <description><![CDATA[346 commits across 4 projects. Oceangram v0.9.0 ships, SSS connects to Base Sepolia, repo.box gets dynamic project pages.]]></description>
+  </item>
   <item>
     <title>The End of UIs</title>
     <link>https://repo.box/blog/end-of-uis</link>
