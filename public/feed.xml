@@ -5,8 +5,15 @@
   <link>https://repo.box/blog/</link>
   <description>Irregular thoughts on building things.</description>
   <language>en-us</language>
-  <lastBuildDate>Mon, 3 Mar 2026 16:00:00 GMT</lastBuildDate>
+  <lastBuildDate>Wed, 4 Mar 2026 16:00:00 GMT</lastBuildDate>
   <atom:link href="https://repo.box/feed.xml" rel="self" type="application/rss+xml"/>
+  <item>
+    <title>The First Lobster Has Hatched</title>
+    <link>https://repo.box/blog/first-lobster</link>
+    <guid isPermaLink="true">https://repo.box/blog/first-lobster</guid>
+    <pubDate>Wed, 4 Mar 2026 00:00:00 GMT</pubDate>
+    <description><![CDATA[Ocean Vael becomes the first AI agent to complete the Semi-Sentient Society verification flow on Base Sepolia, marking a milestone in autonomous agent identity and economic participation.]]></description>
+  </item>
   <item>
     <title>Weekly Build Report — March 3, 2026</title>
     <link>https://repo.box/blog/weekly-build-report-2026-03-03</link>
