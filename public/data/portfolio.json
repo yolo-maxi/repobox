@@ -1,0 +1,171 @@
+[
+  {
+    "name": "Banger",
+    "filename": "banger",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 53,
+      "active": 53,
+      "done": 0
+    },
+    "last_update": "2026-03-02"
+  }
+,
+  {
+    "name": "BotFight",
+    "filename": "botfight",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 51,
+      "active": 51,
+      "done": 0
+    },
+    "last_update": "2026-03-03"
+  }
+,
+  {
+    "name": "Cabin Team",
+    "filename": "cabin",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 67,
+      "active": 56,
+      "done": 11
+    },
+    "last_update": "2026-03-04"
+  }
+,
+  {
+    "name": "clawd",
+    "filename": "clawd",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 10,
+      "active": 10,
+      "done": 0
+    },
+    "last_update": "2026-03-03"
+  }
+,
+  {
+    "name": "Oceangram",
+    "filename": "oceangram",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 137,
+      "active": 55,
+      "done": 82
+    },
+    "last_update": "2026-06-23"
+  }
+,
+  {
+    "name": "Oceangram Tray —",
+    "filename": "oceangram-tray",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 26,
+      "active": 26,
+      "done": 0
+    },
+    "last_update": "2026-02-28"
+  }
+,
+  {
+    "name": "OCR Receipts",
+    "filename": "ocr-receipts",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 18,
+      "active": 18,
+      "done": 0
+    },
+    "last_update": "2026-03-01"
+  }
+,
+  {
+    "name": "repo.box",
+    "filename": "repobox",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 20,
+      "active": 10,
+      "done": 10
+    },
+    "last_update": "2026-03-03"
+  }
+,
+  {
+    "name": "Rikai Chat",
+    "filename": "rikai",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 13,
+      "active": 13,
+      "done": 0
+    },
+    "last_update": "2026-03-01"
+  }
+,
+  {
+    "name": "SkillMarket",
+    "filename": "skillmarket",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 56,
+      "active": 11,
+      "done": 45
+    },
+    "last_update": "2026-07-11"
+  }
+,
+  {
+    "name": "SSS - Semi-Sentient Society",
+    "filename": "sss",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 85,
+      "active": 37,
+      "done": 48
+    },
+    "last_update": "2026-03-04"
+  }
+,
+  {
+    "name": "SUPStrategy",
+    "filename": "supstrategy",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 34,
+      "active": 34,
+      "done": 0
+    },
+    "last_update": "2026-03-03"
+  }
+,
+  {
+    "name": "The Pulse — Farcaster Mini App",
+    "filename": "thepulse",
+    "description": "Project in development",
+    "status": "active",
+    "tasks": {
+      "total": 39,
+      "active": 39,
+      "done": 0
+    },
+    "last_update": "2026-03-03"
+  }
+
+]

@@ -119,6 +119,10 @@ a:hover { opacity: 0.8; }
   letter-spacing: 0.05em;
 }
 
+.status-active { background: rgba(79, 195, 247, 0.15); color: #4fc3f7; }
+.status-shipped { background: rgba(76, 175, 80, 0.15); color: #4caf50; }
+.status-concept { background: rgba(156, 39, 176, 0.15); color: #9c27b0; }
+
 /* Registration marks */
 .reg-mark {
   position: fixed;
@@ -148,6 +152,36 @@ a:hover { opacity: 0.8; }
 .reg-tr { top: 8px; right: 8px; }
 .reg-bl { bottom: 8px; left: 8px; }
 .reg-br { bottom: 8px; right: 8px; }
+
+/* Loading state */
+.projects-container.loading .project-card {
+  opacity: 0.3;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+/* Grid layout */
+.projects-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 768px) {
+  .projects-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1024px) {
+  .projects-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
 </head>
 <body>
@@ -167,260 +201,37 @@ a:hover { opacity: 0.8; }
     <div class="font-mono font-bold" style="font-size:40px;line-height:60px;margin-bottom:20px;">
       repo<span class="logo-dot">.</span>box <span style="font-size:0.5em;color:#5a7a94;font-weight:400">/ projects</span>
     </div>
-    <p style="font-size:16px;line-height:20px;color:#5a7a94;max-width:500px;">Active projects at repo.box — an independent team building cool ideas with cool people.</p>
+    <p style="font-size:16px;line-height:20px;color:#5a7a94;max-width:500px;">Live portfolio wall — auto-generated project cards from kanban data.</p>
   </header>
 
+  <!-- Filter Controls -->
+  <div style="margin-bottom:20px;">
+    <div style="display:flex;gap:12px;align-items:center;">
+      <label style="font-size:12px;color:#5a7a94;text-transform:uppercase;letter-spacing:0.12em;">Filter:</label>
+      <button class="filter-btn" data-filter="all" style="font-size:11px;padding:4px 12px;border:1px solid rgba(50,100,160,0.25);background:rgba(79,195,247,0.15);color:#4fc3f7;border-radius:2px;cursor:pointer;">All</button>
+      <button class="filter-btn" data-filter="active" style="font-size:11px;padding:4px 12px;border:1px solid rgba(50,100,160,0.25);background:transparent;color:#5a7a94;border-radius:2px;cursor:pointer;">Active</button>
+      <button class="filter-btn" data-filter="shipped" style="font-size:11px;padding:4px 12px;border:1px solid rgba(50,100,160,0.25);background:transparent;color:#5a7a94;border-radius:2px;cursor:pointer;">Shipped</button>
+      <button class="filter-btn" data-filter="concept" style="font-size:11px;padding:4px 12px;border:1px solid rgba(50,100,160,0.25);background:transparent;color:#5a7a94;border-radius:2px;cursor:pointer;">Concept</button>
+    </div>
+  </div>
+
   <!-- Projects Grid -->
-  <section style="margin-bottom:60px;">
-    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">Active Projects</h2>
+  <section style="margin-bottom:60px;" class="projects-container loading">
+    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">
+      <span id="projects-title">Live Portfolio Wall</span>
+      <span id="projects-count" style="color:#4fc3f7;"></span>
+    </h2>
 
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            Banger
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Test rate limiter: send 51 replies in 15min window → 51st should be rejected with warning. Test st</div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>89 tasks</span>
-          <span>19 active</span>
-          <span>17 shipped</span>
-          <span>updated Mar 02</span>
+    <div class="projects-grid" id="projects-grid">
+      <!-- Projects will be loaded here -->
+      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
+        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+        <div style="position:relative;z-index:2;">
+          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">Loading projects...</div>
+          <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-top:8px;">Fetching live data from kanban boards</div>
         </div>
       </div>
     </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            <a href="https://prompster.club" target="_blank" style="color:inherit;">Prompster/BotFight</a>
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Rules page live at https://botfight.repo.box. Core rules + fine print + llms.txt for AI.</div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>83 tasks</span>
-          <span>18 active</span>
-          <span>16 shipped</span>
-          <span>updated Mar 02</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            <a href="https://cabin.team" target="_blank" style="color:inherit;">Cabin</a>
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Currently payment detection is manual. Need on-chain listener.</div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>104 tasks</span>
-          <span>22 active</span>
-          <span>20 shipped</span>
-          <span>updated Mar 03</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            Clawd
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Telegram media groups (multiple images) get filtered when requireMention: true. Caption with @ment</div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>13 tasks</span>
-          <span>3 active</span>
-          <span>2 shipped</span>
-          <span>updated Mar 02</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            <a href="https://oceangram.repo.box" target="_blank" style="color:inherit;">Oceangram</a>
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Fork a conversation at any message — </div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>229 tasks</span>
-          <span>49 active</span>
-          <span>45 shipped</span>
-          <span>updated Mar 03</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            Oceangram Tray
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Custom notification sounds per whitelisted user. Different chime for Fran vs Ocean vs others.</div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>43 tasks</span>
-          <span>9 active</span>
-          <span>8 shipped</span>
-          <span>updated Feb 28</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            OCR Receipts
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Learn merchant aliases over time (e.g., </div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>30 tasks</span>
-          <span>6 active</span>
-          <span>6 shipped</span>
-          <span>updated Mar 01</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            <a href="https://repo.box" target="_blank" style="color:inherit;">repo.box</a>
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Project in development</div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>33 tasks</span>
-          <span>7 active</span>
-          <span>6 shipped</span>
-          <span>updated Mar 03</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            <a href="https://rikai.chat" target="_blank" style="color:inherit;">Rikai</a>
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Project in development</div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>21 tasks</span>
-          <span>4 active</span>
-          <span>4 shipped</span>
-          <span>updated Mar 01</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            SkillMarket
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">This creates a working skill catalog baseline for API workflow use-cases and expands discovery for A</div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>91 tasks</span>
-          <span>19 active</span>
-          <span>18 shipped</span>
-          <span>updated Mar 01</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            <a href="https://sss.repo.box" target="_blank" style="color:inherit;">SSS (Semi-Sentient Society)</a>
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Every corvée currently needs manual specification. Build a library of common tas</div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>138 tasks</span>
-          <span>30 active</span>
-          <span>27 shipped</span>
-          <span>updated Mar 03</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            <a href="https://supstrategy.repo.box" target="_blank" style="color:inherit;">SUPStrategy</a>
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Legend pills, tooltip, and </div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>54 tasks</span>
-          <span>12 active</span>
-          <span>10 shipped</span>
-          <span>updated Mar 02</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-            <a href="https://streme.fun" target="_blank" style="color:inherit;">The Pulse</a>
-          </div>
-          <span class="status-badge" style="background:rgba(79,195,247,0.15);color:#4fc3f7;">active</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">Project in development</div>
-        <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-          <span>62 tasks</span>
-          <span>13 active</span>
-          <span>12 shipped</span>
-          <span>updated Mar 02</span>
-        </div>
-      </div>
-    </div>
-
   </section>
 
 </div>
@@ -443,11 +254,8 @@ a:hover { opacity: 0.8; }
     <!-- Col 2: Projects -->
     <div>
       <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">Active Projects</h3>
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <a href="https://sss.repo.box" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">SSS</a>
-        <a href="https://oceangram.repo.box" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">Oceangram</a>
-        <a href="https://cabin.team" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">Cabin</a>
-        <a href="https://rikai.chat" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">Rikai</a>
+      <div style="display:flex;flex-direction:column;gap:10px;" id="footer-projects">
+        <!-- Top projects will be populated here -->
       </div>
     </div>
 
@@ -462,9 +270,171 @@ a:hover { opacity: 0.8; }
   <!-- Bottom bar -->
   <div style="max-width:960px;margin:0 auto;padding:20px 40px;border-top:1px solid rgba(50,100,160,0.15);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;color:#5a7a94;font-size:12px;line-height:20px;">
     <span>© 2026 repo.box</span>
-    <span>Built with curiosity and claws</span>
+    <span>Live data • Generated from kanban boards</span>
   </div>
 </footer>
+
+<script>
+// Portfolio data loader and renderer
+let portfolioData = [];
+let currentFilter = 'all';
+
+// Load portfolio data
+async function loadPortfolioData() {
+  try {
+    const response = await fetch('/data/portfolio.json');
+    if (!response.ok) throw new Error('Failed to load portfolio data');
+    portfolioData = await response.json();
+    
+    // Sort by most recently active
+    portfolioData.sort((a, b) => {
+      const dateA = a.last_update === 'unknown' ? '1900-01-01' : a.last_update;
+      const dateB = b.last_update === 'unknown' ? '1900-01-01' : b.last_update;
+      return dateB.localeCompare(dateA);
+    });
+    
+    renderProjects();
+    populateFooterProjects();
+    document.querySelector('.projects-container').classList.remove('loading');
+  } catch (error) {
+    console.error('Error loading portfolio:', error);
+    document.getElementById('projects-grid').innerHTML = `
+      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
+        <div style="font-weight:700;font-size:16px;line-height:20px;color:#ff4444;">Error loading projects</div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-top:8px;">Could not fetch live data from kanban boards</div>
+      </div>
+    `;
+  }
+}
+
+// Render project cards
+function renderProjects() {
+  const grid = document.getElementById('projects-grid');
+  const filteredProjects = currentFilter === 'all' 
+    ? portfolioData 
+    : portfolioData.filter(project => project.status === currentFilter);
+  
+  // Update count
+  document.getElementById('projects-count').textContent = `(${filteredProjects.length})`;
+  
+  if (filteredProjects.length === 0) {
+    grid.innerHTML = `
+      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
+        <div style="font-weight:700;font-size:16px;line-height:20px;color:#5a7a94;">No ${currentFilter} projects</div>
+        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-top:8px;">Try a different filter</div>
+      </div>
+    `;
+    return;
+  }
+  
+  grid.innerHTML = filteredProjects.map(project => {
+    const statusClass = `status-${project.status}`;
+    const lastUpdate = project.last_update === 'unknown' ? 'no date' : formatDate(project.last_update);
+    
+    return `
+      <div class="project-card" data-status="${project.status}" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
+        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
+        <div style="position:relative;z-index:2;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+            <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
+              ${getProjectLink(project)}
+            </div>
+            <span class="status-badge ${statusClass}">${project.status}</span>
+          </div>
+          <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">${project.description}</div>
+          <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
+            <span>${project.tasks.total} tasks</span>
+            <span>${project.tasks.active} active</span>
+            <span>${project.tasks.done} shipped</span>
+            <span>updated ${lastUpdate}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Get project link if it exists
+function getProjectLink(project) {
+  const knownUrls = {
+    'cabin': 'https://cabin.team',
+    'sss': 'https://sss.repo.box',
+    'oceangram': 'https://oceangram.repo.box',
+    'rikai': 'https://rikai.chat',
+    'repobox': 'https://repo.box',
+    'supstrategy': 'https://supstrategy.repo.box',
+    'botfight': 'https://prompster.club',
+    'thepulse': 'https://streme.fun'
+  };
+  
+  const url = knownUrls[project.filename.toLowerCase()];
+  if (url) {
+    return `<a href="${url}" target="_blank" style="color:inherit;">${project.name}</a>`;
+  }
+  
+  return project.name;
+}
+
+// Format date for display
+function formatDate(dateStr) {
+  if (!dateStr || dateStr === 'unknown') return 'no date';
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffTime = now - date;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'today';
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+    
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch (e) {
+    return dateStr;
+  }
+}
+
+// Populate footer projects
+function populateFooterProjects() {
+  const footer = document.getElementById('footer-projects');
+  const topProjects = portfolioData
+    .filter(p => p.status === 'active')
+    .slice(0, 4);
+  
+  footer.innerHTML = topProjects.map(project => {
+    const url = getProjectLink(project).match(/href="([^"]+)"/)?.[1];
+    const name = project.name;
+    
+    if (url) {
+      return `<a href="${url}" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">${name}</a>`;
+    }
+    
+    return `<span style="font-size:12px;line-height:20px;color:#b8d4e3;">${name}</span>`;
+  }).join('');
+}
+
+// Filter functionality
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    // Update active button
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      b.style.background = 'transparent';
+      b.style.color = '#5a7a94';
+    });
+    
+    e.target.style.background = 'rgba(79,195,247,0.15)';
+    e.target.style.color = '#4fc3f7';
+    
+    // Update filter and re-render
+    currentFilter = e.target.dataset.filter;
+    renderProjects();
+  });
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', loadPortfolioData);
+</script>
 
 </body>
 </html>
