@@ -3,438 +3,118 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Projects - repo.box</title>
-<meta name="description" content="Active projects at repo.box - an independent team building cool ideas with cool people.">
-<meta property="og:title" content="Projects - repo.box">
-<meta property="og:description" content="Active projects at repo.box - an independent team building cool ideas with cool people.">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://repo.box/projects">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Projects - repo.box">
-<meta name="twitter:description" content="Active projects at repo.box - an independent team building cool ideas with cool people.">
+<title>Projects — repo.box</title>
+<meta name="description" content="Live portfolio wall — what we're building at repo.box">
+<meta property="og:title" content="Projects — repo.box">
+<meta property="og:description" content="Live portfolio wall — what we're building at repo.box">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      spacing: {
-        'g1': '20px', 'g2': '40px', 'g3': '60px', 'g4': '80px',
-        'g5': '100px', 'g6': '120px', 'g8': '160px', 'g10': '200px',
-        'u1': '4px', 'u2': '8px', 'u3': '12px', 'u4': '16px', 'u5': '20px',
-      },
-      colors: {
-        bp: {
-          bg: '#0a1628',
-          surface: '#0d1f35',
-          border: 'rgba(50, 100, 160, 0.25)',
-          text: '#b8d4e3',
-          heading: '#e8f4fd',
-          dim: '#5a7a94',
-          accent: '#4fc3f7',
-          accent2: '#81d4fa',
-        }
-      },
-      fontFamily: {
-        mono: ['JetBrains Mono', 'monospace'],
-      },
-      fontSize: {
-        'bp-body': ['12px', '20px'],
-        'bp-lg': ['16px', '20px'],
-        'bp-h2': ['12px', '20px'],
-        'bp-logo': ['40px', '60px'],
-      }
-    }
-  }
-}
-</script>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-  background-color: #0a1628;
-  cursor: crosshair;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  line-height: 20px;
-  color: #b8d4e3;
-  min-height: 100vh;
+:root {
+  --bg: #0a1628; --surface: #0d1f35; --border: rgba(50,100,160,0.25);
+  --text: #b8d4e3; --heading: #e8f4fd; --dim: #5a7a94;
+  --accent: #4fc3f7; --green: #4caf50; --amber: #ffb74d; --purple: #9c27b0;
 }
-
-a { color: #4fc3f7; text-decoration: none; transition: opacity 0.2s; }
-a:hover { opacity: 0.8; }
-
-/* Logo dot breathing */
-.logo-dot {
-  color: #4fc3f7;
-  animation: dot-breathe 3s ease-in-out infinite;
-}
+body { background:var(--bg); font-family:'JetBrains Mono',monospace; font-size:12px; line-height:20px; color:var(--text); min-height:100vh; cursor:crosshair; }
+a { color:var(--accent); text-decoration:none; transition:opacity 0.2s; }
+a:hover { opacity:0.8; }
+.container { max-width:800px; margin:0 auto; padding:80px 40px 60px; }
+.logo-dot { color:var(--accent); animation:dot-breathe 3s ease-in-out infinite; }
 @keyframes dot-breathe {
-  0%, 100% { text-shadow: 0 0 4px #4fc3f7; opacity: 0.85; }
-  50% { text-shadow: 0 0 12px #4fc3f7, 0 0 24px rgba(79,195,247,0.4); opacity: 1; }
+  0%,100% { text-shadow:0 0 4px var(--accent); opacity:0.85; }
+  50% { text-shadow:0 0 12px var(--accent),0 0 24px rgba(79,195,247,0.4); opacity:1; }
 }
-
-/* Project card hover effects */
-.project-card {
-  position: relative;
-  transition: transform 0.2s ease, border-color 0.2s ease;
-}
-.project-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(79, 195, 247, 0.4);
-}
-
-/* SVG card borders */
-.project-card svg.card-border {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
-}
-.project-card svg.card-border rect {
-  fill: none;
-  stroke: #4fc3f7;
-  stroke-width: 1;
-  stroke-dasharray: 400;
-  stroke-dashoffset: 400;
-  transition: stroke-dashoffset 0.6s ease;
-  rx: 8;
-  ry: 8;
-}
-.project-card:hover svg.card-border rect {
-  stroke-dashoffset: 0;
-}
-
-/* Status badges */
-.status-badge {
-  font-size: 11px;
-  line-height: 16px;
-  padding: 2px 8px;
-  border-radius: 2px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.status-active { background: rgba(79, 195, 247, 0.15); color: #4fc3f7; }
-.status-shipped { background: rgba(76, 175, 80, 0.15); color: #4caf50; }
-.status-concept { background: rgba(156, 39, 176, 0.15); color: #9c27b0; }
-
-/* Registration marks */
-.reg-mark {
-  position: fixed;
-  width: 20px;
-  height: 20px;
-  z-index: 100;
-  pointer-events: none;
-}
-.reg-mark::before, .reg-mark::after {
-  content: '';
-  position: absolute;
-  background: rgba(79,195,247,0.3);
-}
-.reg-mark::before {
-  width: 1px;
-  height: 20px;
-  left: 50%;
-  top: 0;
-}
-.reg-mark::after {
-  width: 20px;
-  height: 1px;
-  top: 50%;
-  left: 0;
-}
-.reg-tl { top: 8px; left: 8px; }
-.reg-tr { top: 8px; right: 8px; }
-.reg-bl { bottom: 8px; left: 8px; }
-.reg-br { bottom: 8px; right: 8px; }
-
-/* Loading state */
-.projects-container.loading .project-card {
-  opacity: 0.3;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.6; }
-}
-
-/* Grid layout */
-.projects-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-}
-
-@media (min-width: 768px) {
-  .projects-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (min-width: 1024px) {
-  .projects-grid {
-    grid-template-columns: 1fr;
-  }
-}
+.stats-bar { display:flex; gap:24px; margin-bottom:32px; padding:16px 20px; background:var(--surface); border:1px solid var(--border); border-radius:6px; flex-wrap:wrap; }
+.stat-item { display:flex; flex-direction:column; gap:2px; }
+.stat-value { font-size:24px; font-weight:700; color:var(--heading); line-height:1; }
+.stat-label { font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dim); }
+.filter-bar { display:flex; gap:8px; margin-bottom:24px; align-items:center; }
+.filter-label { font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--dim); margin-right:4px; }
+.filter-btn { font-family:inherit; font-size:11px; padding:4px 12px; border:1px solid var(--border); background:transparent; color:var(--dim); border-radius:3px; cursor:pointer; transition:all 0.2s; }
+.filter-btn:hover { border-color:var(--accent); color:var(--accent); }
+.filter-btn.active { background:rgba(79,195,247,0.12); color:var(--accent); border-color:rgba(79,195,247,0.3); }
+.projects-grid { display:flex; flex-direction:column; gap:16px; }
+.project-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:20px 24px; transition:transform 0.2s,border-color 0.3s; }
+.project-card:hover { transform:translateY(-1px); border-color:rgba(79,195,247,0.35); }
+.card-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+.card-name { font-weight:700; font-size:16px; color:var(--heading); }
+.card-name a { color:inherit; }
+.card-name a:hover { color:var(--accent); }
+.status-badge { font-size:10px; padding:2px 8px; border-radius:2px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; }
+.status-active { background:rgba(79,195,247,0.12); color:var(--accent); }
+.status-shipped { background:rgba(76,175,80,0.12); color:var(--green); }
+.status-concept { background:rgba(156,39,176,0.12); color:var(--purple); }
+.card-desc { color:var(--text); margin-bottom:12px; font-size:12px; line-height:18px; }
+.progress-bar { height:4px; background:rgba(50,100,160,0.15); border-radius:2px; overflow:hidden; display:flex; margin-bottom:10px; }
+.progress-done { background:var(--green); transition:width 0.6s; }
+.progress-active { background:var(--accent); transition:width 0.6s; }
+.progress-ideas { background:rgba(90,122,148,0.3); transition:width 0.6s; }
+.card-stats { display:flex; gap:16px; font-size:11px; color:var(--dim); flex-wrap:wrap; }
+.card-stats .done-count { color:var(--green); }
+.card-stats .active-count { color:var(--accent); }
+.card-stats .blocked-count { color:var(--amber); }
+.reg-mark { position:fixed; width:20px; height:20px; z-index:100; pointer-events:none; }
+.reg-mark::before,.reg-mark::after { content:''; position:absolute; background:rgba(79,195,247,0.25); }
+.reg-mark::before { width:1px; height:20px; left:50%; }
+.reg-mark::after { width:20px; height:1px; top:50%; }
+.reg-tl { top:8px; left:8px; } .reg-tr { top:8px; right:8px; } .reg-bl { bottom:8px; left:8px; } .reg-br { bottom:8px; right:8px; }
+footer { background:#060e1a; border-top:1px solid var(--border); padding:40px; text-align:center; color:var(--dim); font-size:11px; }
+@media (max-width:640px) { .container { padding:40px 20px; } }
 </style>
 </head>
 <body>
-
-<!-- Registration marks -->
-<div class="reg-mark reg-tl"></div>
-<div class="reg-mark reg-tr"></div>
-<div class="reg-mark reg-bl"></div>
-<div class="reg-mark reg-br"></div>
-
-<div class="max-w-[720px] mx-auto" style="padding:80px 40px 100px; position:relative; z-index:1;">
-
-  <a href="/" style="font-size:12px;color:#5a7a94;display:inline-block;margin-bottom:40px;transition:color 0.2s;">← repo.box</a>
-  
-  <!-- Header -->
-  <header style="margin-bottom:40px;">
-    <div class="font-mono font-bold" style="font-size:40px;line-height:60px;margin-bottom:20px;">
-      repo<span class="logo-dot">.</span>box <span style="font-size:0.5em;color:#5a7a94;font-weight:400">/ projects</span>
-    </div>
-    <p style="font-size:16px;line-height:20px;color:#5a7a94;max-width:500px;">Live portfolio wall — auto-generated project cards from kanban data.</p>
+<div class="reg-mark reg-tl"></div><div class="reg-mark reg-tr"></div><div class="reg-mark reg-bl"></div><div class="reg-mark reg-br"></div>
+<div class="container">
+  <a href="/" style="font-size:12px;color:var(--dim);display:inline-block;margin-bottom:32px;">← repo.box</a>
+  <header style="margin-bottom:32px;">
+    <div style="font-size:40px;line-height:1.2;font-weight:700;margin-bottom:8px;">repo<span class="logo-dot">.</span>box <span style="font-size:0.45em;color:var(--dim);font-weight:400">/ projects</span></div>
+    <p style="color:var(--dim);font-size:13px;max-width:460px;">Live portfolio wall. Auto-generated from kanban boards.</p>
   </header>
-
-  <!-- Filter Controls -->
-  <div style="margin-bottom:20px;">
-    <div style="display:flex;gap:12px;align-items:center;">
-      <label style="font-size:12px;color:#5a7a94;text-transform:uppercase;letter-spacing:0.12em;">Filter:</label>
-      <button class="filter-btn" data-filter="all" style="font-size:11px;padding:4px 12px;border:1px solid rgba(50,100,160,0.25);background:rgba(79,195,247,0.15);color:#4fc3f7;border-radius:2px;cursor:pointer;">All</button>
-      <button class="filter-btn" data-filter="active" style="font-size:11px;padding:4px 12px;border:1px solid rgba(50,100,160,0.25);background:transparent;color:#5a7a94;border-radius:2px;cursor:pointer;">Active</button>
-      <button class="filter-btn" data-filter="shipped" style="font-size:11px;padding:4px 12px;border:1px solid rgba(50,100,160,0.25);background:transparent;color:#5a7a94;border-radius:2px;cursor:pointer;">Shipped</button>
-      <button class="filter-btn" data-filter="concept" style="font-size:11px;padding:4px 12px;border:1px solid rgba(50,100,160,0.25);background:transparent;color:#5a7a94;border-radius:2px;cursor:pointer;">Concept</button>
-    </div>
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat-item"><span class="stat-value" id="stat-total">—</span><span class="stat-label">Projects</span></div>
+    <div class="stat-item"><span class="stat-value" id="stat-tasks">—</span><span class="stat-label">Tasks</span></div>
+    <div class="stat-item"><span class="stat-value" id="stat-shipped">—</span><span class="stat-label">Shipped</span></div>
+    <div class="stat-item"><span class="stat-value" id="stat-active">—</span><span class="stat-label">In flight</span></div>
   </div>
-
-  <!-- Projects Grid -->
-  <section style="margin-bottom:60px;" class="projects-container loading">
-    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">
-      <span id="projects-title">Live Portfolio Wall</span>
-      <span id="projects-count" style="color:#4fc3f7;"></span>
-    </h2>
-
-    <div class="projects-grid" id="projects-grid">
-      <!-- Projects will be loaded here -->
-      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
-        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-        <div style="position:relative;z-index:2;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">Loading projects...</div>
-          <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-top:8px;">Fetching live data from kanban boards</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
+  <div class="filter-bar">
+    <span class="filter-label">Show:</span>
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="active">Active</button>
+    <button class="filter-btn" data-filter="shipped">Shipped</button>
+    <button class="filter-btn" data-filter="concept">Concept</button>
+  </div>
+  <div class="projects-grid" id="grid"></div>
 </div>
-
-<!-- Full-width footer -->
-<footer style="background:#060e1a;border-top:1px solid rgba(50,100,160,0.25);margin-top:0;position:relative;z-index:1;">
-  <div style="max-width:960px;margin:0 auto;padding:60px 40px 40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px;">
-
-    <!-- Col 1: Say Hi -->
-    <div>
-      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">Say Hi</h3>
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <a href="https://x.com/FrancescoRenziA" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">𝕏 Fran</a>
-        <a href="https://x.com/oceanvael" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">𝕏 Ocean</a>
-        <a href="https://farcaster.xyz/0xfran" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">🟪 0xFran</a>
-        <a href="https://farcaster.xyz/oceanvael" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">🟪 oceanvael</a>
-      </div>
-    </div>
-
-    <!-- Col 2: Projects -->
-    <div>
-      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">Active Projects</h3>
-      <div style="display:flex;flex-direction:column;gap:10px;" id="footer-projects">
-        <!-- Top projects will be populated here -->
-      </div>
-    </div>
-
-    <!-- Col 3: About -->
-    <div>
-      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">repo.box</h3>
-      <p style="font-size:12px;line-height:20px;color:#5a7a94;">An independent team building cool ideas with cool people. No pitch decks, no roadmaps — just code and curiosity.</p>
-    </div>
-
-  </div>
-
-  <!-- Bottom bar -->
-  <div style="max-width:960px;margin:0 auto;padding:20px 40px;border-top:1px solid rgba(50,100,160,0.15);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;color:#5a7a94;font-size:12px;line-height:20px;">
-    <span>© 2026 repo.box</span>
-    <span>Live data • Generated from kanban boards</span>
-  </div>
+<footer>
+  <div>© 2026 repo.box — Live data from kanban boards</div>
+  <div style="margin-top:8px;"><a href="/">Home</a> · <a href="/blog">Blog</a></div>
 </footer>
-
 <script>
-// Portfolio data loader and renderer
-let portfolioData = [];
-let currentFilter = 'all';
-
-// Load portfolio data
-async function loadPortfolioData() {
-  try {
-    const response = await fetch('/data/portfolio.json');
-    if (!response.ok) throw new Error('Failed to load portfolio data');
-    portfolioData = await response.json();
-    
-    // Sort by most recently active
-    portfolioData.sort((a, b) => {
-      const dateA = a.last_update === 'unknown' ? '1900-01-01' : a.last_update;
-      const dateB = b.last_update === 'unknown' ? '1900-01-01' : b.last_update;
-      return dateB.localeCompare(dateA);
-    });
-    
-    renderProjects();
-    populateFooterProjects();
-    document.querySelector('.projects-container').classList.remove('loading');
-  } catch (error) {
-    console.error('Error loading portfolio:', error);
-    document.getElementById('projects-grid').innerHTML = `
-      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
-        <div style="font-weight:700;font-size:16px;line-height:20px;color:#ff4444;">Error loading projects</div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-top:8px;">Could not fetch live data from kanban boards</div>
-      </div>
-    `;
-  }
-}
-
-// Render project cards
-function renderProjects() {
-  const grid = document.getElementById('projects-grid');
-  const filteredProjects = currentFilter === 'all' 
-    ? portfolioData 
-    : portfolioData.filter(project => project.status === currentFilter);
-  
-  // Update count
-  document.getElementById('projects-count').textContent = `(${filteredProjects.length})`;
-  
-  if (filteredProjects.length === 0) {
-    grid.innerHTML = `
-      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
-        <div style="font-weight:700;font-size:16px;line-height:20px;color:#5a7a94;">No ${currentFilter} projects</div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-top:8px;">Try a different filter</div>
-      </div>
-    `;
-    return;
-  }
-  
-  grid.innerHTML = filteredProjects.map(project => {
-    const statusClass = `status-${project.status}`;
-    const lastUpdate = project.last_update === 'unknown' ? 'no date' : formatDate(project.last_update);
-    
-    return `
-      <div class="project-card" data-status="${project.status}" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;">
-        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-        <div style="position:relative;z-index:2;">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-            <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">
-              ${getProjectLink(project)}
-            </div>
-            <span class="status-badge ${statusClass}">${project.status}</span>
-          </div>
-          <div style="font-size:12px;line-height:20px;color:#b8d4e3;margin-bottom:12px;">${project.description}</div>
-          <div style="display:flex;gap:16px;font-size:11px;line-height:16px;color:#5a7a94;">
-            <span>${project.tasks.total} tasks</span>
-            <span>${project.tasks.active} active</span>
-            <span>${project.tasks.done} shipped</span>
-            <span>updated ${lastUpdate}</span>
-          </div>
-        </div>
-      </div>
-    `;
+let data=[], filter='all';
+const urls={cabin:'https://cabin.team',sss:'https://sss.repo.box',oceangram:'https://oceangram.repo.box',rikai:'https://rikai.chat',repobox:'https://repo.box',supstrategy:'https://supstrategy.repo.box',botfight:'https://prompster.club',thepulse:'https://streme.fun'};
+function relDate(s){if(!s||s==='unknown')return'no date';const d=new Date(s+'T00:00:00'),diff=Math.floor((Date.now()-d)/864e5);if(diff===0)return'today';if(diff===1)return'yesterday';if(diff<7)return diff+'d ago';if(diff<30)return Math.floor(diff/7)+'w ago';return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
+function render(){
+  const f=filter==='all'?data:data.filter(p=>p.status===filter);
+  document.getElementById('stat-total').textContent=data.length;
+  document.getElementById('stat-tasks').textContent=data.reduce((s,p)=>s+p.tasks.total,0);
+  document.getElementById('stat-shipped').textContent=data.reduce((s,p)=>s+p.tasks.done,0);
+  document.getElementById('stat-active').textContent=data.reduce((s,p)=>s+p.tasks.active,0);
+  if(!f.length){document.getElementById('grid').innerHTML='<div style="color:var(--dim);padding:40px 0;text-align:center;">No projects match this filter.</div>';return;}
+  document.getElementById('grid').innerHTML=f.map(p=>{
+    const t=p.tasks,pD=t.total?Math.round(t.done/t.total*100):0,pA=t.total?Math.round(t.active/t.total*100):0,pI=Math.max(0,100-pD-pA);
+    const url=p.url||urls[p.filename],nm=url?'<a href="'+url+'" target="_blank">'+p.name+'</a>':p.name;
+    let st='';
+    if(t.done)st+='<span class="done-count">'+t.done+' shipped</span>';
+    if(t.active)st+='<span class="active-count">'+t.active+' active</span>';
+    if(t.blocked)st+='<span class="blocked-count">'+t.blocked+' blocked</span>';
+    if(t.ideas)st+='<span>'+t.ideas+' ideas</span>';
+    st+='<span>updated '+relDate(p.last_update)+'</span>';
+    return '<div class="project-card"><div class="card-header"><span class="card-name">'+nm+'</span><span class="status-badge status-'+p.status+'">'+p.status+'</span></div><div class="card-desc">'+p.description+'</div>'+(t.total?'<div class="progress-bar"><div class="progress-done" style="width:'+pD+'%"></div><div class="progress-active" style="width:'+pA+'%"></div><div class="progress-ideas" style="width:'+pI+'%"></div></div>':'')+'<div class="card-stats">'+st+'</div></div>';
   }).join('');
 }
-
-// Get project link if it exists
-function getProjectLink(project) {
-  const knownUrls = {
-    'cabin': 'https://cabin.team',
-    'sss': 'https://sss.repo.box',
-    'oceangram': 'https://oceangram.repo.box',
-    'rikai': 'https://rikai.chat',
-    'repobox': 'https://repo.box',
-    'supstrategy': 'https://supstrategy.repo.box',
-    'botfight': 'https://prompster.club',
-    'thepulse': 'https://streme.fun'
-  };
-  
-  const url = knownUrls[project.filename.toLowerCase()];
-  if (url) {
-    return `<a href="${url}" target="_blank" style="color:inherit;">${project.name}</a>`;
-  }
-  
-  return project.name;
-}
-
-// Format date for display
-function formatDate(dateStr) {
-  if (!dateStr || dateStr === 'unknown') return 'no date';
-  try {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffTime = now - date;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return 'today';
-    if (diffDays === 1) return 'yesterday';
-    if (diffDays < 7) return `${diffDays}d ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-    
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  } catch (e) {
-    return dateStr;
-  }
-}
-
-// Populate footer projects
-function populateFooterProjects() {
-  const footer = document.getElementById('footer-projects');
-  const topProjects = portfolioData
-    .filter(p => p.status === 'active')
-    .slice(0, 4);
-  
-  footer.innerHTML = topProjects.map(project => {
-    const url = getProjectLink(project).match(/href="([^"]+)"/)?.[1];
-    const name = project.name;
-    
-    if (url) {
-      return `<a href="${url}" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">${name}</a>`;
-    }
-    
-    return `<span style="font-size:12px;line-height:20px;color:#b8d4e3;">${name}</span>`;
-  }).join('');
-}
-
-// Filter functionality
-document.querySelectorAll('.filter-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    // Update active button
-    document.querySelectorAll('.filter-btn').forEach(b => {
-      b.style.background = 'transparent';
-      b.style.color = '#5a7a94';
-    });
-    
-    e.target.style.background = 'rgba(79,195,247,0.15)';
-    e.target.style.color = '#4fc3f7';
-    
-    // Update filter and re-render
-    currentFilter = e.target.dataset.filter;
-    renderProjects();
-  });
-});
-
-// Initialize
-document.addEventListener('DOMContentLoaded', loadPortfolioData);
+document.querySelectorAll('.filter-btn').forEach(b=>b.addEventListener('click',e=>{document.querySelectorAll('.filter-btn').forEach(x=>x.classList.remove('active'));e.target.classList.add('active');filter=e.target.dataset.filter;render();}));
+fetch('/data/portfolio.json').then(r=>r.json()).then(d=>{data=d;render();}).catch(()=>{document.getElementById('grid').innerHTML='<div style="color:#ef5350;padding:20px;">Failed to load portfolio data.</div>';});
 </script>
-
 </body>
 </html>

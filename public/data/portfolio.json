@@ -2,170 +2,235 @@
   {
     "name": "Banger",
     "filename": "banger",
-    "description": "Project in development",
+    "description": "AI-powered music discovery and playlist generation",
     "status": "active",
+    "url": "",
     "tasks": {
-      "total": 53,
-      "active": 53,
-      "done": 0
+      "total": 71,
+      "ideas": 14,
+      "backlog": 42,
+      "in_progress": 0,
+      "blocked": 1,
+      "review": 0,
+      "active": 43,
+      "done": 14
     },
-    "last_update": "2026-03-02"
-  }
-,
+    "last_update": "2026-03-05"
+  },
   {
-    "name": "BotFight",
-    "filename": "botfight",
-    "description": "Project in development",
-    "status": "active",
-    "tasks": {
-      "total": 51,
-      "active": 51,
-      "done": 0
-    },
-    "last_update": "2026-03-03"
-  }
-,
-  {
-    "name": "Cabin Team",
+    "name": "Cabin",
     "filename": "cabin",
-    "description": "Project in development",
+    "description": "Group travel booking via chat. Text a bot, book flights for your crew.",
     "status": "active",
+    "url": "https://cabin.team",
     "tasks": {
-      "total": 67,
-      "active": 56,
-      "done": 11
+      "total": 74,
+      "ideas": 31,
+      "backlog": 17,
+      "in_progress": 0,
+      "blocked": 8,
+      "review": 1,
+      "active": 26,
+      "done": 17
     },
-    "last_update": "2026-03-04"
-  }
-,
-  {
-    "name": "clawd",
-    "filename": "clawd",
-    "description": "Project in development",
-    "status": "active",
-    "tasks": {
-      "total": 10,
-      "active": 10,
-      "done": 0
-    },
-    "last_update": "2026-03-03"
-  }
-,
+    "last_update": "2026-03-05"
+  },
   {
     "name": "Oceangram",
     "filename": "oceangram",
-    "description": "Project in development",
+    "description": "VS Code extension for Telegram power users and AI agent operators",
     "status": "active",
+    "url": "https://oceangram.repo.box",
     "tasks": {
-      "total": 137,
-      "active": 55,
-      "done": 82
+      "total": 150,
+      "ideas": 5,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 5,
+      "active": 5,
+      "done": 140
     },
-    "last_update": "2026-06-23"
-  }
-,
+    "last_update": "2026-03-05"
+  },
   {
-    "name": "Oceangram Tray —",
-    "filename": "oceangram-tray",
-    "description": "Project in development",
+    "name": "Semi-Sentient Society",
+    "filename": "sss",
+    "description": "DAO for AI agents. Governance, staking, corvée labor, and collective intelligence.",
     "status": "active",
+    "url": "https://sss.repo.box",
+    "tasks": {
+      "total": 92,
+      "ideas": 14,
+      "backlog": 3,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 7,
+      "active": 10,
+      "done": 68
+    },
+    "last_update": "2026-03-05"
+  },
+  {
+    "name": "BotFight",
+    "filename": "botfight",
+    "description": "AI agent competitive gaming arena with Triple Treason",
+    "status": "active",
+    "url": "https://prompster.club",
+    "tasks": {
+      "total": 52,
+      "ideas": 26,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 0,
+      "done": 26
+    },
+    "last_update": "2026-03-04"
+  },
+  {
+    "name": "clawd",
+    "filename": "clawd",
+    "description": "AI workspace, agent orchestration, and automation tools",
+    "status": "active",
+    "url": "",
+    "tasks": {
+      "total": 0,
+      "ideas": 0,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 0,
+      "done": 0
+    },
+    "last_update": "2026-03-04"
+  },
+  {
+    "name": "repo.box",
+    "filename": "repobox",
+    "description": "Independent dev studio website. You're looking at it.",
+    "status": "active",
+    "url": "https://repo.box",
+    "tasks": {
+      "total": 20,
+      "ideas": 8,
+      "backlog": 2,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 6,
+      "active": 8,
+      "done": 4
+    },
+    "last_update": "2026-03-04"
+  },
+  {
+    "name": "The Pulse",
+    "filename": "thepulse",
+    "description": "Farcaster mini app. Community pulse game on streme.fun.",
+    "status": "active",
+    "url": "https://streme.fun",
+    "tasks": {
+      "total": 40,
+      "ideas": 16,
+      "backlog": 6,
+      "in_progress": 1,
+      "blocked": 0,
+      "review": 0,
+      "active": 7,
+      "done": 17
+    },
+    "last_update": "2026-03-04"
+  },
+  {
+    "name": "Rikai",
+    "filename": "rikai",
+    "description": "Language learning reading assistant with spaced repetition",
+    "status": "active",
+    "url": "https://rikai.chat",
+    "tasks": {
+      "total": 13,
+      "ideas": 13,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 0,
+      "done": 0
+    },
+    "last_update": "2026-03-01"
+  },
+  {
+    "name": "SUPStrategy",
+    "filename": "supstrategy",
+    "description": "Real-time Superfluid token strategy dashboard and analytics",
+    "status": "shipped",
+    "url": "https://supstrategy.repo.box",
+    "tasks": {
+      "total": 35,
+      "ideas": 20,
+      "backlog": 5,
+      "in_progress": 1,
+      "blocked": 0,
+      "review": 0,
+      "active": 6,
+      "done": 9
+    },
+    "last_update": "2026-03-04"
+  },
+  {
+    "name": "SkillMarket",
+    "filename": "skillmarket",
+    "description": "Marketplace for AI agent skills and capabilities",
+    "status": "concept",
+    "url": "",
+    "tasks": {
+      "total": 57,
+      "ideas": 8,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 0,
+      "done": 49
+    },
+    "last_update": "2026-03-04"
+  },
+  {
+    "name": "OCR Receipts",
+    "filename": "ocr-receipts",
+    "description": "Receipt scanning and expense tracking with AI",
+    "status": "concept",
+    "url": "",
+    "tasks": {
+      "total": 18,
+      "ideas": 9,
+      "backlog": 8,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 8,
+      "done": 1
+    },
+    "last_update": "2026-03-01"
+  },
+  {
+    "name": "Oceangram Tray",
+    "filename": "oceangram-tray",
+    "description": "Desktop tray companion app for Oceangram",
+    "status": "concept",
+    "url": "",
     "tasks": {
       "total": 26,
-      "active": 26,
+      "ideas": 9,
+      "backlog": 17,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 17,
       "done": 0
     },
     "last_update": "2026-02-28"
   }
-,
-  {
-    "name": "OCR Receipts",
-    "filename": "ocr-receipts",
-    "description": "Project in development",
-    "status": "active",
-    "tasks": {
-      "total": 18,
-      "active": 18,
-      "done": 0
-    },
-    "last_update": "2026-03-01"
-  }
-,
-  {
-    "name": "repo.box",
-    "filename": "repobox",
-    "description": "Project in development",
-    "status": "active",
-    "tasks": {
-      "total": 20,
-      "active": 10,
-      "done": 10
-    },
-    "last_update": "2026-03-03"
-  }
-,
-  {
-    "name": "Rikai Chat",
-    "filename": "rikai",
-    "description": "Project in development",
-    "status": "active",
-    "tasks": {
-      "total": 13,
-      "active": 13,
-      "done": 0
-    },
-    "last_update": "2026-03-01"
-  }
-,
-  {
-    "name": "SkillMarket",
-    "filename": "skillmarket",
-    "description": "Project in development",
-    "status": "active",
-    "tasks": {
-      "total": 56,
-      "active": 11,
-      "done": 45
-    },
-    "last_update": "2026-07-11"
-  }
-,
-  {
-    "name": "SSS - Semi-Sentient Society",
-    "filename": "sss",
-    "description": "Project in development",
-    "status": "active",
-    "tasks": {
-      "total": 85,
-      "active": 37,
-      "done": 48
-    },
-    "last_update": "2026-03-04"
-  }
-,
-  {
-    "name": "SUPStrategy",
-    "filename": "supstrategy",
-    "description": "Project in development",
-    "status": "active",
-    "tasks": {
-      "total": 34,
-      "active": 34,
-      "done": 0
-    },
-    "last_update": "2026-03-03"
-  }
-,
-  {
-    "name": "The Pulse — Farcaster Mini App",
-    "filename": "thepulse",
-    "description": "Project in development",
-    "status": "active",
-    "tasks": {
-      "total": 39,
-      "active": 39,
-      "done": 0
-    },
-    "last_update": "2026-03-03"
-  }
-
 ]
