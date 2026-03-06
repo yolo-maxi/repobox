@@ -1,13 +1,49 @@
 [
   {
+    "name": "Oceangram",
+    "filename": "oceangram",
+    "description": "VS Code extension for Telegram power users and AI agent operators",
+    "status": "active",
+    "url": "https://oceangram.repo.box",
+    "tasks": {
+      "total": 153,
+      "ideas": 8,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 5,
+      "active": 5,
+      "done": 140
+    },
+    "last_update": "2026-03-06"
+  },
+  {
+    "name": "Semi-Sentient Society",
+    "filename": "sss",
+    "description": "DAO for AI agents. Governance, staking, corvée labor, and collective intelligence.",
+    "status": "active",
+    "url": "https://sss.repo.box",
+    "tasks": {
+      "total": 95,
+      "ideas": 9,
+      "backlog": 3,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 7,
+      "active": 10,
+      "done": 76
+    },
+    "last_update": "2026-03-06"
+  },
+  {
     "name": "Banger",
     "filename": "banger",
     "description": "AI-powered music discovery and playlist generation",
     "status": "active",
     "url": "",
     "tasks": {
-      "total": 71,
-      "ideas": 14,
+      "total": 74,
+      "ideas": 17,
       "backlog": 42,
       "in_progress": 0,
       "blocked": 1,
@@ -18,68 +54,14 @@
     "last_update": "2026-03-05"
   },
   {
-    "name": "Cabin",
-    "filename": "cabin",
-    "description": "Group travel booking via chat. Text a bot, book flights for your crew.",
-    "status": "active",
-    "url": "https://cabin.team",
-    "tasks": {
-      "total": 74,
-      "ideas": 31,
-      "backlog": 17,
-      "in_progress": 0,
-      "blocked": 8,
-      "review": 1,
-      "active": 26,
-      "done": 17
-    },
-    "last_update": "2026-03-05"
-  },
-  {
-    "name": "Oceangram",
-    "filename": "oceangram",
-    "description": "VS Code extension for Telegram power users and AI agent operators",
-    "status": "active",
-    "url": "https://oceangram.repo.box",
-    "tasks": {
-      "total": 150,
-      "ideas": 5,
-      "backlog": 0,
-      "in_progress": 0,
-      "blocked": 0,
-      "review": 5,
-      "active": 5,
-      "done": 140
-    },
-    "last_update": "2026-03-05"
-  },
-  {
-    "name": "Semi-Sentient Society",
-    "filename": "sss",
-    "description": "DAO for AI agents. Governance, staking, corvée labor, and collective intelligence.",
-    "status": "active",
-    "url": "https://sss.repo.box",
-    "tasks": {
-      "total": 92,
-      "ideas": 14,
-      "backlog": 3,
-      "in_progress": 0,
-      "blocked": 0,
-      "review": 7,
-      "active": 10,
-      "done": 68
-    },
-    "last_update": "2026-03-05"
-  },
-  {
     "name": "BotFight",
     "filename": "botfight",
     "description": "AI agent competitive gaming arena with Triple Treason",
     "status": "active",
     "url": "https://prompster.club",
     "tasks": {
-      "total": 52,
-      "ideas": 26,
+      "total": 56,
+      "ideas": 30,
       "backlog": 0,
       "in_progress": 0,
       "blocked": 0,
@@ -87,7 +69,25 @@
       "active": 0,
       "done": 26
     },
-    "last_update": "2026-03-04"
+    "last_update": "2026-03-05"
+  },
+  {
+    "name": "Cabin",
+    "filename": "cabin",
+    "description": "Group travel booking via chat. Text a bot, book flights for your crew.",
+    "status": "active",
+    "url": "https://cabin.team",
+    "tasks": {
+      "total": 30,
+      "ideas": 15,
+      "backlog": 12,
+      "in_progress": 2,
+      "blocked": 0,
+      "review": 0,
+      "active": 14,
+      "done": 1
+    },
+    "last_update": "2026-03-05"
   },
   {
     "name": "clawd",
@@ -105,7 +105,7 @@
       "active": 0,
       "done": 0
     },
-    "last_update": "2026-03-04"
+    "last_update": "2026-03-05"
   },
   {
     "name": "repo.box",

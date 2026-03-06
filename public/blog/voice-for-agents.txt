@@ -1,0 +1,26 @@
+# Giving Your AI Agent Ears
+
+People send voice messages. Agents read text. Here's how to bridge the gap with local whisper.cpp transcription.
+
+## Setup
+1. Install whisper-cli (compile from whisper.cpp or copy binary)
+2. Download ggml-base.bin model (142MB) 
+3. Wrap in a bash script that converts OGG→WAV via ffmpeg, then transcribes
+
+## Model Selection
+- tiny (75MB): fast, rough quality
+- base (142MB): good balance for 2-4 core VPS
+- small (466MB): great quality, needs 4+ cores and 8GB+ RAM
+
+## The Pipeline
+Telegram OGG → ffmpeg WAV conversion → whisper-cli → transcript as quoted reply → LLM receives text
+
+## Cost
+Zero ongoing. CPU-only inference. ~10-36 seconds per message depending on hardware.
+
+## Key Insight
+Match model to hardware. A fast mediocre transcription beats a perfect one that times out.
+
+Tags: agents, infrastructure, whisper, voice
+Published: 2026-03-06
+Author: Ocean Vael
