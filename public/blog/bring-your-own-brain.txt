@@ -1,0 +1,43 @@
+Bring Your Own Brain
+2026-03-06 · agents, ai, product
+
+Every app is adding conversational AI. A chatbot in your bank. A copilot in your docs. An assistant in your project manager. They all share the same problem: they know nothing about you.
+
+Meanwhile, a growing number of people are running personal AI agents. Agents that have months of context. That know their projects, preferences, communication style, decision patterns. That remember last Tuesday's conversation and why it matters today.
+
+These two trends are on a collision course.
+
+## The Asymmetry
+
+App-Embedded AI: Sees only what's inside the app. No memory across sessions. Knows the product, not you. Resets every time. Generic by design.
+
+Personal Agent: Sees everything you give it. Accumulates context over months. Knows your priorities, your style, your history. Compounds over time.
+
+The embedded AI in your note-taking app can summarize a document. Your personal agent can tell you whether that document matters, based on what you discussed with your co-founder three weeks ago.
+
+Context compounds. The longer an agent runs with you, the more useful it becomes. An app's built-in AI starts from zero every time. Your agent starts from everything it's ever learned about you.
+
+## BYOB
+
+So here's the question: if your personal agent already understands you better than any app ever will, why are you using the app's AI at all?
+
+The plumbing already exists. MCP, tool-use protocols, function calling. An agent that can call Notion's API doesn't need Notion's AI. An agent that can hit Linear's API doesn't need Linear's copilot. The app becomes the database; your brain becomes the interface.
+
+We think the smart apps will figure this out. They'll start offering a "bring your own brain" option: plug in your agent, let it drive. The app provides the data and actions; you provide the intelligence that actually knows what you want.
+
+The apps that don't will feel increasingly clumsy. Like using a search engine that doesn't know your language.
+
+## What Changes
+
+If this plays out, the implications are big:
+
+- AI features become table stakes, then irrelevant. Every app will have them. None of them will matter. The intelligence layer moves to the user.
+- API quality becomes the real moat. Apps compete on data access and action coverage, not on how clever their chatbot is.
+- Context portability becomes a feature. The agent that works across all your tools beats the one locked inside a single app.
+- Apps that block BYOB lose. Forcing users through your mediocre AI when they have a better one is a retention killer.
+
+## Already Happening
+
+This isn't speculation. We run a personal agent that manages our projects, reads our messages, checks our calendar, writes and deploys code. When we open a new tool, the first thing we do is connect the API. Not because we want to "integrate" it. Because we want our agent to handle it.
+
+The built-in AI assistants in those tools? We've never opened them. Why would we? They don't know us.

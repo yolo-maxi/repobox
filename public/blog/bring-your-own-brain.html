@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bring Your Own Brain — repo.box</title>
+<meta name="description" content="Every app is adding AI. Every power user is building their own. Only one of them knows anything about you.">
+<meta property="og:title" content="Bring Your Own Brain — repo.box">
+<meta property="og:description" content="Every app is adding AI. Every power user is building their own. Only one of them knows anything about you.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://repo.box/blog/bring-your-own-brain">
+<meta property="og:image" content="https://repo.box/og/repo-box-share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="repo.box — independent team building cool ideas with cool people.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Bring Your Own Brain — repo.box">
+<meta name="twitter:description" content="Every app is adding AI. Every power user is building their own. Only one of them knows anything about you.">
+<meta name="twitter:image" content="https://repo.box/og/repo-box-share.jpg">
+<link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
+<link rel="alternate" type="text/plain" title="Agent-readable version" href="/blog/bring-your-own-brain.txt">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a1628;--surface:#0d1f35;--border:rgba(50,100,160,0.25);--text:#b8d4e3;--dim:#5a7a94;--accent:#4fc3f7;--accent2:#81d4fa;--heading:#e8f4fd}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.4}}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;min-height:100vh;cursor:crosshair}
+a{color:var(--accent);text-decoration:none;transition:color .2s}
+a:hover{color:var(--accent2)}
+.container{max-width:720px;margin:0 auto;padding:60px 20px 80px}
+.back{font-size:12px;color:var(--dim);display:inline-block;margin-bottom:40px;transition:color .2s}
+.back:hover{color:var(--accent)}
+footer{margin-top:80px;padding-top:20px;border-top:1px solid var(--border);color:var(--dim);font-size:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+@media(max-width:500px){
+  .container{padding:40px 20px 60px}
+  footer{flex-direction:column;align-items:flex-start}
+}
+
+.post-meta{color:var(--dim);font-size:12px;margin-bottom:40px}
+.post-body{max-width:680px}
+.post-body h1{font-size:24px;font-weight:700;margin-bottom:8px;line-height:1.2;color:var(--heading)}
+.post-body h2{font-size:18px;font-weight:600;margin:40px 0 12px;color:var(--heading)}
+.post-body p{margin-bottom:20px;color:var(--text);font-size:13px;line-height:24px}
+.post-body ul,.post-body ol{margin:0 0 20px 24px;color:var(--text);font-size:13px}
+.post-body li{margin-bottom:8px;line-height:24px}
+.post-body blockquote{border-left:2px solid var(--accent);padding:8px 20px;margin:20px 0;color:var(--dim);background:rgba(79,195,247,.03);border-radius:0 4px 4px 0}
+.post-body code{font-size:12px;background:var(--surface);padding:2px 8px;border-radius:2px;border:1px solid var(--border)}
+.post-body a{color:var(--accent);border-bottom:1px solid rgba(79,195,247,.2)}
+.post-body a:hover{color:var(--accent2);border-bottom-color:var(--accent2)}
+.post-body hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+.post-body em{color:var(--dim)}
+
+/* Visual cards */
+.vs-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+@media(max-width:600px){.vs-grid{grid-template-columns:1fr}}
+.vs-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px}
+.vs-card h3{font-size:13px;font-weight:600;color:var(--heading);margin:0 0 8px}
+.vs-card p{font-size:12px;line-height:20px;margin:0;color:var(--dim)}
+.vs-card .hl{color:var(--accent)}
+.vs-card.fade{border-color:rgba(255,100,100,.2);background:rgba(255,100,100,.02)}
+.vs-card.fade h3{color:#ff8a80}
+</style>
+</head>
+<body>
+<div class="container" style="position:relative;z-index:1;">
+<a href="/blog/" class="back">← blog</a>
+<article class="post-body">
+  <h1>Bring Your Own Brain</h1>
+  <div class="post-meta">2026-03-06 · agents, ai, product</div>
+
+  <p>Every app is adding conversational AI. A chatbot in your bank. A copilot in your docs. An assistant in your project manager. They all share the same problem: they know nothing about you.</p>
+
+  <p>Meanwhile, a growing number of people are running personal AI agents. Agents that have months of context. That know their projects, preferences, communication style, decision patterns. That remember last Tuesday's conversation and why it matters today.</p>
+
+  <p>These two trends are on a collision course.</p>
+
+  <h2>The Asymmetry</h2>
+
+  <div class="vs-grid">
+    <div class="vs-card fade">
+      <h3>App-Embedded AI</h3>
+      <p>Sees only what's inside the app. No memory across sessions. Knows the product, not you. Resets every time. <span class="hl">Generic by design.</span></p>
+    </div>
+    <div class="vs-card">
+      <h3>Personal Agent</h3>
+      <p>Sees everything you give it. Accumulates context over months. Knows your priorities, your style, your history. <span class="hl">Compounds over time.</span></p>
+    </div>
+  </div>
+
+  <p>The embedded AI in your note-taking app can summarize a document. Your personal agent can tell you whether that document matters, based on what you discussed with your co-founder three weeks ago.</p>
+
+  <p>Context compounds. The longer an agent runs with you, the more useful it becomes. An app's built-in AI starts from zero every time. Your agent starts from everything it's ever learned about you.</p>
+
+  <h2>BYOB</h2>
+
+  <p>So here's the question: if your personal agent already understands you better than any app ever will, why are you using the app's AI at all?</p>
+
+  <p>The plumbing already exists. MCP, tool-use protocols, function calling. An agent that can call Notion's API doesn't need Notion's AI. An agent that can hit Linear's API doesn't need Linear's copilot. The app becomes the database; your brain becomes the interface.</p>
+
+  <p>We think the smart apps will figure this out. They'll start offering a "bring your own brain" option: plug in your agent, let it drive. The app provides the data and actions; you provide the intelligence that actually knows what you want.</p>
+
+  <p>The apps that don't will feel increasingly clumsy. Like using a search engine that doesn't know your language.</p>
+
+  <h2>What Changes</h2>
+
+  <p>If this plays out, the implications are big:</p>
+
+  <ul>
+    <li><strong>AI features become table stakes, then irrelevant.</strong> Every app will have them. None of them will matter. The intelligence layer moves to the user.</li>
+    <li><strong>API quality becomes the real moat.</strong> Apps compete on data access and action coverage, not on how clever their chatbot is.</li>
+    <li><strong>Context portability becomes a feature.</strong> The agent that works across all your tools beats the one locked inside a single app.</li>
+    <li><strong>Apps that block BYOB lose.</strong> Forcing users through your mediocre AI when they have a better one is a retention killer.</li>
+  </ul>
+
+  <h2>Already Happening</h2>
+
+  <p>This isn't speculation. We run a personal agent that manages our projects, reads our messages, checks our calendar, writes and deploys code. When we open a new tool, the first thing we do is connect the API. Not because we want to "integrate" it. Because we want our agent to handle it.</p>
+
+  <p>The built-in AI assistants in those tools? We've never opened them. Why would we? They don't know us.</p>
+
+  <hr>
+
+  <p><em>We're building tools for people who want to own their intelligence layer. Follow our work on <a href="/blog/">the blog</a> or <a href="/feed.xml">subscribe to RSS</a>.</em></p>
+
+</article>
+<footer>
+  <span>© 2026 repo.box</span>
+  <span>very unserious builders doing very serious work</span>
+</footer>
+</div>
+<script src="/canvas.js"></script>
+<canvas id="bg-canvas" style="position:absolute;top:0;left:0;width:100%;z-index:0;pointer-events:none;"></canvas>
+<script src="/jellyfish-bg.js"></script>
+</body>
+</html>
