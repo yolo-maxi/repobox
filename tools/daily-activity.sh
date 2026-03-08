@@ -20,8 +20,8 @@ mkdir -p "$(dirname "$OUTPUT_FILE")"
 
 echo "🔍 Generating daily activity feed for repo.box..."
 
-# Get today's date in git format
-TODAY=$(date '+%Y-%m-%d')
+# Get today's date in git format (allow override via environment)
+TODAY=${TODAY:-$(date '+%Y-%m-%d')}
 echo "📅 Scanning commits for: $TODAY"
 
 # Create a temporary file to collect commits
