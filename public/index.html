@@ -205,29 +205,6 @@ a:hover { opacity: 0.8; }
 
 /* canvas.js handles background */
 
-/* Hero manta layer */
-.hero-with-mantas {
-  position: relative;
-  overflow: hidden;
-}
-.hero-with-mantas > * {
-  position: relative;
-  z-index: 2;
-}
-#hero-manta-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 1.4s ease;
-}
-#hero-manta-canvas.active {
-  opacity: 1;
-}
-
 
 /* Hide scrollbar on horizontal card row */
 div[style*="scroll-snap-type"]::-webkit-scrollbar { display: none; }
@@ -1014,41 +991,7 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
       for (let i = 0; i < initialCount; i++) jellies.push(makeJelly(true));
     });
 
-  // Manta fleet (same text-light modulation approach as jellyfish)
-  let mantaFrames = null;
-  let mW = 0, mH = 0, mTotal = 0;
-  const mantaFleet = [];
-  let mantaStartTick = null;
-  let mantaDone = false;
 
-  fetch('/manta-loop.json')
-    .then(r => r.json())
-    .then(data => {
-      mantaFrames = data;
-      mTotal = mantaFrames.length;
-      mH = mantaFrames[0].length;
-      mW = mantaFrames[0][0].length;
-    })
-    .catch(() => {});
-
-  function makeMantaFleet() {
-    mantaFleet.length = 0;
-    const count = isMobile ? 3 : 4;
-    const yAnchors = isMobile ? [0.2, 0.48, 0.78] : [0.14, 0.36, 0.60, 0.84];
-    for (let i = 0; i < count; i++) {
-      const depth = i / Math.max(1, count - 1);
-      const scale = (isMobile ? 0.95 : 1.05) + (Math.random() * 0.35) - depth * 0.12;
-      const scaledW = mW * scale;
-      mantaFleet.push({
-        x: -scaledW - i * (cols * 0.2),
-        y: Math.floor(rows * yAnchors[i]),
-        scale,
-        speed: (isMobile ? 0.035 : 0.042) + Math.random() * 0.01,
-        frameOffset: Math.floor(Math.random() * mTotal),
-        alpha: 0.42 - depth * 0.12,
-      });
-    }
-  }
   
   function makeJelly(initial) {
     // Scale: mostly 0.15–1.0, but occasionally (10% chance) a big one up to 1.8×
@@ -1313,57 +1256,7 @@ document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
       }
     }
 
-    // One-shot full-page manta pass: light shining on ASCII text
-    if (mantaFrames && !mantaDone) {
-      if (mantaStartTick === null && tick > 70) {
-        mantaStartTick = tick;
-        makeMantaFleet();
-      }
 
-      if (mantaStartTick !== null) {
-        let active = false;
-        for (let mi = 0; mi < mantaFleet.length; mi++) {
-          const m = mantaFleet[mi];
-          m.x += m.speed;
-
-          const fi = Math.floor((tick * 0.08 + m.frameOffset) % mTotal);
-          const frame = mantaFrames[fi];
-
-          const scaledW = mW * m.scale;
-          const scaledH = mH * m.scale;
-          const halfW = scaledW / 2;
-          const halfH = scaledH / 2;
-
-          if (m.x - halfW > cols + 2) continue;
-          active = true;
-
-          const gxMin = Math.max(0, Math.floor(m.x - halfW - 1));
-          const gxMax = Math.min(cols, Math.ceil(m.x + halfW + 1));
-          const gyMin = Math.max(0, Math.floor(m.y - halfH - 1));
-          const gyMax = Math.min(rows, Math.ceil(m.y + halfH + 1));
-
-          for (let gy = gyMin; gy < gyMax; gy++) {
-            for (let gx = gxMin; gx < gxMax; gx++) {
-              const fx = Math.floor((gx - (m.x - halfW)) / m.scale);
-              const fy = Math.floor((gy - (m.y - halfH)) / m.scale);
-              if (fx < 0 || fx >= mW || fy < 0 || fy >= mH) continue;
-
-              // Invert because manta is dark in source.
-              const inv = 1 - frame[fy][fx];
-              const mask = Math.pow(Math.max(0, inv - 0.32) / 0.68, 1.8);
-              if (mask < 0.07) continue;
-
-              const alpha = Math.min(0.85, mask * m.alpha);
-              const ch = bgGrid[gy]?.[gx] || '.';
-              ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
-              ctx.fillText(ch, gx * charW, gy * fontSize + fontSize);
-            }
-          }
-        }
-
-        if (!active) mantaDone = true;
-      }
-    }
     
     tick++;
     requestAnimationFrame(draw);
