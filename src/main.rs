@@ -157,15 +157,15 @@ fn cmd_init(force: bool) -> ExitCode {
 
 groups:
   founders:
-    members: []
+    members:
       # - evm:0xYOUR_ADDRESS_HERE
   agents:
-    members: []
+    members:
       # - evm:0xAGENT_ADDRESS_HERE
 
 permissions:
   default: allow
-  rules: []
+  rules:
     # Flat rules:
     #   - "@founders push >*"
     #   - "@founders merge >*"
