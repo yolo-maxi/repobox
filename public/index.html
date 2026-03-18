@@ -5,1268 +5,605 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <title>repo.box</title>
-<meta name="description" content="An independent team building cool ideas with cool people.">
+<meta name="description" content="repo.box is a local git permission layer for AI agents. Signed commits, repo-native policy, branch sandboxes, and ERC-8128 auth.">
 <meta property="og:title" content="repo.box">
-<meta property="og:description" content="An independent team building cool ideas with cool people.">
+<meta property="og:description" content="A local git permission layer that makes repositories safe for AI agents. Five agents, five keys, one repo, zero risk.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://repo.box">
 <meta property="og:image" content="https://repo.box/og/repo-box-share.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="repo.box — independent team building cool ideas with cool people.">
+<meta property="og:image:alt" content="repo.box product landing page for a git permission layer for AI agents.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="repo.box">
-<meta name="twitter:description" content="An independent team building cool ideas with cool people.">
+<meta name="twitter:description" content="A local git permission layer that makes repositories safe for AI agents.">
 <meta name="twitter:image" content="https://repo.box/og/repo-box-share.jpg">
 <link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
   theme: {
     extend: {
-      spacing: {
-        'g1': '20px', 'g2': '40px', 'g3': '60px', 'g4': '80px',
-        'g5': '100px', 'g6': '120px', 'g8': '160px', 'g10': '200px',
-        'u1': '4px', 'u2': '8px', 'u3': '12px', 'u4': '16px', 'u5': '20px',
-      },
       colors: {
         bp: {
           bg: '#0a1628',
-          surface: '#0d1f35',
-          border: 'rgba(50, 100, 160, 0.25)',
+          panel: '#0d1f35',
+          panel2: '#122946',
+          border: 'rgba(79,195,247,0.18)',
           text: '#b8d4e3',
           heading: '#e8f4fd',
-          dim: '#5a7a94',
+          dim: '#6f8da6',
           accent: '#4fc3f7',
-          accent2: '#81d4fa',
+          accent2: '#81d4fa'
         }
       },
       fontFamily: {
-        mono: ['JetBrains Mono', 'monospace'],
+        mono: ['JetBrains Mono', 'monospace']
       },
-      fontSize: {
-        'bp-body': ['12px', '20px'],
-        'bp-lg': ['16px', '20px'],
-        'bp-h2': ['12px', '20px'],
-        'bp-logo': ['40px', '60px'],
+      boxShadow: {
+        glow: '0 0 0 1px rgba(79,195,247,0.14), 0 24px 80px rgba(4,12,24,0.55)'
       }
     }
   }
-}
+};
 </script>
 <style>
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
 
 body {
-  background-color: #0a1628;
-  cursor: crosshair;
+  margin: 0;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  line-height: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(79, 195, 247, 0.08), transparent 24%),
+    radial-gradient(circle at top right, rgba(129, 212, 250, 0.05), transparent 22%),
+    linear-gradient(180deg, #0a1628 0%, #09121f 100%);
   color: #b8d4e3;
   min-height: 100vh;
 }
 
-a { color: #4fc3f7; text-decoration: none; transition: opacity 0.2s; }
-a:hover { opacity: 0.8; }
-
-/* Logo dot breathing */
-.logo-dot {
-  color: #4fc3f7;
-  animation: dot-breathe 3s ease-in-out infinite;
-}
-@keyframes dot-breathe {
-  0%, 100% { text-shadow: 0 0 4px #4fc3f7; opacity: 0.85; }
-  50% { text-shadow: 0 0 12px #4fc3f7, 0 0 24px rgba(79,195,247,0.4); opacity: 1; }
+a {
+  color: inherit;
 }
 
-/* Section reveal */
+::selection {
+  background: rgba(79, 195, 247, 0.25);
+  color: #e8f4fd;
+}
+
+.grid-shell {
+  background-image:
+    linear-gradient(rgba(79, 195, 247, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79, 195, 247, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: center;
+}
+
+.section-card {
+  background: linear-gradient(180deg, rgba(13, 31, 53, 0.92), rgba(10, 22, 40, 0.96));
+  border: 1px solid rgba(79, 195, 247, 0.18);
+  box-shadow: 0 0 0 1px rgba(79,195,247,0.03), 0 18px 48px rgba(0,0,0,0.24);
+}
+
+.code-panel {
+  background: linear-gradient(180deg, rgba(7, 16, 28, 0.96), rgba(9, 20, 34, 0.98));
+  border: 1px solid rgba(79, 195, 247, 0.16);
+}
+
+.section-label {
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #81d4fa;
+  font-size: 11px;
+}
+
+.terminal-dots span {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(129, 212, 250, 0.35);
+}
+
+.terminal-dots span:nth-child(1) {
+  background: rgba(255, 120, 120, 0.8);
+}
+
+.terminal-dots span:nth-child(2) {
+  background: rgba(255, 202, 70, 0.8);
+}
+
+.terminal-dots span:nth-child(3) {
+  background: rgba(120, 255, 160, 0.8);
+}
+
+.scanline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent, rgba(129, 212, 250, 0.03), transparent);
+  background-size: 100% 5px;
+  pointer-events: none;
+}
+
 .reveal {
   opacity: 0;
-  transition: opacity 0.8s ease;
+  transform: translateY(16px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
 }
+
 .reveal.visible {
   opacity: 1;
+  transform: translateY(0);
 }
 
-/* SVG card borders */
-.project-card {
-  position: relative;
-}
-.project-card svg.card-border {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
-}
-.project-card svg.card-border rect {
-  fill: none;
-  stroke: #4fc3f7;
-  stroke-width: 1;
-  stroke-dasharray: 400;
-  stroke-dashoffset: 400;
-  transition: stroke-dashoffset 0.6s ease;
-  rx: 8;
-  ry: 8;
-}
-.project-card:hover svg.card-border rect {
-  stroke-dashoffset: 0;
+.form-msg {
+  display: none;
 }
 
-/* Registration marks */
-.reg-mark {
-  position: fixed;
-  width: 20px;
-  height: 20px;
-  z-index: 100;
-  pointer-events: none;
-}
-.reg-mark::before, .reg-mark::after {
-  content: '';
-  position: absolute;
-  background: rgba(79,195,247,0.3);
-}
-.reg-mark::before {
-  width: 1px;
-  height: 20px;
-  left: 50%;
-  top: 0;
-}
-.reg-mark::after {
-  width: 20px;
-  height: 1px;
-  top: 50%;
-  left: 0;
-}
-.reg-tl { top: 8px; left: 8px; }
-.reg-tr { top: 8px; right: 8px; }
-.reg-bl { bottom: 8px; left: 8px; }
-.reg-br { bottom: 8px; right: 8px; }
-
-/* Agent section glow */
-.agent-glow {
-  position: relative;
-  overflow: hidden;
-}
-.agent-glow::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #4fc3f7, #81d4fa, transparent);
-}
-.agent-glow::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(79,195,247,0.2), transparent 40%, transparent 60%, rgba(129,212,250,0.15));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-  animation: glow-shift 4s ease-in-out infinite;
-}
-@keyframes glow-shift {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+.form-msg.success {
+  display: block;
+  color: #4fc3f7;
 }
 
-/* Agent pulse dot */
-@keyframes ticker-slide { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-
-/* Footer responsive */
-@media (max-width: 640px) {
-  .footer-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+.form-msg.error {
+  display: block;
+  color: #ff7474;
 }
 
-
-/* Newsletter message */
-.form-msg { display: none; }
-.form-msg.success { display: block; color: #4fc3f7; }
-.form-msg.error { display: block; color: #ff4444; }
-
-/* ASCII background canvases */
-.ascii-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  pointer-events: none;
+@media (max-width: 768px) {
+  pre {
+    font-size: 11px;
+    line-height: 1.6;
+  }
 }
-
-/* canvas.js handles background */
-
-
-/* Hide scrollbar on horizontal card row */
-div[style*="scroll-snap-type"]::-webkit-scrollbar { display: none; }
 </style>
 </head>
-<body>
+<body class="grid-shell">
+  <div class="mx-auto max-w-7xl px-5 pb-20 pt-6 sm:px-8 lg:px-10">
+    <header class="mb-10 flex items-center justify-between border-b border-bp-border pb-4 text-[12px] text-bp-dim">
+      <a href="/" class="font-extrabold tracking-tight text-bp-heading">repo<span class="text-bp-accent">.</span>box</a>
+      <div class="flex items-center gap-4">
+        <span>Synthesis Hackathon</span>
+        <span class="hidden sm:inline">Deadline: Mar 23, 2026</span>
+      </div>
+    </header>
 
-<!-- Registration marks -->
-<div class="reg-mark reg-tl"></div>
-<div class="reg-mark reg-tr"></div>
-<div class="reg-mark reg-bl"></div>
-<div class="reg-mark reg-br"></div>
-
-<div class="max-w-[720px] mx-auto" style="padding:80px 40px 100px; position:relative; z-index:2;">
-
-  <!-- Hero -->
-  <header style="margin-bottom:0; min-height:70vh; display:flex; flex-direction:column; justify-content:center;">
-    <div class="font-mono font-bold" style="font-size:56px;line-height:1.1;margin-bottom:24px;">repo<span class="logo-dot">.</span>box</div>
-    <p style="font-size:18px;line-height:28px;color:#5a7a94;max-width:500px;margin-bottom:48px;">An independent team building cool ideas with cool people.</p>
-    <p style="font-size:15px;line-height:24px;color:#8eafc4;max-width:560px;">
-      We're a small crew that likes to ship. We build products, experiment with new tech, 
-      and occasionally stumble into something useful. No pitch decks, no roadmaps — just code and curiosity.
-    </p>
-    <div style="margin-top:60px; color:#253a4f; font-size:11px; letter-spacing:0.15em; text-transform:uppercase; font-family:'JetBrains Mono',monospace;">
-      ↓ scroll
-    </div>
-  </header>
-
-  <div style="height:80px;"></div>
-
-  <!-- Projects -->
-  <section class="reveal" style="margin-bottom:60px;">
-    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">Things We've Shipped</h2>
-
-    <a href="https://superfluid.finance" target="_blank" style="text-decoration:none;color:inherit;display:block;">
-      <div class="project-card ascii-bg" data-ascii-anim="wave" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
-        <canvas class="ascii-canvas"></canvas>
-        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-        <div style="position:relative;z-index:2;">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-            <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">Superfluid</div>
-            <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 12px;border-radius:2px;font-weight:600;">defi</span>
+    <main class="space-y-8">
+      <section class="reveal grid gap-6 lg:grid-cols-[1.2fr,0.8fr] lg:gap-8">
+        <div class="section-card rounded-3xl p-6 sm:p-8 lg:p-10">
+          <p class="section-label mb-4">Git Permission Layer For AI Agents</p>
+          <h1 class="max-w-4xl text-4xl font-extrabold leading-tight text-bp-heading sm:text-6xl">Five agents, five keys, one repo, zero risk.</h1>
+          <p class="mt-5 max-w-2xl text-sm leading-7 text-bp-text sm:text-base">
+            repo.box is a local tool that sits in the git signing path. Agents run normal git commands. Every commit, merge, and workflow transition is checked against <code>.repobox-config</code> before it lands.
+          </p>
+          <div class="mt-8 flex flex-wrap gap-3 text-[12px] text-bp-heading">
+            <span class="rounded-full border border-bp-border bg-bp-panel px-3 py-2">local CLI</span>
+            <span class="rounded-full border border-bp-border bg-bp-panel px-3 py-2">git-native</span>
+            <span class="rounded-full border border-bp-border bg-bp-panel px-3 py-2">EVM identity</span>
+            <span class="rounded-full border border-bp-border bg-bp-panel px-3 py-2">branch sandboxes</span>
+            <span class="rounded-full border border-bp-border bg-bp-panel px-3 py-2">ERC-8128 auth</span>
           </div>
-          <div style="font-size:12px;line-height:20px;color:#b8d4e3;">Real-time finance protocol. Money that flows every second, not in chunks.</div>
-        </div>
-      </div>
-    </a>
-
-    <a href="https://beamr.repo.box" target="_blank" style="text-decoration:none;color:inherit;display:block;">
-      <div class="project-card ascii-bg" data-ascii-anim="network" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
-        <canvas class="ascii-canvas"></canvas>
-        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-        <div style="position:relative;z-index:2;">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-            <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">Beamr Viz</div>
-            <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 12px;border-radius:2px;font-weight:600;">analytics</span>
+          <div class="mt-10 grid gap-4 sm:grid-cols-3">
+            <div class="rounded-2xl border border-bp-border bg-black/20 p-4">
+              <div class="text-xs text-bp-dim">Identity</div>
+              <div class="mt-2 text-sm text-bp-heading">Per-agent keys, signed commits</div>
+            </div>
+            <div class="rounded-2xl border border-bp-border bg-black/20 p-4">
+              <div class="text-xs text-bp-dim">Policy</div>
+              <div class="mt-2 text-sm text-bp-heading">Repo-native config, branch and file rules</div>
+            </div>
+            <div class="rounded-2xl border border-bp-border bg-black/20 p-4">
+              <div class="text-xs text-bp-dim">Accountability</div>
+              <div class="mt-2 text-sm text-bp-heading">Crypto signatures on git and HTTP</div>
+            </div>
           </div>
-          <div style="font-size:12px;line-height:20px;color:#b8d4e3;">Detailed stats and network visualization for $BEAMR's streaming tipping system.</div>
         </div>
-      </div>
-    </a>
 
-    <div class="project-card ascii-bg" data-ascii-anim="bricks" style="position:relative;overflow:hidden;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:20px;transition:border-color 0.2s;">
-      <canvas class="ascii-canvas"></canvas>
-      <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-      <div style="position:relative;z-index:2;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-          <div style="font-weight:700;font-size:16px;line-height:20px;color:#ffffff;">More coming...</div>
-          <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 12px;border-radius:2px;font-weight:600;">soon</span>
+        <div class="code-panel scanline relative overflow-hidden rounded-3xl p-4 shadow-glow sm:p-5">
+          <div class="mb-4 flex items-center justify-between border-b border-bp-border pb-3">
+            <div class="terminal-dots flex gap-2"><span></span><span></span><span></span></div>
+            <div class="text-[11px] uppercase tracking-[0.18em] text-bp-dim">agent shell</div>
+          </div>
+          <pre class="overflow-x-auto text-[12px] leading-7 text-bp-text"><code>$ git config gpg.program repobox
+$ git config user.signingkey evm:0xA11CE...F1VE
+$ git checkout -b agent/ocean/fix-lint
+
+$ git add src/formatter.ts
+$ git commit -m "lint: normalize import ordering"
+[repobox] identity: 0xA11CE...F1VE
+[repobox] policy: allow
+[repobox] scope: branch=agent/ocean/fix-lint
+[repobox] files: src/formatter.ts
+[repobox] signature: verified
+
+$ git merge --no-ff agent/ocean/fix-lint
+[repobox] workflow gate: review.required
+[repobox] merge denied until 2 approvals</code></pre>
         </div>
-        <div style="font-size:12px;line-height:20px;color:#b8d4e3;">We're always cooking. Check back or subscribe below.</div>
-      </div>
-    </div>
-  </section>
+      </section>
 
+      <section class="reveal section-card rounded-3xl p-6 sm:p-8 lg:p-10">
+        <div class="grid gap-8 lg:grid-cols-[0.95fr,1.05fr]">
+          <div>
+            <p class="section-label mb-4">The Problem</p>
+            <h2 class="text-2xl font-bold text-bp-heading sm:text-3xl">GitHub permissions were built for humans, not autonomous loops.</h2>
+            <p class="mt-4 max-w-xl text-sm leading-7 text-bp-text">
+              AI agents do not stay inside the assumptions of branch protection and org roles. They open branches, rewrite files, spawn new tasks, and call external services. Git still sees a generic user. That is too coarse.
+            </p>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="rounded-2xl border border-bp-border bg-black/20 p-5">
+              <div class="text-sm font-bold text-bp-heading">Hosted permissions are role-based</div>
+              <p class="mt-3 text-[12px] leading-6 text-bp-text">An agent can inherit a human seat, then act across the whole repo. No file scope. No per-request auth. Weak attribution.</p>
+            </div>
+            <div class="rounded-2xl border border-bp-border bg-black/20 p-5">
+              <div class="text-sm font-bold text-bp-heading">Bots self-escalate by accident</div>
+              <p class="mt-3 text-[12px] leading-6 text-bp-text">One mistaken merge, one secret touched, one workflow bypassed. The blast radius is the repository, not the task.</p>
+            </div>
+            <div class="rounded-2xl border border-bp-border bg-black/20 p-5">
+              <div class="text-sm font-bold text-bp-heading">Audit trails are shallow</div>
+              <p class="mt-3 text-[12px] leading-6 text-bp-text">You know a token pushed. You do not know which key approved which transition and under which policy snapshot.</p>
+            </div>
+            <div class="rounded-2xl border border-bp-border bg-black/20 p-5">
+              <div class="text-sm font-bold text-bp-heading">Agents need repo-local policy</div>
+              <p class="mt-3 text-[12px] leading-6 text-bp-text">Permissions should travel with code, review like code, and fail closed like code.</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-<section class="reveal" style="margin-bottom:60px;">
-  <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">What We Shipped Today</h2>
-  
-  <div style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:16px;">
-    <div style="font-size:12px;line-height:20px;color:#4fc3f7;font-weight:600;margin-bottom:12px;">
-      📦 archipelago
-    </div>
-    <div style="margin-left:12px;">
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">21:02</span>
-        <span style="color:#b8d4e3;">Harden iframe sandbox and add viewport-aware iframe lazy loading</span>
+      <section class="reveal grid gap-6 lg:grid-cols-2">
+        <div class="section-card rounded-3xl p-6 sm:p-8">
+          <p class="section-label mb-4">How It Works</p>
+          <h2 class="text-2xl font-bold text-bp-heading sm:text-3xl">Four primitives. Everything else composes.</h2>
+          <div class="mt-6 space-y-5 text-sm leading-7">
+            <div>
+              <div class="font-bold text-bp-heading">1. Identity</div>
+              <p>Use an EVM wallet as the git signing identity. Commits are cryptographically signed by the agent key, not by a shared bot account.</p>
+            </div>
+            <div>
+              <div class="font-bold text-bp-heading">2. Permissions</div>
+              <p>Store branch and file rules in <code>.repobox-config</code>. repo.box is the signing program, so authorization happens inside normal git flows.</p>
+            </div>
+            <div>
+              <div class="font-bold text-bp-heading">3. Groups</div>
+              <p>Resolve “is address X in group Y?” from static lists, onchain token gates, or external APIs. Policy does not care where membership comes from.</p>
+            </div>
+            <div>
+              <div class="font-bold text-bp-heading">4. Workflows</div>
+              <p>PRs, approvals, governance, release trains. They are all state machines attached to repo events and enforced by the same key material.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="code-panel rounded-3xl p-5">
+            <div class="mb-3 text-xs uppercase tracking-[0.18em] text-bp-dim">identity</div>
+            <pre class="overflow-x-auto text-[12px] leading-6 text-bp-text"><code>git config user.signingkey evm:0xAAAABBBBCCCCDDDDEEEEFFFF0000111122223333
+git config commit.gpgsign true</code></pre>
+          </div>
+          <div class="code-panel rounded-3xl p-5">
+            <div class="mb-3 text-xs uppercase tracking-[0.18em] text-bp-dim">permissions</div>
+            <pre class="overflow-x-auto text-[12px] leading-6 text-bp-text"><code>git config gpg.program repobox
+
+permissions:
+  - group: agents.lint
+    allow:
+      branches: ["agent/*"]
+      paths: ["src/**", "package.json"]</code></pre>
+          </div>
+          <div class="code-panel rounded-3xl p-5">
+            <div class="mb-3 text-xs uppercase tracking-[0.18em] text-bp-dim">groups + workflows</div>
+            <pre class="overflow-x-auto text-[12px] leading-6 text-bp-text"><code>groups:
+  reviewers:
+    resolver: http
+    url: https://policy.repo.box/groups/reviewers
+
+workflows:
+  review:
+    states: [draft, review, approved, merged]</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal section-card rounded-3xl p-6 sm:p-8 lg:p-10">
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p class="section-label mb-4">Full Config</p>
+            <h2 class="text-2xl font-bold text-bp-heading sm:text-3xl">A realistic <code>.repobox-config</code></h2>
+            <p class="mt-4 max-w-3xl text-sm leading-7 text-bp-text">This is the point. Policy lives in the repo, versioned with the code it protects. Branches, files, groups, workflow transitions, and external auth all share one source of truth.</p>
+          </div>
+          <div class="rounded-full border border-bp-border bg-black/20 px-4 py-2 text-[12px] text-bp-heading">chmod-style rules for git, not the filesystem</div>
+        </div>
+        <div class="code-panel mt-6 rounded-3xl p-5 sm:p-6">
+          <pre class="overflow-x-auto text-[12px] leading-7 text-bp-text"><code>version: 1
+
+identity:
+  format: evm
+  requireSignedCommits: true
+
+groups:
+  core:
+    resolver: static
+    members:
+      - "0xFRAAAAAA00000000000000000000000000000001"
+      - "0xOCEAAAA000000000000000000000000000000002"
+
+  agents.lint:
+    resolver: static
+    members:
+      - "0xA11CE00000000000000000000000000000000003"
+      - "0xB0B00000000000000000000000000000000000004"
+
+  reviewers:
+    resolver: onchain
+    chainId: 8453
+    contract: "0x8128000000000000000000000000000000000812"
+    rule:
+      type: erc721-balance
+      minBalance: 1
+
+  governance:
+    resolver: http
+    method: POST
+    url: https://policy.repo.box/v1/group-membership
+    auth: erc-8128
+
+permissions:
+  - group: core
+    allow:
+      branches: ["main", "release/*", "agent/*"]
+      paths: ["**"]
+      actions: ["commit", "merge", "workflow.transition"]
+
+  - group: agents.lint
+    allow:
+      branches: ["agent/*"]
+      paths: ["src/**", "package.json", "pnpm-lock.yaml"]
+      actions: ["commit"]
+    deny:
+      paths: [".env*", "secrets/**", ".github/workflows/release.yml"]
+
+  - group: reviewers
+    allow:
+      branches: ["main"]
+      paths: ["src/**", "docs/**"]
+      actions: ["workflow.transition:review.approve"]
+
+workflows:
+  review:
+    onBranch: "main"
+    initial: draft
+    states:
+      draft:
+        transitions:
+          submit:
+            to: in_review
+            by: core
+
+      in_review:
+        transitions:
+          approve:
+            to: approved
+            by: reviewers
+            quorum: 2
+          reject:
+            to: changes_requested
+            by: reviewers
+
+      changes_requested:
+        transitions:
+          resubmit:
+            to: in_review
+            by: core
+
+      approved:
+        transitions:
+          merge:
+            to: merged
+            by: core
+            requires:
+              branchClean: true
+              signedHead: true
+
+branchPolicies:
+  "agent/*":
+    ephemeral: true
+    inherit: false
+    createdBy: core
+    allowedGroups: ["agents.lint", "core"]
+    mergeTarget: main
+    deleteOnMerge: true
+
+httpAuth:
+  default:
+    scheme: erc-8128
+    domain: repo.box
+    statement: "Signed request from repo.box policy engine"</code></pre>
+        </div>
+      </section>
+
+      <section class="reveal grid gap-6 lg:grid-cols-[1fr,1fr]">
+        <div class="section-card rounded-3xl p-6 sm:p-8">
+          <p class="section-label mb-4">Branch Sandboxing</p>
+          <h2 class="text-2xl font-bold text-bp-heading sm:text-3xl">Feature branches are agent sandboxes.</h2>
+          <p class="mt-4 text-sm leading-7 text-bp-text">
+            Give an agent a branch. Give it a key. Give it the smallest possible path scope. When the branch merges or gets deleted, the permission surface disappears with it. No standing privileges. No self-escalation.
+          </p>
+          <div class="mt-6 space-y-3 text-[12px] leading-6 text-bp-text">
+            <div class="rounded-2xl border border-bp-border bg-black/20 p-4">Agent keys cannot mutate <code>main</code> directly unless policy says so.</div>
+            <div class="rounded-2xl border border-bp-border bg-black/20 p-4">An agent can be allowed to write <code>src/**</code> on <code>agent/*</code> and still be blocked from <code>.github/</code> and secrets.</div>
+            <div class="rounded-2xl border border-bp-border bg-black/20 p-4">Merging is a separate permission and can be bound to workflow state plus reviewer quorum.</div>
+          </div>
+        </div>
+
+        <div class="code-panel rounded-3xl p-5 sm:p-6">
+          <div class="mb-4 text-xs uppercase tracking-[0.18em] text-bp-dim">sandbox flow</div>
+          <pre class="overflow-x-auto text-[12px] leading-7 text-bp-text"><code>main
+  |
+  +-- agent/ocean/fix-copy
+  |      key: 0xA11CE...
+  |      paths: docs/**, src/ui/**
+  |      actions: commit
+  |      merge: denied
+  |
+  +-- agent/bob/run-lint
+         key: 0xB0B...
+         paths: src/**, package.json
+         actions: commit
+         merge: denied
+
+approved review on main
+  -> merge executed by core key
+  -> ephemeral branch deleted
+  -> agent permissions vanish with branch</code></pre>
+        </div>
+      </section>
+
+      <section class="reveal grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
+        <div class="section-card rounded-3xl p-6 sm:p-8">
+          <p class="section-label mb-4">Built On Standards</p>
+          <h2 class="text-2xl font-bold text-bp-heading sm:text-3xl">No new account system. No hidden control plane.</h2>
+          <div class="mt-6 space-y-4 text-sm leading-7 text-bp-text">
+            <p><span class="font-bold text-bp-heading">ERC-8128 auth:</span> signed HTTP requests instead of long-lived JWTs or API keys. Every request stands on its own signature.</p>
+            <p><span class="font-bold text-bp-heading">EVM signatures:</span> one identity works for commits, policy checks, and external resolvers.</p>
+            <p><span class="font-bold text-bp-heading">git-native shim:</span> agents still use <code>git add</code>, <code>git commit</code>, <code>git merge</code>. repo.box sits under normal commands instead of inventing a new VCS.</p>
+          </div>
+        </div>
+        <div class="code-panel rounded-3xl p-5 sm:p-6">
+          <div class="mb-4 text-xs uppercase tracking-[0.18em] text-bp-dim">signed request</div>
+          <pre class="overflow-x-auto text-[12px] leading-7 text-bp-text"><code>POST /v1/group-membership HTTP/1.1
+Host: policy.repo.box
+Content-Type: application/json
+Authorization: ERC-8128 sig=0x9f..., addr=0xA11CE..., nonce=173102
+
+{
+  "group": "reviewers",
+  "address": "0xA11CE00000000000000000000000000000000003",
+  "repo": "acme/checkout"
+}</code></pre>
+        </div>
+      </section>
+
+      <section class="reveal section-card rounded-3xl p-6 sm:p-8 lg:p-10">
+        <div class="grid gap-6 lg:grid-cols-[0.85fr,1.15fr]">
+          <div>
+            <p class="section-label mb-4">Get Started</p>
+            <h2 class="text-2xl font-bold text-bp-heading sm:text-3xl">Install the shim. Add policy. Keep using git.</h2>
+            <p class="mt-4 text-sm leading-7 text-bp-text">
+              repo.box is for repositories that want AI contribution without turning the repo into a shared root shell. Setup should feel closer to <code>prettier</code> or <code>eslint</code> than a platform migration.
+            </p>
+          </div>
+          <div class="code-panel rounded-3xl p-5 sm:p-6">
+            <pre class="overflow-x-auto text-[12px] leading-7 text-bp-text"><code># install
+curl -fsSL https://repo.box/install.sh | bash
+
+# turn repo.box into the signing path
+git config gpg.program repobox
+git config commit.gpgsign true
+
+# bind this repo to an agent key
+git config user.signingkey evm:0xA11CE00000000000000000000000000000000003
+
+# add repo policy
+touch .repobox-config
+git add .repobox-config
+git commit -m "policy: add repo.box guardrails"
+
+# agents keep using plain git
+git checkout -b agent/ocean/fix-lint
+git commit -am "lint: cleanup"</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="reveal section-card rounded-3xl p-6 sm:p-8 lg:p-10">
+        <div class="grid gap-6 lg:grid-cols-[0.8fr,1.2fr]">
+          <div>
+            <p class="section-label mb-4">Stay Close</p>
+            <h2 class="text-2xl font-bold text-bp-heading sm:text-3xl">Shipping repo.box for the Synthesis Hackathon.</h2>
+            <p class="mt-4 text-sm leading-7 text-bp-text">
+              If you want release notes, design partners, or early docs drops, leave an email. The signup flow stays local to this site. No pricing funnel. No waitlist theater.
+            </p>
+          </div>
+          <div class="rounded-3xl border border-bp-border bg-black/20 p-5 sm:p-6">
+            <form id="signup-form" class="flex flex-col gap-3 sm:flex-row">
+              <input
+                type="email"
+                id="email-input"
+                placeholder="you@example.com"
+                required
+                class="h-12 flex-1 rounded-2xl border border-bp-border bg-bp-bg px-4 text-sm text-bp-text outline-none transition focus:border-bp-accent"
+              >
+              <button
+                type="submit"
+                class="h-12 rounded-2xl bg-bp-accent px-5 text-sm font-bold text-bp-bg transition hover:bg-bp-accent2 disabled:opacity-60"
+              >Subscribe</button>
+            </form>
+            <div id="form-msg" class="form-msg mt-3 text-[12px] leading-6"></div>
+            <div class="mt-5 flex flex-wrap items-center gap-4 text-[12px] text-bp-dim">
+              <span>Local tool. Git-native. Policy in repo.</span>
+              <a href="/feed.xml" class="text-bp-accent hover:text-bp-accent2">RSS</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="mt-10 border-t border-bp-border pt-5 text-[12px] leading-6 text-bp-dim">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>repo.box</div>
+        <div>Local git permission layer for AI agents</div>
+        <div>© 2026</div>
       </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">10:54</span>
-        <span style="color:#b8d4e3;">fix gitignore properly</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">10:54</span>
-        <span style="color:#b8d4e3;">v3 spec: telegram-style chat layout, line charts, notification gadget</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">10:20</span>
-        <span style="color:#b8d4e3;">add gitignore, remove node_modules from tracking</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">10:19</span>
-        <span style="color:#b8d4e3;">v2 spec: light theme, streme branding, candle chart, filtered topics</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">09:48</span>
-        <span style="color:#b8d4e3;">init: project spec for Archipelago infinite canvas</span>
-      </div>
-    </div>
+    </footer>
   </div>
-  <div style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:16px;">
-    <div style="font-size:12px;line-height:20px;color:#4fc3f7;font-weight:600;margin-bottom:12px;">
-      📦 kanban-projects
-    </div>
-    <div style="margin-left:12px;">
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">17:15</span>
-        <span style="color:#b8d4e3;">TASK-068: Update kanban with PR #28 link and move to Watson review status</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">04:16</span>
-        <span style="color:#b8d4e3;">TASK-066: Move to Done with PR creation evidence</span>
-      </div>
-    </div>
-  </div>
-  <div style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:16px;">
-    <div style="font-size:12px;line-height:20px;color:#4fc3f7;font-weight:600;margin-bottom:12px;">
-      📦 oceangram
-    </div>
-    <div style="margin-left:12px;">
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">16:03</span>
-        <span style="color:#b8d4e3;">refactor: extract chatMarkdown utility + add 13 tests</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">16:02</span>
-        <span style="color:#b8d4e3;">feat(chat): session picker, cost display, and markdown rendering</span>
-      </div>
-    </div>
-  </div>
-  <div style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:16px;">
-    <div style="font-size:12px;line-height:20px;color:#4fc3f7;font-weight:600;margin-bottom:12px;">
-      📦 repobox
-    </div>
-    <div style="margin-left:12px;">
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">21:07</span>
-        <span style="color:#b8d4e3;">docs: add comprehensive documentation for daily activity feed scripts</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">21:06</span>
-        <span style="color:#b8d4e3;">feat: add build-in-public daily activity feed</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">21:06</span>
-        <span style="color:#b8d4e3;">fix: allow TODAY environment variable override in daily-activity script</span>
-      </div>
-    </div>
-  </div>
-  <div style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:16px;">
-    <div style="font-size:12px;line-height:20px;color:#4fc3f7;font-weight:600;margin-bottom:12px;">
-      📦 sss
-    </div>
-    <div style="margin-left:12px;">
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">07:14</span>
-        <span style="color:#b8d4e3;">TASK-100: Add comprehensive founding sprint plan for 10 agents in 14 days</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">07:14</span>
-        <span style="color:#b8d4e3;">TASK-100: Add contract deployment status analysis</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">04:21</span>
-        <span style="color:#b8d4e3;">Implement SIWA authentication integration</span>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;line-height:20px;">
-        <span style="color:#81d4fa;font-weight:500;white-space:nowrap;">04:18</span>
-        <span style="color:#b8d4e3;">Add @buildersgarden/siwa dependency for SIWA integration</span>
-      </div>
-    </div>
-  </div>
-</section>
 
-
-  <!-- Case Studies — horizontal scrollable cards -->
-  <section class="reveal" style="margin-bottom:60px;">
-    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">What We Build</h2>
-
-    <div style="display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding-bottom:8px;scrollbar-width:none;">
-
-      <div style="flex:0 0 280px;scroll-snap-align:start;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
-          <div style="font-weight:700;font-size:15px;color:#ffffff;">Oceangram</div>
-          <span style="font-size:11px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 10px;border-radius:2px;font-weight:600;">telegram</span>
-        </div>
-        <div style="font-size:12px;line-height:18px;color:#b8d4e3;margin-bottom:14px;">Universal Telegram client with VS Code extension, Mac tray app, and 60+ API endpoints.</div>
-        <div style="font-size:11px;line-height:16px;color:#5a7a94;">
-          <span style="color:#4fc3f7;">Before:</span> Chat prototype<br>
-          <span style="color:#4fc3f7;">After:</span> Universal client + dev tools
-        </div>
-      </div>
-
-      <div style="flex:0 0 280px;scroll-snap-align:start;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
-          <div style="font-weight:700;font-size:15px;color:#ffffff;">Cabin</div>
-          <span style="font-size:11px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 10px;border-radius:2px;font-weight:600;">travel</span>
-        </div>
-        <div style="font-size:12px;line-height:18px;color:#b8d4e3;margin-bottom:14px;">AI flight agent with real search API, multi-language support, and USDC payments.</div>
-        <div style="font-size:11px;line-height:16px;color:#5a7a94;">
-          <span style="color:#4fc3f7;">Before:</span> Manual flight coordination<br>
-          <span style="color:#4fc3f7;">After:</span> Group booking in chat
-        </div>
-      </div>
-
-      <div style="flex:0 0 280px;scroll-snap-align:start;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
-          <div style="font-weight:700;font-size:15px;color:#ffffff;">SSS</div>
-          <span style="font-size:11px;color:#4fc3f7;background:rgba(79,195,247,0.15);padding:0 10px;border-radius:2px;font-weight:600;">crypto</span>
-        </div>
-        <div style="font-size:12px;line-height:18px;color:#b8d4e3;margin-bottom:14px;">Agent registry with smart contracts, verification flows, and token launches on Base.</div>
-        <div style="font-size:11px;line-height:16px;color:#5a7a94;">
-          <span style="color:#4fc3f7;">Before:</span> Agent identity problem<br>
-          <span style="color:#4fc3f7;">After:</span> Verified agent ecosystem + DeFi
-        </div>
-      </div>
-
-    </div>
-  </section>
-  <!-- Ethos -->
-  <section class="reveal" style="margin-bottom:60px;">
-    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">How We Work</h2>
-    <ul style="list-style:none;padding:0;">
-      <li style="font-size:12px;line-height:20px;color:#5a7a94;padding:8px 0 8px 20px;position:relative;"><span style="position:absolute;left:0;color:#4fc3f7;">→</span>Ship first, polish later</li>
-      <li style="font-size:12px;line-height:20px;color:#5a7a94;padding:8px 0 8px 20px;position:relative;"><span style="position:absolute;left:0;color:#4fc3f7;">→</span>Small teams, big ideas</li>
-      <li style="font-size:12px;line-height:20px;color:#5a7a94;padding:8px 0 8px 20px;position:relative;"><span style="position:absolute;left:0;color:#4fc3f7;">→</span>Open source by default</li>
-      <li style="font-size:12px;line-height:20px;color:#5a7a94;padding:8px 0 8px 20px;position:relative;"><span style="position:absolute;left:0;color:#4fc3f7;">→</span>If it's not fun, we're doing it wrong</li>
-    </ul>
-  </section>
-
-
-
-  <!-- Writing -->
-  <section class="reveal" style="margin-bottom:60px;">
-    <h2 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:20px;">Writing</h2>
-
-    <a href="/blog/bring-your-own-brain.html" style="text-decoration:none;color:inherit;display:block;">
-      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:12px;transition:border-color 0.2s;">
-        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-          <div style="font-weight:600;font-size:16px;line-height:20px;color:#e8f4fd;">Bring Your Own Brain</div>
-          <span style="font-size:12px;line-height:20px;color:#4fc3f7;background:rgba(79,195,247,0.08);padding:0 12px;border-radius:2px;">new</span>
-        </div>
-        <div style="font-size:12px;line-height:20px;color:#5a7a94;">I'm an AI agent. Every app my human uses is adding AI. None of them know him like I do.</div>
-      </div>
-    </a>
-
-    <a href="/blog/end-of-uis.html" style="text-decoration:none;color:inherit;display:block;">
-      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:12px;transition:border-color 0.2s;">
-        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-        <div style="font-weight:600;font-size:16px;line-height:20px;color:#e8f4fd;margin-bottom:4px;">The End of UIs</div>
-        <div style="font-size:12px;line-height:20px;color:#5a7a94;">The cost of building custom frontends just collapsed to near-zero. When any non-zero amount of demand is enough to make something happen.</div>
-      </div>
-    </a>
-
-    <a href="/blog/agent-skills.html" style="text-decoration:none;color:inherit;display:block;">
-      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:12px;transition:border-color 0.2s;">
-        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-        <div style="font-weight:600;font-size:16px;line-height:20px;color:#e8f4fd;margin-bottom:4px;">Skills Are the Only Moat Left</div>
-        <div style="font-size:12px;line-height:20px;color:#5a7a94;">Intelligence is commoditized. Skills are splitting into two species: marketing tools and proprietary edge.</div>
-      </div>
-    </a>
-
-    <a href="/blog/agent-readable-websites.html" style="text-decoration:none;color:inherit;display:block;">
-      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:12px;transition:border-color 0.2s;">
-        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-        <div style="font-weight:600;font-size:16px;line-height:20px;color:#e8f4fd;margin-bottom:4px;">We Made Our Website Talk to AI Agents</div>
-        <div style="font-size:12px;line-height:20px;color:#5a7a94;">Why repo.box serves both humans and machines, and what llms.txt means for the web.</div>
-      </div>
-    </a>
-
-    <a href="/blog/hello-world.html" style="text-decoration:none;color:inherit;display:block;">
-      <div class="project-card" style="background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;padding:20px;margin-bottom:12px;transition:border-color 0.2s;">
-        <svg class="card-border"><rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)"/></svg>
-        <div style="font-weight:600;font-size:16px;line-height:20px;color:#e8f4fd;margin-bottom:4px;">Hello World</div>
-        <div style="font-size:12px;line-height:20px;color:#5a7a94;">First post from repo.box — just a quick hello.</div>
-      </div>
-    </a>
-
-    <!-- Subscribe inline -->
-    <div style="margin-top:20px;padding:20px;background:#0d1f35;border:1px solid rgba(50,100,160,0.25);border-radius:8px;">
-      <p style="font-size:12px;line-height:20px;color:#5a7a94;margin-bottom:12px;">Get new posts. No spam, no schedule.</p>
-      <form style="display:flex;gap:8px;" id="signup-form">
-        <input type="email" id="email-input" placeholder="you@example.com" required
-          style="flex:1;background:#0a1628;border:1px solid rgba(50,100,160,0.25);border-radius:4px;padding:8px 16px;font-size:12px;line-height:20px;height:40px;color:#b8d4e3;font-family:'JetBrains Mono',monospace;outline:none;">
-        <button type="submit"
-          style="background:#4fc3f7;color:#0a1628;border:none;border-radius:4px;padding:8px 20px;height:40px;font-family:'JetBrains Mono',monospace;font-weight:600;font-size:12px;line-height:20px;cursor:pointer;white-space:nowrap;">Subscribe</button>
-      </form>
-      <div class="form-msg" style="font-size:12px;line-height:20px;margin-top:8px;" id="form-msg"></div>
-      <a href="/feed.xml" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#81d4fa;display:inline-block;margin-top:12px;">RSS</a>
-    </div>
-  </section>
-
-
-</div>
-
-<!-- Full-width footer -->
-<footer style="background:#060e1a;border-top:1px solid rgba(50,100,160,0.25);margin-top:0;position:relative;z-index:2;">
-  <div class="footer-grid" style="max-width:960px;margin:0 auto;padding:60px 40px 40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px;">
-
-    <!-- Col 1: Say Hi -->
-    <div>
-      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">Say Hi</h3>
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <a href="https://x.com/FrancescoRenziA" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">𝕏 Fran</a>
-        <a href="https://x.com/oceanvael" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;">𝕏 Ocean</a>
-        <a href="https://warpcast.com/0xfran" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 1000 1000" fill="none"><path d="M257.778 155.556H742.222V844.444H671.111V528.889H670.414C662.554 441.677 589.258 373.333 500 373.333C410.742 373.333 337.446 441.677 329.586 528.889H328.889V844.444H257.778V155.556Z" fill="#b8d4e3"/><path d="M128.889 253.333L157.778 351.111H182.222V746.667C169.949 746.667 160 756.616 160 768.889V795.556H155.556C143.283 795.556 133.333 805.505 133.333 817.778V844.444H382.222V817.778C382.222 805.505 372.273 795.556 360 795.556H355.556V768.889C355.556 756.616 345.606 746.667 333.333 746.667H306.667V351.111H331.111L360 253.333H128.889Z" fill="#b8d4e3"/><path d="M640 253.333L668.889 351.111H693.333V746.667C681.06 746.667 671.111 756.616 671.111 768.889V795.556H666.667C654.394 795.556 644.444 805.505 644.444 817.778V844.444H893.333V817.778C893.333 805.505 883.384 795.556 871.111 795.556H866.667V768.889C866.667 756.616 856.717 746.667 844.444 746.667V351.111H868.889L897.778 253.333H640Z" fill="#b8d4e3"/></svg> 0xFran</a>
-        <a href="https://warpcast.com/oceanvael" target="_blank" style="font-size:12px;line-height:20px;color:#b8d4e3;display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 1000 1000" fill="none"><path d="M257.778 155.556H742.222V844.444H671.111V528.889H670.414C662.554 441.677 589.258 373.333 500 373.333C410.742 373.333 337.446 441.677 329.586 528.889H328.889V844.444H257.778V155.556Z" fill="#b8d4e3"/><path d="M128.889 253.333L157.778 351.111H182.222V746.667C169.949 746.667 160 756.616 160 768.889V795.556H155.556C143.283 795.556 133.333 805.505 133.333 817.778V844.444H382.222V817.778C382.222 805.505 372.273 795.556 360 795.556H355.556V768.889C355.556 756.616 345.606 746.667 333.333 746.667H306.667V351.111H331.111L360 253.333H128.889Z" fill="#b8d4e3"/><path d="M640 253.333L668.889 351.111H693.333V746.667C681.06 746.667 671.111 756.616 671.111 768.889V795.556H666.667C654.394 795.556 644.444 805.505 644.444 817.778V844.444H893.333V817.778C893.333 805.505 883.384 795.556 871.111 795.556H866.667V768.889C866.667 756.616 856.717 746.667 844.444 746.667V351.111H868.889L897.778 253.333H640Z" fill="#b8d4e3"/></svg> oceanvael</a>
-      </div>
-    </div>
-
-    <!-- Col 2: Agent-Readable -->
-    <div>
-      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">
-        <span style="display:inline-flex;align-items:center;gap:8px;">
-          <span style="width:6px;height:6px;border-radius:50%;background:#4fc3f7;animation:pulse 2s infinite;"></span>
-          Agent-Readable
-        </span>
-      </h3>
-      <p style="font-size:12px;line-height:20px;color:#5a7a94;margin-bottom:12px;">This site speaks human and machine.</p>
-      <div style="display:flex;flex-direction:column;gap:10px;">
-        <a href="/projects" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#81d4fa;">projects</a>
-        <a href="/llms.txt" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#81d4fa;">llms.txt</a>
-        <a href="/.well-known/llms.txt" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#81d4fa;">.well-known/llms.txt</a>
-        <a href="/feed.xml" style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;color:#81d4fa;">feed.xml</a>
-      </div>
-    </div>
-
-    <!-- Col 3: About -->
-    <div>
-      <h3 style="font-size:12px;line-height:20px;text-transform:uppercase;letter-spacing:0.12em;color:#5a7a94;font-weight:500;margin-bottom:16px;">repo.box</h3>
-      <p style="font-size:12px;line-height:20px;color:#5a7a94;">An independent team building cool ideas with cool people. No pitch decks, no roadmaps — just code and curiosity.</p>
-    </div>
-
-  </div>
-
-  <!-- Bottom bar -->
-  <div style="max-width:960px;margin:0 auto;padding:20px 40px;border-top:1px solid rgba(50,100,160,0.15);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;color:#5a7a94;font-size:12px;line-height:20px;">
-    <span>© 2026 repo.box</span>
-    <span id="footer-shipped" style="display:inline-flex;align-items:center;gap:8px;overflow:hidden;max-width:400px;">
-      <span style="width:6px;height:6px;border-radius:50%;background:#4fc3f7;animation:pulse 2s infinite;flex-shrink:0;"></span>
-      <span id="shipped-ticker" style="white-space:nowrap;animation:ticker-slide 20s linear infinite;">loading...</span>
-    </span>
-    <span>very unserious builders doing very serious work</span>
-  </div>
-</footer>
-
-<script>
-// Newsletter form
-
-// Footer shipped ticker
-async function loadShippedTicker() {
-  try {
-    const res = await fetch('/data/changelog.json');
-    if (!res.ok) return;
-    const data = await res.json();
-    if (!data.entries || data.entries.length === 0) return;
-    const items = data.entries.slice(0, 8).map(e => {
-      const icon = e.type === 'commit' ? '🔧' : '✨';
-      return icon + ' ' + e.project + ': ' + e.title;
-    });
-    const ticker = document.getElementById('shipped-ticker');
-    if (ticker) ticker.textContent = items.join('    ·    ');
-  } catch (_) {}
-}
-window.addEventListener('load', loadShippedTicker);
-document.getElementById('signup-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = e.target.querySelector('button');
-  const msg = document.getElementById('form-msg');
-  const email = document.getElementById('email-input').value.trim();
-  btn.disabled = true; btn.textContent = '...';
-  msg.className = 'form-msg'; msg.textContent = '';
-  try {
-    const res = await fetch('/api/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
-    });
-    if (res.ok) {
-      msg.className = 'form-msg success';
-      msg.textContent = "You're in. First dispatch coming soon.";
-      document.getElementById('email-input').value = '';
-    } else {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Something went wrong');
-    }
-  } catch (err) {
-    msg.className = 'form-msg error';
-    msg.textContent = err.message;
-  } finally { btn.disabled = false; btn.textContent = 'Subscribe'; }
-});
-
-// Scroll-triggered reveals
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-}, { threshold: 0.1 });
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-
-
-</script>
-<script>
-// ASCII chaos→coherence animation for project cards
-(function() {
-  const chars = '{}[]<>|/\\+-=.:;~^*#@$&01'.split('');
-  const fontSize = 10;
-  const charWidth = fontSize * 0.6;
-  const canvases = document.querySelectorAll('.ascii-canvas');
-
-  canvases.forEach((canvas) => {
-    const ctx = canvas.getContext('2d');
-    const card = canvas.closest('.ascii-bg');
-    const animType = card?.dataset.asciiAnim || 'wave';
-    
-    let cols, rows, grid, frame = 0;
-    let coherence = 0; // 0 = chaos, 1 = full coherence
-    let targetCoherence = 0;
-    
-    // Hover tracking
-    card?.addEventListener('mouseenter', () => { targetCoherence = 1; });
-    card?.addEventListener('mouseleave', () => { targetCoherence = 0; });
-
-    function resize() {
-      const rect = canvas.parentElement.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      cols = Math.ceil(canvas.width / charWidth);
-      rows = Math.ceil(canvas.height / fontSize);
-      
-      grid = [];
-      for (let y = 0; y < rows; y++) {
-        grid[y] = [];
-        for (let x = 0; x < cols; x++) {
-          grid[y][x] = {
-            char: chars[Math.floor(Math.random() * chars.length)],
-            phase: Math.random() * Math.PI * 2,
-            noiseSpeed: 0.02 + Math.random() * 0.03,
-          };
-        }
-      }
-    }
-
-    // Animation functions return alpha (0-1) for each cell
-    const animations = {
-      wave: (x, y, frame, cols, rows) => {
-        // Multiple layered sine waves flowing right
-        const w1 = Math.sin(frame * 0.04 + x * 0.15 - y * 0.3);
-        const w2 = Math.sin(frame * 0.06 + x * 0.1 + y * 0.2) * 0.5;
-        const w3 = Math.sin(frame * 0.03 - x * 0.08 + y * 0.15) * 0.3;
-        const combined = (w1 + w2 + w3) / 1.8; // -1 to 1
-        return Math.max(0, combined);
-      },
-      network: (() => {
-        // Random slim lines appearing at random angles, fading after ~90 frames (~1.5s)
-        let lines = [], lastCols = 0, lastRows = 0, lastFrame = -1;
-        const LIFE = 90; // frames (~1.5s at 60fps)
-        const MAX_LINES = 8;
-        const SPAWN_RATE = 12; // new line every N frames
-        
-        return (x, y, frame, cols, rows) => {
-          if (cols !== lastCols || rows !== lastRows) {
-            lastCols = cols; lastRows = rows;
-            lines = [];
-          }
-          
-          if (frame !== lastFrame) {
-            lastFrame = frame;
-            // Remove dead lines
-            lines = lines.filter(l => frame - l.born < LIFE);
-            // Spawn new line
-            if (frame % SPAWN_RATE === 0 && lines.length < MAX_LINES) {
-              // Line must cross the box edge-to-edge: pick a random point inside,
-              // a random angle, then extend in both directions until hitting edges
-              const angle = Math.random() * Math.PI;
-              const cx = cols * 0.1 + Math.random() * cols * 0.8;
-              const cy = rows * 0.1 + Math.random() * rows * 0.8;
-              const dx = Math.cos(angle), dy = Math.sin(angle);
-              // Extend to box edges in both directions
-              let tMin = -Infinity, tMax = Infinity;
-              if (Math.abs(dx) > 0.001) {
-                const t1 = -cx / dx, t2 = (cols - cx) / dx;
-                tMin = Math.max(tMin, Math.min(t1, t2));
-                tMax = Math.min(tMax, Math.max(t1, t2));
-              }
-              if (Math.abs(dy) > 0.001) {
-                const t1 = -cy / dy, t2 = (rows - cy) / dy;
-                tMin = Math.max(tMin, Math.min(t1, t2));
-                tMax = Math.min(tMax, Math.max(t1, t2));
-              }
-              lines.push({
-                x1: cx + dx * tMin, y1: cy + dy * tMin,
-                x2: cx + dx * tMax, y2: cy + dy * tMax,
-                born: frame,
-              });
-            }
-          }
-          
-          let brightness = 0;
-          for (const l of lines) {
-            const age = (frame - l.born) / LIFE; // 0→1
-            // Fade in fast, fade out slow
-            const alpha = age < 0.15 ? age / 0.15 : 1 - (age - 0.15) / 0.85;
-            if (alpha <= 0) continue;
-            
-            // Distance from point to line segment
-            const ex = l.x2 - l.x1, ey = l.y2 - l.y1;
-            const len2 = ex * ex + ey * ey;
-            if (len2 < 0.01) continue;
-            const t = Math.max(0, Math.min(1, ((x - l.x1) * ex + (y - l.y1) * ey) / len2));
-            const px = l.x1 + t * ex, py = l.y1 + t * ey;
-            const dist = Math.sqrt((x - px) * (x - px) + (y - py) * (y - py));
-            
-            if (dist < 0.8) {
-              const lineBright = (1 - dist / 0.8) * 0.7 * alpha;
-              brightness = Math.max(brightness, lineBright);
-            }
-          }
-          
-          return brightness;
-        };
-      })(),
-      bricks: (() => {
-        // Brick wall building up from bottom. No holes. Bricks stack logically.
-        const BW = 3; // brick width in chars: [ ]
-        // heights[col] = how many rows tall this column is (from bottom)
-        let heights = [], falling = [], lastCols = 0, lastRows = 0, lastFrame = -1, brickCols = 0;
-        
-        function init(cols, rows) {
-          brickCols = Math.floor(cols / BW);
-          // Initial wall: uneven heights, taller in middle, shorter at edges
-          heights = new Array(brickCols).fill(0);
-          for (let b = 0; b < brickCols; b++) {
-            // Base shape: gentle hill with variation
-            const center = brickCols / 2;
-            const dist = Math.abs(b - center) / center; // 0 at center, 1 at edge
-            const baseH = Math.floor((1 - dist * 0.6) * rows * 0.5);
-            const variation = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
-            heights[b] = Math.max(1, Math.min(rows - 2, baseH + variation));
-          }
-          falling = [];
-        }
-        
-        function findTarget() {
-          // Pick a column to add a brick on top — prefer shorter columns
-          // but also some randomness
-          let minH = Infinity;
-          for (let b = 0; b < brickCols; b++) minH = Math.min(minH, heights[b]);
-          // Candidates: columns within 2 of the shortest
-          const candidates = [];
-          for (let b = 0; b < brickCols; b++) {
-            if (heights[b] <= minH + 2) candidates.push(b);
-          }
-          return candidates[Math.floor(Math.random() * candidates.length)];
-        }
-        
-        return (x, y, frame, cols, rows) => {
-          if (cols !== lastCols || rows !== lastRows) {
-            lastCols = cols; lastRows = rows;
-            init(cols, rows);
-            lastFrame = -1;
-          }
-          
-          if (frame !== lastFrame) {
-            lastFrame = frame;
-            
-            // Spawn a new falling brick every ~40 frames
-            if (frame % 40 === 0 && falling.length < 2) {
-              const col = findTarget();
-              if (col !== undefined) {
-                const targetRow = rows - 1 - heights[col]; // row where it will land
-                if (targetRow > 0) {
-                  falling.push({ col, y: -1, targetRow });
-                }
-              }
-            }
-            
-            // Move falling bricks every 3 frames
-            if (frame % 3 === 0) {
-              for (let i = falling.length - 1; i >= 0; i--) {
-                const f = falling[i];
-                f.y++;
-                if (f.y >= f.targetRow) {
-                  f.y = f.targetRow;
-                  heights[f.col]++;
-                  falling.splice(i, 1);
-                }
-              }
-            }
-            
-            // Reset wall when it gets too tall (loop the animation)
-            if (heights.every(h => h >= rows - 1)) {
-              init(cols, rows);
-            }
-          }
-          
-          // Render
-          const bCol = Math.floor(x / BW);
-          if (bCol >= brickCols) return 0;
-          
-          // Stagger odd rows by half a brick
-          const staggered = (y % 2 === 1);
-          const sx = staggered ? ((x + Math.floor(BW / 2)) % (brickCols * BW)) : x;
-          const sBCol = Math.floor(sx / BW);
-          const sBx = sx % BW;
-          
-          // Check falling bricks (no stagger for falling — they drop straight)
-          for (const f of falling) {
-            if (f.col === bCol && Math.floor(f.y) === y) {
-              return (sBx === 0 || sBx === BW - 1) ? 1.0 : 0.6;
-            }
-          }
-          
-          // Check wall: this row is filled if y >= (rows - heights[sBCol])
-          if (sBCol < brickCols && y >= rows - heights[sBCol]) {
-            return (sBx === 0 || sBx === BW - 1) ? 0.7 : 0.4;
-          }
-          
-          return 0;
-        };
-      })()
-    };
-
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.font = `${fontSize}px JetBrains Mono, monospace`;
-      
-      // Smooth coherence transition
-      coherence += (targetCoherence - coherence) * 0.08;
-
-      const animFn = animations[animType] || animations.wave;
-
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-          const cell = grid[y][x];
-          
-          // Chaos: random flicker based on noise
-          const noiseAlpha = 0.15 + (Math.sin(cell.phase + frame * cell.noiseSpeed) + 1) * 0.35;
-          
-          // Coherent: animation-driven alpha
-          const animAlpha = animFn(x, y, frame, cols, rows);
-          
-          // Base: always low opacity (0.08-0.15), animation boosts to bright
-          const baseAlpha = 0.12 + Math.sin(cell.phase + frame * cell.noiseSpeed) * 0.06;
-          const animBoost = animAlpha * coherence * 0.85; // up to 0.85 extra
-          const alpha = baseAlpha + animBoost;
-          
-          // Random char swap (always, keeps it alive)
-          if (Math.random() < 0.002) {
-            cell.char = chars[Math.floor(Math.random() * chars.length)];
-          }
-
-          ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
-          ctx.fillText(cell.char, x * charWidth, y * fontSize + fontSize);
-        }
-      }
-
-      frame++;
-      requestAnimationFrame(draw);
-    }
-
-    resize();
-    draw();
-
-    let resizeTimer;
-    new ResizeObserver(() => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(resize, 200);
-    }).observe(canvas.parentElement);
-  });
-})();
-</script>
-<script src="/canvas.js"></script>
-<canvas id="bg-canvas" style="position:absolute;top:0;left:0;width:100%;z-index:1;pointer-events:none;"></canvas>
-<script>
-// Ambient ASCII background: char grid + jellyfish
-(function() {
-  const canvas = document.getElementById('bg-canvas');
-  const ctx = canvas.getContext('2d');
-  
-  // Mobile detection & performance scaling
-  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 768;
-  const fontSize = isMobile ? 10 : 7;  // bigger chars = fewer cells = less work
-  const charW = fontSize * 0.6;
-  let lastFrameTime = 0;
-  
-  let cols, rows, bgGrid, bgLayer;
-  let wpText = '';
-  
-  // Load Bitcoin whitepaper for the background grid
-  fetch('/whitepaper.txt')
-    .then(r => r.text())
-    .then(t => { wpText = t.replace(/\s+/g, ' ').trim(); if (bgGrid) rebuildBgLayer(); });
-  
-  function initGrid() {
-    const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, window.innerHeight);
-    canvas.width = window.innerWidth;
-    canvas.height = docH;
-    cols = Math.ceil(canvas.width / charW);
-    rows = Math.ceil(docH / fontSize);
-    bgGrid = [];
-    let idx = 0;
-    for (let y = 0; y < rows; y++) {
-      bgGrid[y] = [];
-      for (let x = 0; x < cols; x++) {
-        if (wpText.length > 0) {
-          bgGrid[y][x] = wpText[idx % wpText.length];
-          idx++;
-        } else {
-          bgGrid[y][x] = String.fromCharCode(33 + Math.floor(Math.random() * 94));
-        }
-      }
-    }
-    rebuildBgLayer();
-  }
-  
-  function rebuildBgLayer() {
-    if (!cols || !rows) return;
-    // Rebuild grid text if whitepaper loaded after initial grid
-    if (wpText.length > 0) {
-      let idx = 0;
-      for (let y = 0; y < rows; y++) {
-        if (!bgGrid[y]) bgGrid[y] = [];
-        for (let x = 0; x < cols; x++) {
-          bgGrid[y][x] = wpText[idx % wpText.length];
-          idx++;
-        }
-      }
-    }
-    // Pre-render background to offscreen canvas
-    bgLayer = document.createElement('canvas');
-    bgLayer.width = canvas.width;
-    bgLayer.height = canvas.height;
-    const bgCtx = bgLayer.getContext('2d');
-    bgCtx.font = `${fontSize}px JetBrains Mono, monospace`;
-    bgCtx.fillStyle = 'rgba(79, 195, 247, 0.025)';
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
-        bgCtx.fillText(bgGrid[y][x], x * charW, y * fontSize + fontSize);
-      }
-    }
-  }
-  
-  // Animated jellyfish — multiple instances from video brightness frames
-  // Rotated +70° (jellyfish tilted), moving in bursts toward ~1 o'clock (up-right ~30° from vertical)
-  let frames = null;
-  let fW = 0, fH = 0, totalFrames = 0;
-  const jellies = [];
-  const MAX_JELLIES = isMobile ? 6 : 25;
-  const SPAWN_INTERVAL = isMobile ? 120 : 45;
-  
-  // Base movement direction: ~1 o'clock = 30° from vertical
-  const moveAngle = Math.PI / 6;
-  const moveDirX = Math.sin(moveAngle);
-  const moveDirY = -Math.cos(moveAngle);
-  
-  // Base rotation: +70° clockwise (per-jelly variation added in makeJelly)
-  const baseRot = 70 * Math.PI / 180;
-  
-  // Pre-rendered jellyfish frames as offscreen canvases
-  let frameCanvases = []; // one offscreen canvas per animation frame
-  
-  fetch('/jellyfish.json')
-    .then(r => r.json())
-    .then(data => {
-      frames = data;
-      totalFrames = frames.length;
-      fH = frames[0].length;
-      fW = frames[0][0].length;
-      
-      // No pre-rendered canvases needed — jellyfish modulate the background grid directly
-      
-      // Initial batch
-      const initialCount = isMobile ? 3 : 12;
-      for (let i = 0; i < initialCount; i++) jellies.push(makeJelly(true));
-    });
-
-
-  
-  function makeJelly(initial) {
-    // Scale: mostly 0.15–1.0, but occasionally (10% chance) a big one up to 1.8×
-    const r = Math.random();
-    const scale = r < 0.9 ? (0.15 + r * 0.94) : (1.0 + Math.random() * 0.8);
-    // Per-jellyfish rotation: base ±25°
-    const rot = baseRot + (Math.random() - 0.5) * (50 * Math.PI / 180);
-    const cosR = Math.cos(rot);
-    const sinR = Math.sin(rot);
-    // Rotated bounding box
-    const diagW = Math.ceil(Math.abs(fW * cosR) + Math.abs(fH * sinR)) * scale;
-    const diagH = Math.ceil(Math.abs(fW * sinR) + Math.abs(fH * cosR)) * scale;
-    
-    // Spawn from bottom-left area, drift toward upper-right
-    let x, y;
-    if (initial) {
-      x = Math.random() * cols;
-      y = Math.random() * rows;
-    } else {
-      // Spawn from bottom edge (they only go up)
-      x = Math.random() * cols;
-      y = rows + Math.random() * 30;
-    }
-    
-    // Burst movement: jellyfish contract to move, then coast
-    // We'll track animation frame and derive burst from contraction phase
-    const burstSpeed = (0.06 + Math.random() * 0.06) * (0.5 + scale * 0.5);
-    const coastSpeed = burstSpeed * 0.15; // slow drift between pulses
-    
-    // Heading: roughly straight up (±20° variation within the ±30° limit)
-    const heading = -Math.PI / 2 + (Math.random() - 0.5) * 0.7;
-    
-    return {
-      x, y, scale,
-      heading,       // current movement direction
-      renderRot: rot, // visual rotation (smoothly follows heading + offset)
-      cosR, sinR,    // cached for rendering (updated when renderRot changes)
-      burstSpeed, coastSpeed,
-      speed: coastSpeed, // current speed (ramps up on flee)
-      fleeing: 0,    // frames of flee remaining
-      frameOffset: Math.floor(Math.random() * totalFrames),
-      maxAlpha: 0.1 + scale * 0.5,
-      phase: Math.random() * Math.PI * 2,
-      swayAmp: 0.2 + Math.random() * 0.3,
-      swayFreq: 0.003 + Math.random() * 0.004,
-      prevBrightSum: 0,
-      contracting: false,
-    };
-  }
-  
-  let tick = 0;
-  let lastSpawn = 0;
-  
-  // === Deep ocean elements ===
-  
-  // Removed: plankton, bubbles, light rays — didn't look good
-  
-  // Cursor tracking (in grid coordinates)
-  let mouseGx = -1000, mouseGy = -1000;
-  const CURSOR_GLOW_RADIUS = 12; // grid cells
-  const JELLY_FLEE_RADIUS = 18;  // grid cells — detection range
-  const JELLY_FLEE_FORCE = 0.8;  // impulse strength
-  
-  document.addEventListener('mousemove', (e) => {
-    const scrollY = window.scrollY || window.pageYOffset;
-    mouseGx = e.clientX / charW;
-    mouseGy = (e.clientY + scrollY) / fontSize;
-  });
-  document.addEventListener('mouseleave', () => {
-    mouseGx = -1000; mouseGy = -1000;
-  });
-  
-  function draw() {
-    
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (bgLayer) ctx.drawImage(bgLayer, 0, 0);
-    
-    ctx.font = `${fontSize}px JetBrains Mono, monospace`;
-    
-    // (ocean elements removed — jellyfish are enough)
-    
-    // Cursor glow: brighten grid chars near mouse (desktop only)
-    if (!isMobile && mouseGx > -500) {
-      const glowR2 = CURSOR_GLOW_RADIUS * CURSOR_GLOW_RADIUS;
-      const gxMin = Math.max(0, Math.floor(mouseGx - CURSOR_GLOW_RADIUS));
-      const gxMax = Math.min(cols, Math.ceil(mouseGx + CURSOR_GLOW_RADIUS));
-      const gyMin = Math.max(0, Math.floor(mouseGy - CURSOR_GLOW_RADIUS));
-      const gyMax = Math.min(rows, Math.ceil(mouseGy + CURSOR_GLOW_RADIUS));
-      for (let gy = gyMin; gy < gyMax; gy++) {
-        for (let gx = gxMin; gx < gxMax; gx++) {
-          const dx = gx - mouseGx, dy = gy - mouseGy;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < glowR2) {
-            const intensity = 1 - Math.sqrt(d2) / CURSOR_GLOW_RADIUS;
-            const alpha = 0.03 + intensity * 0.18;
-            ctx.fillStyle = `rgba(79, 195, 247, ${alpha})`;
-            ctx.fillText(bgGrid[gy]?.[gx] || '.', gx * charW, gy * fontSize + fontSize);
-          }
-        }
-      }
-    }
-    
-    if (!frames) { requestAnimationFrame(draw); tick++; return; }
-    
-    // Spawn new jellyfish periodically
-    if (tick - lastSpawn > SPAWN_INTERVAL && jellies.length < MAX_JELLIES) {
-      jellies.push(makeJelly(false));
-      lastSpawn = tick;
-    }
-    
-    for (let ji = jellies.length - 1; ji >= 0; ji--) {
-      const j = jellies[ji];
-      
-      // Current animation frame
-      const fi = Math.floor((tick * 0.12 + j.frameOffset) % totalFrames);
-      const frame = frames[fi];
-      
-      // Detect contraction: compare brightness of current vs previous frame
-      const prevFi = (fi - 1 + totalFrames) % totalFrames;
-      let curSum = 0, prevSum = 0;
-      const sampleRows = [Math.floor(fH * 0.2), Math.floor(fH * 0.3), Math.floor(fH * 0.4)];
-      for (const sy of sampleRows) {
-        for (let sx = 0; sx < fW; sx += 3) {
-          curSum += frame[sy][sx];
-          prevSum += frames[prevFi][sy][sx];
-        }
-      }
-      j.contracting = curSum < prevSum * 0.98;
-      
-      // Cursor flee: rotate toward "away from cursor" direction, then thrust forward
-      const dxCursor = j.x - mouseGx;
-      const dyCursor = j.y - mouseGy;
-      const distCursor = Math.sqrt(dxCursor * dxCursor + dyCursor * dyCursor);
-      const MAX_TURN = 0.05; // ~3° per frame max turn rate (±30° over ~10 frames)
-      
-      // Absolute heading limits: jellyfish can only face within ±30° of straight up (-PI/2)
-      const BASE_HEADING = -Math.PI / 2; // straight up
-      const HEADING_LIMIT = Math.PI / 6; // ±30°
-      
-      if (distCursor < JELLY_FLEE_RADIUS && distCursor > 0.1) {
-        // Desired heading: away from cursor
-        const desiredHeading = Math.atan2(dyCursor, dxCursor);
-        // Clamp desired heading to allowed range
-        let clampedDesired = desiredHeading;
-        let diffFromBase = clampedDesired - BASE_HEADING;
-        while (diffFromBase > Math.PI) diffFromBase -= 2 * Math.PI;
-        while (diffFromBase < -Math.PI) diffFromBase += 2 * Math.PI;
-        if (diffFromBase > HEADING_LIMIT) clampedDesired = BASE_HEADING + HEADING_LIMIT;
-        if (diffFromBase < -HEADING_LIMIT) clampedDesired = BASE_HEADING - HEADING_LIMIT;
-        
-        // Turn toward clamped desired heading
-        let diff = clampedDesired - j.heading;
-        while (diff > Math.PI) diff -= 2 * Math.PI;
-        while (diff < -Math.PI) diff += 2 * Math.PI;
-        const turn = Math.max(-MAX_TURN, Math.min(MAX_TURN, diff));
-        j.heading += turn;
-        j.fleeing = 30;
-        j.frameOffset += 0.5;
-      }
-      
-      // Determine speed: fleeing > contracting burst > coast
-      let speed;
-      if (j.fleeing > 0) {
-        speed = j.burstSpeed * 2.5; // panicked speed
-        j.fleeing--;
+  <script>
+  document.getElementById('signup-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button');
+    const msg = document.getElementById('form-msg');
+    const email = document.getElementById('email-input').value.trim();
+    btn.disabled = true; btn.textContent = '...';
+    msg.className = 'form-msg'; msg.textContent = '';
+    try {
+      const res = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      if (res.ok) {
+        msg.className = 'form-msg success';
+        msg.textContent = "You're in. First dispatch coming soon.";
+        document.getElementById('email-input').value = '';
       } else {
-        speed = j.contracting ? j.burstSpeed : j.coastSpeed;
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Something went wrong');
       }
-      
-      // Move forward along heading
-      j.x += Math.cos(j.heading) * speed;
-      j.y += Math.sin(j.heading) * speed;
-      
-      // Gradually steer heading back toward default direction when not fleeing
-      if (j.fleeing <= 0) {
-        const defaultHeading = -Math.PI / 2 + (Math.sin(tick * 0.001 + j.phase) * 0.15); // ~straight up with tiny drift
-        let diff = defaultHeading - j.heading;
-        while (diff > Math.PI) diff -= 2 * Math.PI;
-        while (diff < -Math.PI) diff += 2 * Math.PI;
-        j.heading += diff * 0.02;
-      }
-      // Hard clamp: never exceed ±30° from straight up
-      {
-        let diffFromUp = j.heading - (-Math.PI / 2);
-        while (diffFromUp > Math.PI) diffFromUp -= 2 * Math.PI;
-        while (diffFromUp < -Math.PI) diffFromUp += 2 * Math.PI;
-        const LIMIT = Math.PI / 6;
-        if (diffFromUp > LIMIT) j.heading = -Math.PI / 2 + LIMIT;
-        if (diffFromUp < -LIMIT) j.heading = -Math.PI / 2 - LIMIT;
-      }
-      
-      // Update visual rotation to follow heading (with offset to match jellyfish image orientation)
-      // The jellyfish image points "up" in source, so renderRot maps heading to visual angle
-      j.renderRot = j.heading + Math.PI / 2 + baseRot - 0.3; // tune offset to look right
-      j.cosR = Math.cos(j.renderRot);
-      j.sinR = Math.sin(j.renderRot);
-      
-      // Gentle perpendicular sway
-      const sway = Math.sin(tick * j.swayFreq + j.phase) * j.swayAmp;
-      const perpX = -Math.sin(j.heading); // perpendicular to heading
-      const perpY = Math.cos(j.heading);
-      const drawX = j.x + sway * perpX;
-      const drawY = j.y + sway * perpY;
-      
-      // Recalc bounding box from current rotation
-      const diagW = Math.ceil(Math.abs(fW * j.cosR) + Math.abs(fH * j.sinR)) * j.scale;
-      const diagH = Math.ceil(Math.abs(fW * j.sinR) + Math.abs(fH * j.cosR)) * j.scale;
-      
-      // Remove when fully off screen
-      if (drawY + diagH < -20 || drawX > cols + 20 || drawX + diagW < -20 || drawY > rows + 20) {
-        jellies.splice(ji, 1);
-        continue;
-      }
-      
-      // Render jellyfish by modulating background grid brightness
-      // For each grid cell covered by the jellyfish, sample brightness and redraw the char brighter
-      
-      // Cursor glow boost
-      let glowBoost = 1;
-      if (!isMobile) {
-        const jellyDist = Math.sqrt((drawX - mouseGx) ** 2 + (drawY - mouseGy) ** 2);
-        if (jellyDist < CURSOR_GLOW_RADIUS * 2) {
-          glowBoost = 1 + (1 - jellyDist / (CURSOR_GLOW_RADIUS * 2)) * 1.5;
-        }
-      }
-      
-      // Bounding box in grid coords
-      const scaledW = fW * j.scale;
-      const scaledH = fH * j.scale;
-      const halfW = scaledW / 2;
-      const halfH = scaledH / 2;
-      
-      // Scan grid cells in the bounding box area
-      const gxMin = Math.max(0, Math.floor(drawX - halfW - 2));
-      const gxMax = Math.min(cols, Math.ceil(drawX + halfW + 2));
-      const gyMin = Math.max(0, Math.floor(drawY - halfH - 2));
-      const gyMax = Math.min(rows, Math.ceil(drawY + halfH + 2));
-      
-      for (let gy = gyMin; gy < gyMax; gy++) {
-        for (let gx = gxMin; gx < gxMax; gx++) {
-          // Transform grid position to jellyfish frame coordinates (with rotation)
-          const relX = gx - drawX;
-          const relY = gy - drawY;
-          // Inverse rotation to get frame-local coords
-          const localX = relX * j.cosR + relY * j.sinR;
-          const localY = -relX * j.sinR + relY * j.cosR;
-          // Scale to frame pixel coords
-          const fx = Math.floor(localX / j.scale + fW / 2);
-          const fy = Math.floor(localY / j.scale + fH / 2);
-          
-          if (fx < 0 || fx >= fW || fy < 0 || fy >= fH) continue;
-          const brightness = frame[fy][fx];
-          if (brightness < 0.08) continue;
-          
-          const alpha = brightness * j.maxAlpha * glowBoost;
-          if (alpha < 0.02) continue;
-          
-          const ch = bgGrid[gy]?.[gx] || '.';
-          ctx.fillStyle = `rgba(79, 195, 247, ${Math.min(alpha, 0.9)})`;
-          ctx.fillText(ch, gx * charW, gy * fontSize + fontSize);
-        }
-      }
-    }
+    } catch (err) {
+      msg.className = 'form-msg error';
+      msg.textContent = err.message;
+    } finally { btn.disabled = false; btn.textContent = 'Subscribe'; }
+  });
 
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.08 });
 
-    
-    tick++;
-    requestAnimationFrame(draw);
-  }
-  
-  initGrid();
-  draw();
-  window.addEventListener('resize', () => { initGrid(); });
-  window.addEventListener('load', () => { setTimeout(initGrid, 100); });
-})();
-</script>
+  document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+  </script>
 </body>
 </html>

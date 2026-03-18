@@ -113,18 +113,18 @@ The agent uses normal git commands. The shim handles permission checks and signi
 
 ## Agent Spawning Sub-Agents
 
-Agents can onboard sub-agents on feature branches. Sub-agents use **dot notation** names: `@parent.childname` with a random adjective-animal pattern.
+Agents can onboard sub-agents on feature branches. Sub-agents use **plus notation** names: `@parent+childname` with a random adjective-animal pattern.
 
 ```bash
 # Agent (@claude) is on feature/big-refactor
-git repobox keys generate --alias claude.roudy-piglet
-# → @claude.roudy-piglet (evm:0xCCC...789)
+git repobox keys generate --alias claude+roudy-piglet
+# → @claude+roudy-piglet (evm:0xCCC...789)
 
 # Agent appends a direct permission rule to .repobox-config:
 #   evm:0xCCC...789 write >feature/big-refactor/*
 
 git add .repobox-config
-git commit -m "onboard @claude.roudy-piglet for refactor"
+git commit -m "onboard @claude+roudy-piglet for refactor"
 
 # Spawn the sub-agent with its identity
 GIT_CONFIG_COUNT=1 \
@@ -133,10 +133,10 @@ GIT_CONFIG_VALUE_0=evm:0xCCC...789 \
 sub-agent-command --task "refactor the database layer"
 ```
 
-The dot notation makes lineage visible in the audit trail:
+The plus notation makes lineage visible in the audit trail:
 ```
 commit f3e2d1c
-EVM-signed by @claude.roudy-piglet (evm:0xCCC...789)
+EVM-signed by @claude+roudy-piglet (evm:0xCCC...789)
 
     refactor database layer
 ```

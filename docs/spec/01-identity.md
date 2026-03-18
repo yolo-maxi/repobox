@@ -248,18 +248,18 @@ The CLI distinguishes by checking the alias file first, then the config groups. 
 
 ### Sub-Agent Naming Convention
 
-When agents spawn sub-agents, they use **dot notation** for the alias:
+When agents spawn sub-agents, they use **plus notation** for the alias:
 
 ```
-@claude.roudy-piglet = evm:0xCCC...789
-@claude.swift-otter = evm:0xDDD...012
+@claude+roudy-piglet = evm:0xCCC...789
+@claude+swift-otter = evm:0xDDD...012
 ```
 
-The parent alias + `.` + a random adjective-animal name. This makes lineage visible at a glance:
+The parent alias + `+` + a random adjective-animal name. This makes lineage visible at a glance:
 
 ```
 commit f3e2d1c
-EVM-signed by @claude.roudy-piglet (evm:0xCCC...789)
+EVM-signed by @claude+roudy-piglet (evm:0xCCC...789)
 
     refactor database layer
 ```
