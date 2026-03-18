@@ -62,6 +62,21 @@ enum Commands {
     },
     /// Validate .repobox-config
     Lint,
+    /// Configure git to use repobox as the command interceptor
+    Setup {
+        /// Remove repobox git hooks
+        #[arg(long)]
+        remove: bool,
+    },
+    /// Git hook handler (called by git hooks)
+    #[command(hide = true)]
+    Hook {
+        /// Hook name (pre-commit, pre-push)
+        hook: String,
+        /// Hook arguments
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -123,6 +138,8 @@ fn main() -> ExitCode {
             cmd_check(&id_str, &verb, &target, &home)
         }
         Some(Commands::Lint) => cmd_lint(),
+        Some(Commands::Setup { remove }) => cmd_setup(remove),
+        Some(Commands::Hook { hook, args }) => cmd_hook(&hook, &args, &home),
         None => {
             // No subcommand → shim mode (intercept git commands)
             cmd_shim(&cli.git_args, &home)
@@ -566,6 +583,204 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
     }
 }
 
+// ── Setup ─────────────────────────────────────────────────────────────
+
+fn cmd_setup(remove: bool) -> ExitCode {
+    // Check we're in a git repo
+    let git_dir = Command::new("git")
+        .args(["rev-parse", "--git-dir"])
+        .output();
+
+    let git_dir = match git_dir {
+        Ok(out) if out.status.success() => {
+            PathBuf::from(String::from_utf8_lossy(&out.stdout).trim())
+        }
+        _ => {
+            eprintln!("error: not a git repository");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let hooks_dir = git_dir.join("hooks");
+
+    if remove {
+        // Remove hooks
+        let _ = std::fs::remove_file(hooks_dir.join("pre-commit"));
+        let _ = std::fs::remove_file(hooks_dir.join("pre-push"));
+        let _ = Command::new("git")
+            .args(["config", "--local", "--unset", "gpg.program"])
+            .output();
+        println!("✅ Removed repobox git hooks");
+        return ExitCode::SUCCESS;
+    }
+
+    // Create hooks directory if needed
+    let _ = std::fs::create_dir_all(&hooks_dir);
+
+    // Pre-commit hook
+    let pre_commit = r#"#!/bin/sh
+# repo.box pre-commit hook
+exec repobox hook pre-commit "$@"
+"#;
+
+    // Pre-push hook
+    let pre_push = r#"#!/bin/sh
+# repo.box pre-push hook
+exec repobox hook pre-push "$@"
+"#;
+
+    // Write hooks
+    let pre_commit_path = hooks_dir.join("pre-commit");
+    let pre_push_path = hooks_dir.join("pre-push");
+
+    if let Err(e) = std::fs::write(&pre_commit_path, pre_commit) {
+        eprintln!("error writing pre-commit hook: {e}");
+        return ExitCode::FAILURE;
+    }
+
+    if let Err(e) = std::fs::write(&pre_push_path, pre_push) {
+        eprintln!("error writing pre-push hook: {e}");
+        return ExitCode::FAILURE;
+    }
+
+    // Make hooks executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&pre_commit_path, std::fs::Permissions::from_mode(0o755));
+        let _ = std::fs::set_permissions(&pre_push_path, std::fs::Permissions::from_mode(0o755));
+    }
+
+    // Set gpg.program for commit signing
+    let _ = Command::new("git")
+        .args(["config", "--local", "gpg.program", "repobox"])
+        .status();
+
+    println!("✅ Git hooks installed");
+    println!("   • pre-commit: checks file edit permissions");
+    println!("   • pre-push: checks branch push permissions");
+    println!("   • gpg.program: EVM commit signing enabled");
+    println!();
+    println!("   Run `git repobox setup --remove` to undo.");
+
+    ExitCode::SUCCESS
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────
+
+fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
+    // Read .repobox-config
+    let config_path = Path::new(".repobox-config");
+    if !config_path.exists() {
+        // No config → allow everything
+        return ExitCode::SUCCESS;
+    }
+
+    let config_content = match std::fs::read_to_string(config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error reading .repobox-config: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let config = match parser::parse(&config_content) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("❌ .repobox-config error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Get identity
+    let identity = read_identity_from_git_config()
+        .or_else(|| identity::get_identity(home).ok().flatten());
+
+    let identity = match identity {
+        Some(id) => id,
+        None => {
+            eprintln!("❌ no identity configured. Run: git repobox keys generate");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Get current branch
+    let current_branch = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        });
+
+    match hook {
+        "pre-commit" => {
+            // Check file permissions for staged files
+            let staged = shim::get_staged_files(Path::new("."));
+            for file in &staged {
+                let result = engine::check(
+                    &config,
+                    &identity,
+                    Verb::Edit,
+                    current_branch.as_deref(),
+                    Some(file),
+                );
+                if !result.is_allowed() {
+                    let display = aliases::display_identity(home, &identity.to_string());
+                    eprintln!("❌ permission denied: {display} cannot edit {file}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        "pre-push" => {
+            // Args: remote_name remote_url
+            // stdin: <local ref> <local sha> <remote ref> <remote sha>
+            let mut target_branches: Vec<String> = Vec::new();
+
+            // Read stdin for refspecs
+            use std::io::BufRead;
+            let stdin = std::io::stdin();
+            for line in stdin.lock().lines().flatten() {
+                // Format: <local ref> <local sha> <remote ref> <remote sha>
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 3 {
+                    let remote_ref = parts[2];
+                    if let Some(branch_name) = remote_ref.strip_prefix("refs/heads/") {
+                        if !target_branches.contains(&branch_name.to_string()) {
+                            target_branches.push(branch_name.to_string());
+                        }
+                    }
+                }
+            }
+
+            // If no explicit refspecs, fall back to current branch
+            if target_branches.is_empty() {
+                let branch = current_branch.as_deref().unwrap_or("main");
+                target_branches.push(branch.to_string());
+            }
+
+            for target in &target_branches {
+                let result = engine::check(&config, &identity, Verb::Push, Some(target), None);
+                if !result.is_allowed() {
+                    let display = aliases::display_identity(home, &identity.to_string());
+                    eprintln!("❌ permission denied: {display} cannot push to {target}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        _ => {
+            eprintln!("unknown hook: {hook}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 // ── Lint ──────────────────────────────────────────────────────────────
 
 fn cmd_lint() -> ExitCode {
@@ -717,6 +932,8 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                     cmd_check(&id_str, &verb, &target, &home)
                 }
                 Some(Commands::Lint) => cmd_lint(),
+                Some(Commands::Setup { remove }) => cmd_setup(remove),
+                Some(Commands::Hook { hook, args }) => cmd_hook(&hook, &args, &home),
                 None => {
                     eprintln!("Unknown repobox command. Run: git repobox --help");
                     ExitCode::FAILURE

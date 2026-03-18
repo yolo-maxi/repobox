@@ -294,7 +294,7 @@ fn check_branch(
 }
 
 /// Get staged files by running real git.
-fn get_staged_files(repo_root: &Path) -> Vec<String> {
+pub fn get_staged_files(repo_root: &Path) -> Vec<String> {
     let output = Command::new("git")
         .args(["diff", "--cached", "--name-only"])
         .current_dir(repo_root)
