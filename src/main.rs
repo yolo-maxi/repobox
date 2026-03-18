@@ -124,6 +124,21 @@ enum AliasAction {
 }
 
 fn main() -> ExitCode {
+    // Check argv[0]: if invoked as "git", act as transparent shim
+    let argv0 = std::env::args().next().unwrap_or_default();
+    let invoked_as_git = Path::new(&argv0)
+        .file_name()
+        .map(|n| n == "git")
+        .unwrap_or(false);
+
+    if invoked_as_git {
+        // Shim mode: intercept git commands transparently
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        let home = home_dir();
+        return cmd_shim(&args, &home);
+    }
+
+    // Normal CLI mode
     let cli = Cli::parse();
     let home = home_dir();
 
@@ -151,7 +166,7 @@ fn main() -> ExitCode {
 
 fn cmd_init(force: bool) -> ExitCode {
     // Check we're in a git repo
-    let git_check = Command::new("git")
+    let git_check = Command::new(find_real_git())
         .args(["rev-parse", "--git-dir"])
         .output();
 
@@ -253,7 +268,7 @@ fn cmd_keys(action: KeysAction, home: &Path) -> ExitCode {
             if let Err(e) = identity::set_identity(home, &address) {
                 eprintln!("warning: failed to set identity: {e}");
             }
-            let _ = Command::new("git")
+            let _ = Command::new(&find_real_git())
                 .args(["config", "--local", "user.signingkey", &identity_str])
                 .output();
 
@@ -351,7 +366,7 @@ fn cmd_identity(action: IdentityAction, home: &Path) -> ExitCode {
             let identity_str = format!("evm:{address}");
 
             // Set git config
-            let _ = Command::new("git")
+            let _ = Command::new(&find_real_git())
                 .args(["config", "--local", "user.signingkey", &identity_str])
                 .output();
 
@@ -411,7 +426,7 @@ fn cmd_use(name: &str, home: &Path) -> ExitCode {
     }
 
     // Set git config
-    let _ = Command::new("git")
+    let _ = Command::new(&find_real_git())
         .args(["config", "--local", "user.signingkey", &identity_str])
         .output();
 
@@ -586,84 +601,93 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
 // ── Setup ─────────────────────────────────────────────────────────────
 
 fn cmd_setup(remove: bool) -> ExitCode {
-    // Check we're in a git repo
-    let git_dir = Command::new("git")
-        .args(["rev-parse", "--git-dir"])
-        .output();
-
-    let git_dir = match git_dir {
-        Ok(out) if out.status.success() => {
-            PathBuf::from(String::from_utf8_lossy(&out.stdout).trim())
-        }
-        _ => {
-            eprintln!("error: not a git repository");
-            return ExitCode::FAILURE;
-        }
-    };
-
-    let hooks_dir = git_dir.join("hooks");
+    let home = home_dir();
+    let repobox_home = identity::repobox_home_with_base(&home);
+    let bin_dir = repobox_home.join("bin");
+    let shim_path = bin_dir.join("git");
+    let real_git_path = repobox_home.join("real-git");
 
     if remove {
-        // Remove hooks
-        let _ = std::fs::remove_file(hooks_dir.join("pre-commit"));
-        let _ = std::fs::remove_file(hooks_dir.join("pre-push"));
-        let _ = Command::new("git")
-            .args(["config", "--local", "--unset", "gpg.program"])
-            .output();
-        println!("✅ Removed repobox git hooks");
+        let _ = std::fs::remove_file(&shim_path);
+        let _ = std::fs::remove_file(&real_git_path);
+        println!("✅ Removed repobox shim");
+        println!("   Remove ~/.repobox/bin from your PATH to complete uninstall.");
         return ExitCode::SUCCESS;
     }
 
-    // Create hooks directory if needed
-    let _ = std::fs::create_dir_all(&hooks_dir);
-
-    // Pre-commit hook
-    let pre_commit = r#"#!/bin/sh
-# repo.box pre-commit hook
-exec repobox hook pre-commit "$@"
-"#;
-
-    // Pre-push hook
-    let pre_push = r#"#!/bin/sh
-# repo.box pre-push hook
-exec repobox hook pre-push "$@"
-"#;
-
-    // Write hooks
-    let pre_commit_path = hooks_dir.join("pre-commit");
-    let pre_push_path = hooks_dir.join("pre-push");
-
-    if let Err(e) = std::fs::write(&pre_commit_path, pre_commit) {
-        eprintln!("error writing pre-commit hook: {e}");
+    // Find real git (skip ourselves)
+    let real_git = find_system_git();
+    if real_git.is_empty() {
+        eprintln!("error: could not find system git");
         return ExitCode::FAILURE;
     }
 
-    if let Err(e) = std::fs::write(&pre_push_path, pre_push) {
-        eprintln!("error writing pre-push hook: {e}");
+    // Create ~/.repobox/bin/
+    if let Err(e) = std::fs::create_dir_all(&bin_dir) {
+        eprintln!("error creating ~/.repobox/bin/: {e}");
         return ExitCode::FAILURE;
     }
 
-    // Make hooks executable
+    // Store real git path
+    if let Err(e) = std::fs::write(&real_git_path, &real_git) {
+        eprintln!("error writing real git path: {e}");
+        return ExitCode::FAILURE;
+    }
+
+    // Find our own binary
+    let our_binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("repobox"));
+
+    // Create symlink: ~/.repobox/bin/git → repobox binary
+    let _ = std::fs::remove_file(&shim_path); // Remove existing
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&pre_commit_path, std::fs::Permissions::from_mode(0o755));
-        let _ = std::fs::set_permissions(&pre_push_path, std::fs::Permissions::from_mode(0o755));
+        if let Err(e) = std::os::unix::fs::symlink(&our_binary, &shim_path) {
+            eprintln!("error creating symlink: {e}");
+            return ExitCode::FAILURE;
+        }
     }
 
-    // Set gpg.program for commit signing
-    let _ = Command::new("git")
-        .args(["config", "--local", "gpg.program", "repobox"])
-        .status();
-
-    println!("✅ Git hooks installed");
-    println!("   • pre-commit: checks file edit permissions");
-    println!("   • pre-push: checks branch push permissions");
-    println!("   • gpg.program: EVM commit signing enabled");
+    println!("✅ Shim installed");
+    println!("   Real git: {real_git}");
+    println!("   Shim: {}", shim_path.display());
+    println!();
+    println!("   Add this to your shell profile (.bashrc, .zshrc, etc.):");
+    println!();
+    println!("     export PATH=\"$HOME/.repobox/bin:$PATH\"");
+    println!();
+    println!("   Then every `git` command routes through repobox.");
+    println!("   --no-verify won't help — this is a shim, not a hook.");
     println!();
     println!("   Run `git repobox setup --remove` to undo.");
 
     ExitCode::SUCCESS
+}
+
+/// Find the system git binary (not our shim).
+fn find_system_git() -> String {
+    let our_path = std::env::current_exe().ok();
+
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in path_var.split(':') {
+            let candidate = PathBuf::from(dir).join("git");
+            if !candidate.exists() {
+                continue;
+            }
+            // Skip if it's our shim (symlink to us)
+            if let Ok(resolved) = std::fs::canonicalize(&candidate) {
+                if let Some(ref ours) = our_path {
+                    if let Ok(our_resolved) = std::fs::canonicalize(ours) {
+                        if resolved == our_resolved {
+                            continue;
+                        }
+                    }
+                }
+            }
+            return candidate.to_string_lossy().to_string();
+        }
+    }
+
+    String::new()
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────
@@ -705,7 +729,8 @@ fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
     };
 
     // Get current branch
-    let current_branch = Command::new("git")
+    let real_git = find_real_git();
+    let current_branch = Command::new(&real_git)
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .ok()
@@ -854,8 +879,14 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    let real_git = find_real_git();
+
+    // Set env var so shim internals use real git too
+    // SAFETY: single-threaded at this point, no other threads reading env
+    unsafe { std::env::set_var("REPOBOX_REAL_GIT", &real_git); }
+
     // Determine repo root
-    let repo_root = Command::new("git")
+    let repo_root = Command::new(&real_git)
         .args(["rev-parse", "--show-toplevel"])
         .output()
         .ok()
@@ -872,7 +903,7 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
         .or_else(|| identity::get_identity(home).ok().flatten());
 
     // Get current branch
-    let current_branch = Command::new("git")
+    let current_branch = Command::new(&real_git)
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .ok()
@@ -894,7 +925,6 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
     match action {
         ShimAction::Passthrough | ShimAction::Delegate => {
             // Run real git with the original args
-            let real_git = find_real_git();
             let status = Command::new(&real_git)
                 .args(args)
                 .status()
@@ -953,7 +983,17 @@ fn home_dir() -> PathBuf {
 }
 
 fn find_real_git() -> String {
-    // Try .repobox/config first
+    // Try ~/.repobox/real-git first (set by setup)
+    let home = home_dir();
+    let real_git_file = identity::repobox_home_with_base(&home).join("real-git");
+    if let Ok(path) = std::fs::read_to_string(&real_git_file) {
+        let path = path.trim();
+        if !path.is_empty() && Path::new(path).exists() {
+            return path.to_string();
+        }
+    }
+
+    // Try .repobox/config in repo (legacy)
     if let Ok(content) = std::fs::read_to_string(".repobox/config") {
         for line in content.lines() {
             if let Some(path) = line.strip_prefix("git = ") {
@@ -965,26 +1005,16 @@ fn find_real_git() -> String {
     }
 
     // Fall back to finding git in PATH (skipping ourselves)
-    let our_path = std::env::current_exe().ok();
-    if let Ok(path_var) = std::env::var("PATH") {
-        for dir in path_var.split(':') {
-            let candidate = PathBuf::from(dir).join("git");
-            if candidate.exists() {
-                if let Some(ref ours) = our_path {
-                    if candidate == *ours {
-                        continue;
-                    }
-                }
-                return candidate.to_string_lossy().to_string();
-            }
-        }
+    let real = find_system_git();
+    if !real.is_empty() {
+        return real;
     }
 
     "git".to_string()
 }
 
 fn read_identity_from_git_config() -> Option<Identity> {
-    let output = Command::new("git")
+    let output = Command::new(find_real_git())
         .args(["config", "user.signingkey"])
         .output()
         .ok()?;

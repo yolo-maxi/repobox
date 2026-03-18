@@ -295,7 +295,9 @@ fn check_branch(
 
 /// Get staged files by running real git.
 pub fn get_staged_files(repo_root: &Path) -> Vec<String> {
-    let output = Command::new("git")
+    // Use REPOBOX_REAL_GIT env var if set, else fall back to "git"
+    let git = std::env::var("REPOBOX_REAL_GIT").unwrap_or_else(|_| "git".to_string());
+    let output = Command::new(&git)
         .args(["diff", "--cached", "--name-only"])
         .current_dir(repo_root)
         .output();
