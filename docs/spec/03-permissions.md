@@ -8,17 +8,74 @@ Permissions control what identities and groups can do — which branches they ca
 
 - **Enforced everywhere.** The git shim enforces permissions locally. An agent cannot merge to main on its own machine. The server also rejects non-compliant pushes as defense in depth.
 - **No bypass.** Git hooks can be skipped with `--no-verify`. The shim cannot — it IS the `git` command in the agent's environment.
-- **Implicit deny.** If any rule exists for a verb, identities not matched by any rule for that verb are denied.
+- **Implicit deny per target.** If any rule allows a subject for a specific verb+target, other identities are implicitly denied **for that target**. Targets not mentioned by any rule remain open (or closed, depending on `default`).
 - **Top-to-bottom priority.** First matching rule wins. Higher position = higher authority.
 - **No overrides.** There is no sudo, no admin escape hatch, no emergency bypass.
 
+## Two Types of Checks
+
+Every git operation may trigger **two independent checks**:
+
+1. **Branch check** — can you perform this branch operation? (`push`, `merge`, `create`, `delete`, `force-push`)
+2. **File check** — can you modify these files? (`edit`, `write`, `append`)
+
+**Both must pass.** Having `push` permission on a branch doesn't automatically grant `edit` on every file. But if no `edit` rules exist at all, file editing is unrestricted (with `default: allow`).
+
+This means a minimal config can just use branch rules and skip file rules entirely:
+
+```yaml
+permissions:
+  default: allow
+  rules:
+    - @founders push >*
+    - @founders merge >*
+    - @agents push >feature/**
+    - @agents create >feature/**
+```
+
+No `edit`/`write`/`append` rules → no file restrictions. Anyone who can push can modify any file. Add file rules only when you need file-level control.
+
 ## Rule Syntax
 
-Every rule is a single line in `Subject Verb Object` order:
+Rules can be written in two forms: **flat** (one-liners) and **nested** (grouped by subject).
+
+### Flat rules
 
 ```
 <subject> <verb> <target>
 ```
+
+Examples:
+```yaml
+rules:
+  - @founders edit *
+  - @founders push >*
+  - @agents not merge >main
+  - evm:0xBBB...456 push >feature/**
+```
+
+### Nested rules
+
+Group multiple verbs and targets under a subject to avoid repetition:
+
+```yaml
+rules:
+  - @agents:
+      push:
+        - >feature/**
+        - >fix/**
+        - >chore/**
+      create:
+        - >feature/**
+        - >fix/**
+        - >chore/**
+      merge:
+        - >chore/**
+      append:
+        - .repobox-config
+```
+
+**Both forms are equivalent.** Use flat for simple rules, nested when a subject has many verb/target combinations. They can be mixed in the same `rules:` list.
 
 ### Subjects
 
@@ -27,18 +84,25 @@ Every rule is a single line in `Subject Verb Object` order:
 
 ### Verbs
 
-| Verb | Scope | Meaning |
-|------|-------|---------|
-| `push` | branch | Push commits to a branch |
-| `merge` | branch | Merge into a branch |
-| `create` | branch | Create a new branch matching pattern |
-| `delete` | branch | Delete a branch |
-| `edit` | path | Full file modification — add, change, or remove lines |
-| `write` | path | Add lines only — no deletions allowed |
-| `append` | path | Add lines strictly at the end of the file only |
-| `force-push` | branch | Rewrite history (force push) |
+**Branch verbs** (control branch operations):
 
-Prefix with `not` to deny: `@agents not merge >main`
+| Verb | Meaning |
+|------|---------|
+| `push` | Push commits to a branch |
+| `merge` | Merge into a branch |
+| `create` | Create a new branch matching pattern |
+| `delete` | Delete a branch |
+| `force-push` | Rewrite history (force push) |
+
+**File verbs** (control file modifications):
+
+| Verb | Meaning |
+|------|---------|
+| `edit` | Full file modification — add, change, or remove lines |
+| `write` | Add lines only — no deletions allowed |
+| `append` | Add lines strictly at the end of the file only |
+
+Prefix any verb with `not` to deny: `@agents not merge >main`
 
 #### `edit` vs `write` vs `append`
 
@@ -57,7 +121,7 @@ The shim validates at commit time by inspecting the diff:
 - `>main` — branch named "main"
 - `>feature/*` — branches matching glob (one level)
 - `>feature/**` — branches matching glob (recursive)
-- `*` — all files / all branches (context-dependent)
+- `*` — all files / all branches (context-dependent: `push >*` = all branches, `edit *` = all files)
 - `contracts/**` — file path glob (recursive)
 - `package.json` — specific file
 - `contracts/** >dev` — combined: file path + branch (both must match)
@@ -77,6 +141,8 @@ If only a path is specified (`contracts/**`), the rule applies on all branches.
 
 ## Config Format
 
+### Minimal (branch control only, no file restrictions)
+
 ```yaml
 groups:
   founders:
@@ -89,99 +155,126 @@ groups:
 permissions:
   default: allow
   rules:
-    - @founders edit *
     - @founders push >*
     - @founders merge >*
     - @founders create >*
-    - @agents push >feature/**
-    - @agents create >feature/**
-    - @agents merge >feature/**
-    - @agents append .repobox-config
+    - @agents:
+        push:
+          - >feature/**
+          - >fix/**
+        create:
+          - >feature/**
+          - >fix/**
 ```
+
+Agents can push and create feature/fix branches, edit any files on those branches. Only founders can push/merge/create on main and other branches.
+
+### With file restrictions
+
+```yaml
+permissions:
+  default: allow
+  rules:
+    - @founders push >*
+    - @founders merge >*
+    - @founders create >*
+    - @founders edit .repobox-config
+    - @agents:
+        push:
+          - >feature/**
+          - >fix/**
+        create:
+          - >feature/**
+          - >fix/**
+        edit:
+          - * >feature/**
+          - * >fix/**
+        append:
+          - .repobox-config
+```
+
+Now agents can edit files, but only on feature/fix branches. And `.repobox-config` is locked to founders for full edits — agents can only append to it.
 
 ### The `default` field
 
-- **`allow`** (default if omitted) — if no rule covers a verb at all, the action is permitted
-- **`deny`** — if no rule covers a verb at all, the action is denied
+- **`allow`** (default if omitted) — if no rule covers a verb+target combination at all, the action is permitted
+- **`deny`** — if no rule covers a verb+target combination at all, the action is denied
 
-Note: `default` only matters for verbs with **zero** rules. The moment you write even one rule for a verb, implicit deny handles the rest.
+**Important:** `default` only matters for verb+target combinations with **zero** matching rules. The moment any rule mentions a verb for a target, implicit deny handles identities not covered by that rule.
+
+## How Implicit Deny Works
+
+This is the most important concept to understand.
+
+**Implicit deny is scoped to the target, not the verb globally.**
+
+When you write `@founders edit .repobox-config`, the system learns: "someone has explicit edit access to `.repobox-config`." Any identity NOT matched by an `edit` rule for `.repobox-config` is implicitly denied. But files NOT mentioned by any `edit` rule are unaffected — they follow `default`.
+
+### Example: selective file protection
+
+```yaml
+permissions:
+  default: allow
+  rules:
+    - @founders edit .repobox-config
+```
+
+| Action | Result | Why |
+|--------|--------|-----|
+| @founders edit .repobox-config | ✅ permit | Rule matches |
+| @agents edit .repobox-config | ❌ deny | Implicit deny: rule exists for `edit .repobox-config`, @agents not matched |
+| @agents edit src/app.rs | ✅ permit | No `edit` rule mentions `src/app.rs` → default: allow |
+| @agents edit package.json | ✅ permit | No `edit` rule mentions `package.json` → default: allow |
+
+Only `.repobox-config` is protected. Everything else is open.
+
+### Example: broad file lockdown
+
+```yaml
+permissions:
+  default: allow
+  rules:
+    - @founders edit *
+    - @agents edit * >feature/**
+```
+
+| Action | Result | Why |
+|--------|--------|-----|
+| @founders edit anything | ✅ permit | `@founders edit *` matches all files |
+| @agents edit src/app.rs on feature/fix | ✅ permit | `@agents edit * >feature/**` matches |
+| @agents edit src/app.rs on main | ❌ deny | `edit *` has rules, @agents only matched on >feature/** → implicit deny on main |
+
+Here `@founders edit *` covers all files, so implicit deny applies to all files for non-founders. But `@agents edit * >feature/**` carves out an exception for agents on feature branches.
 
 ## Evaluation Algorithm
 
 Given an action (subject, verb, target):
 
-1. Collect all rules matching the verb (including `not` variants)
-2. If **zero rules** exist for this verb:
+1. Collect all rules for this verb whose **target pattern** matches the actual target
+2. If **zero rules** match this verb+target:
    - `default: allow` → **permit**
    - `default: deny` → **deny**
-3. If rules exist, walk them **top-to-bottom**:
-   - For each rule, check if subject AND target match
-   - First match wins:
+3. If matching rules exist, walk them **top-to-bottom**:
+   - For each rule, check if subject matches
+   - First subject match wins:
      - Allow rule → **permit**
      - `not` (deny) rule → **deny**
-4. If no rule matched but rules exist for this verb → **deny** (implicit deny)
+4. If no rule matched the subject but rules exist for this verb+target → **deny** (implicit deny)
 
-### Examples
+### Deny ordering
 
-Config:
-```yaml
-permissions:
-  default: allow
-  rules:
-    - @founders merge >main
-```
-
-| Action | Result | Why |
-|--------|--------|-----|
-| @founders merge >main | ✅ permit | Rule 1 matches |
-| @agents merge >main | ❌ deny | Rules exist for `merge`, no match → implicit deny |
-| @agents push >feature/x | ✅ permit | No rules for `push` at all → default: allow |
-
-Config:
-```yaml
-permissions:
-  default: allow
-  rules:
-    - @founders edit *
-    - @founders push >*
-    - @founders merge >*
-    - @founders create >*
-    - @agents push >feature/**
-    - @agents create >feature/**
-    - @agents merge >feature/**
-```
-
-| Action | Result | Why |
-|--------|--------|-----|
-| @founders merge >main | ✅ permit | Rule 3 matches |
-| @agents create >feature/fix | ✅ permit | Rule 6 matches |
-| @agents push >main | ❌ deny | Rules exist for `push`, none match @agents on >main → implicit deny |
-| @agents delete >feature/fix | ❌ deny | Rules exist for... wait, no rules for `delete` → default: allow |
-
-That last case reveals an important point: if you want to lock down `delete`, you need at least one rule for it. With `default: allow`, unmentioned verbs are open. With `default: deny`, they'd be closed.
-
-### Explicit deny (`not`) vs implicit deny
-
-- **Implicit deny**: "No rule matched you, but rules exist for this verb" → denied
-- **Explicit deny**: `@agents not merge >main` → denied by a specific rule
-
-Explicit deny is useful when you want to override a broader allow:
+Explicit `not` rules must come **before** broader allows to take effect:
 
 ```yaml
 rules:
+  # ✅ Correct: deny first, then allow
+  - @agents not push >main
+  - @agents push >*
+
+  # ❌ Wrong: push >* matches first, deny never reached
   - @agents push >*
   - @agents not push >main
 ```
-
-Here `@agents push >*` would allow pushing to main, but `@agents not push >main` is more specific. Wait — rules are top-to-bottom, so `push >*` would match first. To make this work, put the deny **above** the allow:
-
-```yaml
-rules:
-  - @agents not push >main
-  - @agents push >*
-```
-
-Now agents can push to any branch except main.
 
 ## Priority Model
 
@@ -249,10 +342,10 @@ Answers "can this identity do this?" against the current `.repobox-config`. Show
 
 ```bash
 git repobox check evm:0xBBB...456 push >main
-# ❌ denied — implicit deny (rules exist for 'push', no match for this identity on >main)
+# ❌ denied — implicit deny (rules exist for 'push >main', no match for this identity)
 
 git repobox check evm:0xBBB...456 push >feature/fix
-# ✅ allowed — rule 5: @agents push >feature/**
+# ✅ allowed — rule: @agents push >feature/**
 ```
 
 ### `git repobox lint`
