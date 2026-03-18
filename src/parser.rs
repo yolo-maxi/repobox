@@ -236,7 +236,7 @@ fn parse_verb_str(s: &str) -> Result<(bool, Verb), ConfigError> {
 
 /// Validate group includes: check for unknown references and circular dependencies.
 fn validate_includes(groups: &HashMap<String, Group>) -> Result<(), ConfigError> {
-    for (name, group) in groups {
+    for (_name, group) in groups {
         for inc in &group.includes {
             if !groups.contains_key(inc) {
                 return Err(ConfigError::UnknownGroup(inc.clone()));

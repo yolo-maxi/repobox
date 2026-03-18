@@ -1,4 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(test)]
+use std::path::PathBuf;
 use std::process::Command;
 
 use crate::config::*;
@@ -148,7 +150,7 @@ fn check_commit(
 
 /// Check permissions for git merge.
 fn check_merge(
-    args: &[String],
+    _args: &[String],
     config: &Config,
     identity: &Identity,
     current_branch: Option<&str>,
