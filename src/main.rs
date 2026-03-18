@@ -39,6 +39,11 @@ enum Commands {
         #[command(subcommand)]
         action: IdentityAction,
     },
+    /// Set identity by alias or address (shorthand for identity set)
+    Use {
+        /// Alias name (e.g. fran-test) or evm:0x... address
+        name: String,
+    },
     /// Show current identity
     Whoami,
     /// Manage local aliases
@@ -111,6 +116,7 @@ fn main() -> ExitCode {
         Some(Commands::Init { force }) => cmd_init(force),
         Some(Commands::Keys { action }) => cmd_keys(action, &home),
         Some(Commands::Identity { action }) => cmd_identity(action, &home),
+        Some(Commands::Use { name }) => cmd_use(&name, &home),
         Some(Commands::Whoami) => cmd_whoami(&home),
         Some(Commands::Alias { action }) => cmd_alias(action, &home),
         Some(Commands::Check { identity: id_str, verb, target }) => {
@@ -226,12 +232,21 @@ fn cmd_keys(action: KeysAction, home: &Path) -> ExitCode {
                 }
             }
 
+            // Auto-set as current identity
+            if let Err(e) = identity::set_identity(home, &address) {
+                eprintln!("warning: failed to set identity: {e}");
+            }
+            let _ = Command::new("git")
+                .args(["config", "--local", "user.signingkey", &identity_str])
+                .output();
+
             let display = match &alias {
                 Some(a) => format!("@{a} ({identity_str})"),
                 None => identity_str,
             };
             println!("🔑 Generated: {display}");
             println!("   Key stored in ~/.repobox/keys/{address}.key");
+            println!("   ✅ Set as current identity");
 
             ExitCode::SUCCESS
         }
@@ -338,6 +353,55 @@ fn cmd_identity(action: IdentityAction, home: &Path) -> ExitCode {
             ExitCode::SUCCESS
         }
     }
+}
+
+// ── Use (set identity by alias/address) ───────────────────────────────
+
+fn cmd_use(name: &str, home: &Path) -> ExitCode {
+    // Strip @ prefix if present
+    let name = name.strip_prefix('@').unwrap_or(name);
+
+    // Try resolving as alias first
+    let identity_str = match aliases::resolve_alias(home, name) {
+        Ok(Some(addr)) => addr,
+        _ => {
+            // Try as raw identity string
+            if name.starts_with("evm:") {
+                name.to_string()
+            } else {
+                eprintln!("error: unknown alias '{name}'. Run: git repobox alias list");
+                return ExitCode::FAILURE;
+            }
+        }
+    };
+
+    // Extract address from identity string
+    let address = identity_str.strip_prefix("evm:").unwrap_or(&identity_str);
+
+    // Check we have the key
+    let key_path = identity::repobox_home_with_base(home)
+        .join("keys")
+        .join(format!("{address}.key"));
+    if !key_path.exists() {
+        eprintln!("error: no key found for {identity_str}. Run: git repobox keys generate");
+        return ExitCode::FAILURE;
+    }
+
+    // Set identity
+    if let Err(e) = identity::set_identity(home, address) {
+        eprintln!("error: {e}");
+        return ExitCode::FAILURE;
+    }
+
+    // Set git config
+    let _ = Command::new("git")
+        .args(["config", "--local", "user.signingkey", &identity_str])
+        .output();
+
+    let display = aliases::display_identity(home, &identity_str);
+    println!("✅ Now using: {display}");
+
+    ExitCode::SUCCESS
 }
 
 // ── Whoami ────────────────────────────────────────────────────────────
@@ -646,6 +710,7 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                 Some(Commands::Init { force }) => cmd_init(force),
                 Some(Commands::Keys { action }) => cmd_keys(action, &home),
                 Some(Commands::Identity { action }) => cmd_identity(action, &home),
+                Some(Commands::Use { name }) => cmd_use(&name, &home),
                 Some(Commands::Whoami) => cmd_whoami(&home),
                 Some(Commands::Alias { action }) => cmd_alias(action, &home),
                 Some(Commands::Check { identity: id_str, verb, target }) => {
