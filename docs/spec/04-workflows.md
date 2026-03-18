@@ -2,7 +2,7 @@
 
 ## Overview
 
-Workflows are generic state machines defined in `.boxconfig`. PRs, ideas, releases, governance proposals — all are instances of workflows. States, transitions, guards, and actions are the building blocks. Instances live as JSONL files in the repo.
+Workflows are generic state machines defined in `.repobox-config`. PRs, ideas, releases, governance proposals — all are instances of workflows. States, transitions, guards, and actions are the building blocks. Instances live as JSONL files in the repo.
 
 **Everything as code.** Workflow definitions, instance data, discussions — all are files in the repo, versioned by git, governed by permissions.
 
@@ -17,7 +17,7 @@ Workflows are generic state machines defined in `.boxconfig`. PRs, ideas, releas
 
 ## Workflow Definitions
 
-Defined in `.boxconfig` under `workflows:`:
+Defined in `.repobox-config` under `workflows:`:
 
 ```yaml
 workflows:
@@ -284,11 +284,11 @@ To open a new PR/idea/etc:
 1. Append a line to `index.jsonl` with metadata and initial state
 2. Create a new `<slug>.jsonl` file with the description as the first line
 
-The shim provides a helper: `git box pr create --title "Fix auth bug" --branch feature/fix-auth --target main` (which generates the JSONL entries and commits them). But you can also just manually append to the files with `git commit`.
+The shim provides a helper: `git repobox pr create --title "Fix auth bug" --branch feature/fix-auth --target main` (which generates the JSONL entries and commits them). But you can also just manually append to the files with `git commit`.
 
 ### Permission Model for Instances
 
-Controlled by the standard file permissions in `.boxconfig`:
+Controlled by the standard file permissions in `.repobox-config`:
 
 ```yaml
 .box/workflows/pull-request/index.jsonl:
@@ -424,22 +424,22 @@ workflows:
 
 ## Tooling
 
-### `git box pr create`
+### `git repobox pr create`
 Create a pull request (appends to index.jsonl + creates thread file).
 
-### `git box pr review --approve|--request-changes`
+### `git repobox pr review --approve|--request-changes`
 Submit a review verdict (appends review line to thread).
 
-### `git box pr merge`
+### `git repobox pr merge`
 Attempt the `approved → merged` transition.
 
-### `git box workflow list <workflow-name>`
+### `git repobox workflow list <workflow-name>`
 List all instances of a workflow (reads index.jsonl).
 
-### `git box workflow transition <workflow-name> <id> <target-state>`
+### `git repobox workflow transition <workflow-name> <id> <target-state>`
 Generic transition command for any workflow.
 
-### `git box workflow create <workflow-name> --title "..." [--branch ...] [--target ...]`
+### `git repobox workflow create <workflow-name> --title "..." [--branch ...] [--target ...]`
 Create a new instance of any workflow.
 
 Note: All of these are convenience wrappers. The underlying operation is always a `git commit` that modifies JSONL files — users and agents can do it manually too.

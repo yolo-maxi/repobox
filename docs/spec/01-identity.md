@@ -73,7 +73,7 @@ Fully supported via ERC-1271. A multisig, a Safe, or any smart contract wallet c
 
 **TBD** — Fran consulting with ERC-8128 authors (Slice team) on recommended patterns. Options include OS keychain, credential helpers, browser wallet delegation.
 
-For the git shim, identity is stored in `~/.box/identity` and used to sign commits and determine permissions locally.
+For the git shim, identity is stored in `~/.repobox/identity` and used to sign commits and determine permissions locally.
 
 ### Server-Side Requirements
 
@@ -92,6 +92,98 @@ interface IdentityProvider {
 ```
 
 EVM is the only provider at launch. The interface exists so SSH or other providers can be added later without changing the core.
+
+## Git Signing Integration
+
+repo.box extends git's native signing infrastructure rather than running alongside it.
+
+### How It Works
+
+- `git repobox init` sets `gpg.program = repobox` in the repo's git config
+- `user.signingkey` holds the EVM address: `evm:0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`
+- When git needs a signature, it calls `box` which signs with the secp256k1 private key
+- The signature is stored in the commit object — native git, not a side-channel
+- `git verify-commit` works using the EVM address
+
+`user.signingkey` is the **single source of identity**. The shim reads it for permission checks. Git reads it for signing. One config key, two purposes.
+
+### Key Storage
+
+Private keys are stored in `~/.repobox/keys/`, keyed by address:
+
+```
+~/.repobox/keys/0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045.key
+```
+
+`git repobox keys generate` creates a new key pair and prints the address.
+`git repobox keys import <private-key>` imports an existing key.
+
+### Identity Precedence
+
+Standard git config resolution, no custom mechanisms:
+
+1. `git -c user.signingkey=evm:0x...` (per-command)
+2. `GIT_CONFIG_*` environment variables (per-process)
+3. `.git/config` in the repo (per-repo, via `git config --local`)
+4. `~/.gitconfig` conditional includes (per-directory pattern)
+5. `~/.gitconfig` global default
+
+### Multi-Agent Setup
+
+**Granting access to a new agent (requires .repobox-config edit permission):**
+
+```bash
+# 1. Generate a key for the agent
+git repobox keys generate
+# → Created: ~/.repobox/keys/0xCCC...def.key
+# → Address: evm:0xCCC...def
+
+# 2. Add the address to .repobox-config (you need edit permission)
+# Under groups:
+#   agents:
+#     members:
+#       - evm:0xCCC...def
+
+# 3. Commit the change (only @founders can edit .repobox-config)
+git add .repobox-config
+git commit -m "onboard agent-1"
+```
+
+**Spawning agents with separate identities:**
+
+```bash
+# Each agent process gets its own identity via environment
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=user.signingkey \
+GIT_CONFIG_VALUE_0=evm:0xCCC...def \
+codex --task "fix the auth bug"
+```
+
+The agent uses normal git commands. The shim reads `user.signingkey` from the environment, checks permissions, and signs commits — all transparently.
+
+**Audit trail:**
+
+```
+commit a1b2c3d
+EVM-signed by evm:0xCCC...def
+Author: agent <agent@repo.box>
+
+    fix the auth bug
+
+commit e5f6a7b
+EVM-signed by evm:0xAAA...789
+Author: alice <alice@example.com>
+
+    onboard agent-1
+```
+
+Every commit is cryptographically tied to a specific EVM address. You know exactly which agent (or human) made which change.
+
+**Security properties:**
+- Agents cannot grant themselves access (editing .repobox-config requires @founders permission)
+- Agents cannot impersonate other identities (signing requires the private key)
+- The orchestrator controls onboarding — generates keys, edits .repobox-config, assigns identities
+- Post-hoc audit: any commit's authorship is cryptographically verifiable
 
 ## What Identity Does NOT Cover
 

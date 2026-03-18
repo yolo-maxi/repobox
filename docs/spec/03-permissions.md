@@ -4,7 +4,7 @@
 
 ## Overview
 
-Permissions control what identities and groups can do — which branches they can push to, which files they can modify, and how. Rules are defined in `.boxconfig` (YAML), enforced both **locally** (by the `box` CLI) and **server-side** (on push). No bypass possible.
+Permissions control what identities and groups can do — which branches they can push to, which files they can modify, and how. Rules are defined in `.repobox-config` (YAML), enforced both **locally** (by the `repobox` CLI) and **server-side** (on push). No bypass possible.
 
 ## Core Principles
 
@@ -16,11 +16,11 @@ Permissions control what identities and groups can do — which branches they ca
 
 ## Config Format
 
-Permissions live in `.boxconfig` (YAML). One file per repo, at the root.
+Permissions live in `.repobox-config` (YAML). One file per repo, at the root.
 
 ### Style Declaration
 
-Each `.boxconfig` declares one permission style. All rules must follow that style.
+Each `.repobox-config` declares one permission style. All rules must follow that style.
 
 ```yaml
 permissions:
@@ -55,7 +55,7 @@ Three levels of file modification, each a subset of the previous:
 
 - **`edit`**: Full power. Add, modify, delete any line. Traditional write access.
 - **`write`**: Can add new lines anywhere in the file, but cannot remove or modify existing lines. Diff may only contain `+` lines, no `-` lines. Useful for config files where you want contributors to add entries without changing existing ones.
-- **`append`**: Can only add lines at the end of the file. Strictest — preserves the entire existing file and only extends it. Useful for logs, `.boxconfig` permission layering, and append-only data files.
+- **`append`**: Can only add lines at the end of the file. Strictest — preserves the entire existing file and only extends it. Useful for logs, `.repobox-config` permission layering, and append-only data files.
 
 The git shim validates these constraints at commit time by inspecting the diff:
 - `write`: rejects any diff hunk containing `-` lines for that file
@@ -63,7 +63,7 @@ The git shim validates these constraints at commit time by inspecting the diff:
 
 ## Permission Styles
 
-All three styles express the same permission graph. A `.boxconfig` uses exactly one.
+All three styles express the same permission graph. A `.repobox-config` uses exactly one.
 
 ### Subject-first
 
@@ -79,7 +79,7 @@ permissions:
     push:
       - >main
     write:
-      - .boxconfig
+      - .repobox-config
       - .github/**
       - .env*
 
@@ -101,7 +101,7 @@ permissions:
       - >agent/*
     not write:
       - package.json
-      - .boxconfig
+      - .repobox-config
       - contracts/**
 
   evm:0xBob...123:
@@ -136,7 +136,7 @@ permissions:
     not write:
       - evm:0xBob...123
 
-  .boxconfig:
+  .repobox-config:
     write:
       - @founders
 ```
@@ -167,7 +167,7 @@ permissions:
     contracts/**:
       - @devs
       - @auditors
-    .boxconfig:
+    .repobox-config:
       - @founders
 
   not write:
@@ -203,8 +203,8 @@ If only a branch is specified (e.g. `>main`), the rule applies to all files on t
 
 The priority model is safe because of **who can write where**:
 
-- **Founders** have full `write` access to `.boxconfig`. They control the top of the file — the highest priority rules. They're trusted to get ordering right.
-- **Devs** have `append` access to `.boxconfig` on feature branches. Their rules land at the bottom — lowest priority. They can never override founder rules.
+- **Founders** have full `write` access to `.repobox-config`. They control the top of the file — the highest priority rules. They're trusted to get ordering right.
+- **Devs** have `append` access to `.repobox-config` on feature branches. Their rules land at the bottom — lowest priority. They can never override founder rules.
 - **Agents** can only append on their own branches. Lowest priority, most constrained.
 
 A dev appending `@devs: merge: contracts/** >dev` at the bottom is useless if a higher `not merge` rule already blocks it.
@@ -237,7 +237,7 @@ A key use case: devs spin up constrained agents on feature branches.
 ### Flow
 
 1. Dev creates `feature/my-thing`
-2. Dev appends to `.boxconfig`:
+2. Dev appends to `.repobox-config`:
    ```yaml
    @my-agent:
      push:
@@ -251,7 +251,7 @@ A key use case: devs spin up constrained agents on feature branches.
      - evm:0xAgentKey...
    ```
 3. Agent works within constraints on the feature branch
-4. When feature merges to dev/main, `.boxconfig` changes are rejected (dev doesn't have merge permission for `.boxconfig` changes on protected branches)
+4. When feature merges to dev/main, `.repobox-config` changes are rejected (dev doesn't have merge permission for `.repobox-config` changes on protected branches)
 5. Agent permissions die with the branch
 
 ### Why this is safe
@@ -266,7 +266,7 @@ A key use case: devs spin up constrained agents on feature branches.
 ### Layer 1: Git shim (local)
 
 - Intercepts `git commit`, `git merge`, `git push`, `git checkout -b`, `git branch`
-- Validates every commit against `.boxconfig` before delegating to real git
+- Validates every commit against `.repobox-config` before delegating to real git
 - Checks branch permissions before push/merge/create/delete
 - Checks file permissions by inspecting the diff
 - Validates `append` constraints (only `+` lines in diff)
@@ -275,34 +275,65 @@ A key use case: devs spin up constrained agents on feature branches.
 
 ### Layer 2: Server (remote)
 
-- Validates every push against `.boxconfig` on the target branch
+- Validates every push against `.repobox-config` on the target branch
 - Rejects non-compliant pushes with descriptive errors
 - Defense in depth — catches anything that bypasses the CLI (e.g. raw `git` usage)
-- Uses the `.boxconfig` from the **target branch** (not the incoming changes) to prevent permission smuggling
+- Uses the `.repobox-config` from the **target branch** (not the incoming changes) to prevent permission smuggling
+
+### Which .repobox-config applies?
+
+| Operation | Which .repobox-config? |
+|-----------|-------------------|
+| `git commit` | Current branch |
+| `git push` | Current branch |
+| `git merge X into Y` | **Y** (target branch) |
+
+The target branch is the authority. To merge into a branch, you need permission according to that branch's rules.
+
+**Why this matters for multi-agent workflows:**
+
+Agents can freely edit `.repobox-config` on feature branches to onboard sub-agents:
+
+1. Agent on `feature/fix` generates a key for a sub-agent
+2. Edits `.repobox-config` on `feature/fix` to add the sub-agent to `@agents`
+3. Commits the change → ✅ (feature branch allows this)
+4. Sub-agent works on `feature/fix` with its new permissions
+5. Work done. Agent reverts `.repobox-config` changes.
+6. Merges clean code to `main` → ✅
+
+If the agent forgets to revert `.repobox-config`:
+
+```
+git merge feature/fix into main
+→ ❌ Blocked: merge contains .repobox-config changes.
+   You don't have permission to edit .repobox-config on >main.
+```
+
+This creates **branch-scoped permissions**: sub-agents exist for the duration of a feature branch. When the branch merges (without the `.repobox-config` changes) or is deleted, their access vanishes.
 
 ### Permission smuggling prevention
 
-The server always evaluates permissions from the `.boxconfig` on the **target branch**, not from incoming changes. If someone modifies `.boxconfig` to grant themselves access and pushes that change, the server uses the pre-push version of `.boxconfig` to evaluate. The modified permissions don't take effect until they're already on the branch — which requires someone with existing access to merge them.
+The server always evaluates permissions from the `.repobox-config` on the **target branch**, not from incoming changes. If someone modifies `.repobox-config` to grant themselves access and pushes that change, the server uses the pre-push version of `.repobox-config` to evaluate. The modified permissions don't take effect until they're already on the branch — which requires someone with existing access to merge them.
 
 ## Tooling
 
-### `git box lint` (shim subcommand)
+### `git repobox lint` (shim subcommand)
 
-- Validates `.boxconfig` syntax
+- Validates `.repobox-config` syntax
 - Detects undefined group references
 - Warns about ordering issues (allow below deny for same target)
 - Normalizes rules to canonical form (SVO)
 - Detects circular group includes
 
-### `git box check <identity> <verb> <target>` (shim subcommand)
+### `git repobox check <identity> <verb> <target>` (shim subcommand)
 
-- Answers "can this identity do this?" against the current `.boxconfig`
+- Answers "can this identity do this?" against the current `.repobox-config`
 - Shows which rule matched and why
 - Essential for debugging permission issues
 
-### `git box diff` (shim subcommand)
+### `git repobox diff` (shim subcommand)
 
-- Shows permission changes between two `.boxconfig` versions
+- Shows permission changes between two `.repobox-config` versions
 - Used in code review to understand impact of permission changes
 
 ## What Permissions Does NOT Cover

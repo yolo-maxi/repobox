@@ -20,7 +20,7 @@ Chosen for type safety (security-critical permission engine), crypto ecosystem a
 - **tower** — Middleware layer. ERC-8128 verification as a tower middleware that extracts identity before hitting route handlers.
 
 ### Config
-- **serde + serde_yaml** — Parse `.boxconfig` YAML.
+- **serde + serde_yaml** — Parse `.repobox-config` YAML.
 - Custom permission parser for the free-form permission syntax.
 
 ### Storage
@@ -29,7 +29,7 @@ Chosen for type safety (security-critical permission engine), crypto ecosystem a
 
 ### CLI
 - **clap** — Argument parsing for the binary.
-- Single binary that operates in two modes: **git shim** (invoked as `git`, intercepts commands) and **server** (`box serve`).
+- Single binary that operates in two modes: **git shim** (invoked as `git`, intercepts commands) and **server** (`repobox serve`).
 
 ## Architecture
 
@@ -44,7 +44,7 @@ Chosen for type safety (security-critical permission engine), crypto ecosystem a
 │  └──────────┘  └──────────┘  └───────────┘  │
 │        │              │             │        │
 │  ┌─────────────────────────────────────────┐ │
-│  │    .boxconfig parser + gitoxide diffs   │ │
+│  │    .repobox-config parser + gitoxide diffs   │ │
 │  └─────────────────────────────────────────┘ │
 └─────────────────────────────────────────────┘
                       │
@@ -53,7 +53,7 @@ Chosen for type safety (security-critical permission engine), crypto ecosystem a
                   (post-MVP)
                       │
 ┌─────────────────────────────────────────────┐
-│              box serve (server)               │
+│              reporepobox serve (server)               │
 │                                              │
 │  ┌──────────────────────────────────────┐    │
 │  │  axum HTTP server                    │    │
@@ -72,7 +72,7 @@ Chosen for type safety (security-critical permission engine), crypto ecosystem a
 │  ┌──────────┐  ┌──────────┐  ┌───────────┐  │
 │  │  Group   │  │  Config  │  │  Nonce /   │  │
 │  │ Resolvers│  │  Parser  │  │  Cache DB  │  │
-│  │(onchain/ │  │ (.box    │  │ (redb/     │  │
+│  │(onchain/ │  │ (.repobox    │  │ (redb/     │  │
 │  │ http)    │  │  config) │  │  sqlite)   │  │
 │  └──────────┘  └──────────┘  └───────────┘  │
 │        │                                     │
@@ -89,13 +89,13 @@ Single binary, two modes:
 
 **Git shim mode** (invoked as `git` via PATH/symlink):
 - Intercepts `git commit`, `git merge`, `git push`, `git checkout -b`, `git branch`
-- Checks permissions against `.boxconfig`, then delegates to real git
+- Checks permissions against `.repobox-config`, then delegates to real git
 - Read-only commands pass through unchanged
-- `git box init` — set up a repo with `.boxconfig`
-- `git box lint`, `git box check` — config tooling
+- `git repobox init` — set up a repo with `.repobox-config`
+- `git repobox lint`, `git repobox check` — config tooling
 
 **Server mode:**
-- `box serve` — start the HTTP git server with ERC-8128 auth (post-hackathon)
+- `repobox serve` — start the HTTP git server with ERC-8128 auth (post-hackathon)
 
 ### Shared Engine
 The permission engine and workflow engine are library crates shared between CLI and server. Same code, same rules, enforced in both places.
@@ -123,16 +123,16 @@ Tokio. Required by axum, alloy, and beneficial for concurrent onchain resolver c
 ## Crate Structure
 
 ```
-repo-box/
+repobox/
   crates/
-    box-core/          # Identity types, group interface, permission engine
-    box-config/        # .boxconfig YAML parser, permission syntax parser
-    box-git/           # gitoxide wrappers, smart HTTP protocol
-    box-auth/          # ERC-8128 verification, alloy integration
-    box-groups/        # Group resolvers (static, onchain, http)
-    box-workflows/     # Workflow engine, state machine, JSONL
-    box-server/        # axum HTTP server, middleware, API routes
-    box-shim/          # git shim, command interception, local enforcement
+    reporepobox-core/          # Identity types, group interface, permission engine
+    repobox-config/        # .repobox-config YAML parser, permission syntax parser
+    reporepobox-git/           # gitoxide wrappers, smart HTTP protocol
+    reporepobox-auth/          # ERC-8128 verification, alloy integration
+    reporepobox-groups/        # Group resolvers (static, onchain, http)
+    reporepobox-workflows/     # Workflow engine, state machine, JSONL
+    reporepobox-server/        # axum HTTP server, middleware, API routes
+    reporepobox-shim/          # git shim, command interception, local enforcement
   src/
     main.rs            # Binary entry point (dispatches to CLI or server)
 ```
