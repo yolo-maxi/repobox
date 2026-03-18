@@ -62,6 +62,29 @@ git commit -m "initialize repo.box permissions"
 
 Your commit is now signed with your EVM key.
 
+## Aliases (Local Address Book)
+
+Raw EVM addresses are unreadable. Use aliases to give them names:
+
+```bash
+git repobox alias add claude evm:0xBBB...456
+git repobox alias list
+git repobox whoami
+# → @alice (evm:0xAAA...123)
+```
+
+Aliases are stored in `~/.repobox/aliases` — local to your machine, not part of the repo. Each collaborator can have their own names for the same addresses.
+
+The CLI shows aliases everywhere:
+```
+❌ permission denied: @claude cannot edit .repobox-config
+```
+
+You can also set an alias when creating your identity:
+```bash
+git repobox identity set <private-key> --alias alice
+```
+
 ## Onboarding an Agent
 
 ```bash
@@ -69,12 +92,15 @@ Your commit is now signed with your EVM key.
 git repobox keys generate
 # → evm:0xBBB...456
 
+# Give it a name
+git repobox alias add claude evm:0xBBB...456
+
 # Add to .repobox-config under agents.members:
 #   - evm:0xBBB...456
 
 # Commit the change
 git add .repobox-config
-git commit -m "onboard agent-1"
+git commit -m "onboard @claude"
 
 # Spawn the agent with its identity
 GIT_CONFIG_COUNT=1 \
@@ -87,24 +113,32 @@ The agent uses normal git commands. The shim handles permission checks and signi
 
 ## Agent Spawning Sub-Agents
 
-Agents can onboard sub-agents on feature branches:
+Agents can onboard sub-agents on feature branches. Sub-agents use **dot notation** names: `@parent.childname` with a random adjective-animal pattern.
 
 ```bash
-# Agent is on feature/big-refactor
-git repobox keys generate
-# → evm:0xCCC...789
+# Agent (@claude) is on feature/big-refactor
+git repobox keys generate --alias claude.roudy-piglet
+# → @claude.roudy-piglet (evm:0xCCC...789)
 
-# Agent appends to .repobox-config (has 'append' permission):
-# adds evm:0xCCC...789 to @agents members
+# Agent appends a direct permission rule to .repobox-config:
+#   evm:0xCCC...789 write >feature/big-refactor/*
 
 git add .repobox-config
-git commit -m "onboard sub-agent for refactor"
+git commit -m "onboard @claude.roudy-piglet for refactor"
 
 # Spawn the sub-agent with its identity
 GIT_CONFIG_COUNT=1 \
 GIT_CONFIG_KEY_0=user.signingkey \
 GIT_CONFIG_VALUE_0=evm:0xCCC...789 \
 sub-agent-command --task "refactor the database layer"
+```
+
+The dot notation makes lineage visible in the audit trail:
+```
+commit f3e2d1c
+EVM-signed by @claude.roudy-piglet (evm:0xCCC...789)
+
+    refactor database layer
 ```
 
 When done, revert `.repobox-config` changes before merging to main:

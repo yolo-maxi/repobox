@@ -185,6 +185,87 @@ Every commit is cryptographically tied to a specific EVM address. You know exact
 - The orchestrator controls onboarding — generates keys, edits .repobox-config, assigns identities
 - Post-hoc audit: any commit's authorship is cryptographically verifiable
 
+## Local Aliases (Address Book)
+
+Raw EVM addresses are unreadable. Aliases give them human-friendly names — stored **locally**, not in the repo.
+
+### Storage
+
+Aliases live in `~/.repobox/aliases` (one per line):
+
+```
+alice = evm:0xAAA...123
+claude = evm:0xBBB...456
+roudy-piglet = evm:0xCCC...789
+```
+
+This file is **per-machine, not per-repo**. Different collaborators can have different names for the same addresses. The canonical identity is always the EVM address.
+
+### CLI Commands
+
+```bash
+git repobox alias add alice evm:0xAAA...123
+git repobox alias remove alice
+git repobox alias list
+```
+
+When setting identity, you can name yourself at the same time:
+
+```bash
+git repobox identity set <private-key> --alias alice
+# → Identity set: @alice (evm:0xAAA...123)
+```
+
+### Display
+
+The CLI resolves aliases everywhere — error messages, logs, permission checks:
+
+```
+❌ permission denied: @claude cannot edit .repobox-config
+   (only @founders can edit .repobox-config on main)
+```
+
+```
+commit a1b2c3d
+EVM-signed by @claude (evm:0xBBB...456)
+```
+
+```bash
+git repobox whoami
+# → @alice (evm:0xAAA...123)
+```
+
+If no alias exists for an address, the raw `evm:0x...` is shown.
+
+### Aliases vs Groups
+
+Both use `@` prefix but they're different things:
+
+- **`@founders`** — a group defined in `.repobox-config`, resolves to multiple addresses
+- **`@alice`** — a local alias in `~/.repobox/aliases`, resolves to one address
+
+The CLI distinguishes by checking the alias file first, then the config groups. Groups always contain multiple members; aliases are always 1:1.
+
+### Sub-Agent Naming Convention
+
+When agents spawn sub-agents, they use **dot notation** for the alias:
+
+```
+@claude.roudy-piglet = evm:0xCCC...789
+@claude.swift-otter = evm:0xDDD...012
+```
+
+The parent alias + `.` + a random adjective-animal name. This makes lineage visible at a glance:
+
+```
+commit f3e2d1c
+EVM-signed by @claude.roudy-piglet (evm:0xCCC...789)
+
+    refactor database layer
+```
+
+The naming is a **convention enforced by tooling** (SKILL.md), not by the core system. The alias file just stores whatever string → address mapping you give it.
+
 ## What Identity Does NOT Cover
 
 - **Display names / ENS** — UI layer, not identity
