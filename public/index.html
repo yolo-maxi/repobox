@@ -63,10 +63,10 @@ html {
 body {
   margin: 0;
   font-family: 'JetBrains Mono', monospace;
-  background:
+  background-color: #0a1628;
+  background-image:
     radial-gradient(circle at top left, rgba(79, 195, 247, 0.08), transparent 24%),
-    radial-gradient(circle at top right, rgba(129, 212, 250, 0.05), transparent 22%),
-    linear-gradient(180deg, #0a1628 0%, #09121f 100%);
+    radial-gradient(circle at top right, rgba(129, 212, 250, 0.05), transparent 22%);
   color: #b8d4e3;
   min-height: 100vh;
 }
@@ -136,14 +136,8 @@ a {
 }
 
 .reveal {
-  opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 0.45s ease, transform 0.45s ease;
-}
-
-.reveal.visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
 }
 
 .form-msg {
