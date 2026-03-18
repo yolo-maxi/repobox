@@ -4,3 +4,4 @@ pub mod engine;
 pub mod identity;
 pub mod parser;
 pub mod shim;
+pub mod signing;
