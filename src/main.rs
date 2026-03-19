@@ -189,11 +189,9 @@ fn cmd_init(force: bool) -> ExitCode {
 
 groups:
   founders:
-    members:
-      # - evm:0xYOUR_ADDRESS_HERE
+    # - evm:0xYOUR_ADDRESS_HERE
   agents:
-    members:
-      # - evm:0xAGENT_ADDRESS_HERE
+    # - evm:0xAGENT_ADDRESS_HERE
 
 permissions:
   default: allow

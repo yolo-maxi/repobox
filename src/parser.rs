@@ -13,12 +13,60 @@ struct RawConfig {
     permissions: Option<RawPermissions>,
 }
 
-#[derive(Debug, Deserialize)]
+/// A group can be either:
+///   - A plain list: `founders: [evm:0xAAA...]` (simple form)
+///   - A mapping: `founders: { members: [...], includes: [...] }` (full form)
+#[derive(Debug)]
 struct RawGroup {
-    #[serde(default)]
     members: Vec<String>,
-    #[serde(default)]
     includes: Vec<String>,
+}
+
+impl<'de> Deserialize<'de> for RawGroup {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de;
+
+        #[derive(Deserialize)]
+        struct FullGroup {
+            #[serde(default)]
+            members: Vec<String>,
+            #[serde(default)]
+            includes: Vec<String>,
+        }
+
+        // Try as sequence first (simple form), then as mapping (full form)
+        let value = serde_yaml::Value::deserialize(deserializer)?;
+        match &value {
+            serde_yaml::Value::Sequence(seq) => {
+                let members = seq
+                    .iter()
+                    .map(|v| {
+                        v.as_str()
+                            .map(|s| s.to_string())
+                            .ok_or_else(|| de::Error::custom("group members must be strings"))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(RawGroup {
+                    members,
+                    includes: vec![],
+                })
+            }
+            serde_yaml::Value::Mapping(_) => {
+                let full: FullGroup =
+                    serde_yaml::from_value(value).map_err(de::Error::custom)?;
+                Ok(RawGroup {
+                    members: full.members,
+                    includes: full.includes,
+                })
+            }
+            _ => Err(de::Error::custom(
+                "group must be a list of members or a mapping with 'members' key",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -359,6 +407,49 @@ permissions:
         assert!(matches!(&rule.subject, Subject::Group(g) if g == "founders"));
         assert_eq!(rule.verb, Verb::Push);
         assert!(!rule.deny);
+    }
+
+    #[test]
+    fn test_simple_group_list_form() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+    - evm:0xAAA0000000000000000000000000000000000002
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000001
+
+permissions:
+  default: allow
+  rules:
+    - "%founders push >*"
+    - "%agents push >feature/**"
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.groups.len(), 2);
+        assert_eq!(config.groups["founders"].members.len(), 2);
+        assert_eq!(config.groups["agents"].members.len(), 1);
+        assert_eq!(config.permissions.rules.len(), 2);
+    }
+
+    #[test]
+    fn test_mixed_group_forms() {
+        // Simple list + full mapping in same config
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+  staff:
+    members:
+      - evm:0xBBB0000000000000000000000000000000000002
+    includes:
+      - founders
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.groups["founders"].members.len(), 1);
+        assert_eq!(config.groups["staff"].members.len(), 1);
+        let members = resolve_group_members("staff", &config.groups).unwrap();
+        assert_eq!(members.len(), 2);
     }
 
     #[test]

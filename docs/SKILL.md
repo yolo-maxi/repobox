@@ -12,11 +12,9 @@ A git permission layer. Shims the `git` command so every commit, merge, and push
 ```yaml
 groups:
   founders:
-    members:
-      - evm:0xAAA...123
+    - evm:0xAAA...123
   agents:
-    members:
-      - evm:0xBBB...456
+    - evm:0xBBB...456
 
 permissions:
   default: allow    # or "deny"
@@ -54,17 +52,15 @@ The config file is YAML with exactly two top-level keys: `groups` and `permissio
 groups:
   # Group names are bare words (no prefix in the config file).
   # In rules, reference them as %founders, %agents, etc.
+  # Simple form — just a list of addresses:
   founders:
-    members:
-      - evm:0xAAA0000000000000000000000000000000000001   # Alice
-      - evm:0xAAA0000000000000000000000000000000000002   # Bob
+    - evm:0xAAA0000000000000000000000000000000000001   # Alice
+    - evm:0xAAA0000000000000000000000000000000000002   # Bob
   agents:
-    members:
-      - evm:0xBBB0000000000000000000000000000000000001   # Claude
-      - evm:0xBBB0000000000000000000000000000000000002   # Codex
+    - evm:0xBBB0000000000000000000000000000000000001   # Claude
+    - evm:0xBBB0000000000000000000000000000000000002   # Codex
   deploy-bots:
-    members:
-      - evm:0xCCC0000000000000000000000000000000000001   # CI runner
+    - evm:0xCCC0000000000000000000000000000000000001   # CI runner
 
 # ═══════════════════════════════════════════════════════
 # PERMISSIONS — who can do what, where
@@ -137,6 +133,8 @@ permissions:
   - A **string** (flat rule): `"%founders push >*"`
   - A **mapping** (nested rule): `{ "%agents": { push: [">feature/**"] } }`
 - Both flat and nested can be mixed freely in the same list
+- Groups can be a **simple list** (preferred): `founders: [evm:0x...]`
+- Or a **full mapping** with `members:` and `includes:` keys (for group inheritance)
 - Group names in `groups:` are bare words. In rules, prefix with `%`
 - Members are always full `evm:0x...` addresses (42 hex chars with checksum)
 - Branch targets always start with `>`. File targets never do
