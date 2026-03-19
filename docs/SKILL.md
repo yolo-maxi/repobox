@@ -2,14 +2,6 @@
 
 > Canonical reference for the repo.box permission model. Read this before writing or reviewing `.repobox-config` files.
 
-## Source of Truth
-
-- Full specs: `/home/xiko/repobox/docs/spec/`
-- Dashboard: `/home/xiko/repobox-dashboard/`
-- Tests: `/home/xiko/repobox-dashboard/data/tests.json`
-- Stories: `/home/xiko/repobox-dashboard/data/stories.json`
-- SKILL.md (for agents): `/home/xiko/repobox/docs/SKILL.md`
-- Project brief: `/home/xiko/clawd/memory/projects/repobox-platform.md`
 
 ## What is repo.box?
 
