@@ -41,18 +41,19 @@ impl<'de> Deserialize<'de> for RawGroup {
         let value = serde_yaml::Value::deserialize(deserializer)?;
         match &value {
             serde_yaml::Value::Sequence(seq) => {
-                let members = seq
-                    .iter()
-                    .map(|v| {
-                        v.as_str()
-                            .map(|s| s.to_string())
-                            .ok_or_else(|| de::Error::custom("group members must be strings"))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(RawGroup {
-                    members,
-                    includes: vec![],
-                })
+                let mut members = vec![];
+                let mut includes = vec![];
+                for v in seq {
+                    let s = v
+                        .as_str()
+                        .ok_or_else(|| de::Error::custom("group entries must be strings"))?;
+                    if let Some(group_name) = s.strip_prefix("group:") {
+                        includes.push(group_name.to_string());
+                    } else {
+                        members.push(s.to_string());
+                    }
+                }
+                Ok(RawGroup { members, includes })
             }
             serde_yaml::Value::Mapping(_) => {
                 let full: FullGroup =
@@ -450,6 +451,27 @@ groups:
         assert_eq!(config.groups["staff"].members.len(), 1);
         let members = resolve_group_members("staff", &config.groups).unwrap();
         assert_eq!(members.len(), 2);
+    }
+
+    #[test]
+    fn test_inline_group_includes() {
+        // group:name in a list = include that group
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000001
+    - group:founders
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.groups["agents"].members.len(), 1);
+        assert_eq!(config.groups["agents"].includes.len(), 1);
+        assert_eq!(config.groups["agents"].includes[0], "founders");
+        let members = resolve_group_members("agents", &config.groups).unwrap();
+        assert_eq!(members.len(), 2);
+        assert!(members.contains(&Identity::parse("evm:0xAAA0000000000000000000000000000000000001").unwrap()));
+        assert!(members.contains(&Identity::parse("evm:0xBBB0000000000000000000000000000000000001").unwrap()));
     }
 
     #[test]

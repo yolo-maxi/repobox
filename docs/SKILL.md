@@ -61,6 +61,10 @@ groups:
     - evm:0xBBB0000000000000000000000000000000000002   # Codex
   deploy-bots:
     - evm:0xCCC0000000000000000000000000000000000001   # CI runner
+  # Include another group's members with group: prefix
+  all-humans:
+    - evm:0xDDD0000000000000000000000000000000000001   # External reviewer
+    - group:founders                                    # includes all founders too
 
 # ═══════════════════════════════════════════════════════
 # PERMISSIONS — who can do what, where
@@ -134,7 +138,8 @@ permissions:
   - A **mapping** (nested rule): `{ "%agents": { push: [">feature/**"] } }`
 - Both flat and nested can be mixed freely in the same list
 - Groups can be a **simple list** (preferred): `founders: [evm:0x...]`
-- Or a **full mapping** with `members:` and `includes:` keys (for group inheritance)
+- Include other groups inline with `group:name`: `- group:founders`
+- Or use the **full mapping** form with `members:` and `includes:` keys (legacy, still supported)
 - Group names in `groups:` are bare words. In rules, prefix with `%`
 - Members are always full `evm:0x...` addresses (42 hex chars with checksum)
 - Branch targets always start with `>`. File targets never do
