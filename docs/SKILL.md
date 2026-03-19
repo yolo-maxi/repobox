@@ -45,12 +45,12 @@ groups:
 permissions:
   style: subject-first
   rules:
-    - @founders edit *
-    - @founders merge >main
-    - @founders edit .repobox-config
-    - @agents push >feature/*
-    - @agents create >feature/*
-    - @agents append .repobox-config
+    - %founders edit *
+    - %founders merge >main
+    - %founders edit .repobox-config
+    - %agents push >feature/*
+    - %agents create >feature/*
+    - %agents append .repobox-config
 ```
 
 ### 4. Commit
@@ -70,14 +70,14 @@ Raw EVM addresses are unreadable. Use aliases to give them names:
 git repobox alias add claude evm:0xBBB...456
 git repobox alias list
 git repobox whoami
-# → @alice (evm:0xAAA...123)
+# → %alice (evm:0xAAA...123)
 ```
 
 Aliases are stored in `~/.repobox/aliases` — local to your machine, not part of the repo. Each collaborator can have their own names for the same addresses.
 
 The CLI shows aliases everywhere:
 ```
-❌ permission denied: @claude cannot edit .repobox-config
+❌ permission denied: %claude cannot edit .repobox-config
 ```
 
 You can also set an alias when creating your identity:
@@ -100,7 +100,7 @@ git repobox alias add claude evm:0xBBB...456
 
 # Commit the change
 git add .repobox-config
-git commit -m "onboard @claude"
+git commit -m "onboard %claude"
 
 # Spawn the agent with its identity
 GIT_CONFIG_COUNT=1 \
@@ -113,18 +113,18 @@ The agent uses normal git commands. The shim handles permission checks and signi
 
 ## Agent Spawning Sub-Agents
 
-Agents can onboard sub-agents on feature branches. Sub-agents use **plus notation** names: `@parent+childname` with a random adjective-animal pattern.
+Agents can onboard sub-agents on feature branches. Sub-agents use **plus notation** names: `%parent+childname` with a random adjective-animal pattern.
 
 ```bash
-# Agent (@claude) is on feature/big-refactor
+# Agent (%claude) is on feature/big-refactor
 git repobox keys generate --alias claude+roudy-piglet
-# → @claude+roudy-piglet (evm:0xCCC...789)
+# → %claude+roudy-piglet (evm:0xCCC...789)
 
 # Agent appends a direct permission rule to .repobox-config:
 #   evm:0xCCC...789 write >feature/big-refactor/*
 
 git add .repobox-config
-git commit -m "onboard @claude+roudy-piglet for refactor"
+git commit -m "onboard %claude+roudy-piglet for refactor"
 
 # Spawn the sub-agent with its identity
 GIT_CONFIG_COUNT=1 \
@@ -136,7 +136,7 @@ sub-agent-command --task "refactor the database layer"
 The plus notation makes lineage visible in the audit trail:
 ```
 commit f3e2d1c
-EVM-signed by @claude+roudy-piglet (evm:0xCCC...789)
+EVM-signed by %claude+roudy-piglet (evm:0xCCC...789)
 
     refactor database layer
 ```
@@ -181,7 +181,7 @@ If you forget to revert, the merge gate catches it:
 ### Deny Rules
 
 ```yaml
-- @agents not merge >main
+- %agents not merge >main
 - evm:0xBob not edit contracts/**
 ```
 

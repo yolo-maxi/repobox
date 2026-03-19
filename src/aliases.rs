@@ -87,15 +87,15 @@ pub fn get_alias_for_address(base: &Path, address: &str) -> Option<String> {
 /// Format an address with its alias for display.
 pub fn display_identity(base: &Path, address: &str) -> String {
     match get_alias_for_address(base, address) {
-        Some(alias) => format!("@{alias} ({address})"),
+        Some(alias) => format!("%{alias} ({address})"),
         None => address.to_string(),
     }
 }
 
-/// Validate alias name — cannot start with @.
+/// Validate alias name — cannot start with % (the % prefix is for display/rules only).
 fn validate_alias_name(name: &str) -> Result<(), String> {
-    if name.starts_with('@') {
-        return Err("alias name cannot start with @ (the @ is added for display only)".to_string());
+    if name.starts_with('%') {
+        return Err("alias name cannot start with % (the % is added for display only)".to_string());
     }
     if name.is_empty() {
         return Err("alias name cannot be empty".to_string());
@@ -158,7 +158,7 @@ mod tests {
         set_alias(tmp.path(), "claude", "evm:0xBBB0000000000000000000000000000000000002").unwrap();
 
         let display = display_identity(tmp.path(), "evm:0xBBB0000000000000000000000000000000000002");
-        assert_eq!(display, "@claude (evm:0xBBB0000000000000000000000000000000000002)");
+        assert_eq!(display, "%claude (evm:0xBBB0000000000000000000000000000000000002)");
     }
 
     #[test]
@@ -186,9 +186,9 @@ mod tests {
     }
 
     #[test]
-    fn test_alias_cannot_start_with_at() {
+    fn test_alias_cannot_start_with_percent() {
         let tmp = TempDir::new().unwrap();
-        let result = set_alias(tmp.path(), "@claude", "evm:0xBBB0000000000000000000000000000000000002");
+        let result = set_alias(tmp.path(), "%claude", "evm:0xBBB0000000000000000000000000000000000002");
         assert!(result.is_err());
     }
 

@@ -27,10 +27,10 @@ This means a minimal config can just use branch rules and skip file rules entire
 permissions:
   default: allow
   rules:
-    - @founders push >*
-    - @founders merge >*
-    - @agents push >feature/**
-    - @agents create >feature/**
+    - %founders push >*
+    - %founders merge >*
+    - %agents push >feature/**
+    - %agents create >feature/**
 ```
 
 No `edit`/`write`/`append` rules → no file restrictions. Anyone who can push can modify any file. Add file rules only when you need file-level control.
@@ -48,9 +48,9 @@ Rules can be written in two forms: **flat** (one-liners) and **nested** (grouped
 Examples:
 ```yaml
 rules:
-  - @founders edit *
-  - @founders push >*
-  - @agents not merge >main
+  - %founders edit *
+  - %founders push >*
+  - %agents not merge >main
   - evm:0xBBB...456 push >feature/**
 ```
 
@@ -60,7 +60,7 @@ Group multiple verbs and targets under a subject to avoid repetition:
 
 ```yaml
 rules:
-  - @agents:
+  - %agents:
       push:
         - >feature/**
         - >fix/**
@@ -79,7 +79,7 @@ rules:
 
 ### Subjects
 
-- `@groupname` — group reference (defined in `groups:` section)
+- `%groupname` — group reference (defined in `groups:` section)
 - `evm:0x...` — individual identity
 
 ### Verbs
@@ -102,7 +102,7 @@ rules:
 | `write` | Add lines only — no deletions allowed |
 | `append` | Add lines strictly at the end of the file only |
 
-Prefix any verb with `not` to deny: `@agents not merge >main`
+Prefix any verb with `not` to deny: `%agents not merge >main`
 
 #### `edit` vs `write` vs `append`
 
@@ -131,10 +131,10 @@ The shim validates at commit time by inspecting the diff:
 A target can combine a file path and branch:
 
 ```
-@devs write contracts/** >feature/*
+%devs write contracts/** >feature/*
 ```
 
-This means: "@devs can write to files matching `contracts/**` on branches matching `feature/*`." Both the path and branch must match for the rule to apply.
+This means: "%devs can write to files matching `contracts/**` on branches matching `feature/*`." Both the path and branch must match for the rule to apply.
 
 If only a branch is specified (`>main`), the rule applies to all files on that branch.
 If only a path is specified (`contracts/**`), the rule applies on all branches.
@@ -155,10 +155,10 @@ groups:
 permissions:
   default: allow
   rules:
-    - @founders push >*
-    - @founders merge >*
-    - @founders create >*
-    - @agents:
+    - %founders push >*
+    - %founders merge >*
+    - %founders create >*
+    - %agents:
         push:
           - >feature/**
           - >fix/**
@@ -175,11 +175,11 @@ Agents can push and create feature/fix branches, edit any files on those branche
 permissions:
   default: allow
   rules:
-    - @founders push >*
-    - @founders merge >*
-    - @founders create >*
-    - @founders edit .repobox-config
-    - @agents:
+    - %founders push >*
+    - %founders merge >*
+    - %founders create >*
+    - %founders edit .repobox-config
+    - %agents:
         push:
           - >feature/**
           - >fix/**
@@ -208,7 +208,7 @@ This is the most important concept to understand.
 
 **Implicit deny is scoped to the target, not the verb globally.**
 
-When you write `@founders edit .repobox-config`, the system learns: "someone has explicit edit access to `.repobox-config`." Any identity NOT matched by an `edit` rule for `.repobox-config` is implicitly denied. But files NOT mentioned by any `edit` rule are unaffected — they follow `default`.
+When you write `%founders edit .repobox-config`, the system learns: "someone has explicit edit access to `.repobox-config`." Any identity NOT matched by an `edit` rule for `.repobox-config` is implicitly denied. But files NOT mentioned by any `edit` rule are unaffected — they follow `default`.
 
 ### Example: selective file protection
 
@@ -216,15 +216,15 @@ When you write `@founders edit .repobox-config`, the system learns: "someone has
 permissions:
   default: allow
   rules:
-    - @founders edit .repobox-config
+    - %founders edit .repobox-config
 ```
 
 | Action | Result | Why |
 |--------|--------|-----|
-| @founders edit .repobox-config | ✅ permit | Rule matches |
-| @agents edit .repobox-config | ❌ deny | Implicit deny: rule exists for `edit .repobox-config`, @agents not matched |
-| @agents edit src/app.rs | ✅ permit | No `edit` rule mentions `src/app.rs` → default: allow |
-| @agents edit package.json | ✅ permit | No `edit` rule mentions `package.json` → default: allow |
+| %founders edit .repobox-config | ✅ permit | Rule matches |
+| %agents edit .repobox-config | ❌ deny | Implicit deny: rule exists for `edit .repobox-config`, %agents not matched |
+| %agents edit src/app.rs | ✅ permit | No `edit` rule mentions `src/app.rs` → default: allow |
+| %agents edit package.json | ✅ permit | No `edit` rule mentions `package.json` → default: allow |
 
 Only `.repobox-config` is protected. Everything else is open.
 
@@ -234,17 +234,17 @@ Only `.repobox-config` is protected. Everything else is open.
 permissions:
   default: allow
   rules:
-    - @founders edit *
-    - @agents edit * >feature/**
+    - %founders edit *
+    - %agents edit * >feature/**
 ```
 
 | Action | Result | Why |
 |--------|--------|-----|
-| @founders edit anything | ✅ permit | `@founders edit *` matches all files |
-| @agents edit src/app.rs on feature/fix | ✅ permit | `@agents edit * >feature/**` matches |
-| @agents edit src/app.rs on main | ❌ deny | `edit *` has rules, @agents only matched on >feature/** → implicit deny on main |
+| %founders edit anything | ✅ permit | `%founders edit *` matches all files |
+| %agents edit src/app.rs on feature/fix | ✅ permit | `%agents edit * >feature/**` matches |
+| %agents edit src/app.rs on main | ❌ deny | `edit *` has rules, %agents only matched on >feature/** → implicit deny on main |
 
-Here `@founders edit *` covers all files, so implicit deny applies to all files for non-founders. But `@agents edit * >feature/**` carves out an exception for agents on feature branches.
+Here `%founders edit *` covers all files, so implicit deny applies to all files for non-founders. But `%agents edit * >feature/**` carves out an exception for agents on feature branches.
 
 ## Evaluation Algorithm
 
@@ -268,12 +268,12 @@ Explicit `not` rules must come **before** broader allows to take effect:
 ```yaml
 rules:
   # ✅ Correct: deny first, then allow
-  - @agents not push >main
-  - @agents push >*
+  - %agents not push >main
+  - %agents push >*
 
   # ❌ Wrong: push >* matches first, deny never reached
-  - @agents push >*
-  - @agents not push >main
+  - %agents push >*
+  - %agents not push >main
 ```
 
 ## Priority Model
@@ -302,7 +302,7 @@ Agents can grant sub-agents temporary access on feature branches:
 If the agent forgets to revert:
 ```
 ❌ Blocked: merge contains .repobox-config changes.
-   @claude cannot edit .repobox-config on >main.
+   %claude cannot edit .repobox-config on >main.
 ```
 
 Permissions are branch-scoped: sub-agent access exists only while the feature branch exists.
@@ -345,7 +345,7 @@ git repobox check evm:0xBBB...456 push >main
 # ❌ denied — implicit deny (rules exist for 'push >main', no match for this identity)
 
 git repobox check evm:0xBBB...456 push >feature/fix
-# ✅ allowed — rule: @agents push >feature/**
+# ✅ allowed — rule: %agents push >feature/**
 ```
 
 ### `git repobox lint`

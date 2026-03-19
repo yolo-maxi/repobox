@@ -199,12 +199,12 @@ permissions:
   default: allow
   rules:
     # Flat rules:
-    #   - "@founders push >*"
-    #   - "@founders merge >*"
-    #   - "@founders edit .repobox-config"
+    #   - "%founders push >*"
+    #   - "%founders merge >*"
+    #   - "%founders edit .repobox-config"
     #
     # Nested rules:
-    #   - "@agents":
+    #   - "%agents":
     #       push:
     #         - ">feature/**"
     #         - ">fix/**"
@@ -273,7 +273,7 @@ fn cmd_keys(action: KeysAction, home: &Path) -> ExitCode {
                 .output();
 
             let display = match &alias {
-                Some(a) => format!("@{a} ({identity_str})"),
+                Some(a) => format!("%{a} ({identity_str})"),
                 None => identity_str,
             };
             println!("🔑 Generated: {display}");
@@ -305,7 +305,7 @@ fn cmd_keys(action: KeysAction, home: &Path) -> ExitCode {
             }
 
             let display = match &alias {
-                Some(a) => format!("@{a} ({identity_str})"),
+                Some(a) => format!("%{a} ({identity_str})"),
                 None => identity_str,
             };
             println!("🔑 Imported: {display}");
@@ -377,7 +377,7 @@ fn cmd_identity(action: IdentityAction, home: &Path) -> ExitCode {
             }
 
             let display = match &alias {
-                Some(a) => format!("@{a} ({identity_str})"),
+                Some(a) => format!("%{a} ({identity_str})"),
                 None => identity_str,
             };
             println!("✅ Identity set: {display}");
@@ -390,8 +390,8 @@ fn cmd_identity(action: IdentityAction, home: &Path) -> ExitCode {
 // ── Use (set identity by alias/address) ───────────────────────────────
 
 fn cmd_use(name: &str, home: &Path) -> ExitCode {
-    // Strip @ prefix if present
-    let name = name.strip_prefix('@').unwrap_or(name);
+    // Strip % prefix if present (users might type it from habit)
+    let name = name.strip_prefix('%').unwrap_or(name);
 
     // Try resolving as alias first
     let identity_str = match aliases::resolve_alias(home, name) {
@@ -466,13 +466,13 @@ fn cmd_alias(action: AliasAction, home: &Path) -> ExitCode {
                 eprintln!("error: {e}");
                 return ExitCode::FAILURE;
             }
-            println!("✅ @{name} → {address}");
+            println!("✅ %{name} → {address}");
             ExitCode::SUCCESS
         }
         AliasAction::Remove { name } => {
             match aliases::remove_alias(home, &name) {
                 Ok(true) => {
-                    println!("✅ Removed @{name}");
+                    println!("✅ Removed %{name}");
                     ExitCode::SUCCESS
                 }
                 Ok(false) => {
@@ -493,7 +493,7 @@ fn cmd_alias(action: AliasAction, home: &Path) -> ExitCode {
                 let mut entries: Vec<_> = map.into_iter().collect();
                 entries.sort_by(|a, b| a.0.cmp(&b.0));
                 for (name, addr) in entries {
-                    println!("  @{name} = {addr}");
+                    println!("  %{name} = {addr}");
                 }
             }
             ExitCode::SUCCESS
@@ -527,7 +527,7 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
     };
 
     // Resolve alias to address
-    let resolved = if id_str.starts_with('@') {
+    let resolved = if id_str.starts_with('%') {
         let name = &id_str[1..];
         match aliases::resolve_alias(home, name) {
             Ok(Some(addr)) => addr,
@@ -842,7 +842,7 @@ fn cmd_lint() -> ExitCode {
                             {
                                 if a == b {
                                     println!(
-                                        "   ⚠️  warning: deny rule for @{b} {} is shadowed by allow rule above (line {})",
+                                        "   ⚠️  warning: deny rule for %{b} {} is shadowed by allow rule above (line {})",
                                         later.verb, rule.line
                                     );
                                 }
@@ -1032,7 +1032,7 @@ fn enhance_error_message(msg: &str, home: &Path) -> String {
     let aliases = aliases::read_aliases(home);
     let mut result = msg.to_string();
     for (name, addr) in &aliases {
-        result = result.replace(addr.as_str(), &format!("@{name} ({addr})"));
+        result = result.replace(addr.as_str(), &format!("%{name} ({addr})"));
     }
     result
 }
