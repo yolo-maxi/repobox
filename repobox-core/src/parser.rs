@@ -76,8 +76,12 @@ impl<'de> Deserialize<'de> for RawGroup {
 struct RawPermissions {
     #[serde(default = "default_allow")]
     default: String,
-    #[serde(default)]
-    rules: Vec<serde_yaml::Value>,
+    #[serde(default = "default_rules")]
+    rules: serde_yaml::Value,
+}
+
+fn default_rules() -> serde_yaml::Value {
+    serde_yaml::Value::Sequence(vec![])
 }
 
 fn default_allow() -> String {
@@ -124,10 +128,122 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
             };
 
             let mut rules = Vec::new();
-            for (idx, value) in raw_perms.rules.iter().enumerate() {
-                let line = idx + 1; // approximate line number
-                let mut parsed = parse_rule_value(value, line, &groups)?;
-                rules.append(&mut parsed);
+            match &raw_perms.rules {
+                // Format A: rules is a list (current format)
+                serde_yaml::Value::Sequence(seq) => {
+                    for (idx, value) in seq.iter().enumerate() {
+                        let line = idx + 1;
+                        let mut parsed = parse_rule_value(value, line, &groups)?;
+                        rules.append(&mut parsed);
+                    }
+                }
+                // Format B/C: rules is a mapping (subject-grouped)
+                serde_yaml::Value::Mapping(map) => {
+                    let mut line = 1;
+                    for (key, val) in map {
+                        let subject_str = key
+                            .as_str()
+                            .ok_or_else(|| ConfigError::InvalidRule("rule key must be a string".into()))?;
+                        let subject = parse_subject(subject_str)?;
+
+                        // Validate group reference
+                        if let Subject::Group(name) = &subject {
+                            if !groups.contains_key(name) {
+                                return Err(ConfigError::UnknownGroup(name.clone()));
+                            }
+                        }
+
+                        match val {
+                            // Format B: subject → list of "verb target" strings
+                            serde_yaml::Value::Sequence(entries) => {
+                                for entry in entries {
+                                    let s = entry.as_str().ok_or_else(|| {
+                                        ConfigError::InvalidRule("rule entry must be a string".into())
+                                    })?;
+                                    // Parse "verb target" or "not verb target"
+                                    let parts: Vec<&str> = s.split_whitespace().collect();
+                                    if parts.is_empty() {
+                                        return Err(ConfigError::InvalidRule("empty rule".into()));
+                                    }
+                                    let (deny, verb, target_start) = if parts[0] == "not" {
+                                        if parts.len() < 3 {
+                                            return Err(ConfigError::InvalidRule(format!(
+                                                "deny rule needs at least 'not verb target', got: '{s}'"
+                                            )));
+                                        }
+                                        let (_, verb) = parse_verb_str(parts[1])?;
+                                        (true, verb, 2)
+                                    } else {
+                                        if parts.len() < 2 {
+                                            return Err(ConfigError::InvalidRule(format!(
+                                                "rule needs at least 'verb target', got: '{s}'"
+                                            )));
+                                        }
+                                        let (deny, verb) = parse_verb_str(parts[0])?;
+                                        (deny, verb, 1)
+                                    };
+                                    let target_str = parts[target_start..].join(" ");
+                                    let target = Target::parse(&target_str)?;
+                                    rules.push(Rule {
+                                        subject: subject.clone(),
+                                        verb,
+                                        deny,
+                                        target,
+                                        line,
+                                    });
+                                    line += 1;
+                                }
+                            }
+                            // Format C: subject → mapping of verb → targets
+                            serde_yaml::Value::Mapping(verb_map) => {
+                                for (vkey, vval) in verb_map {
+                                    let verb_str = vkey.as_str().ok_or_else(|| {
+                                        ConfigError::InvalidRule("verb key must be a string".into())
+                                    })?;
+                                    let (deny, verb) = parse_verb_str(verb_str)?;
+
+                                    let targets = match vval {
+                                        serde_yaml::Value::Sequence(tlist) => tlist.clone(),
+                                        serde_yaml::Value::String(s) => {
+                                            vec![serde_yaml::Value::String(s.clone())]
+                                        }
+                                        _ => {
+                                            return Err(ConfigError::InvalidRule(
+                                                "verb targets must be a list or string".into(),
+                                            ));
+                                        }
+                                    };
+
+                                    for tval in &targets {
+                                        let t = tval.as_str().ok_or_else(|| {
+                                            ConfigError::InvalidRule("target must be a string".into())
+                                        })?;
+                                        let target = Target::parse(t)?;
+                                        rules.push(Rule {
+                                            subject: subject.clone(),
+                                            verb,
+                                            deny,
+                                            target,
+                                            line,
+                                        });
+                                        line += 1;
+                                    }
+                                }
+                            }
+                            _ => {
+                                return Err(ConfigError::InvalidRule(format!(
+                                    "rules for '{subject_str}' must be a list or mapping"
+                                )));
+                            }
+                        }
+                    }
+                }
+                serde_yaml::Value::Null => {} // empty rules: OK
+                _ => {
+                    return Err(ConfigError::InvalidRule(
+                        "rules must be a list or mapping".into(),
+                    ));
+                }
             }
 
             // Validate group references in rules
@@ -751,5 +867,105 @@ permissions:
         assert_eq!(config.permissions.rules[0].verb, Verb::Edit);
         assert_eq!(config.permissions.rules[1].verb, Verb::Push);
         assert_eq!(config.permissions.rules[2].verb, Verb::Create);
+    }
+
+    // ========== Format B: subject-grouped rules ==========
+
+    #[test]
+    fn test_subject_grouped_rules() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000002
+
+permissions:
+  default: allow
+  rules:
+    founders:
+      - push >main
+      - merge >main
+      - delete >*
+    agents:
+      - push >feature/**
+      - not edit ./.repobox-config
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.permissions.rules.len(), 5);
+
+        // founders rules
+        assert!(matches!(&config.permissions.rules[0].subject, Subject::Group(g) if g == "founders"));
+        assert_eq!(config.permissions.rules[0].verb, Verb::Push);
+        assert!(!config.permissions.rules[0].deny);
+
+        assert_eq!(config.permissions.rules[1].verb, Verb::Merge);
+        assert_eq!(config.permissions.rules[2].verb, Verb::Delete);
+
+        // agents rules
+        assert!(matches!(&config.permissions.rules[3].subject, Subject::Group(g) if g == "agents"));
+        assert_eq!(config.permissions.rules[3].verb, Verb::Push);
+
+        assert_eq!(config.permissions.rules[4].verb, Verb::Edit);
+        assert!(config.permissions.rules[4].deny);
+    }
+
+    // ========== Format C: fully nested verb-mapping rules ==========
+
+    #[test]
+    fn test_verb_mapping_rules() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+
+permissions:
+  default: allow
+  rules:
+    founders:
+      push:
+        - ">main"
+        - ">develop"
+      merge:
+        - ">main"
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.permissions.rules.len(), 3);
+        assert_eq!(config.permissions.rules[0].verb, Verb::Push);
+        assert_eq!(config.permissions.rules[1].verb, Verb::Push);
+        assert_eq!(config.permissions.rules[2].verb, Verb::Merge);
+    }
+
+    // ========== Mixed B + C within same config ==========
+
+    #[test]
+    fn test_mixed_subject_grouped_and_verb_mapping() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000002
+
+permissions:
+  default: allow
+  rules:
+    founders:
+      - push >*
+      - merge >*
+    agents:
+      push:
+        - ">feature/**"
+      create:
+        - ">feature/**"
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.permissions.rules.len(), 4);
+        // founders: 2 rules from list format
+        assert!(matches!(&config.permissions.rules[0].subject, Subject::Group(g) if g == "founders"));
+        // agents: 2 rules from verb-mapping format
+        assert!(matches!(&config.permissions.rules[2].subject, Subject::Group(g) if g == "agents"));
+        assert_eq!(config.permissions.rules[2].verb, Verb::Push);
+        assert_eq!(config.permissions.rules[3].verb, Verb::Create);
     }
 }

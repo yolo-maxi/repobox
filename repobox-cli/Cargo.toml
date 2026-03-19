@@ -1,0 +1,15 @@
+[package]
+name = "repobox-cli"
+version = "0.1.0"
+edition = "2024"
+description = "CLI for repo.box"
+
+[[bin]]
+name = "repobox"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+hex = "0.4"
+rand = "0.8"
+repobox = { package = "repobox-core", path = "../repobox-core" }
