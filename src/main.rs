@@ -197,19 +197,19 @@ permissions:
   default: allow
   rules:
     # Flat rules:
-    #   - "%founders push >*"
-    #   - "%founders merge >*"
-    #   - "%founders edit .repobox-config"
+    #   - founders push >*
+    #   - founders merge >*
+    #   - founders edit ./.repobox-config
     #
     # Nested rules:
-    #   - "%agents":
+    #   - agents:
     #       push:
     #         - ">feature/**"
     #         - ">fix/**"
     #       create:
     #         - ">feature/**"
     #       append:
-    #         - ".repobox-config"
+    #         - "./.repobox-config"
 "#;
 
     if let Err(e) = std::fs::write(config_path, template) {
@@ -271,7 +271,7 @@ fn cmd_keys(action: KeysAction, home: &Path) -> ExitCode {
                 .output();
 
             let display = match &alias {
-                Some(a) => format!("%{a} ({identity_str})"),
+                Some(a) => format!("{a} ({identity_str})"),
                 None => identity_str,
             };
             println!("🔑 Generated: {display}");
@@ -303,7 +303,7 @@ fn cmd_keys(action: KeysAction, home: &Path) -> ExitCode {
             }
 
             let display = match &alias {
-                Some(a) => format!("%{a} ({identity_str})"),
+                Some(a) => format!("{a} ({identity_str})"),
                 None => identity_str,
             };
             println!("🔑 Imported: {display}");
@@ -375,7 +375,7 @@ fn cmd_identity(action: IdentityAction, home: &Path) -> ExitCode {
             }
 
             let display = match &alias {
-                Some(a) => format!("%{a} ({identity_str})"),
+                Some(a) => format!("{a} ({identity_str})"),
                 None => identity_str,
             };
             println!("✅ Identity set: {display}");
@@ -464,13 +464,13 @@ fn cmd_alias(action: AliasAction, home: &Path) -> ExitCode {
                 eprintln!("error: {e}");
                 return ExitCode::FAILURE;
             }
-            println!("✅ %{name} → {address}");
+            println!("✅ {name} → {address}");
             ExitCode::SUCCESS
         }
         AliasAction::Remove { name } => {
             match aliases::remove_alias(home, &name) {
                 Ok(true) => {
-                    println!("✅ Removed %{name}");
+                    println!("✅ Removed {name}");
                     ExitCode::SUCCESS
                 }
                 Ok(false) => {
@@ -491,7 +491,7 @@ fn cmd_alias(action: AliasAction, home: &Path) -> ExitCode {
                 let mut entries: Vec<_> = map.into_iter().collect();
                 entries.sort_by(|a, b| a.0.cmp(&b.0));
                 for (name, addr) in entries {
-                    println!("  %{name} = {addr}");
+                    println!("  {name} = {addr}");
                 }
             }
             ExitCode::SUCCESS
@@ -840,7 +840,7 @@ fn cmd_lint() -> ExitCode {
                             {
                                 if a == b {
                                     println!(
-                                        "   ⚠️  warning: deny rule for %{b} {} is shadowed by allow rule above (line {})",
+                                        "   ⚠️  warning: deny rule for {b} {} is shadowed by allow rule above (line {})",
                                         later.verb, rule.line
                                     );
                                 }
@@ -1030,7 +1030,7 @@ fn enhance_error_message(msg: &str, home: &Path) -> String {
     let aliases = aliases::read_aliases(home);
     let mut result = msg.to_string();
     for (name, addr) in &aliases {
-        result = result.replace(addr.as_str(), &format!("%{name} ({addr})"));
+        result = result.replace(addr.as_str(), &format!("{name} ({addr})"));
     }
     result
 }

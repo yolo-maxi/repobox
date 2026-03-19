@@ -172,7 +172,8 @@ impl Target {
 
         // Combined: "path >branch"
         if let Some(idx) = s.rfind(" >") {
-            let path = s[..idx].trim().to_string();
+            let path = s[..idx].trim();
+            let path = strip_path_prefix(path);
             let branch = s[idx + 2..].trim().to_string();
             return Ok(Target {
                 branch: Some(branch),
@@ -189,9 +190,10 @@ impl Target {
         }
 
         // Path only (or wildcard)
+        let path = strip_path_prefix(s);
         Ok(Target {
             branch: None,
-            path: Some(s.to_string()),
+            path: Some(path),
         })
     }
 
@@ -211,6 +213,11 @@ impl Target {
 
         branch_ok && path_ok
     }
+}
+
+/// Strip optional `./` prefix from file paths (visual convention, not semantic).
+fn strip_path_prefix(s: &str) -> String {
+    s.strip_prefix("./").unwrap_or(s).to_string()
 }
 
 /// Simple glob matching: `*` matches within one level, `**` matches recursively.

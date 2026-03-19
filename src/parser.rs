@@ -47,10 +47,12 @@ impl<'de> Deserialize<'de> for RawGroup {
                     let s = v
                         .as_str()
                         .ok_or_else(|| de::Error::custom("group entries must be strings"))?;
-                    if let Some(group_name) = s.strip_prefix("group:") {
-                        includes.push(group_name.to_string());
-                    } else {
+                    if s.starts_with("evm:") {
                         members.push(s.to_string());
+                    } else {
+                        // Bare word or group: prefix = group include
+                        let name = s.strip_prefix("group:").unwrap_or(s);
+                        includes.push(name.to_string());
                     }
                 }
                 Ok(RawGroup { members, includes })
@@ -158,12 +160,12 @@ fn parse_rule_value(
     groups: &HashMap<String, Group>,
 ) -> Result<Vec<Rule>, ConfigError> {
     match value {
-        // Flat rule: "%founders edit *"
+        // Flat rule: "founders edit *"
         serde_yaml::Value::String(s) => {
             let rule = parse_flat_rule(s, line)?;
             Ok(vec![rule])
         }
-        // Nested rule: { "%agents": { push: [">feature/**"], ... } }
+        // Nested rule: { "agents": { push: [">feature/**"], ... } }
         serde_yaml::Value::Mapping(map) => {
             let mut rules = Vec::new();
             for (key, val) in map {
@@ -221,7 +223,7 @@ fn parse_rule_value(
     }
 }
 
-/// Parse a flat rule string like "%founders edit *" or "%agents not merge >main".
+/// Parse a flat rule string like "founders edit *" or "agents not merge >main".
 fn parse_flat_rule(s: &str, line: usize) -> Result<Rule, ConfigError> {
     let parts: Vec<&str> = s.split_whitespace().collect();
 
@@ -259,16 +261,14 @@ fn parse_flat_rule(s: &str, line: usize) -> Result<Rule, ConfigError> {
     })
 }
 
-/// Parse a subject string: "%groupname" or "evm:0x..."
+/// Parse a subject string: bare group name, "evm:0x...", or legacy "%groupname".
 fn parse_subject(s: &str) -> Result<Subject, ConfigError> {
-    if let Some(name) = s.strip_prefix('%') {
-        Ok(Subject::Group(name.to_string()))
-    } else if s.starts_with("evm:") {
+    if s.starts_with("evm:") {
         Ok(Subject::Identity(Identity::parse(s)?))
     } else {
-        Err(ConfigError::InvalidRule(format!(
-            "subject must be %group or evm:0x..., got: '{s}'"
-        )))
+        // Bare word = group name. Strip legacy % prefix if present.
+        let name = s.strip_prefix('%').unwrap_or(s);
+        Ok(Subject::Group(name.to_string()))
     }
 }
 
@@ -396,7 +396,7 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders push >main"
+    - "founders push >main"
 "#;
         let config = parse(yaml).unwrap();
         assert_eq!(config.groups.len(), 1);
@@ -423,8 +423,8 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders push >*"
-    - "%agents push >feature/**"
+    - "founders push >*"
+    - "agents push >feature/**"
 "#;
         let config = parse(yaml).unwrap();
         assert_eq!(config.groups.len(), 2);
@@ -455,14 +455,14 @@ groups:
 
     #[test]
     fn test_inline_group_includes() {
-        // group:name in a list = include that group
+        // bare name in a group list = include that group
         let yaml = r#"
 groups:
   founders:
     - evm:0xAAA0000000000000000000000000000000000001
   agents:
     - evm:0xBBB0000000000000000000000000000000000001
-    - group:founders
+    - founders
 "#;
         let config = parse(yaml).unwrap();
         assert_eq!(config.groups["agents"].members.len(), 1);
@@ -518,7 +518,7 @@ groups:
 
 permissions:
   rules:
-    - "%founders edit *"
+    - "founders edit *"
 "#;
         let config = parse(yaml).unwrap();
         assert!(matches!(&config.permissions.rules[0].subject, Subject::Group(g) if g == "founders"));
@@ -534,7 +534,7 @@ groups:
 
 permissions:
   rules:
-    - "%nonexistent edit *"
+    - "nonexistent edit *"
 "#;
         let err = parse(yaml).unwrap_err();
         assert!(
@@ -642,7 +642,7 @@ groups:
 
 permissions:
   rules:
-    - "%agents not edit .repobox-config"
+    - "agents not edit .repobox-config"
 "#;
         let config = parse(yaml).unwrap();
         let rule = &config.permissions.rules[0];
@@ -688,7 +688,7 @@ groups:
 
 permissions:
   rules:
-    - "%founders edit *"
+    - "founders edit *"
 "#;
         let config = parse(yaml).unwrap();
         let rule = &config.permissions.rules[0];
@@ -707,7 +707,7 @@ groups:
 
 permissions:
   rules:
-    - "%agents":
+    - "agents":
         push:
           - ">feature/**"
           - ">fix/**"
@@ -738,8 +738,8 @@ groups:
 
 permissions:
   rules:
-    - "%founders edit *"
-    - "%agents":
+    - "founders edit *"
+    - "agents":
         push:
           - ">feature/**"
         create:

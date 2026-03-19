@@ -492,7 +492,7 @@ permissions:
 permissions:
   default: allow
   rules:
-    - "%founders edit .repobox-config"
+    - "founders edit .repobox-config"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -514,7 +514,7 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders edit .repobox-config"
+    - "founders edit .repobox-config"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -558,7 +558,7 @@ groups:
     members: [evm:0xAAA0000000000000000000000000000000000001]
 permissions:
   rules:
-    - "%founders merge >main"
+    - "founders merge >main"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -581,7 +581,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%founders merge >main"
+    - "founders merge >main"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -602,7 +602,7 @@ groups:
     members: [evm:0xAAA0000000000000000000000000000000000001]
 permissions:
   rules:
-    - "%founders merge >main"
+    - "founders merge >main"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -627,7 +627,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%agents push >feature/*"
+    - "agents push >feature/*"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -650,7 +650,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%founders push >main"
+    - "founders push >main"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -673,8 +673,8 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%founders force-push >main"
-    - "%agents push >main"
+    - "founders force-push >main"
+    - "agents push >main"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -696,7 +696,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%agents push >feature/*"
+    - "agents push >feature/*"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -722,7 +722,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%agents create >feature/*"
+    - "agents create >feature/*"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -743,7 +743,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%agents create >feature/*"
+    - "agents create >feature/*"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -766,7 +766,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%agents create >feature/*"
+    - "agents create >feature/*"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -788,7 +788,7 @@ groups:
     members: [evm:0xAAA0000000000000000000000000000000000001]
 permissions:
   rules:
-    - "%founders delete >feature/*"
+    - "founders delete >feature/*"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -813,7 +813,7 @@ groups:
     members: [evm:0xAAA0000000000000000000000000000000000001]
 permissions:
   rules:
-    - "%founders push >main"
+    - "founders push >main"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 

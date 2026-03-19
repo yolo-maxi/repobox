@@ -20,21 +20,21 @@ permissions:
   default: allow    # or "deny"
   rules:
     # Flat rules (one-liners)
-    - %founders push >*
-    - %founders merge >*
-    - %founders create >*
-    - %founders edit .repobox-config
+    - founders push >*
+    - founders merge >*
+    - founders create >*
+    - founders edit ./.repobox-config
 
     # Nested rules (grouped by subject)
-    - %agents:
+    - agents:
         push:
-          - >feature/**
-          - >fix/**
+          - ">feature/**"
+          - ">fix/**"
         create:
-          - >feature/**
-          - >fix/**
+          - ">feature/**"
+          - ">fix/**"
         append:
-          - .repobox-config
+          - "./.repobox-config"
 ```
 
 Both flat and nested are equivalent. Mix freely in the same `rules:` list.
@@ -50,9 +50,7 @@ The config file is YAML with exactly two top-level keys: `groups` and `permissio
 # GROUPS — define named sets of EVM identities
 # ═══════════════════════════════════════════════════════
 groups:
-  # Group names are bare words (no prefix in the config file).
-  # In rules, reference them as %founders, %agents, etc.
-  # Simple form — just a list of addresses:
+  # Group names are bare words. Just list the addresses.
   founders:
     - evm:0xAAA0000000000000000000000000000000000001   # Alice
     - evm:0xAAA0000000000000000000000000000000000002   # Bob
@@ -61,10 +59,10 @@ groups:
     - evm:0xBBB0000000000000000000000000000000000002   # Codex
   deploy-bots:
     - evm:0xCCC0000000000000000000000000000000000001   # CI runner
-  # Include another group's members with group: prefix
+  # Include another group's members by bare name:
   all-humans:
     - evm:0xDDD0000000000000000000000000000000000001   # External reviewer
-    - group:founders                                    # includes all founders too
+    - founders                                          # includes all founders too
 
 # ═══════════════════════════════════════════════════════
 # PERMISSIONS — who can do what, where
@@ -80,26 +78,25 @@ permissions:
     # ─── FLAT RULES (one-liners) ─────────────────────
     # Format: <subject> [not] <verb> <target>
     #
-    # Subject: %groupname or evm:0x...
+    # Subject: group name (bare word) or evm:0x... (address)
     # Verb: push | merge | create | delete | force-push | edit | write | append
-    # Target: >branchpattern (branches) or filepattern (files)
-    #         * means "all" for either context
-    #         Combine both: filepattern >branchpattern
+    # Target: >branch (branches), ./path (files), or * (all)
+    #         Combine both: ./path >branch
 
     # Branch control — who can do branch operations
-    - %founders push >*                     # founders push to any branch
-    - %founders merge >*                    # founders merge into any branch
-    - %founders create >*                   # founders create any branch
-    - %founders delete >*                   # founders delete any branch
-    - %founders force-push >*               # founders rewrite history anywhere
+    - founders push >*                     # founders push to any branch
+    - founders merge >*                    # founders merge into any branch
+    - founders create >*                   # founders create any branch
+    - founders delete >*                   # founders delete any branch
+    - founders force-push >*               # founders rewrite history anywhere
 
     # File control — who can modify which files
-    - %founders edit .repobox-config        # only founders can fully edit config
-    - %founders edit *                      # founders can edit all files
+    - founders edit ./.repobox-config      # only founders can fully edit config
+    - founders edit *                      # founders can edit all files
 
     # Deny rules — prefix verb with "not"
-    - %agents not push >main               # agents cannot push to main
-    - %agents not merge >main              # agents cannot merge into main
+    - agents not push >main                # agents cannot push to main
+    - agents not merge >main               # agents cannot merge into main
 
     # Individual identity rule (not a group)
     - evm:0xDDD0000000000000000000000000000000000001 push >hotfix/**
@@ -107,7 +104,7 @@ permissions:
     # ─── NESTED RULES (grouped by subject) ───────────
     # Exactly equivalent to flat rules, just organized differently.
     # Useful when one subject has many verb+target combinations.
-    - %agents:
+    - agents:
         push:
           - ">feature/**"                   # agents push to feature branches
           - ">fix/**"                       # agents push to fix branches
@@ -115,18 +112,26 @@ permissions:
           - ">feature/**"                   # agents create feature branches
           - ">fix/**"
         edit:
-          - "* >feature/**"                 # agents edit any file ON feature branches
-          - "* >fix/**"                     # agents edit any file ON fix branches
+          - "./* >feature/**"               # agents edit any file ON feature branches
+          - "./* >fix/**"                   # agents edit any file ON fix branches
         append:
-          - .repobox-config                 # agents can append to config (not full edit)
+          - "./.repobox-config"             # agents can append to config (not full edit)
 
-    - %deploy-bots:
+    - deploy-bots:
         push:
           - ">main"                         # deploy bot pushes to main
         edit:
-          - "CHANGELOG.md >main"            # but can only touch these files
-          - "k8s/** >main"
+          - "./CHANGELOG.md >main"          # but can only touch these files
+          - "./k8s/** >main"
 ```
+
+### Conventions
+
+- **Bare word** = group name (self-defined in `groups:`)
+- **`evm:0x...`** = EVM address (external identity)
+- **`./path`** = file path (`./` is optional but recommended for clarity)
+- **`>branch`** = branch target
+- **`*`** = wildcard (matches all files or all branches)
 
 ### Structure rules
 
@@ -134,18 +139,14 @@ permissions:
 - **`permissions`** is required
 - **`permissions.default`** is optional (defaults to `allow`)
 - **`permissions.rules`** is a list. Each entry is either:
-  - A **string** (flat rule): `"%founders push >*"`
-  - A **mapping** (nested rule): `{ "%agents": { push: [">feature/**"] } }`
+  - A **string** (flat rule): `"founders push >*"`
+  - A **mapping** (nested rule): `{ "agents": { push: [">feature/**"] } }`
 - Both flat and nested can be mixed freely in the same list
-- Groups can be a **simple list** (preferred): `founders: [evm:0x...]`
-- Include other groups inline with `group:name`: `- group:founders`
-- Or use the **full mapping** form with `members:` and `includes:` keys (legacy, still supported)
-- Group names in `groups:` are bare words. In rules, prefix with `%`
+- Groups are a list of `evm:0x...` addresses and/or bare group names (for includes)
 - Members are always full `evm:0x...` addresses (42 hex chars with checksum)
-- Branch targets always start with `>`. File targets never do
-- `*` alone means "all" (all branches or all files depending on context)
-- `**` in globs means recursive: `src/**` matches `src/a.rs` and `src/deep/b.rs`
-- Combined targets: `contracts/** >dev` means "files matching `contracts/**` on branch `dev`"
+- `./` prefix on file paths is stripped by the parser (purely visual)
+- `**` in globs means recursive: `./src/**` matches `src/a.rs` and `src/deep/b.rs`
+- Combined targets: `./contracts/** >dev` means "files matching `contracts/**` on branch `dev`"
 
 ### What the file does NOT contain
 
@@ -157,8 +158,8 @@ permissions:
 ## Rule Syntax: `<subject> <verb> <target>`
 
 ### Subjects
-- `%groupname` — group from `groups:` section
-- `evm:0x...` — individual identity
+- `groupname` — bare word, references a group from `groups:` section
+- `evm:0x...` — individual EVM identity
 
 ### Branch Verbs
 | Verb | Meaning |
@@ -176,7 +177,7 @@ permissions:
 | `write` | Add lines only, no deletions |
 | `append` | Add lines at end of file only |
 
-Prefix with `not` to deny: `%agents not merge >main`
+Prefix with `not` to deny: `agents not merge >main`
 
 ### Targets
 - `>main` — specific branch
@@ -203,30 +204,30 @@ Every git operation triggers up to two checks:
 
 **Implicit deny is per-target, NOT per-verb globally.**
 
-When you write `%founders edit .repobox-config`:
+When you write `founders edit .repobox-config`:
 - Only `.repobox-config` is locked down
 - Other files are unaffected (follow `default`)
-- %agents editing `src/app.rs` → ✅ allowed (no rule covers it)
-- %agents editing `.repobox-config` → ❌ denied (rule exists, agent not matched)
+- agents editing `src/app.rs` → ✅ allowed (no rule covers it)
+- agents editing `.repobox-config` → ❌ denied (rule exists, agent not matched)
 
-When you write `%founders edit *`:
+When you write `founders edit *`:
 - ALL files are locked down (`*` matches everything)
-- %agents editing anything → ❌ denied (unless another rule grants them access)
+- agents editing anything → ❌ denied (unless another rule grants them access)
 
 ### Common Mistake
 
 ```yaml
 rules:
-  - %founders edit *        # ← This locks ALL files for non-founders
-  - %agents push >feature/**  # ← Agents can push but can't edit any files!
+  - founders edit *        # ← This locks ALL files for non-founders
+  - agents push >feature/**  # ← Agents can push but can't edit any files!
 ```
 
 Fix: add file permissions for agents too:
 ```yaml
 rules:
-  - %founders edit *
-  - %agents edit * >feature/**  # ← Agents can edit files on feature branches
-  - %agents push >feature/**
+  - founders edit *
+  - agents edit * >feature/**  # ← Agents can edit files on feature branches
+  - agents push >feature/**
 ```
 
 ## Evaluation Algorithm
@@ -243,12 +244,12 @@ Given action (subject, verb, target):
 
 ```yaml
 # ✅ Correct: deny first
-- %agents not push >main
-- %agents push >*
+- agents not push >main
+- agents push >*
 
 # ❌ Wrong: push >* matches first, deny never reached
-- %agents push >*
-- %agents not push >main
+- agents push >*
+- agents not push >main
 ```
 
 ## Aliases (Local Address Book)
@@ -263,8 +264,8 @@ claude = evm:0xBBB...456
 - CLI commands: `git repobox alias add/remove/list`
 - `git repobox keys generate --alias claude`
 - `git repobox identity set <key> --alias alice`
-- CLI shows `%alice`, `%claude` everywhere (errors, logs, whoami)
-- Sub-agents use `+` notation: `%claude+roudy-piglet`
+- CLI shows `alice`, `claude` everywhere (errors, logs, whoami)
+- Sub-agents use `+` notation: `claude+roudy-piglet`
 - `.repobox-config` always stores raw `evm:0x...` addresses (canonical)
 
 ## Priority Model
@@ -291,7 +292,7 @@ git repobox keys generate
 
 # Generate key with alias in one step
 git repobox keys generate --alias alice
-# → %alice (evm:0xAAA...123)
+# → alice (evm:0xAAA...123)
 
 # Import an existing private key
 git repobox keys import <private-key>
@@ -302,7 +303,7 @@ git repobox identity set <private-key> --alias alice
 
 # Check current identity
 git repobox whoami
-# → %alice (evm:0xAAA...123)
+# → alice (evm:0xAAA...123)
 ```
 
 ### Aliases
@@ -317,7 +318,7 @@ git repobox alias list
 
 The CLI resolves aliases everywhere — errors, logs, signature display:
 ```
-❌ %claude cannot edit .repobox-config on >main
+❌ claude cannot edit .repobox-config on >main
 ```
 
 If no alias exists, the raw `evm:0x...` address is shown.
@@ -327,7 +328,7 @@ If no alias exists, the raw `evm:0x...` address is shown.
 ```bash
 # Generate a key for the agent
 git repobox keys generate --alias claude
-# → %claude (evm:0xBBB...456)
+# → claude (evm:0xBBB...456)
 
 # Add to .repobox-config groups + commit
 # Then spawn with identity via env:
@@ -337,7 +338,7 @@ GIT_CONFIG_VALUE_0=evm:0xBBB...456 \
 your-agent-command --task "fix the auth bug"
 ```
 
-Sub-agents use `+` notation: `%claude+roudy-piglet`
+Sub-agents use `+` notation: `claude+roudy-piglet`
 
 ```bash
 git repobox keys generate --alias claude+roudy-piglet
@@ -351,7 +352,7 @@ git repobox check evm:0xBBB...456 push >main
 # ❌ denied — implicit deny
 
 git repobox check evm:0xBBB...456 push >feature/fix
-# ✅ allowed — rule: %agents push >feature/**
+# ✅ allowed — rule: agents push >feature/**
 
 # Validate .repobox-config syntax
 git repobox lint
@@ -389,7 +390,7 @@ Identity precedence (standard git config resolution):
 permissions:
   default: allow
   rules:
-    - %founders merge >main
+    - founders merge >main
 ```
 
 - Only founders can merge to main
@@ -402,10 +403,10 @@ permissions:
 permissions:
   default: allow
   rules:
-    - %founders push >*
-    - %founders merge >*
-    - %founders create >*
-    - %agents:
+    - founders push >*
+    - founders merge >*
+    - founders create >*
+    - agents:
         push:
           - >feature/**
           - >fix/**
@@ -424,22 +425,22 @@ permissions:
 permissions:
   default: allow
   rules:
-    - %founders push >*
-    - %founders merge >*
-    - %founders create >*
-    - %founders edit .repobox-config
-    - %agents:
+    - founders push >*
+    - founders merge >*
+    - founders create >*
+    - founders edit ./.repobox-config
+    - agents:
         push:
-          - >feature/**
-          - >fix/**
+          - ">feature/**"
+          - ">fix/**"
         create:
-          - >feature/**
-          - >fix/**
+          - ">feature/**"
+          - ">fix/**"
         edit:
-          - * >feature/**
-          - * >fix/**
+          - "./* >feature/**"
+          - "./* >fix/**"
         append:
-          - .repobox-config
+          - "./.repobox-config"
 ```
 
 - Agents can edit files only on their branches
@@ -452,15 +453,15 @@ permissions:
 permissions:
   default: allow
   rules:
-    - %founders push >*
-    - %founders merge >*
-    - %deploy-bot:
+    - founders push >*
+    - founders merge >*
+    - deploy-bot:
         push:
-          - >main
+          - ">main"
         edit:
-          - CHANGELOG.md >main
-          - k8s/** >main
+          - "./CHANGELOG.md >main"
+          - "./k8s/** >main"
 ```
 
-- %deploy-bot can push to main but only touch CHANGELOG.md and k8s/ files
+- deploy-bot can push to main but only touch CHANGELOG.md and k8s/ files
 - A commit touching anything else → blocked

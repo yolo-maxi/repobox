@@ -116,7 +116,7 @@ groups:
     members: [evm:0xAAA0000000000000000000000000000000000001]
 permissions:
   rules:
-    - "%founders push >main"
+    - "founders push >main"
 "#,
             "evm:0xAAA0000000000000000000000000000000000001",
             Verb::Push,
@@ -135,7 +135,7 @@ groups:
     members: [evm:0xAAA0000000000000000000000000000000000001]
 permissions:
   rules:
-    - "%founders push >main"
+    - "founders push >main"
 "#,
             "evm:0xCCC0000000000000000000000000000000000003",
             Verb::Push,
@@ -155,7 +155,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%agents push >feature/*"
+    - "agents push >feature/*"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Push,
@@ -175,8 +175,8 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%founders push >main"
-    - "%agents push >feature/**"
+    - "founders push >main"
+    - "agents push >feature/**"
 "#;
         let r = check_yaml(
             yaml,
@@ -197,7 +197,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%agents create >feature/*"
+    - "agents create >feature/*"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Create,
@@ -216,7 +216,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%agents create >feature/*"
+    - "agents create >feature/*"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Create,
@@ -264,7 +264,7 @@ groups:
 permissions:
   rules:
     - "evm:0xBBB0000000000000000000000000000000000002 not push >main"
-    - "%devs push >main"
+    - "devs push >main"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Push,
@@ -289,7 +289,7 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders edit .repobox-config"
+    - "founders edit .repobox-config"
 "#,
             "evm:0xAAA0000000000000000000000000000000000001",
             Verb::Edit,
@@ -311,7 +311,7 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders edit .repobox-config"
+    - "founders edit .repobox-config"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Edit,
@@ -333,7 +333,7 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders edit .repobox-config"
+    - "founders edit .repobox-config"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Edit,
@@ -356,7 +356,7 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders edit *"
+    - "founders edit *"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Edit,
@@ -378,8 +378,8 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders edit *"
-    - "%agents edit * >feature/**"
+    - "founders edit *"
+    - "agents edit * >feature/**"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Edit,
@@ -401,8 +401,8 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders edit *"
-    - "%agents edit * >feature/**"
+    - "founders edit *"
+    - "agents edit * >feature/**"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Edit,
@@ -490,7 +490,7 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders merge >main"
+    - "founders merge >main"
 "#,
             "evm:0xAAA0000000000000000000000000000000000001",
             Verb::Merge,
@@ -512,7 +512,7 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders merge >main"
+    - "founders merge >main"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Merge,
@@ -534,7 +534,7 @@ groups:
 permissions:
   default: allow
   rules:
-    - "%founders merge >main"
+    - "founders merge >main"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Merge,
@@ -557,7 +557,7 @@ groups:
 permissions:
   default: deny
   rules:
-    - "%founders merge >main"
+    - "founders merge >main"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Merge,
@@ -576,8 +576,8 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%agents not push >main"
-    - "%agents push >*"
+    - "agents not push >main"
+    - "agents push >*"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Push,
@@ -596,8 +596,8 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "%agents push >*"
-    - "%agents not push >main"
+    - "agents push >*"
+    - "agents not push >main"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Push,
@@ -622,7 +622,7 @@ groups:
 permissions:
   rules:
     - "evm:0xAAA0000000000000000000000000000000000001 edit .repobox-config"
-    - "%devs not edit .repobox-config"
+    - "devs not edit .repobox-config"
 "#,
             "evm:0xAAA0000000000000000000000000000000000001",
             Verb::Edit,
@@ -643,8 +643,8 @@ groups:
     members: [evm:0xAAA0000000000000000000000000000000000001]
 permissions:
   rules:
-    - "%founders not merge >main"
-    - "%devs merge >main"
+    - "founders not merge >main"
+    - "devs merge >main"
 "#,
             "evm:0xAAA0000000000000000000000000000000000001",
             Verb::Merge,
