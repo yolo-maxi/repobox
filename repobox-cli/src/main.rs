@@ -95,6 +95,8 @@ enum Commands {
     },
     /// Validate .repobox.yml
     Lint,
+    /// Show current status: identity, groups, permissions summary
+    Status,
     /// Configure git to use repobox as the command interceptor
     Setup {
         /// Remove repobox git hooks
@@ -186,6 +188,7 @@ fn main() -> ExitCode {
             cmd_check(&id_str, &verb, &target, &home)
         }
         Some(Commands::Lint) => cmd_lint(),
+        Some(Commands::Status) => cmd_status(&home),
         Some(Commands::Setup { remove }) => cmd_setup(remove),
         Some(Commands::Hook { hook, args }) => cmd_hook(&hook, &args, &home),
         None => {
@@ -887,6 +890,107 @@ fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
     }
 }
 
+// ── Status ────────────────────────────────────────────────────────────
+
+fn cmd_status(home: &Path) -> ExitCode {
+    // Identity
+    let identity = identity::get_identity(home).ok().flatten();
+    let id_display = match &identity {
+        Some(id) => aliases::display_identity(home, &id.to_string()),
+        None => "not set".to_string(),
+    };
+
+    // Branch
+    let real_git = find_real_git();
+    let branch = Command::new(&real_git)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| if o.status.success() {
+            Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+        } else {
+            None
+        })
+        .unwrap_or_else(|| "unknown".to_string());
+
+    println!("repo.box status");
+    println!("  Identity: {id_display}");
+    println!("  Branch:   {branch}");
+
+    // Config
+    let config_path = Path::new(".repobox.yml");
+    if !config_path.exists() {
+        println!("  Config:   no .repobox.yml found");
+        return ExitCode::SUCCESS;
+    }
+
+    let content = match std::fs::read_to_string(config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("  Config:   error reading .repobox.yml: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let config = match parser::parse(&content) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("  Config:   error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    println!("  Default:  {:?}", config.permissions.default);
+    println!("  Groups:   {}", config.groups.len());
+    println!("  Rules:    {}", config.permissions.rules.len());
+
+    // Show which groups the current identity belongs to
+    if let Some(ref id) = identity {
+        let mut member_of = Vec::new();
+        for (name, group) in &config.groups {
+            if group.members.contains(id) {
+                member_of.push(name.clone());
+            }
+            // Also check resolved includes
+            if let Ok(members) = parser::resolve_group_members(name, &config.groups) {
+                if members.contains(id) && !member_of.contains(name) {
+                    member_of.push(format!("{name} (via include)"));
+                }
+            }
+        }
+        if member_of.is_empty() {
+            println!("  Member of: (none)");
+        } else {
+            println!("  Member of: {}", member_of.join(", "));
+        }
+
+        // Quick permission summary for current branch
+        println!();
+        println!("  Permissions on >{branch}:");
+        let verbs = ["push", "merge", "create", "delete", "force-push", "edit", "write", "append"];
+        for vname in &verbs {
+            let verb = repobox::config::Verb::parse(vname).unwrap();
+            // For file verbs, check with wildcard path to match combined targets like "edit * >feature/**"
+            let file_path = if verb.is_file_verb() { Some("*") } else { None };
+            let result = engine::check(&config, id, verb, Some(&branch), file_path);
+            let icon = if result.is_allowed() { "✅" } else { "❌" };
+            println!("    {icon} {vname}");
+        }
+    }
+
+    // Lint warnings
+    let warnings = repobox::lint::lint(&config);
+    if !warnings.is_empty() {
+        println!();
+        println!("  Lint warnings:");
+        for w in &warnings {
+            println!("    {w}");
+        }
+    }
+
+    ExitCode::SUCCESS
+}
+
 // ── Lint ──────────────────────────────────────────────────────────────
 
 fn cmd_lint() -> ExitCode {
@@ -1045,6 +1149,7 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                     cmd_check(&id_str, &verb, &target, &home)
                 }
                 Some(Commands::Lint) => cmd_lint(),
+                Some(Commands::Status) => cmd_status(&home),
                 Some(Commands::Setup { remove }) => cmd_setup(remove),
                 Some(Commands::Hook { hook, args }) => cmd_hook(&hook, &args, &home),
                 None => {
