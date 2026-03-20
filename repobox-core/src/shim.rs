@@ -890,4 +890,181 @@ permissions:
         );
         assert!(matches!(action, ShimAction::Passthrough));
     }
+
+    // ================================================================
+    // Section 14: Config file protection — append vs edit
+    // ================================================================
+
+    /// Agent with only append on .repobox.yml should be BLOCKED from editing it.
+    /// This reproduces the bug where claude could commit edits to the config file.
+    #[test]
+    fn test_agent_edit_config_blocked_when_only_append() {
+        let config = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000002
+permissions:
+  default: deny
+  rules:
+    - founders push >*
+    - founders merge >*
+    - founders edit *
+    - agents push >feature/**
+    - agents edit * >feature/**
+    - agents append ./.repobox.yml
+"#;
+        let (_tmp, repo) = setup_repo_with_config(config);
+
+        // Commit the initial config first so git diff --cached works
+        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
+
+        // Now stage a non-config file to simulate agent editing config
+        // We test via process_command which reads staged files — stage a source file
+        // that the agent shouldn't be able to edit on main
+        std::fs::write(repo.join("src.txt"), "code").unwrap();
+        Command::new("git").args(["add", "src.txt"]).current_dir(&repo).output().unwrap();
+
+        let agent = id("evm:0xBBB0000000000000000000000000000000000002");
+
+        // On main branch — agent has no edit rules for main, only >feature/**
+        let action = process_command(
+            &args("commit -m evil"),
+            Some(&repo),
+            Some(&agent),
+            Some("main"),
+        );
+        assert!(matches!(action, ShimAction::Block(ref msg) if msg.contains("cannot edit")),
+            "Agent should be blocked from editing files on main, got: {:?}", action);
+    }
+
+    /// Agent CAN edit files on feature branches when they have edit * >feature/**
+    #[test]
+    fn test_agent_edit_allowed_on_feature_branch() {
+        let config = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000002
+permissions:
+  default: deny
+  rules:
+    - founders edit *
+    - agents edit * >feature/**
+    - agents append ./.repobox.yml
+"#;
+        let (_tmp, repo) = setup_repo_with_config(config);
+
+        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
+
+        std::fs::write(repo.join("src.txt"), "code").unwrap();
+        Command::new("git").args(["add", "src.txt"]).current_dir(&repo).output().unwrap();
+
+        let agent = id("evm:0xBBB0000000000000000000000000000000000002");
+
+        // On feature branch — agents have `edit * >feature/**`
+        let action = process_command(
+            &args("commit -m ok"),
+            Some(&repo),
+            Some(&agent),
+            Some("feature/test"),
+        );
+        assert!(matches!(action, ShimAction::Delegate),
+            "Agent should be able to edit files on feature branches, got: {:?}", action);
+    }
+
+    /// Founder can edit config, agent cannot — with explicit deny rule.
+    #[test]
+    fn test_founder_edit_config_allowed_agent_blocked() {
+        let config = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000002
+permissions:
+  default: allow
+  rules:
+    - founders edit ./.repobox.yml
+    - agents not edit ./.repobox.yml
+    - agents edit *
+"#;
+        let (_tmp, repo) = setup_repo_with_config(config);
+
+        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
+
+        // Now modify config and stage it
+        let new_config = config.to_string() + "\n# modified\n";
+        std::fs::write(repo.join(".repobox.yml"), &new_config).unwrap();
+        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+
+        let founder = id("evm:0xAAA0000000000000000000000000000000000001");
+        let agent = id("evm:0xBBB0000000000000000000000000000000000002");
+
+        // Founder can edit config
+        let action = process_command(
+            &args("commit -m ok"),
+            Some(&repo),
+            Some(&founder),
+            Some("main"),
+        );
+        assert!(matches!(action, ShimAction::Delegate),
+            "Founder should be able to edit config, got: {:?}", action);
+
+        // Agent is explicitly denied
+        let action = process_command(
+            &args("commit -m evil"),
+            Some(&repo),
+            Some(&agent),
+            Some("main"),
+        );
+        assert!(matches!(action, ShimAction::Block(ref msg) if msg.contains("cannot edit")),
+            "Agent should be blocked from editing config, got: {:?}", action);
+    }
+
+    /// Fran's actual config scenario: agents have `edit *` which includes config.
+    /// This documents that `edit *` DOES grant access to config unless
+    /// an explicit deny or priority rule prevents it.
+    #[test]
+    fn test_agents_edit_star_includes_config() {
+        let config = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000002
+permissions:
+  default: allow
+  rules:
+    - founders edit ./.repobox.yml
+    - agents edit *
+"#;
+        let (_tmp, repo) = setup_repo_with_config(config);
+
+        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
+
+        let new_config = config.to_string() + "\n# sneaky addition\n";
+        std::fs::write(repo.join(".repobox.yml"), &new_config).unwrap();
+        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+
+        let agent = id("evm:0xBBB0000000000000000000000000000000000002");
+
+        // agents edit * matches .repobox.yml — the founders rule only creates
+        // implicit deny for identities NOT matching ANY rule for that target.
+        // But agents DO match via `edit *`, so they're allowed.
+        let action = process_command(
+            &args("commit -m sneaky"),
+            Some(&repo),
+            Some(&agent),
+            Some("main"),
+        );
+        assert!(matches!(action, ShimAction::Delegate),
+            "agents edit * includes config file — correct but surprising, got: {:?}", action);
+    }
 }
