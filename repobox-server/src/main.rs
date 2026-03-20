@@ -1,5 +1,6 @@
 mod db;
 mod git;
+mod resolve;
 mod routes;
 
 use std::net::SocketAddr;
@@ -21,26 +22,31 @@ struct Cli {
     /// Repository storage directory
     #[arg(short = 'd', long = "data-dir", default_value = "/var/lib/repobox/repos")]
     data_dir: PathBuf,
+    /// Alchemy API key for on-chain resolver proxy
+    #[arg(long, env = "ALCHEMY_API_KEY")]
+    alchemy_key: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct AppState {
     data_dir: PathBuf,
     db_path: PathBuf,
+    alchemy_key: Option<String>,
 }
 
 impl AppState {
-    fn new(data_dir: PathBuf) -> std::io::Result<Self> {
+    fn new(data_dir: PathBuf, alchemy_key: Option<String>) -> std::io::Result<Self> {
         std::fs::create_dir_all(&data_dir)?;
         let db_path = data_dir.join("repobox.db");
         db::init(&db_path)?;
-        Ok(Self { data_dir, db_path })
+        Ok(Self { data_dir, db_path, alchemy_key })
     }
 }
 
 fn build_router(state: Arc<AppState>) -> Router {
     Router::new()
         .merge(routes::router())
+        .merge(resolve::router())
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
@@ -54,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let cli = Cli::parse();
-    let state = Arc::new(AppState::new(cli.data_dir)?);
+    let state = Arc::new(AppState::new(cli.data_dir, cli.alchemy_key)?);
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind(cli.bind).await?;
 
