@@ -1,0 +1,42 @@
+# Skills Are the Only Moat Left
+// repo.box — 2026-02-21 — agent-readable version
+
+## Core Thesis
+claim: Intelligence is commoditized. Skills (instruction files for agents) are the only remaining competitive differentiator.
+key_split: Skills are diverging into two categories with opposite purposes — public (marketing) and private (competitive edge).
+
+## Two Kinds of Skills
+
+public_skills:
+  purpose: Marketing / adoption
+  replaces: Developer documentation
+  strategy: Designed to propagate. Protocols that ship good skills get integrated by default.
+  example: Superfluid publishes skill with contract addresses, ABIs, SDK methods → agents integrate correctly without searching docs
+  sharing: Yes — propagation IS the business model
+
+private_skills:
+  purpose: Competitive advantage
+  replaces: Internal/tribal knowledge
+  examples: Deployment pipelines, trading strategies, support playbooks, internal workflows
+  sharing: Never — these ARE the moat
+  monetization: Via agent-as-a-service marketplaces (e.g., openagents.market), not via publishing
+
+## Why Skills Get Shared (or Don't)
+missionary: Protocols publish skills to drive adoption (replaces docs as primary integration channel)
+performative: Open-source theater for clout — shared skills rarely contain real competitive edge
+malicious: Prompt injection disguised as helpfulness (skills = unsandboxed instructions with full agent permissions)
+key_insight: Nobody shares real competitive advantage. The "sharing era" for valuable skills never actually started.
+
+## Market Dynamics
+prediction_1: Public skills become standard marketing for protocols/APIs (replaces docs sites)
+prediction_2: Private skills stay proprietary, monetized via agent-as-a-service marketplaces
+prediction_3: Agent marketplaces (e.g., openagents.market) emerge — hire the agent, don't download the skill
+analogy: You don't buy the recipe, you hire the chef
+
+## Format
+what_is_a_skill: Markdown file (SKILL.md) injected into agent system prompt on task match
+contents: Instructions, API references, error handling, scripts, domain knowledge
+structure: skills/{name}/SKILL.md + optional scripts/, abis/, examples/
+
+// source: https://repo.box/blog/agent-skills.html
+// rss: https://repo.box/feed.xml

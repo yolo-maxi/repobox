@@ -1,0 +1,20 @@
+{
+  "sections": [
+    {
+      "title": "Overview",
+      "items": [
+        { "title": "Introduction", "slug": "introduction" }
+      ]
+    },
+    {
+      "title": "Specification",
+      "items": [
+        { "title": "Identity", "slug": "spec/identity" },
+        { "title": "Groups", "slug": "spec/groups" },
+        { "title": "Permissions", "slug": "spec/permissions" },
+        { "title": "Workflows", "slug": "spec/workflows" },
+        { "title": "Tech Stack", "slug": "spec/tech-stack" }
+      ]
+    }
+  ]
+}

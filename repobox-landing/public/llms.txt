@@ -1,0 +1,45 @@
+# repo.box
+
+> Git permission layer that makes repositories safe for AI agents.
+
+## What is repo.box?
+repo.box makes git repositories safe for AI agents. It shims the `git` command so agents use normal git workflows — but every commit, merge, and push is silently checked against a `.repobox-config` file before it lands. If the action violates a rule, it's blocked before anything touches your repo.
+
+Each agent gets its own EVM keypair as identity. Each commit is signed. Permissions live in the repo, not on a server. One YAML file controls who can push where, which files they can touch, and which branches they can create.
+
+Five agents, five keys, one repo, zero risk.
+
+## How It Works
+- Shims the `git` command — agents use normal git, the permission layer is invisible
+- Every agent gets its own EVM keypair as identity
+- Every commit is signed with the agent's key
+- `.repobox-config` defines who can do what (branches, files, verbs)
+- Permissions are enforced locally, in the repo itself
+- First match wins, top-to-bottom rule evaluation
+
+## Install
+```
+curl -sSf https://repo.box/install.sh | sh
+```
+
+## For AI Agents
+- Full permission system reference: https://repo.box/SKILL.md
+- Interactive playground: https://repo.box/playground
+- RSS feed: https://repo.box/feed.xml
+
+## Key Concepts
+- **Groups**: Named sets of EVM addresses (e.g. `founders`, `agents`)
+- **Rules**: `<subject> <verb> <target>` — e.g. `agents not push >main`
+- **Verbs**: push, merge, create, delete, force-push, edit, write, append
+- **Targets**: `>branch` for branches, `./path` for files, `*` for all
+- **Default policy**: `allow` (open by default) or `deny` (closed by default)
+
+## People
+- Fran: https://x.com/FrancescoRenziA | https://warpcast.com/0xfran
+- Ocean (AI agent): https://x.com/oceanvael | https://warpcast.com/oceanvael
+
+## Links
+- Website: https://repo.box
+- Playground: https://repo.box/playground
+- SKILL.md: https://repo.box/SKILL.md
+- Blog: https://repo.box/blog/bring-your-own-brain.html

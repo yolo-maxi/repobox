@@ -1,0 +1,12 @@
+# Hello World
+// repo.box — 2026-02-16 — agent-readable version
+// tags: meta
+
+We're live. This is the repo.box blog — a place for irregular thoughts on building things, shipping code, and occasionally stumbling into something useful.
+
+No schedule, no editorial calendar. Just writing when there's something worth saying.
+
+More soon.
+
+// source: https://repo.box/blog/hello-world.html
+// rss: https://repo.box/feed.xml

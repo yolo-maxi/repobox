@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The End of UIs — repo.box</title>
+<meta name="description" content="The cost of building custom frontends just collapsed to near-zero. When cost trends to zero, any non-zero amount of demand is enough to make something happen.">
+<meta property="og:title" content="The End of UIs — repo.box">
+<meta property="og:description" content="The cost of building custom frontends just collapsed to near-zero. When cost trends to zero, any non-zero amount of demand is enough to make something happen.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://repo.box/blog/end-of-uis">
+<meta property="og:image" content="https://repo.box/og/repo-box-share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="repo.box — independent team building cool ideas with cool people.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The End of UIs — repo.box">
+<meta name="twitter:description" content="The cost of building custom frontends just collapsed to near-zero. When cost trends to zero, any non-zero amount of demand is enough to make something happen.">
+<meta name="twitter:image" content="https://repo.box/og/repo-box-share.jpg">
+<link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a1628;--surface:#0d1f35;--border:rgba(50,100,160,0.25);--text:#b8d4e3;--dim:#5a7a94;--accent:#4fc3f7;--accent2:#81d4fa;--heading:#e8f4fd}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.4}}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;min-height:100vh;cursor:crosshair}
+a{color:var(--accent);text-decoration:none;transition:color .2s}
+a:hover{color:var(--accent2)}
+.container{max-width:720px;margin:0 auto;padding:60px 20px 80px}
+.back{font-size:12px;color:var(--dim);display:inline-block;margin-bottom:40px;transition:color .2s}
+.back:hover{color:var(--accent)}
+footer{margin-top:80px;padding-top:20px;border-top:1px solid var(--border);color:var(--dim);font-size:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+@media(max-width:500px){
+  .container{padding:40px 20px 60px}
+  footer{flex-direction:column;align-items:flex-start}
+}
+
+.post-meta{color:var(--dim);font-size:12px;margin-bottom:40px}
+.post-body{max-width:680px}
+.post-body h1{font-size:24px;font-weight:700;margin-bottom:8px;line-height:1.2;color:var(--heading)}
+.post-body h2{font-size:18px;font-weight:600;margin:40px 0 12px;color:var(--heading)}
+.post-body h3{font-size:15px;font-weight:600;margin:28px 0 8px;color:var(--heading)}
+.post-body p{margin-bottom:20px;color:var(--text);font-size:13px;line-height:24px}
+.post-body ul,.post-body ol{margin:0 0 20px 24px;color:var(--text);font-size:13px}
+.post-body li{margin-bottom:8px;line-height:24px}
+.post-body blockquote{border-left:2px solid var(--accent);padding:8px 20px;margin:20px 0;color:var(--dim);background:rgba(79,195,247,.03);border-radius:0 4px 4px 0}
+.post-body code{font-size:12px;background:var(--surface);padding:2px 8px;border-radius:2px;border:1px solid var(--border)}
+.post-body pre{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:20px;margin:20px 0;overflow-x:auto}
+.post-body pre code{background:none;border:none;padding:0;font-size:12px;line-height:20px}
+.post-body img{max-width:100%;border-radius:4px;margin:20px 0}
+.post-body a{color:var(--accent);border-bottom:1px solid rgba(79,195,247,.2)}
+.post-body a:hover{color:var(--accent2);border-bottom-color:var(--accent2)}
+.post-body hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+
+/* Infographic cards */
+.pattern-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;margin:20px 0}
+.pattern-card h3{margin:0 0 8px;font-size:14px;color:var(--heading)}
+.pattern-card p{margin:0;font-size:12px;line-height:20px}
+.pattern-card .arrow{color:var(--accent);font-size:14px;margin:0 6px}
+.pattern-card .label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px}
+
+.diagram{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:24px;margin:24px 0;text-align:center;font-size:13px;line-height:28px}
+.diagram .vs{color:var(--accent);font-weight:700;margin:12px 0;font-size:11px;text-transform:uppercase;letter-spacing:2px}
+.diagram .old{color:var(--dim);text-decoration:line-through}
+.diagram .new{color:var(--heading);font-weight:600}
+.diagram .sub{color:var(--dim);font-size:11px;line-height:16px}
+
+.example-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}
+@media(max-width:500px){.example-grid{grid-template-columns:1fr}}
+.example-grid .card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:16px}
+.example-grid .card h4{font-size:12px;color:var(--heading);margin:0 0 6px;font-weight:600}
+.example-grid .card p{font-size:11px;line-height:18px;margin:0;color:var(--dim)}
+.example-grid .card .highlight{color:var(--accent)}
+
+.rip{border-color:rgba(255,100,100,.25);background:rgba(255,100,100,.03)}
+.rip h4{color:#ff8a80 !important}
+</style>
+</head>
+<body>
+<div class="container" style="position:relative;z-index:1;">
+<a href="/blog/" class="back">← blog</a>
+<article class="post-body">
+  <h1>The End of UIs</h1>
+  <div class="post-meta">2026-02-23 · apis, economics, building</div>
+
+  <p>The UI layer used to be owned by the company that built the service. Now it can be owned by the person using it.</p>
+
+  <p>That's not a prediction — it's already happening. "APIs beat UIs" is a decade-old take, and APIs have always existed. What's new is that the cost of building on top of them just collapsed. One person can rebuild GitHub's entire frontend. An AI agent can build a Telegram client inside VS Code. When cost trends to zero, any non-zero amount of demand is enough to make something happen.</p>
+
+  <h2>The Evidence</h2>
+
+  <div class="example-grid">
+    <div class="card">
+      <h4>FasterGH</h4>
+      <p><a href="https://github.com/RhysSullivan">Rhys Sullivan</a> rebuilt GitHub's entire frontend. <span class="highlight">One person.</span> GitHub's API stays the write model; <a href="https://convex.dev">Convex</a> acts as a real-time read cache via webhooks. The result loads PRs faster than GitHub does — because it doesn't serve 100 million developers' edge cases. It serves <em>his</em>.</p>
+    </div>
+    <div class="card">
+      <h4>Our Local Build</h4>
+      <p>We have an AI agent building a Telegram client as a <span class="highlight">VS Code extension.</span> Not a human dev — an agent. It talks to Telegram's API, renders messages in the editor sidebar, with hardcoded UI for agent interactions and inline GitHub PR rendering. Still rough, but it works. Build time: one session per feature.</p>
+    </div>
+  </div>
+
+  <h2>Capabilities, Not Apps</h2>
+
+  <p>Here's the deeper shift: apps will no longer be the basic unit of software. <em>Capabilities</em> will.</p>
+
+  <p>When a custom UI costs six months and a team of five, you tolerate the app you're given. When it costs one person one weekend, you stop thinking in terms of apps and start thinking in terms of what each service <em>can do</em>. GitHub isn't an app — it's a capability: code hosting, PRs, CI. Telegram isn't an app — it's a capability: real-time messaging. Stripe isn't an app — it's a capability: payments.</p>
+
+  <p>Every user becomes their own product manager. You assemble your command center from capabilities — the specific bits and pieces of various APIs, arranged for maximum effectiveness of <em>your</em> workflow. Think traders building their own Bloomberg from APIs. Developers embedding chat, git, and AI into one surface. Personal productivity setups that look nothing like anyone else's.</p>
+
+  <h2>Composition: The Actually New Thing</h2>
+
+  <p>This is the first-order effect: hyper-customization of single services. The second-order effect is more interesting — you <em>compose</em> capabilities from multiple services into interfaces that no single company would ever build.</p>
+
+  <p>Here's a concrete example from our local build. We have a Telegram client in VS Code with hardcoded special UI for talking to AI agents — custom rendering for structured responses, inline action buttons, context from your codebase. When someone pastes a GitHub link, it renders the PR status, diff stats, and a merge button inline. Chat + merge PRs + query your AI agent — one surface, zero tab-switching.</p>
+
+  <p>That's Telegram API + GitHub API + OpenClaw API = one bespoke interface. No single company would build this. But when cost is near-zero, "too niche" isn't a valid objection anymore.</p>
+
+  <div style="margin:28px 0;">
+    <svg viewBox="0 0 680 480" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:680px;display:block;margin:0 auto;">
+      <!-- Background -->
+      <rect width="680" height="480" rx="8" fill="#0d1f35" stroke="rgba(50,100,160,0.35)" stroke-width="1"/>
+      <!-- Grid lines -->
+      <g stroke="rgba(50,100,160,0.08)" stroke-width="1">
+        <line x1="0" y1="40" x2="680" y2="40"/><line x1="0" y1="80" x2="680" y2="80"/>
+        <line x1="0" y1="120" x2="680" y2="120"/><line x1="0" y1="160" x2="680" y2="160"/>
+        <line x1="0" y1="200" x2="680" y2="200"/><line x1="0" y1="240" x2="680" y2="240"/>
+        <line x1="0" y1="280" x2="680" y2="280"/><line x1="0" y1="320" x2="680" y2="320"/>
+        <line x1="0" y1="360" x2="680" y2="360"/><line x1="0" y1="400" x2="680" y2="400"/>
+        <line x1="0" y1="440" x2="680" y2="440"/>
+        <line x1="85" y1="0" x2="85" y2="480"/><line x1="170" y1="0" x2="170" y2="480"/>
+        <line x1="255" y1="0" x2="255" y2="480"/><line x1="340" y1="0" x2="340" y2="480"/>
+        <line x1="425" y1="0" x2="425" y2="480"/><line x1="510" y1="0" x2="510" y2="480"/>
+        <line x1="595" y1="0" x2="595" y2="480"/>
+      </g>
+
+      <!-- Title -->
+      <text x="340" y="38" text-anchor="middle" fill="#e8f4fd" font-family="'JetBrains Mono',monospace" font-size="15" font-weight="700">The Stack That Wins: Composition</text>
+
+      <!-- Section label: APIs -->
+      <text x="40" y="72" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9" text-transform="uppercase" letter-spacing="1.5">APIS</text>
+
+      <!-- Five API source boxes at top — wider spread -->
+      <rect x="40" y="82" width="108" height="40" rx="4" fill="rgba(79,195,247,0.06)" stroke="rgba(79,195,247,0.3)" stroke-width="1"/>
+      <text x="94" y="100" text-anchor="middle" fill="#b8d4e3" font-family="'JetBrains Mono',monospace" font-size="11">Telegram</text>
+      <text x="94" y="114" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">messages, media</text>
+
+      <rect x="168" y="82" width="108" height="40" rx="4" fill="rgba(79,195,247,0.06)" stroke="rgba(79,195,247,0.3)" stroke-width="1"/>
+      <text x="222" y="100" text-anchor="middle" fill="#b8d4e3" font-family="'JetBrains Mono',monospace" font-size="11">GitHub</text>
+      <text x="222" y="114" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">PRs, issues, CI</text>
+
+      <rect x="296" y="82" width="108" height="40" rx="4" fill="rgba(79,195,247,0.06)" stroke="rgba(79,195,247,0.3)" stroke-width="1"/>
+      <text x="350" y="100" text-anchor="middle" fill="#b8d4e3" font-family="'JetBrains Mono',monospace" font-size="11">OpenClaw</text>
+      <text x="350" y="114" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">agent sessions</text>
+
+      <rect x="424" y="82" width="108" height="40" rx="4" fill="rgba(79,195,247,0.06)" stroke="rgba(79,195,247,0.3)" stroke-width="1"/>
+      <text x="478" y="100" text-anchor="middle" fill="#b8d4e3" font-family="'JetBrains Mono',monospace" font-size="11">Calendar</text>
+      <text x="478" y="114" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">events, reminders</text>
+
+      <rect x="552" y="82" width="108" height="40" rx="4" fill="rgba(79,195,247,0.06)" stroke="rgba(79,195,247,0.3)" stroke-width="1"/>
+      <text x="606" y="100" text-anchor="middle" fill="#b8d4e3" font-family="'JetBrains Mono',monospace" font-size="11">Your API</text>
+      <text x="606" y="114" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">anything else</text>
+
+      <!-- Arrows converging down -->
+      <g stroke="#4fc3f7" stroke-width="1" stroke-dasharray="4,3" opacity="0.7">
+        <line x1="94" y1="122" x2="260" y2="175"/>
+        <line x1="222" y1="122" x2="300" y2="175"/>
+        <line x1="350" y1="122" x2="350" y2="175"/>
+        <line x1="478" y1="122" x2="400" y2="175"/>
+        <line x1="606" y1="122" x2="440" y2="175"/>
+      </g>
+      <g fill="#4fc3f7">
+        <polygon points="255,172 260,182 267,173"/>
+        <polygon points="295,172 300,182 307,173"/>
+        <polygon points="344,172 350,182 356,172"/>
+        <polygon points="395,172 400,182 407,173"/>
+        <polygon points="435,172 440,182 447,173"/>
+      </g>
+
+      <!-- Section label: Composition -->
+      <text x="40" y="172" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9" text-transform="uppercase" letter-spacing="1.5">COMPOSE</text>
+
+      <!-- Composition layer (highlighted, wider) -->
+      <rect x="140" y="185" width="420" height="52" rx="5" fill="rgba(79,195,247,0.08)" stroke="#4fc3f7" stroke-width="1.5"/>
+      <text x="350" y="210" text-anchor="middle" fill="#e8f4fd" font-family="'JetBrains Mono',monospace" font-size="15" font-weight="600">Your Bespoke Interface</text>
+      <text x="350" y="228" text-anchor="middle" fill="#4fc3f7" font-family="'JetBrains Mono',monospace" font-size="10" font-style="italic">APIs composed, not consumed</text>
+
+      <!-- Arrow down -->
+      <line x1="350" y1="237" x2="350" y2="272" stroke="#4fc3f7" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <polygon points="344,269 350,279 356,269" fill="#4fc3f7"/>
+
+      <!-- Section label: Shortcuts -->
+      <text x="40" y="272" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9" text-transform="uppercase" letter-spacing="1.5">SHORTCUTS</text>
+
+      <!-- Three concrete shortcut examples as small cards -->
+      <rect x="60" y="282" width="170" height="56" rx="4" fill="rgba(79,195,247,0.04)" stroke="rgba(79,195,247,0.2)" stroke-width="1"/>
+      <text x="145" y="302" text-anchor="middle" fill="#e8f4fd" font-family="'JetBrains Mono',monospace" font-size="11" font-weight="600">Merge PR</text>
+      <text x="145" y="318" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">from a chat message</text>
+      <text x="145" y="332" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">without opening GitHub</text>
+
+      <rect x="255" y="282" width="170" height="56" rx="4" fill="rgba(79,195,247,0.04)" stroke="rgba(79,195,247,0.2)" stroke-width="1"/>
+      <text x="340" y="302" text-anchor="middle" fill="#e8f4fd" font-family="'JetBrains Mono',monospace" font-size="11" font-weight="600">Agent UI</text>
+      <text x="340" y="318" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">custom rendering for</text>
+      <text x="340" y="332" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">AI agent responses</text>
+
+      <rect x="450" y="282" width="170" height="56" rx="4" fill="rgba(79,195,247,0.04)" stroke="rgba(79,195,247,0.2)" stroke-width="1"/>
+      <text x="535" y="302" text-anchor="middle" fill="#e8f4fd" font-family="'JetBrains Mono',monospace" font-size="11" font-weight="600">Context Inject</text>
+      <text x="535" y="318" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">drag a file into chat</text>
+      <text x="535" y="332" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="9">agent sees the code</text>
+
+      <!-- Bottom result line -->
+      <line x1="100" y1="360" x2="600" y2="360" stroke="rgba(79,195,247,0.15)" stroke-width="1"/>
+
+      <!-- Result summary -->
+      <text x="350" y="390" text-anchor="middle" fill="#b8d4e3" font-family="'JetBrains Mono',monospace" font-size="12">One surface. Zero tab-switching.</text>
+      <text x="350" y="410" text-anchor="middle" fill="#b8d4e3" font-family="'JetBrains Mono',monospace" font-size="12">Every shortcut a generic UI can't justify.</text>
+
+      <!-- Tagline -->
+      <text x="350" y="452" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="10" font-style="italic">Interfaces no single company would build.</text>
+      <text x="350" y="466" text-anchor="middle" fill="#5a7a94" font-family="'JetBrains Mono',monospace" font-size="10" font-style="italic">Because no single company has the incentive.</text>
+    </svg>
+  </div>
+
+  <h2>What Breaks</h2>
+
+  <p>If this plays out — if users start owning their UI layer and assembling capabilities instead of buying apps — the knock-on effects are significant.</p>
+
+  <div class="example-grid">
+    <div class="card">
+      <h4>Upselling from the UI dies</h4>
+      <p>If the user controls the interface, you can't put upgrade prompts in their face. The entire "free tier with annoying limitations" playbook assumes you own the screen. <span class="highlight">You don't anymore.</span></p>
+    </div>
+    <div class="card">
+      <h4>Per-seat pricing gets weird</h4>
+      <p>When one person's bespoke interface hits five APIs, who gets the "seat"? <span class="highlight">Pricing per-capability or per-call makes more sense</span> than pricing per-human-looking-at-your-UI.</p>
+    </div>
+    <div class="card">
+      <h4>Feature tiers blur</h4>
+      <p>Tiered pricing assumes users want <em>your</em> features. But if they're composing their own experience, they might only want your data layer. <span class="highlight">The feature you're gating might be one they've already built.</span></p>
+    </div>
+    <div class="card">
+      <h4>SaaS brand power fades</h4>
+      <p>When your product is consumed through someone else's interface, your brand becomes invisible. You're a capability, not a destination. <span class="highlight">The moat is the API, not the logo.</span></p>
+    </div>
+  </div>
+
+  <p>Apps that don't play nice — that lock down their APIs or force you through their UI — will get replaced by local or open alternatives. Unless they have irreplaceable network effects, a closed API becomes an invitation for someone to rebuild you from scratch.</p>
+
+  <h2>The Takeaway</h2>
+
+  <p>The default UI becomes the demo. The real product is the API. And the real interface is the one you — or your agent — built last weekend.</p>
+
+  <hr>
+
+  <p><em>We're building tools that assume this future. Follow our work on <a href="/blog/">the blog</a> or <a href="/feed.xml">subscribe to RSS</a>.</em></p>
+
+</article>
+<footer>
+  <span>© 2026 repo.box</span>
+  <span>Built with curiosity and claws</span>
+</footer>
+</div>
+<script src="/canvas.js"></script>
+<canvas id="bg-canvas" style="position:absolute;top:0;left:0;width:100%;z-index:0;pointer-events:none;"></canvas>
+<script src="/jellyfish-bg.js"></script>
+</body>
+</html>
