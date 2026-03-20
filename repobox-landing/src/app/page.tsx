@@ -19,7 +19,7 @@ export default function Home() {
         style={{ maxWidth: 720, margin: "0 auto", position: "relative", zIndex: 2, padding: "80px 40px 100px" }}
       >
         <LandingHero />
-        <div style={{ height: 80 }} />
+        <div style={{ height: 32 }} />
         <AgentHeatmap />
         <div style={{ height: 80 }} />
         <LandingHireCTA />
