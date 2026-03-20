@@ -6,6 +6,7 @@ use std::process::Command;
 use crate::config::*;
 use crate::engine;
 use crate::parser;
+use crate::resolver::RemoteResolver;
 
 /// Commands that are never intercepted.
 const PASSTHROUGH_COMMANDS: &[&str] = &[
@@ -32,11 +33,23 @@ pub enum ShimAction {
 }
 
 /// Determine what the shim should do with a git command.
+/// Process a git command with optional remote resolver for dynamic groups.
 pub fn process_command(
     args: &[String],
     repo_root: Option<&Path>,
     identity: Option<&Identity>,
     current_branch: Option<&str>,
+) -> ShimAction {
+    process_command_with_resolver(args, repo_root, identity, current_branch, None)
+}
+
+/// Process a git command, using a remote resolver for dynamic group membership checks.
+pub fn process_command_with_resolver(
+    args: &[String],
+    repo_root: Option<&Path>,
+    identity: Option<&Identity>,
+    current_branch: Option<&str>,
+    resolver: Option<&RemoteResolver>,
 ) -> ShimAction {
     if args.is_empty() {
         return ShimAction::Passthrough;
@@ -96,17 +109,15 @@ pub fn process_command(
     };
 
     match cmd.as_str() {
-        "commit" => check_commit(args, &config, identity, current_branch, repo_root.unwrap()),
-        "merge" => check_merge(args, &config, identity, current_branch),
-        "push" => check_push(args, &config, identity, current_branch),
-        "checkout" => check_checkout(args, &config, identity),
-        "branch" => check_branch(args, &config, identity),
+        "commit" => check_commit(args, &config, identity, current_branch, repo_root.unwrap(), resolver),
+        "merge" => check_merge(args, &config, identity, current_branch, resolver),
+        "push" => check_push(args, &config, identity, current_branch, resolver),
+        "checkout" => check_checkout(args, &config, identity, resolver),
+        "branch" => check_branch(args, &config, identity, resolver),
         "pull" => {
-            // Pull = fetch + merge. The merge part needs checking.
-            // For simplicity, check merge permission on current branch.
             match current_branch {
                 Some(branch) => {
-                    let result = engine::check(&config, identity, Verb::Merge, Some(branch), None);
+                    let result = engine::check_with_resolver(&config, identity, Verb::Merge, Some(branch), None, resolver);
                     if result.is_allowed() {
                         ShimAction::Delegate
                     } else {
@@ -130,6 +141,7 @@ fn check_commit(
     identity: &Identity,
     current_branch: Option<&str>,
     repo_root: &Path,
+    resolver: Option<&RemoteResolver>,
 ) -> ShimAction {
     // Run lint on .repobox.yml if it's being committed
     let staged_files = get_staged_files(repo_root);
@@ -147,7 +159,7 @@ fn check_commit(
 
     // Check file permissions for each staged file
     for file in &staged_files {
-        let result = engine::check(config, identity, Verb::Edit, current_branch, Some(file));
+        let result = engine::check_with_resolver(config, identity, Verb::Edit, current_branch, Some(file), resolver);
         if !result.is_allowed() {
             return ShimAction::Block(format!(
                 "permission denied: {} cannot edit {file}",
@@ -165,14 +177,14 @@ fn check_merge(
     config: &Config,
     identity: &Identity,
     current_branch: Option<&str>,
+    resolver: Option<&RemoteResolver>,
 ) -> ShimAction {
     let branch = match current_branch {
         Some(b) => b,
         None => return ShimAction::Delegate,
     };
 
-    // Check branch-level merge permission
-    let result = engine::check(config, identity, Verb::Merge, Some(branch), None);
+    let result = engine::check_with_resolver(config, identity, Verb::Merge, Some(branch), None, resolver);
     if !result.is_allowed() {
         return ShimAction::Block(format!(
             "permission denied: {} cannot merge into {branch}",
@@ -193,19 +205,19 @@ fn check_push(
     config: &Config,
     identity: &Identity,
     current_branch: Option<&str>,
+    resolver: Option<&RemoteResolver>,
 ) -> ShimAction {
-    // Detect target branch from args or current branch
     let is_force = args.iter().any(|a| a == "--force" || a == "-f");
 
     let target_branch = detect_push_target(args, current_branch);
 
     let target_branch = match target_branch {
         Some(b) => b,
-        None => return ShimAction::Delegate, // Can't determine branch, let git handle it
+        None => return ShimAction::Delegate,
     };
 
     if is_force {
-        let result = engine::check(config, identity, Verb::ForcePush, Some(&target_branch), None);
+        let result = engine::check_with_resolver(config, identity, Verb::ForcePush, Some(&target_branch), None, resolver);
         if !result.is_allowed() {
             return ShimAction::Block(format!(
                 "permission denied: {} cannot force-push to {target_branch}",
@@ -214,7 +226,7 @@ fn check_push(
         }
     }
 
-    let result = engine::check(config, identity, Verb::Push, Some(&target_branch), None);
+    let result = engine::check_with_resolver(config, identity, Verb::Push, Some(&target_branch), None, resolver);
     if result.is_allowed() {
         ShimAction::Delegate
     } else {
@@ -230,14 +242,13 @@ fn check_checkout(
     args: &[String],
     config: &Config,
     identity: &Identity,
+    resolver: Option<&RemoteResolver>,
 ) -> ShimAction {
-    // Only intercept -b (create branch)
     let has_b_flag = args.iter().any(|a| a == "-b" || a == "-B");
     if !has_b_flag {
-        return ShimAction::Passthrough; // Just switching branches, no check needed
+        return ShimAction::Passthrough;
     }
 
-    // Find the branch name (the arg after -b)
     let branch_name = args
         .windows(2)
         .find(|w| w[0] == "-b" || w[0] == "-B")
@@ -248,7 +259,7 @@ fn check_checkout(
         None => return ShimAction::Delegate,
     };
 
-    let result = engine::check(config, identity, Verb::Create, Some(&branch_name), None);
+    let result = engine::check_with_resolver(config, identity, Verb::Create, Some(&branch_name), None, resolver);
     if result.is_allowed() {
         ShimAction::Delegate
     } else {
@@ -264,14 +275,14 @@ fn check_branch(
     args: &[String],
     config: &Config,
     identity: &Identity,
+    resolver: Option<&RemoteResolver>,
 ) -> ShimAction {
     let has_delete = args.iter().any(|a| a == "-d" || a == "-D" || a == "--delete");
 
     if has_delete {
-        // Find the branch being deleted (last arg that doesn't start with -)
         let branch_name = args.iter().rev().find(|a| !a.starts_with('-'));
         if let Some(branch) = branch_name {
-            let result = engine::check(config, identity, Verb::Delete, Some(branch), None);
+            let result = engine::check_with_resolver(config, identity, Verb::Delete, Some(branch), None, resolver);
             if !result.is_allowed() {
                 return ShimAction::Block(format!(
                     "permission denied: {} cannot delete branch {branch}",
@@ -282,12 +293,10 @@ fn check_branch(
         return ShimAction::Delegate;
     }
 
-    // Creating a new branch: `git branch new-branch`
-    // The branch name is the first arg that doesn't start with -
     let branch_name = args.iter().skip(1).find(|a| !a.starts_with('-'));
     if let Some(branch) = branch_name {
         if branch != "branch" {
-            let result = engine::check(config, identity, Verb::Create, Some(branch), None);
+            let result = engine::check_with_resolver(config, identity, Verb::Create, Some(branch), None, resolver);
             if result.is_allowed() {
                 ShimAction::Delegate
             } else {

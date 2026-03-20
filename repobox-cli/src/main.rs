@@ -1072,8 +1072,10 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
             }
         });
 
-    // Read identity from git config (user.signingkey)
-    let identity = read_identity_from_git_config()
+    // Read identity: env var → git config → ~/.repobox/identity
+    let identity = std::env::var("REPOBOX_IDENTITY").ok()
+        .and_then(|s| Identity::parse(&s).ok())
+        .or_else(|| read_identity_from_git_config())
         .or_else(|| identity::get_identity(home).ok().flatten());
 
     // Get current branch
@@ -1089,11 +1091,17 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
             }
         });
 
-    let action = shim::process_command(
+    // Create resolver if REPOBOX_SERVER env var is set (e.g. "https://repo.box/api")
+    let resolver = std::env::var("REPOBOX_SERVER").ok().map(|url| {
+        repobox::resolver::RemoteResolver::new(&url)
+    });
+
+    let action = shim::process_command_with_resolver(
         args,
         repo_root.as_deref(),
         identity.as_ref(),
         current_branch.as_deref(),
+        resolver.as_ref(),
     );
 
     match action {
