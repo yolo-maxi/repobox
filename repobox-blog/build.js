@@ -84,6 +84,8 @@ const POST_STYLES = `
 .post-body a{color:var(--accent);border-bottom:1px solid rgba(0,255,136,.2)}
 .post-body a:hover{border-bottom-color:var(--accent)}
 .post-body hr{border:none;border-top:1px solid var(--border);margin:2rem 0}
+.visual-break{margin:2rem 0}
+.visual-break .diagram{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.5rem;font-family:'JetBrains Mono',monospace;font-size:.75rem;line-height:1.5;color:var(--accent);overflow-x:auto;white-space:pre}
 `;
 
 const htmlHead = (title, description) => `<!DOCTYPE html>
