@@ -445,6 +445,7 @@ fn parse_rule_value(
 /// Parse a flat rule string like "founders edit *" or "agents not merge >main".
 /// All verbs that `own` expands to.
 const OWN_VERBS: &[Verb] = &[
+    Verb::Read,
     Verb::Push, Verb::Merge, Verb::Create, Verb::Delete, Verb::ForcePush,
     Verb::Edit, Verb::Write, Verb::Append,
 ];
@@ -1188,12 +1189,13 @@ permissions:
 "#;
         let config = parse(yaml).unwrap();
         // own expands to 8 verbs
-        assert_eq!(config.permissions.rules.len(), 8);
+        assert_eq!(config.permissions.rules.len(), 9);
 
         let founder = Identity::parse("evm:0xAAA0000000000000000000000000000000000001").unwrap();
         use crate::engine;
 
         // All verbs should be allowed
+        assert!(engine::check(&config, &founder, Verb::Read, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Push, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Merge, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Create, Some("main"), None).is_allowed());
@@ -1217,7 +1219,7 @@ permissions:
       - own >main
 "#;
         let config = parse(yaml).unwrap();
-        assert_eq!(config.permissions.rules.len(), 8);
+        assert_eq!(config.permissions.rules.len(), 9);
     }
 
     #[test]
@@ -1236,7 +1238,7 @@ permissions:
 "#;
         let config = parse(yaml).unwrap();
         // 8 verbs × 2 targets = 16 rules
-        assert_eq!(config.permissions.rules.len(), 16);
+        assert_eq!(config.permissions.rules.len(), 18);
     }
 
     #[test]
@@ -1406,6 +1408,6 @@ permissions:
         let config = parse(yaml).unwrap();
         assert!(config.groups["founders"].resolver.is_none());
         assert!(config.groups["dao"].resolver.is_some());
-        assert_eq!(config.permissions.rules.len(), 9); // 8 from own + 1
+        assert_eq!(config.permissions.rules.len(), 10); // 9 from own + 1
     }
 }

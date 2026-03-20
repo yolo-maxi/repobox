@@ -121,6 +121,8 @@ impl Subject {
 /// A permission verb (action).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verb {
+    // Access verbs
+    Read,
     // Branch verbs
     Push,
     Merge,
@@ -136,6 +138,7 @@ pub enum Verb {
 impl Verb {
     pub fn parse(s: &str) -> Result<Self, ConfigError> {
         match s {
+            "read" => Ok(Verb::Read),
             "push" => Ok(Verb::Push),
             "merge" => Ok(Verb::Merge),
             "create" => Ok(Verb::Create),
@@ -158,11 +161,16 @@ impl Verb {
     pub fn is_file_verb(self) -> bool {
         matches!(self, Verb::Edit | Verb::Write | Verb::Append)
     }
+
+    pub fn is_access_verb(self) -> bool {
+        matches!(self, Verb::Read)
+    }
 }
 
 impl std::fmt::Display for Verb {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Verb::Read => write!(f, "read"),
             Verb::Push => write!(f, "push"),
             Verb::Merge => write!(f, "merge"),
             Verb::Create => write!(f, "create"),

@@ -49,6 +49,13 @@ async fn info_refs(
         return StatusCode::NOT_FOUND.into_response();
     }
 
+    // Check read access for clone/fetch operations
+    if service == "git-upload-pack" {
+        if let Err(denied) = check_read_access(&state, &repo, &headers) {
+            return denied;
+        }
+    }
+
     let qs = if service == "git-upload-pack" {
         "service=git-upload-pack"
     } else {
@@ -83,6 +90,11 @@ async fn upload_pack(
 
     if !git::repo_dir(&state.data_dir, &repo).exists() {
         return StatusCode::NOT_FOUND.into_response();
+    }
+
+    // Check read access
+    if let Err(denied) = check_read_access(&state, &repo, &headers) {
+        return denied;
     }
 
     backend_post(
@@ -175,11 +187,17 @@ async fn receive_pack(
 async fn head(
     State(state): State<Arc<AppState>>,
     Path((address, repo)): Path<(String, String)>,
+    headers: HeaderMap,
 ) -> Response {
     let repo = match repo_path(address, repo) {
         Ok(repo) => repo,
         Err(status) => return status.into_response(),
     };
+
+    // Check read access
+    if let Err(denied) = check_read_access(&state, &repo, &headers) {
+        return denied;
+    }
 
     match git::read_head(&state.data_dir, &repo) {
         Ok(head) => {
@@ -221,6 +239,86 @@ fn repo_path(address: String, repo: String) -> Result<RepoPath, StatusCode> {
     git::validate_address(&address)?;
     let name = git::parse_repo(&repo)?;
     Ok(RepoPath { address, name })
+}
+
+/// Check if the request has read access to the repo.
+/// Returns Ok(()) if access is granted, Err(Response) if denied.
+fn check_read_access(
+    state: &AppState,
+    repo: &RepoPath,
+    headers: &HeaderMap,
+) -> Result<(), Response> {
+    let repo_dir = git::repo_dir(&state.data_dir, repo);
+
+    // Try to read config from the repo (via git show HEAD:.repobox/config.yml)
+    let config_content = match read_config_from_repo(&repo_dir) {
+        Some(content) => content,
+        None => return Ok(()), // No config = public (default: allow)
+    };
+
+    let config = match repobox::parser::parse(&config_content) {
+        Ok(c) => c,
+        Err(_) => return Ok(()), // Invalid config = don't block reads
+    };
+
+    // Check if any read rules exist
+    let has_read_rules = config.permissions.rules.iter().any(|r| r.verb == repobox::config::Verb::Read);
+    if !has_read_rules {
+        // No read rules → use default policy
+        return if config.permissions.default == repobox::config::DefaultPolicy::Allow {
+            Ok(())
+        } else {
+            // default: deny with no read rules → need auth
+            let repo_path_str = format!("{}/{}", repo.address, repo.name);
+            match crate::auth::extract_identity(headers, &repo_path_str) {
+                Ok(Some(_)) => {
+                    // Authenticated but no read rules and default deny → denied
+                    Err((StatusCode::FORBIDDEN, "read access denied").into_response())
+                }
+                Ok(None) => {
+                    Err((StatusCode::UNAUTHORIZED, "authentication required").into_response())
+                }
+                Err(e) => {
+                    Err((StatusCode::UNAUTHORIZED, format!("auth error: {e}")).into_response())
+                }
+            }
+        };
+    }
+
+    // Read rules exist — need to authenticate and check
+    let repo_path_str = format!("{}/{}", repo.address, repo.name);
+    let identity = match crate::auth::extract_identity(headers, &repo_path_str) {
+        Ok(Some(id)) => id,
+        Ok(None) => {
+            return Err((StatusCode::UNAUTHORIZED, "authentication required for this repo").into_response());
+        }
+        Err(e) => {
+            return Err((StatusCode::UNAUTHORIZED, format!("auth error: {e}")).into_response());
+        }
+    };
+
+    // Check read permission
+    let result = repobox::engine::check(&config, &identity, repobox::config::Verb::Read, None, None);
+    if result.is_allowed() {
+        Ok(())
+    } else {
+        Err((StatusCode::FORBIDDEN, format!("read access denied for {}", identity)).into_response())
+    }
+}
+
+/// Read .repobox/config.yml from a bare git repo (HEAD revision).
+fn read_config_from_repo(repo_dir: &std::path::Path) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .args(["show", "HEAD:.repobox/config.yml"])
+        .current_dir(repo_dir)
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        None
+    }
 }
 
 fn ensure_repo_initialized(state: &AppState, repo: &RepoPath) -> std::io::Result<()> {

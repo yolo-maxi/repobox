@@ -1351,6 +1351,7 @@ dependencies = [
  "clap",
  "hex",
  "http",
+ "k256",
  "repobox-core",
  "reqwest",
  "rusqlite",

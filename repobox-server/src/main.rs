@@ -1,3 +1,4 @@
+pub mod auth;
 mod db;
 mod git;
 mod resolve;
