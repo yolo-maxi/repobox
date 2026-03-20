@@ -1,33 +1,42 @@
-# repo.box — permission config for the repo.box project itself
-# Dogfooding our own creation 🪸
+# repo.box — permission config
+# Four-agent pipeline: PM → Dev → Reviewer → Mergeooor
 
 groups:
   founders:
-    - evm:0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048  # Ocean
+    - evm:0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048  # Ocean (Mergeooor)
     - evm:0x69C2920CA309577bcd79e4e6e3afdda93287Cc8b  # Fran
 
-  agents:
+  product:
+    - evm:0x9aBA6b1a5175CA8fd97D6c83c2Dd66dA6f47234b  # PM agent
+
+  devs:
     - evm:0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00  # Claude
     - evm:0x82240a161Fea724D059a74F948C8E18674c0fA09  # Codex
 
   reviewers:
-    members:
-      - evm:0xF053A15C36f1FbCC2A281095e6f1507ea1EFc931
-    includes:
-      - founders
+    - evm:0xe4D4438Fd215c2befe8ef3fB78E72e14e011C307  # Reviewer agent
 
 permissions:
   default: deny
   rules:
-    # Founders — full control
+    # ── Founders (Mergeooor + Fran) ──────────────
     - founders own >*
 
-    # Agents — feature branches only, no config access
-    - agents push >feature/**
-    - agents create >feature/**
-    - agents edit * >feature/**
-    - agents append ./CHANGELOG.md
-    - agents not edit .repobox/config.yml
+    # ── PM ── can only edit the kanban + docs ────
+    - product edit ./KANBAN.md
+    - product edit ./docs/**
+    - product not edit .repobox/config.yml
 
-    # Reviewers can merge feature branches into main
-    - reviewers merge >main
+    # ── Devs ── feature branches only ────────────
+    - devs push >feature/**
+    - devs create >feature/**
+    - devs edit * >feature/**
+    - devs append ./KANBAN.md >feature/**
+    - devs not edit .repobox/config.yml
+
+    # ── Reviewer ── review branches + log ────────
+    - reviewers push >review/**
+    - reviewers create >review/**
+    - reviewers edit * >review/**
+    - reviewers append ./REVIEWS.md
+    - reviewers not edit .repobox/config.yml
