@@ -1,0 +1,18 @@
+# repo.box — permission config for the repo.box project itself
+# Dogfooding our own creation 🪸
+
+groups:
+  founders:
+    - evm:0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048  # Ocean
+  agents:
+    - evm:0xF053A15C36f1FbCC2A281095e6f1507ea1EFc931  # Ocean's agent wallet
+
+permissions:
+  default: deny
+  rules:
+    - founders own >*                          # full control everywhere
+    - agents push >feature/**                  # agents push to feature branches
+    - agents create >feature/**                # agents can create feature branches
+    - agents edit * >feature/**                # agents edit files on feature branches
+    - agents append ./CHANGELOG.md             # agents can append to changelog
+    - agents not edit .repobox/config.yml      # agents can never touch permissions
