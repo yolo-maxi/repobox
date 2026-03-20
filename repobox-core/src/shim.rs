@@ -49,9 +49,9 @@ pub fn process_command(
         return ShimAction::RepoboxCommand;
     }
 
-    // Check if .repobox-config exists
+    // Check if .repobox.yml exists
     let config_path = match repo_root {
-        Some(root) => root.join(".repobox-config"),
+        Some(root) => root.join(".repobox.yml"),
         None => return ShimAction::Passthrough, // Not in a git repo
     };
 
@@ -83,7 +83,7 @@ pub fn process_command(
     let config_content = match std::fs::read_to_string(&config_path) {
         Ok(c) => c,
         Err(e) => {
-            return ShimAction::Block(format!("failed to read .repobox-config: {e}"));
+            return ShimAction::Block(format!("failed to read .repobox.yml: {e}"));
         }
     };
 
@@ -91,7 +91,7 @@ pub fn process_command(
         Ok(c) => c,
         Err(e) => {
             // Parse errors block permission-checked commands
-            return ShimAction::Block(format!(".repobox-config error: {e}"));
+            return ShimAction::Block(format!(".repobox.yml error: {e}"));
         }
     };
 
@@ -169,8 +169,8 @@ fn check_merge(
         ));
     }
 
-    // TODO: Check if merge would bring in .repobox-config changes
-    // and verify the identity can edit .repobox-config on the target branch.
+    // TODO: Check if merge would bring in .repobox.yml changes
+    // and verify the identity can edit .repobox.yml on the target branch.
     // For now, this is checked at commit time.
 
     ShimAction::Delegate
@@ -359,7 +359,7 @@ mod tests {
             .unwrap();
 
         if !config_content.is_empty() {
-            std::fs::write(repo.join(".repobox-config"), config_content).unwrap();
+            std::fs::write(repo.join(".repobox.yml"), config_content).unwrap();
         }
 
         (tmp, repo)
@@ -381,7 +381,7 @@ mod tests {
     fn test_no_config_passthrough() {
         let (_tmp, repo) = setup_repo_with_config("");
         // Remove config file
-        let _ = std::fs::remove_file(repo.join(".repobox-config"));
+        let _ = std::fs::remove_file(repo.join(".repobox.yml"));
 
         let action = process_command(
             &args("commit -m test"),
@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn test_commit_no_config_delegates() {
         let (_tmp, repo) = setup_repo_with_config("");
-        let _ = std::fs::remove_file(repo.join(".repobox-config"));
+        let _ = std::fs::remove_file(repo.join(".repobox.yml"));
 
         let action = process_command(
             &args("commit -m test"),
@@ -492,7 +492,7 @@ permissions:
 permissions:
   default: allow
   rules:
-    - "founders edit .repobox-config"
+    - "founders edit .repobox.yml"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -514,11 +514,11 @@ groups:
 permissions:
   default: allow
   rules:
-    - "founders edit .repobox-config"
+    - "founders edit .repobox.yml"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
-        // Stage .repobox-config
+        // Stage .repobox.yml
         std::fs::write(repo.join("test.txt"), "hello").unwrap();
         Command::new("git").args(["add", "test.txt"]).current_dir(&repo).output().unwrap();
 
@@ -838,7 +838,7 @@ permissions:
     #[test]
     fn test_no_config_all_passthrough() {
         let (_tmp, repo) = setup_repo_with_config("");
-        let _ = std::fs::remove_file(repo.join(".repobox-config"));
+        let _ = std::fs::remove_file(repo.join(".repobox.yml"));
 
         for cmd in &["commit -m test", "merge feature/x", "push origin main", "checkout -b new"] {
             let action = process_command(

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Workflows are generic state machines defined in `.repobox-config`. PRs, ideas, releases, governance proposals — all are instances of workflows. States, transitions, guards, and actions are the building blocks. Instances live as JSONL files in the repo.
+Workflows are generic state machines defined in `.repobox.yml`. PRs, ideas, releases, governance proposals — all are instances of workflows. States, transitions, guards, and actions are the building blocks. Instances live as JSONL files in the repo.
 
 **Everything as code.** Workflow definitions, instance data, discussions — all are files in the repo, versioned by git, governed by permissions.
 
@@ -17,7 +17,7 @@ Workflows are generic state machines defined in `.repobox-config`. PRs, ideas, r
 
 ## Workflow Definitions
 
-Defined in `.repobox-config` under `workflows:`:
+Defined in `.repobox.yml` under `workflows:`:
 
 ```yaml
 workflows:
@@ -288,7 +288,7 @@ The shim provides a helper: `git repobox pr create --title "Fix auth bug" --bran
 
 ### Permission Model for Instances
 
-Controlled by the standard file permissions in `.repobox-config`:
+Controlled by the standard file permissions in `.repobox.yml`:
 
 ```yaml
 .box/workflows/pull-request/index.jsonl:

@@ -19,19 +19,40 @@ impl Drop for ServerGuard {
 }
 
 #[test]
-fn repo_creation_on_first_push_and_clone_after_push() {
+fn signed_push_and_clone_roundtrip() {
     let temp = TempDir::new("repobox-server-test").unwrap();
     let data_dir = temp.path().join("data");
-    let address = "0xabc123";
-    let repo_name = "demo";
     let bind = free_addr();
     let _server = start_server(bind, &data_dir);
 
+    // Known test key (Hardhat account #0)
+    let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    let expected_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
     let source_repo = init_working_repo(temp.path().join("source"));
+
+    // Set up repobox key
+    let repobox_home = temp.path().join("repobox-home");
+    let keys_dir = repobox_home.join(".repobox").join("keys");
+    std::fs::create_dir_all(&keys_dir).unwrap();
+    write_file(
+        &keys_dir.join(format!("{expected_address}.key")),
+        &format!("0x{private_key}"),
+    );
+
+    // Create signed commit
     write_file(&source_repo.join("README.md"), "# repo.box\n");
     git(&source_repo, &["add", "README.md"]);
-    git(&source_repo, &["commit", "-m", "initial commit"]);
+    let signed_commit = create_signed_commit(
+        &source_repo,
+        &repobox_home,
+        expected_address,
+        "initial commit",
+    );
+    git(&source_repo, &["update-ref", "HEAD", &signed_commit]);
 
+    let address = "0xdemo";
+    let repo_name = "roundtrip";
     let remote = format!("http://{bind}/{address}/{repo_name}.git");
     git(&source_repo, &["remote", "add", "origin", &remote]);
     git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
@@ -49,7 +70,7 @@ fn repo_creation_on_first_push_and_clone_after_push() {
 }
 
 #[test]
-fn unsigned_push_does_not_create_ownership() {
+fn unsigned_push_is_rejected_and_cleaned_up() {
     let temp = TempDir::new("repobox-server-unsigned-test").unwrap();
     let data_dir = temp.path().join("data");
     let address = "0xfeedbeef";
@@ -64,12 +85,21 @@ fn unsigned_push_does_not_create_ownership() {
 
     let remote = format!("http://{bind}/{address}/{repo_name}.git");
     git(&source_repo, &["remote", "add", "origin", &remote]);
-    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
 
-    // Repo should exist on disk but NOT have an ownership record
+    // Push will "succeed" from git's perspective (objects transferred),
+    // but the server should clean up the repo afterwards
+    let output = Command::new("git")
+        .current_dir(&source_repo)
+        .args(["push", "-u", "origin", "HEAD:refs/heads/main"])
+        .output()
+        .unwrap();
+    eprintln!("[unsigned push] exit={} stderr={}", output.status, String::from_utf8_lossy(&output.stderr));
+
+    // Bare repo should NOT exist — server cleaned it up
     let bare_repo = data_dir.join(address).join(format!("{repo_name}.git"));
-    assert!(bare_repo.exists(), "bare repo should be created");
+    assert!(!bare_repo.exists(), "unsigned repo should be deleted");
 
+    // No ownership record either
     let db = Connection::open(data_dir.join("repobox.db")).unwrap();
     let count: i64 = db
         .query_row(
@@ -88,60 +118,20 @@ fn signed_push_establishes_ownership() {
     let bind = free_addr();
     let _server = start_server(bind, &data_dir);
 
-    // Known test key (Hardhat account #0)
     let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
     let expected_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
     let source_repo = init_working_repo(temp.path().join("source"));
+    let repobox_home = setup_repobox_key(temp.path(), private_key, expected_address);
 
-    // Set up repobox key for signing
-    let repobox_home = temp.path().join("repobox-home");
-    let keys_dir = repobox_home.join(".repobox").join("keys");
-    std::fs::create_dir_all(&keys_dir).unwrap();
-    write_file(
-        &keys_dir.join(format!("{expected_address}.key")),
-        &format!("0x{private_key}"),
-    );
-
-    // Create a signing script that uses repobox-cli (or we can sign manually)
-    // For the test, we'll create a signed commit manually using git commit-tree
     write_file(&source_repo.join("README.md"), "# signed repo\n");
     git(&source_repo, &["add", "README.md"]);
-
-    // Create the commit object manually with a signature
-    let tree_hash = git_output(&source_repo, &["write-tree"]);
-
-    // Build the commit content (without signature) — this is what gets signed
-    let commit_content = format!(
-        "tree {tree_hash}\n\
-         author Test <test@test.com> 1234567890 +0000\n\
-         committer Test <test@test.com> 1234567890 +0000\n\
-         \n\
-         signed initial commit\n"
-    );
-
-    // Sign the commit content using repobox-core
-    let sig = repobox::signing::sign(
+    let commit_hash = create_signed_commit(
+        &source_repo,
         &repobox_home,
         expected_address,
-        commit_content.as_bytes(),
-    )
-    .expect("signing should succeed");
-    let sig_hex = hex::encode(&sig);
-
-    // Build the full commit with gpgsig header
-    let signed_commit = format!(
-        "tree {tree_hash}\n\
-         author Test <test@test.com> 1234567890 +0000\n\
-         committer Test <test@test.com> 1234567890 +0000\n\
-         gpgsig {sig_hex}\n\
-         \n\
-         signed initial commit\n"
+        "signed initial commit",
     );
-
-    // Write the commit object via git hash-object
-    let commit_hash = git_output_stdin(&source_repo, &["hash-object", "-t", "commit", "-w", "--stdin"], &signed_commit);
-    // Update the branch ref to point to this commit
     git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
 
     let namespace = expected_address;
@@ -165,6 +155,49 @@ fn signed_push_establishes_ownership() {
         expected_address.to_lowercase(),
         "owner should be the EVM address that signed the first commit"
     );
+}
+
+fn setup_repobox_key(temp_dir: &Path, private_key: &str, address: &str) -> PathBuf {
+    let repobox_home = temp_dir.join("repobox-home");
+    let keys_dir = repobox_home.join(".repobox").join("keys");
+    std::fs::create_dir_all(&keys_dir).unwrap();
+    write_file(
+        &keys_dir.join(format!("{address}.key")),
+        &format!("0x{private_key}"),
+    );
+    repobox_home
+}
+
+fn create_signed_commit(
+    repo: &Path,
+    repobox_home: &Path,
+    address: &str,
+    message: &str,
+) -> String {
+    let tree_hash = git_output(repo, &["write-tree"]);
+
+    let commit_content = format!(
+        "tree {tree_hash}\n\
+         author Test <test@test.com> 1234567890 +0000\n\
+         committer Test <test@test.com> 1234567890 +0000\n\
+         \n\
+         {message}\n"
+    );
+
+    let sig = repobox::signing::sign(repobox_home, address, commit_content.as_bytes())
+        .expect("signing should succeed");
+    let sig_hex = hex::encode(&sig);
+
+    let signed_commit = format!(
+        "tree {tree_hash}\n\
+         author Test <test@test.com> 1234567890 +0000\n\
+         committer Test <test@test.com> 1234567890 +0000\n\
+         gpgsig {sig_hex}\n\
+         \n\
+         {message}\n"
+    );
+
+    git_output_stdin(repo, &["hash-object", "-t", "commit", "-w", "--stdin"], &signed_commit)
 }
 
 fn start_server(bind: SocketAddr, data_dir: &Path) -> ServerGuard {

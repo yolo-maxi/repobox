@@ -99,6 +99,8 @@ async fn receive_pack(
         Err(status) => return status.into_response(),
     };
 
+    let is_new_repo = !git::repo_dir(&state.data_dir, &repo).exists();
+
     if let Err(error) = ensure_repo_initialized(&state, &repo) {
         return internal_error(error);
     }
@@ -111,16 +113,32 @@ async fn receive_pack(
         body,
     );
 
-    // After a successful push, check if this repo needs an owner.
-    // Ownership is established by the EVM signature on the first commit.
-    if let Ok(None) = db::get_repo(&state.db_path, &repo.address, &repo.name) {
-        if let Ok(Some(signer)) = git::extract_owner_from_first_commit(&state.data_dir, &repo) {
-            let _ = db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
-            tracing::info!(
-                repo = %format!("{}/{}", repo.address, repo.name),
-                owner = %signer,
-                "ownership established via signed commit"
-            );
+    // For new repos: require a signed first commit to establish ownership.
+    // If unsigned or invalid, delete the repo — we only host compliant repos.
+    if is_new_repo {
+        tracing::debug!(
+            repo = %format!("{}/{}", repo.address, repo.name),
+            "new repo push completed, checking for EVM signature"
+        );
+        match git::extract_owner_from_first_commit(&state.data_dir, &repo) {
+            Ok(Some(signer)) => {
+                let _ = db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
+                tracing::info!(
+                    repo = %format!("{}/{}", repo.address, repo.name),
+                    owner = %signer,
+                    "ownership established via signed commit"
+                );
+            }
+            _ => {
+                // No valid signature — reject by removing the repo
+                let repo_dir = git::repo_dir(&state.data_dir, &repo);
+                let _ = std::fs::remove_dir_all(&repo_dir);
+                tracing::warn!(
+                    repo = %format!("{}/{}", repo.address, repo.name),
+                    "rejected: first commit must be EVM-signed"
+                );
+                return (StatusCode::FORBIDDEN, "first commit must be EVM-signed to establish ownership").into_response();
+            }
         }
     }
 

@@ -289,12 +289,12 @@ groups:
 permissions:
   default: allow
   rules:
-    - "founders edit .repobox-config"
+    - "founders edit .repobox.yml"
 "#,
             "evm:0xAAA0000000000000000000000000000000000001",
             Verb::Edit,
             None,
-            Some(".repobox-config"),
+            Some(".repobox.yml"),
         );
         assert!(r.is_allowed());
     }
@@ -311,12 +311,12 @@ groups:
 permissions:
   default: allow
   rules:
-    - "founders edit .repobox-config"
+    - "founders edit .repobox.yml"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Edit,
             None,
-            Some(".repobox-config"),
+            Some(".repobox.yml"),
         );
         assert!(!r.is_allowed());
     }
@@ -333,7 +333,7 @@ groups:
 permissions:
   default: allow
   rules:
-    - "founders edit .repobox-config"
+    - "founders edit .repobox.yml"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
             Verb::Edit,
@@ -621,13 +621,13 @@ groups:
     members: [evm:0xAAA0000000000000000000000000000000000001]
 permissions:
   rules:
-    - "evm:0xAAA0000000000000000000000000000000000001 edit .repobox-config"
-    - "devs not edit .repobox-config"
+    - "evm:0xAAA0000000000000000000000000000000000001 edit .repobox.yml"
+    - "devs not edit .repobox.yml"
 "#,
             "evm:0xAAA0000000000000000000000000000000000001",
             Verb::Edit,
             None,
-            Some(".repobox-config"),
+            Some(".repobox.yml"),
         );
         assert!(r.is_allowed());
     }

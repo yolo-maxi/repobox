@@ -88,7 +88,7 @@ fn default_allow() -> String {
     "allow".to_string()
 }
 
-/// Parse a .repobox-config YAML string into a validated Config.
+/// Parse a .repobox.yml YAML string into a validated Config.
 pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
     let raw: RawConfig = serde_yaml::from_str(yaml)?;
 
@@ -498,7 +498,7 @@ mod tests {
     use super::*;
 
     // ================================================================
-    // Section 1: .repobox-config Parser
+    // Section 1: .repobox.yml Parser
     // ================================================================
 
     #[test]
@@ -758,7 +758,7 @@ groups:
 
 permissions:
   rules:
-    - "agents not edit .repobox-config"
+    - "agents not edit .repobox.yml"
 "#;
         let config = parse(yaml).unwrap();
         let rule = &config.permissions.rules[0];
@@ -889,7 +889,7 @@ permissions:
       - delete >*
     agents:
       - push >feature/**
-      - not edit ./.repobox-config
+      - not edit ./.repobox.yml
 "#;
         let config = parse(yaml).unwrap();
         assert_eq!(config.permissions.rules.len(), 5);
