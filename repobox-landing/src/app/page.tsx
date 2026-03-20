@@ -4,6 +4,7 @@ import { AgentHeatmap } from "@/components/landing/AgentHeatmap";
 import { LandingShippedToday } from "@/components/landing/ShippedToday";
 import { LandingCaseStudies } from "@/components/landing/CaseStudies";
 import { LandingEthos } from "@/components/landing/Ethos";
+import { ConfigExample } from "@/components/landing/ConfigExample";
 import { LandingCTA } from "@/components/landing/CTA";
 import { LandingHireCTA } from "@/components/landing/HireCTA";
 import { LandingWriting } from "@/components/landing/Writing";
@@ -25,6 +26,7 @@ export default function Home() {
         <LandingHireCTA />
         <LandingShippedToday />
         <LandingCaseStudies />
+        <ConfigExample />
         <LandingEthos />
         <LandingCTA />
         <LandingWriting />
