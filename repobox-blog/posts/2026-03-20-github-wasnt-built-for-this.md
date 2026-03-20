@@ -29,7 +29,6 @@ The pattern already exists. Blockchain wallets work exactly this way: generate a
 <pre class="diagram">
   TODAY                          WHAT'S NEEDED
   ─────                          ────────────
-
   ┌─────────┐                    ┌─────────┐
   │  Human  │                    │  Human  │
   │ Account │                    │ Account │

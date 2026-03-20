@@ -4,6 +4,8 @@ const path = require('path');
 const { marked } = require('marked');
 const matter = require('gray-matter');
 
+marked.setOptions({ breaks: false });
+
 const POSTS_DIR = path.join(__dirname, 'posts');
 const OUT_DIR = '/var/www/repo.box/subdomains/root/blog';
 const FEED_PATH = '/var/www/repo.box/subdomains/root/feed.xml';
