@@ -147,15 +147,15 @@ async fn resolve_membership(
         }
     };
 
-    // Parse result: "0x...0001" = true, "0x...0000" = false
+    // Parse result as truthy: any non-zero return = member
+    // This means balanceOf > 0, isMember == true, hasRole == true all work natively
     let is_member = rpc_json
         .get("result")
         .and_then(|v| v.as_str())
         .map(|hex_str| {
-            // The result is a 32-byte ABI-encoded bool
-            // True = ...0001, False = ...0000
             let clean = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-            clean.ends_with('1') && !clean.ends_with("00")
+            // Truthy = any non-zero value (works for bool, uint256, etc.)
+            !clean.is_empty() && clean.chars().any(|c| c != '0')
         })
         .unwrap_or(false);
 
