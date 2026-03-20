@@ -5,7 +5,11 @@
 
 ## What is repo.box?
 
-A git permission layer. Shims the `git` command so every commit, merge, and push is checked against a `.repobox-config` file. Permissions are tied to EVM wallet identities. Five agents, five keys, one repo, zero risk.
+repo.box makes git repositories safe for AI agents. It shims the `git` command so agents use normal git workflows — but every commit, merge, and push is silently checked against a `.repobox-config` file before it lands. If the action violates a rule, it's blocked before anything touches your repo.
+
+Each agent gets its own EVM keypair as identity. Each commit is signed. Permissions live in the repo, not on a server. One YAML file controls who can push where, which files they can touch, and which branches they can create — with first-match-wins evaluation and implicit deny on any target that has rules.
+
+Five agents, five keys, one repo, zero risk.
 
 ## Config Structure
 
