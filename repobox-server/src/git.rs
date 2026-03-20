@@ -145,6 +145,69 @@ pub(crate) fn read_head(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Str
     std::fs::read_to_string(repo_dir(data_dir, repo).join("HEAD"))
 }
 
+/// Check if a pusher is authorized to push to a repo.
+/// If a `.repobox-config` exists in the repo, parse and evaluate it.
+/// If no config exists, only the owner (from SQLite) can push.
+/// Returns Ok(true) if authorized, Ok(false) if denied.
+pub(crate) fn check_push_authorized(
+    data_dir: &Path,
+    repo: &RepoPath,
+    pusher_address: &str,
+    owner_address: &str,
+) -> std::io::Result<bool> {
+    let repo_dir = repo_dir(data_dir, repo);
+    let repo_dir_str = repo_dir.to_string_lossy().to_string();
+
+    // Try to read .repobox-config from HEAD
+    let output = Command::new("git")
+        .args(["--git-dir", &repo_dir_str, "show", "HEAD:.repobox-config"])
+        .output()?;
+
+    if output.status.success() {
+        // Config exists — parse and evaluate using the permission engine
+        let config_text = String::from_utf8_lossy(&output.stdout);
+        match repobox::parser::parse(&config_text) {
+            Ok(config) => {
+                let identity = repobox::config::Identity::parse(&format!("evm:{pusher_address}"))
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
+                let result = repobox::engine::check(
+                    &config,
+                    &identity,
+                    repobox::config::Verb::Push,
+                    None, // branch — checked per-ref in pre-receive, here we do a general push check
+                    None, // path
+                );
+                Ok(result.is_allowed())
+            }
+            Err(_) => {
+                // Invalid config — fall back to owner-only
+                Ok(pusher_address.eq_ignore_ascii_case(owner_address))
+            }
+        }
+    } else {
+        // No config — implicit rule: only owner can push
+        Ok(pusher_address.eq_ignore_ascii_case(owner_address))
+    }
+}
+
+/// Extract the EVM signer address from the latest pushed commits.
+/// Checks the HEAD commit (most recent) for an EVM signature.
+pub(crate) fn extract_pusher_from_head(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Option<String>> {
+    let repo_dir = repo_dir(data_dir, repo);
+    let repo_dir_str = repo_dir.to_string_lossy().to_string();
+
+    let output = Command::new("git")
+        .args(["--git-dir", &repo_dir_str, "cat-file", "commit", "HEAD"])
+        .output()?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let commit_text = String::from_utf8_lossy(&output.stdout);
+    extract_signer_from_commit_text(&commit_text)
+}
+
 /// Extract the EVM signer address from the first signed commit in a repo.
 /// Walks the default branch (HEAD) and finds the root commit.
 /// If the root commit has an EVM signature (65-byte gpgsig), recovers the signer address.

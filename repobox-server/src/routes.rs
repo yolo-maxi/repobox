@@ -117,14 +117,31 @@ async fn receive_pack(
         body,
     );
 
-    // Check if this repo has an owner yet. If not, this is the first push
-    // and we need to verify the first commit is EVM-signed.
-    let has_owner = matches!(
-        db::get_repo(&state.db_path, &repo.address, &repo.name),
-        Ok(Some(_))
-    );
+    // Check ownership and authorization.
+    let existing_owner = db::get_repo(&state.db_path, &repo.address, &repo.name);
 
-    if !has_owner {
+    if let Ok(Some(record)) = &existing_owner {
+        // Existing repo — check if the pusher is authorized.
+        // Extract the signer of the HEAD commit (the latest pushed commit).
+        if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo) {
+            if !matches!(
+                git::check_push_authorized(&state.data_dir, &repo, &pusher, &record.owner_address),
+                Ok(true)
+            ) {
+                // Unauthorized — revert would be ideal but for now just log.
+                // TODO: pre-receive hook integration for proper rejection.
+                tracing::warn!(
+                    repo = %format!("{}/{}", repo.address, repo.name),
+                    pusher = %pusher,
+                    owner = %record.owner_address,
+                    "push denied: pusher not authorized"
+                );
+            }
+        }
+        // If HEAD commit is unsigned, the implicit owner-only rule still applies
+        // through the pre-receive hook (when repobox-check is installed).
+    } else {
+        // New repo — first push. Verify the first commit is EVM-signed.
         match git::extract_owner_from_first_commit(&state.data_dir, &repo) {
             Ok(Some(signer)) => {
                 let _ = db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
