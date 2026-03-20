@@ -911,25 +911,14 @@ fn cmd_lint() -> ExitCode {
             println!("✅ .repobox.yml is valid");
             println!("   {n_groups} groups, {n_rules} rules, default: {:?}", config.permissions.default);
 
-            // Warn about potential issues
-            // Check for broader allow above narrower deny for same subject
-            for (i, rule) in config.permissions.rules.iter().enumerate() {
-                if !rule.deny {
-                    // Look for deny rules below this one for the same subject
-                    for later in &config.permissions.rules[i + 1..] {
-                        if later.deny && later.verb == rule.verb {
-                            if let (Subject::Group(a), Subject::Group(b)) =
-                                (&rule.subject, &later.subject)
-                            {
-                                if a == b {
-                                    println!(
-                                        "   ⚠️  warning: deny rule for {b} {} is shadowed by allow rule above (line {})",
-                                        later.verb, rule.line
-                                    );
-                                }
-                            }
-                        }
-                    }
+            let warnings = repobox::lint::lint(&config);
+            if warnings.is_empty() {
+                println!("   No warnings.");
+            } else {
+                println!();
+                for w in &warnings {
+                    println!("   {w}");
+                    println!();
                 }
             }
 

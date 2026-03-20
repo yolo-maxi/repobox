@@ -131,8 +131,19 @@ fn check_commit(
     current_branch: Option<&str>,
     repo_root: &Path,
 ) -> ShimAction {
-    // Get staged files from git
+    // Run lint on .repobox.yml if it's being committed
     let staged_files = get_staged_files(repo_root);
+
+    if staged_files.iter().any(|f| f == ".repobox.yml") {
+        let warnings = crate::lint::lint(config);
+        if !warnings.is_empty() {
+            eprintln!("repo.box lint warnings:");
+            for w in &warnings {
+                eprintln!("  {w}");
+            }
+            eprintln!();
+        }
+    }
 
     // Check file permissions for each staged file
     for file in &staged_files {
