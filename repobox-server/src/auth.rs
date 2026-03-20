@@ -22,10 +22,27 @@ pub fn extract_identity(headers: &HeaderMap, repo_path: &str) -> Result<Option<I
         None => return Ok(None),
     };
 
-    let token = auth
-        .strip_prefix("Bearer ")
-        .or_else(|| auth.strip_prefix("bearer "))
-        .ok_or("auth must use Bearer scheme")?;
+    // Support both Bearer and Basic auth schemes.
+    // Bearer: Authorization: Bearer <sig_hex>:<timestamp>
+    // Basic:  Authorization: Basic base64(evm:<sig_hex>:<timestamp>)  (git's native format)
+    let token = if let Some(bearer) = auth.strip_prefix("Bearer ").or_else(|| auth.strip_prefix("bearer ")) {
+        bearer.to_string()
+    } else if let Some(basic) = auth.strip_prefix("Basic ").or_else(|| auth.strip_prefix("basic ")) {
+        // Decode base64 → "evm:<sig_hex>:<timestamp>"
+        use base64::Engine;
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(basic.trim())
+            .map_err(|_| "invalid base64 in Basic auth")?;
+        let decoded_str = String::from_utf8(decoded)
+            .map_err(|_| "invalid UTF-8 in Basic auth")?;
+        // Strip "evm:" username prefix → "<sig_hex>:<timestamp>"
+        decoded_str
+            .strip_prefix("evm:")
+            .ok_or("Basic auth username must be 'evm'")?
+            .to_string()
+    } else {
+        return Err("auth must use Bearer or Basic scheme".into());
+    };
 
     // Parse "hex_signature:timestamp"
     let (sig_hex, timestamp_str) = token
@@ -46,9 +63,15 @@ pub fn extract_identity(headers: &HeaderMap, repo_path: &str) -> Result<Option<I
         return Err("timestamp too old or too far in the future".into());
     }
 
-    // Reconstruct the signed message: keccak256("{repo_path}:{timestamp}")
+    // Reconstruct the signed message: "{repo_path}:{timestamp}"
+    // (The signing module will keccak256 this before verifying)
     let message = format!("{repo_path}:{timestamp}");
-    let message_hash = keccak256(message.as_bytes());
+    tracing::debug!(
+        message = %message,
+        sig_hex_len = sig_hex.len(),
+        timestamp = timestamp,
+        "verifying auth signature"
+    );
 
     // Recover the signer address from the signature
     let sig_bytes = hex::decode(sig_hex.strip_prefix("0x").unwrap_or(sig_hex))
@@ -58,47 +81,14 @@ pub fn extract_identity(headers: &HeaderMap, repo_path: &str) -> Result<Option<I
         return Err(format!("signature must be 65 bytes, got {}", sig_bytes.len()));
     }
 
-    let address = recover_address(&message_hash, &sig_bytes)?;
+    // Use repobox::signing::recover_address which handles keccak256 internally
+    let address = repobox::signing::recover_address(message.as_bytes(), &sig_bytes)
+        .map_err(|e| format!("signature recovery failed: {e}"))?;
+    tracing::debug!(recovered_address = %address, "signature verified");
     let identity = Identity::parse(&format!("evm:{address}"))
         .map_err(|e| format!("invalid recovered address: {e}"))?;
 
     Ok(Some(identity))
-}
-
-/// Keccak-256 hash.
-fn keccak256(data: &[u8]) -> [u8; 32] {
-    use sha3::{Digest, Keccak256};
-    let mut hasher = Keccak256::new();
-    hasher.update(data);
-    hasher.finalize().into()
-}
-
-/// Recover an EVM address from a message hash and 65-byte signature.
-/// Uses secp256k1 ECDSA recovery (same as Ethereum's ecrecover).
-fn recover_address(message_hash: &[u8; 32], sig: &[u8]) -> Result<String, String> {
-    use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
-
-    // Ethereum signature: [r (32 bytes), s (32 bytes), v (1 byte)]
-    let v = match sig[64] {
-        0 | 27 => 0u8,
-        1 | 28 => 1u8,
-        v => return Err(format!("invalid recovery id: {v}")),
-    };
-    let recovery_id = RecoveryId::from_byte(v)
-        .ok_or("invalid recovery id")?;
-
-    let signature = Signature::from_slice(&sig[..64])
-        .map_err(|e| format!("invalid signature: {e}"))?;
-
-    let recovered_key = VerifyingKey::recover_from_prehash(message_hash, &signature, recovery_id)
-        .map_err(|e| format!("signature recovery failed: {e}"))?;
-
-    // Derive address: keccak256(uncompressed_pubkey[1..]) → last 20 bytes
-    let pubkey_bytes = recovered_key.to_encoded_point(false);
-    let pubkey_hash = keccak256(&pubkey_bytes.as_bytes()[1..]);
-    let address = &pubkey_hash[12..32];
-
-    Ok(format!("0x{}", hex::encode(address)))
 }
 
 #[cfg(test)]

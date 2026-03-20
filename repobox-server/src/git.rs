@@ -225,20 +225,27 @@ pub(crate) fn extract_owner_from_staging_repo(data_dir: &Path, repo_name: &str) 
 
 fn extract_owner_from_repo_dir(repo_dir: &Path) -> std::io::Result<Option<String>> {
     let repo_dir_str = repo_dir.to_string_lossy().to_string();
+    tracing::debug!(repo_dir = %repo_dir_str, "extracting owner from repo dir");
 
     // Get the root commit (first commit in history)
+    // Use --all instead of HEAD because HEAD may point to a branch that doesn't exist
+    // (e.g., HEAD -> refs/heads/main but the push created refs/heads/master)
     let output = Command::new("git")
-        .args(["--git-dir", &repo_dir_str, "rev-list", "--max-parents=0", "HEAD"])
+        .args(["--git-dir", &repo_dir_str, "rev-list", "--max-parents=0", "--all"])
         .output()?;
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        tracing::debug!(stderr = %stderr, "rev-list failed");
         return Ok(None);
     }
 
     let root_hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if root_hash.is_empty() {
+        tracing::debug!("rev-list returned empty");
         return Ok(None);
     }
+    tracing::debug!(root_hash = %root_hash, "found root commit");
 
     // Get the raw commit object to extract the gpgsig
     let output = Command::new("git")
@@ -246,10 +253,13 @@ fn extract_owner_from_repo_dir(repo_dir: &Path) -> std::io::Result<Option<String
         .output()?;
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        tracing::debug!(stderr = %stderr, "cat-file failed");
         return Ok(None);
     }
 
     let commit_text = String::from_utf8_lossy(&output.stdout);
+    tracing::debug!(commit_len = commit_text.len(), "got commit text");
     extract_signer_from_commit_text(&commit_text)
 }
 
@@ -259,8 +269,14 @@ fn extract_owner_from_repo_dir(repo_dir: &Path) -> std::io::Result<Option<String
 fn extract_signer_from_commit_text(commit_text: &str) -> std::io::Result<Option<String>> {
     // Extract the gpgsig header value
     let sig_hex = match extract_gpgsig(commit_text) {
-        Some(s) => s,
-        None => return Ok(None),
+        Some(s) => {
+            tracing::debug!(sig_hex_len = s.len(), "extracted gpgsig");
+            s
+        }
+        None => {
+            tracing::debug!(commit_len = commit_text.len(), "no gpgsig found in commit");
+            return Ok(None);
+        }
     };
 
     let sig_bytes = hex::decode(&sig_hex).map_err(|e| {

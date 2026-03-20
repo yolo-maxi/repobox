@@ -1538,3 +1538,43 @@ div[style*="scroll-snap-type"]::-webkit-scrollbar {
     padding: 60px 20px 60px;
   }
 }
+
+/* ── README Markdown Rendering ──────────────────────────────── */
+.explore-readme-content h1 { font-size: 1.75rem; font-weight: 700; margin: 1.5rem 0 0.75rem; color: #e2e8f0; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.5rem; }
+.explore-readme-content h2 { font-size: 1.35rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: #e2e8f0; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 0.4rem; }
+.explore-readme-content h3 { font-size: 1.1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: #cbd5e1; }
+.explore-readme-content p { margin: 0.75rem 0; line-height: 1.7; color: #94a3b8; }
+.explore-readme-content strong { color: #e2e8f0; }
+.explore-readme-content ul, .explore-readme-content ol { margin: 0.5rem 0; padding-left: 1.5rem; color: #94a3b8; }
+.explore-readme-content li { margin: 0.3rem 0; line-height: 1.6; }
+.explore-readme-content blockquote { border-left: 3px solid var(--bp-accent, #4fc3f7); padding: 0.5rem 1rem; margin: 1rem 0; background: rgba(79,195,247,0.05); border-radius: 0 6px 6px 0; }
+.explore-inline-code { background: rgba(79,195,247,0.1); color: var(--bp-accent, #4fc3f7); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; font-family: var(--font-mono, 'JetBrains Mono', monospace); }
+.explore-code-block { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 1rem; margin: 1rem 0; overflow-x: auto; font-size: 0.85rem; line-height: 1.6; color: #e2e8f0; font-family: var(--font-mono, 'JetBrains Mono', monospace); }
+.explore-code-block code { background: none; padding: 0; color: inherit; font-size: inherit; }
+.explore-table-wrap { overflow-x: auto; margin: 1rem 0; }
+.explore-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.explore-table th { text-align: left; padding: 0.5rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; font-weight: 600; }
+.explore-table td { padding: 0.5rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); color: #94a3b8; }
+.explore-link { color: var(--bp-accent, #4fc3f7); text-decoration: none; }
+.explore-link:hover { text-decoration: underline; }
+
+/* ── Clone URL ──────────────────────────────────────────────── */
+.explore-clone-url { display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 0.5rem 0.75rem; cursor: pointer; transition: border-color 0.2s; width: 100%; text-align: left; color: inherit; }
+.explore-clone-url:hover { border-color: var(--bp-accent, #4fc3f7); }
+.explore-clone-url code { color: #94a3b8; }
+.explore-copy-hint { font-size: 11px; color: var(--bp-dim, #3a5a6e); margin-left: auto; white-space: nowrap; }
+.explore-repo-owner { display: flex; align-items: center; gap: 0.5rem; background: none; border: none; cursor: pointer; padding: 0; color: inherit; }
+.explore-repo-owner code { color: #94a3b8; font-size: 0.85rem; font-family: var(--font-mono, 'JetBrains Mono', monospace); }
+.explore-repo-owner:hover .explore-copy-hint { color: var(--bp-accent, #4fc3f7); }
+
+/* ── Config Tab ─────────────────────────────────────────────── */
+.explore-config { display: flex; flex-direction: column; gap: 1.5rem; }
+.explore-config-section { }
+.explore-config-heading { font-size: 1rem; font-weight: 600; color: #e2e8f0; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; }
+.explore-config-identity { display: flex; align-items: center; gap: 0.75rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.75rem 1rem; }
+.explore-config-identity code { color: var(--bp-accent, #4fc3f7); font-size: 0.85rem; font-family: var(--font-mono, 'JetBrains Mono', monospace); word-break: break-all; }
+.explore-config-badge { font-size: 11px; background: rgba(79,195,247,0.15); color: var(--bp-accent, #4fc3f7); padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; white-space: nowrap; }
+.explore-config-empty { background: rgba(0,0,0,0.2); border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; padding: 1.5rem; text-align: center; }
+.explore-config-empty p { color: #64748b; margin: 0.25rem 0; }
+.explore-config-empty code { color: var(--bp-accent, #4fc3f7); font-size: 0.85em; }
+.explore-config-hint { font-size: 0.85rem; margin-top: 0.5rem !important; }

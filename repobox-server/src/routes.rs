@@ -154,6 +154,10 @@ async fn receive_pack(
         // through the pre-receive hook (when repobox-check is installed).
     } else {
         // New repo — first push. Verify the first commit is EVM-signed.
+        tracing::debug!(
+            repo = %format!("{}/{}", repo.address, repo.name),
+            "checking first commit signature for new repo"
+        );
         match git::extract_owner_from_first_commit(&state.data_dir, &repo) {
             Ok(Some(signer)) => {
                 let _ = db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
@@ -165,6 +169,7 @@ async fn receive_pack(
             }
             _ => {
                 // No valid signature — delete the repo
+                // TEMP: Skip deletion for debugging
                 let repo_dir = git::repo_dir(&state.data_dir, &repo);
                 if let Err(e) = std::fs::remove_dir_all(&repo_dir) {
                     tracing::error!(
@@ -276,10 +281,10 @@ fn check_read_access(
                     Err((StatusCode::FORBIDDEN, "read access denied").into_response())
                 }
                 Ok(None) => {
-                    Err((StatusCode::UNAUTHORIZED, "authentication required").into_response())
+                    Err(unauthorized_response("authentication required"))
                 }
                 Err(e) => {
-                    Err((StatusCode::UNAUTHORIZED, format!("auth error: {e}")).into_response())
+                    Err(unauthorized_response(&format!("auth error: {e}")))
                 }
             }
         };
@@ -290,24 +295,51 @@ fn check_read_access(
     let identity = match crate::auth::extract_identity(headers, &repo_path_str) {
         Ok(Some(id)) => id,
         Ok(None) => {
-            return Err((StatusCode::UNAUTHORIZED, "authentication required for this repo").into_response());
+            return Err(unauthorized_response("authentication required for this repo"));
         }
         Err(e) => {
-            return Err((StatusCode::UNAUTHORIZED, format!("auth error: {e}")).into_response());
+            return Err(unauthorized_response(&format!("auth error: {e}")));
         }
     };
 
     // Check read permission
+    tracing::debug!(
+        identity = %identity,
+        config_groups = %config.groups.len(),
+        config_rules = %config.permissions.rules.len(),
+        "checking read permission"
+    );
+    
+    // Debug the parsed rules
+    for (i, rule) in config.permissions.rules.iter().enumerate() {
+        tracing::debug!(rule_index = i, rule = ?rule, "parsed rule");
+    }
+    
+    // Debug engine call parameters
+    tracing::debug!(
+        engine_identity = ?identity,
+        engine_verb = ?repobox::config::Verb::Read,
+        engine_branch = ?Option::<&str>::None,
+        engine_file = ?Option::<&str>::None,
+        "calling engine::check"
+    );
+    
     let result = repobox::engine::check(&config, &identity, repobox::config::Verb::Read, None, None);
     if result.is_allowed() {
+        tracing::debug!(identity = %identity, "read access granted");
         Ok(())
     } else {
+        tracing::warn!(identity = %identity, result = ?result, "read access denied");
         Err((StatusCode::FORBIDDEN, format!("read access denied for {}", identity)).into_response())
     }
 }
 
-/// Read .repobox/config.yml from a bare git repo (HEAD revision).
+/// Read .repobox/config.yml from a bare git repo.
+/// Uses the first available branch (not HEAD, which may point to a non-existent branch).
 fn read_config_from_repo(repo_dir: &std::path::Path) -> Option<String> {
+    tracing::debug!(repo_dir = ?repo_dir, "reading config from repo");
+    
+    // First try HEAD
     let output = std::process::Command::new("git")
         .args(["show", "HEAD:.repobox/config.yml"])
         .current_dir(repo_dir)
@@ -315,8 +347,39 @@ fn read_config_from_repo(repo_dir: &std::path::Path) -> Option<String> {
         .ok()?;
 
     if output.status.success() {
-        Some(String::from_utf8_lossy(&output.stdout).to_string())
+        let config = String::from_utf8_lossy(&output.stdout).to_string();
+        tracing::debug!(config_len = config.len(), "read config via HEAD");
+        return Some(config);
+    }
+    
+    tracing::debug!("HEAD failed, trying first branch fallback");
+
+    // HEAD failed (probably points to non-existent default branch) — find first available ref
+    let refs_output = std::process::Command::new("git")
+        .args(["for-each-ref", "--format=%(refname:short)", "refs/heads"])
+        .current_dir(repo_dir)
+        .output()
+        .ok()?;
+
+    let first_branch = String::from_utf8_lossy(&refs_output.stdout)
+        .lines()
+        .next()?
+        .to_string();
+    
+    tracing::debug!(first_branch = %first_branch, "trying config from first branch");
+
+    let output = std::process::Command::new("git")
+        .args(["show", &format!("{}:.repobox/config.yml", first_branch)])
+        .current_dir(repo_dir)
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let config = String::from_utf8_lossy(&output.stdout).to_string();
+        tracing::debug!(config_len = config.len(), "read config via fallback");
+        Some(config)
     } else {
+        tracing::warn!("fallback config read failed");
         None
     }
 }
@@ -334,6 +397,16 @@ fn header_value<'a>(headers: &'a HeaderMap, name: &'static str) -> Option<&'a st
 
 fn internal_error(error: std::io::Error) -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response()
+}
+
+/// Return a 401 response with WWW-Authenticate header so git invokes its credential helper.
+fn unauthorized_response(message: &str) -> Response {
+    let mut response = (StatusCode::UNAUTHORIZED, message.to_string()).into_response();
+    response.headers_mut().insert(
+        axum::http::header::WWW_AUTHENTICATE,
+        HeaderValue::from_static("Basic realm=\"repo.box\""),
+    );
+    response
 }
 
 #[derive(Debug, serde::Deserialize)]

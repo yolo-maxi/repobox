@@ -103,6 +103,12 @@ enum Commands {
         #[arg(long)]
         remove: bool,
     },
+    /// Git credential helper (called by git automatically)
+    #[command(name = "credential-helper", hide = true)]
+    CredentialHelper {
+        /// Credential action (get, store, erase)
+        action: String,
+    },
     /// Git hook handler (called by git hooks)
     #[command(hide = true)]
     Hook {
@@ -201,6 +207,7 @@ fn main() -> ExitCode {
         Some(Commands::Lint) => cmd_lint(),
         Some(Commands::Status) => cmd_status(&home),
         Some(Commands::Setup { remove }) => cmd_setup(remove),
+        Some(Commands::CredentialHelper { action }) => cmd_credential_helper(&action, &home),
         Some(Commands::Hook { hook, args }) => cmd_hook(&hook, &args, &home),
         None => {
             // No subcommand → shim mode (intercept git commands)
@@ -778,6 +785,119 @@ fn cmd_setup(remove: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+// ── Credential Helper ────────────────────────────────────────────────
+
+fn cmd_credential_helper(action: &str, home: &Path) -> ExitCode {
+    if action != "get" {
+        // Only support 'get' action for now
+        return ExitCode::SUCCESS;
+    }
+
+    use std::io::{self, BufRead};
+
+    // Read credential request from stdin
+    let stdin = io::stdin();
+    let mut host = String::new();
+    let mut protocol = String::new();
+
+    for line in stdin.lock().lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => break,
+        };
+        
+        if line.is_empty() {
+            break;
+        }
+
+        if let Some(val) = line.strip_prefix("host=") {
+            host = val.to_string();
+        } else if let Some(val) = line.strip_prefix("protocol=") {
+            protocol = val.to_string();
+        }
+        // Ignore other fields like wwwauth[]
+    }
+
+    // Only handle repo.box hosts
+    if !host.contains("repo.box") {
+        return ExitCode::SUCCESS;
+    }
+
+    // Get current identity
+    let identity = match identity::get_identity(home) {
+        Ok(Some(id)) => id,
+        _ => {
+            eprintln!("repobox: no identity configured. Run: git repobox keys generate");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Extract the address from the identity
+    let address = identity.to_string();
+    let address = address.strip_prefix("evm:").unwrap_or(&address);
+
+    // Get repository path from git remote URL
+    let repo_path = match get_repo_path_from_git() {
+        Some(path) => path,
+        None => {
+            eprintln!("repobox: could not determine repository path");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Get current timestamp
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    // Sign: keccak256("{repo_path}:{timestamp}")
+    let message = format!("{repo_path}:{timestamp}");
+    let sig = match repobox::signing::sign(home, address, message.as_bytes()) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("repobox: signing failed: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let sig_hex = hex::encode(&sig);
+    let password = format!("{sig_hex}:{timestamp}");
+
+    // Output credential response
+    println!("protocol={protocol}");
+    println!("host={host}");
+    println!("username=evm");
+    println!("password={password}");
+
+    ExitCode::SUCCESS
+}
+
+/// Extract repository path from git remote URL
+fn get_repo_path_from_git() -> Option<String> {
+    // Try to get the remote URL from git config
+    let output = Command::new("git")
+        .args(["config", "--get", "remote.origin.url"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let url = String::from_utf8(output.stdout).ok()?;
+    let url = url.trim();
+
+    // Parse repo.box URLs: https://git.repo.box/address/repo.git
+    if let Some(path_part) = url.strip_prefix("https://git.repo.box/") {
+        // Strip .git suffix
+        let repo_path = path_part.strip_suffix(".git").unwrap_or(path_part);
+        Some(repo_path.to_string())
+    } else {
+        None
+    }
+}
+
 /// Find the system git binary (not our shim).
 fn find_system_git() -> String {
     let our_path = std::env::current_exe().ok();
@@ -1192,6 +1312,7 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                 Some(Commands::Lint) => cmd_lint(),
                 Some(Commands::Status) => cmd_status(&home),
                 Some(Commands::Setup { remove }) => cmd_setup(remove),
+                Some(Commands::CredentialHelper { action }) => cmd_credential_helper(&action, &home),
                 Some(Commands::Hook { hook, args }) => cmd_hook(&hook, &args, &home),
                 None => {
                     eprintln!("Unknown repobox command. Run: git repobox --help");
