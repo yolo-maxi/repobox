@@ -104,8 +104,8 @@ export function PlaygroundClient() {
 
     const userMessage =
       mode === "generate"
-        ? `Generate a .repobox.yml for this scenario:\n\n${input}\n\nOutput ONLY the YAML. No explanation, no code fences.`
-        : `Explain this .repobox.yml in plain English. What can each group do? What are they denied?\n\n${input}`;
+        ? `Generate a .repobox/config.yml for this scenario:\n\n${input}\n\nOutput ONLY the YAML. No explanation, no code fences.`
+        : `Explain this .repobox/config.yml in plain English. What can each group do? What are they denied?\n\n${input}`;
 
     try {
       const res = await fetch(VENICE_ENDPOINT, {
@@ -249,7 +249,7 @@ export function PlaygroundClient() {
               borderRadius: 3,
             }}
           >
-            .repobox.yml
+            .repobox/config.yml
           </code>{" "}
           — or paste a config to understand what it does.
         </p>
@@ -299,7 +299,7 @@ export function PlaygroundClient() {
       {/* Explain mode */}
       {mode === "explain" && (
         <div>
-          <label className="playground-label">Paste a .repobox.yml</label>
+          <label className="playground-label">Paste a .repobox/config.yml</label>
           <textarea
             className="playground-textarea"
             rows={10}

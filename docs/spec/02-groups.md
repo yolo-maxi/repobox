@@ -17,7 +17,7 @@ interface GroupResolver {
 }
 ```
 
-Mutation (add/remove) is only available for static groups and happens by editing `.repobox.yml`.
+Mutation (add/remove) is only available for static groups and happens by editing `.repobox/config.yml`.
 
 `isMember()` is the only required method. `listMembers()` is best-effort.
 
@@ -25,7 +25,7 @@ Mutation (add/remove) is only available for static groups and happens by editing
 
 ### 1. Static (local list)
 
-Members listed directly in `.repobox.yml`. No external calls.
+Members listed directly in `.repobox/config.yml`. No external calls.
 
 ```ini
 [group "core-team"]
@@ -181,5 +181,5 @@ The CLI uses the `check` endpoint for pre-flight access verification before push
 ## What Groups Does NOT Cover
 
 - **What can a group do?** — That's permissions (03-permissions.md)
-- **Who created this group?** — The person who committed the `.repobox.yml` change
+- **Who created this group?** — The person who committed the `.repobox/config.yml` change
 - **Governance / voting** — Out of scope. Groups are just membership lists.

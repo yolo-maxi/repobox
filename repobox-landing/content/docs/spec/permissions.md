@@ -7,7 +7,7 @@ description: "repo.box specification: Permissions"
 
 ## Overview
 
-Permissions control what identities and groups can do — which branches they can push to, which files they can modify, and how. Rules are defined in `.repobox.yml` (YAML), enforced both **locally** (by the `repobox` CLI) and **server-side** (on push). No bypass possible.
+Permissions control what identities and groups can do — which branches they can push to, which files they can modify, and how. Rules are defined in `.repobox/config.yml` (YAML), enforced both **locally** (by the `repobox` CLI) and **server-side** (on push). No bypass possible.
 
 ## Core Principles
 
@@ -92,7 +92,7 @@ rules:
     merge:
       - ">chore/**"
     append:
-      - "./.repobox.yml"
+      - "./.repobox/config.yml"
 ```
 
 ### Mixing formats
@@ -107,7 +107,7 @@ rules:
       push:
         - ">feature/**"
       append:
-        - "./.repobox.yml"
+        - "./.repobox/config.yml"
 ```
 
 Formats B and C both use a top-level mapping for `rules:`. Write it however feels natural.
@@ -211,7 +211,7 @@ permissions:
     - founders push >*
     - founders merge >*
     - founders create >*
-    - founders edit .repobox.yml
+    - founders edit .repobox/config.yml
     - agents:
         push:
           - >feature/**
@@ -223,10 +223,10 @@ permissions:
           - * >feature/**
           - * >fix/**
         append:
-          - .repobox.yml
+          - .repobox/config.yml
 ```
 
-Now agents can edit files, but only on feature/fix branches. And `.repobox.yml` is locked to founders for full edits — agents can only append to it.
+Now agents can edit files, but only on feature/fix branches. And `.repobox/config.yml` is locked to founders for full edits — agents can only append to it.
 
 ### The `default` field
 
@@ -241,7 +241,7 @@ This is the most important concept to understand.
 
 **Implicit deny is scoped to the target, not the verb globally.**
 
-When you write `founders edit .repobox.yml`, the system learns: "someone has explicit edit access to `.repobox.yml`." Any identity NOT matched by an `edit` rule for `.repobox.yml` is implicitly denied. But files NOT mentioned by any `edit` rule are unaffected — they follow `default`.
+When you write `founders edit .repobox/config.yml`, the system learns: "someone has explicit edit access to `.repobox/config.yml`." Any identity NOT matched by an `edit` rule for `.repobox/config.yml` is implicitly denied. But files NOT mentioned by any `edit` rule are unaffected — they follow `default`.
 
 ### Example: selective file protection
 
@@ -249,17 +249,17 @@ When you write `founders edit .repobox.yml`, the system learns: "someone has exp
 permissions:
   default: allow
   rules:
-    - founders edit .repobox.yml
+    - founders edit .repobox/config.yml
 ```
 
 | Action | Result | Why |
 |--------|--------|-----|
-| founders edit .repobox.yml | ✅ permit | Rule matches |
-| agents edit .repobox.yml | ❌ deny | Implicit deny: rule exists for `edit .repobox.yml`, agents not matched |
+| founders edit .repobox/config.yml | ✅ permit | Rule matches |
+| agents edit .repobox/config.yml | ❌ deny | Implicit deny: rule exists for `edit .repobox/config.yml`, agents not matched |
 | agents edit src/app.rs | ✅ permit | No `edit` rule mentions `src/app.rs` → default: allow |
 | agents edit package.json | ✅ permit | No `edit` rule mentions `package.json` → default: allow |
 
-Only `.repobox.yml` is protected. Everything else is open.
+Only `.repobox/config.yml` is protected. Everything else is open.
 
 ### Example: broad file lockdown
 
@@ -315,8 +315,8 @@ rules:
 
 ### Why this works safely
 
-- **Founders** have full `edit` access to `.repobox.yml`. They write the top rules — highest priority.
-- **Agents** can only `append` to `.repobox.yml`. Their rules land at the bottom — lowest priority. They can never override founder rules.
+- **Founders** have full `edit` access to `.repobox/config.yml`. They write the top rules — highest priority.
+- **Agents** can only `append` to `.repobox/config.yml`. Their rules land at the bottom — lowest priority. They can never override founder rules.
 
 **Append-only + top-wins = permission escalation is structurally impossible.**
 
@@ -325,28 +325,28 @@ rules:
 Agents can grant sub-agents temporary access on feature branches:
 
 1. Agent on `feature/fix` generates a key for a sub-agent
-2. Agent appends a direct permission rule to `.repobox.yml`:
+2. Agent appends a direct permission rule to `.repobox/config.yml`:
    `evm:0xSub write >feature/fix/*`
 3. Commits the change → ✅ (has append permission on feature branch)
 4. Sub-agent works within its scope
-5. Work done. Agent reverts `.repobox.yml` changes.
-6. Merges clean code to `main` → ✅ (no `.repobox.yml` changes in diff)
+5. Work done. Agent reverts `.repobox/config.yml` changes.
+6. Merges clean code to `main` → ✅ (no `.repobox/config.yml` changes in diff)
 
 If the agent forgets to revert:
 ```
-❌ Blocked: merge contains .repobox.yml changes.
-   claude cannot edit .repobox.yml on >main.
+❌ Blocked: merge contains .repobox/config.yml changes.
+   claude cannot edit .repobox/config.yml on >main.
 ```
 
 Permissions are branch-scoped: sub-agent access exists only while the feature branch exists.
 
 ### Permission smuggling prevention
 
-The server evaluates permissions from the `.repobox.yml` on the **target branch**, not incoming changes. Modifying `.repobox.yml` to grant yourself access doesn't work — the pre-push version is used for evaluation.
+The server evaluates permissions from the `.repobox/config.yml` on the **target branch**, not incoming changes. Modifying `.repobox/config.yml` to grant yourself access doesn't work — the pre-push version is used for evaluation.
 
-### Which .repobox.yml applies?
+### Which .repobox/config.yml applies?
 
-| Operation | Which .repobox.yml? |
+| Operation | Which .repobox/config.yml? |
 |-----------|------------------------|
 | `git commit` | Current branch |
 | `git push` | Current branch |
@@ -357,21 +357,21 @@ The server evaluates permissions from the `.repobox.yml` on the **target branch*
 ### Layer 1: Git shim (local)
 
 - Intercepts `git commit`, `git merge`, `git push`, `git checkout -b`, `git branch`
-- Validates every commit against `.repobox.yml` before delegating to real git
+- Validates every commit against `.repobox/config.yml` before delegating to real git
 - Validates `write`/`append` constraints by inspecting the diff
 - **Cannot be bypassed** — it IS the `git` command in the agent's environment
 - Read-only commands (`git status`, `git log`, `git diff`, etc.) pass through unchanged
 
 ### Layer 2: Server (remote, post-hackathon)
 
-- Validates every push against `.repobox.yml` on the target branch
+- Validates every push against `.repobox/config.yml` on the target branch
 - Defense in depth — catches raw `git` usage that bypasses the shim
 
 ## Tooling
 
 ### `git repobox check <identity> <verb> <target>`
 
-Answers "can this identity do this?" against the current `.repobox.yml`. Shows which rule matched and why.
+Answers "can this identity do this?" against the current `.repobox/config.yml`. Shows which rule matched and why.
 
 ```bash
 git repobox check evm:0xBBB...456 push >main
@@ -383,14 +383,14 @@ git repobox check evm:0xBBB...456 push >feature/fix
 
 ### `git repobox lint`
 
-- Validates `.repobox.yml` syntax
+- Validates `.repobox/config.yml` syntax
 - Detects undefined group references
 - Warns about ordering issues (allow below deny for same target)
 - Detects unreachable rules (shadowed by earlier broader rules)
 
 ### `git repobox diff`
 
-Shows permission changes between two `.repobox.yml` versions. Used in code review.
+Shows permission changes between two `.repobox/config.yml` versions. Used in code review.
 
 ## What Permissions Does NOT Cover
 

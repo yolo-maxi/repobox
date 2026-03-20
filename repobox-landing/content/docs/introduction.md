@@ -18,7 +18,7 @@ This creates a trust bottleneck: you can't give an agent enough access to be use
 repo.box sits between your agents and your git repos. It provides:
 
 - **Cryptographic identity** for agents (EVM keypairs, not borrowed tokens)
-- **Declarative permissions** defined in `.repobox.yml` (file paths, branch patterns, PR limits)
+- **Declarative permissions** defined in `.repobox/config.yml` (file paths, branch patterns, PR limits)
 - **Group-based access** (define teams of humans and agents, assign permissions to groups)
 - **Workflow state machines** (PRs, reviews, releases as configurable pipelines)
 - **Sandboxed experimentation** (agents can go wild in their branches; production paths are gated)
@@ -26,7 +26,7 @@ repo.box sits between your agents and your git repos. It provides:
 ## How It Works
 
 1. Every participant (human or agent) has an EVM identity
-2. The repo owner defines rules in `.repobox.yml`
+2. The repo owner defines rules in `.repobox/config.yml`
 3. The `repobox` CLI enforces rules locally on commit/push
 4. The server enforces rules again on receive (no bypass possible)
 5. All actions are signed and auditable
@@ -43,7 +43,7 @@ repobox init
 # Add an agent identity
 repobox identity add evm:0x1234...abcd --alias ocean
 
-# Define permissions in .repobox.yml
+# Define permissions in .repobox/config.yml
 # Push with enforcement
 git push
 ```

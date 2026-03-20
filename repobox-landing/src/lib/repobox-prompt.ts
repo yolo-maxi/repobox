@@ -1,4 +1,4 @@
-export const REPOBOX_SYSTEM_PROMPT = `You generate .repobox.yml files. This is a PROPRIETARY format for repo.box, a git permission layer for AI agents. Do NOT invent fields or use any other YAML schema.
+export const REPOBOX_SYSTEM_PROMPT = `You generate .repobox/config.yml files. This is a PROPRIETARY format for repo.box, a git permission layer for AI agents. Do NOT invent fields or use any other YAML schema.
 
 THE EXACT AND ONLY FORMAT:
 
@@ -54,13 +54,13 @@ TARGETS:
   * — all files (when used with file verbs)
   ./* — all files (equivalent to *)
   ./contracts/** — file path glob (./prefix optional but recommended)
-  ./.repobox.yml — the config file
+  ./.repobox/config.yml — the config file
   ./contracts/** >dev — file + branch combo
 
 CRITICAL RULES:
 - Groups are flat lists (no "members:" key)
 - Group names in rules are bare words: founders, agents (NO %, NO @)
-- File paths use ./ prefix (optional but recommended): ./.repobox.yml, ./* >feature/**
+- File paths use ./ prefix (optional but recommended): ./.repobox/config.yml, ./* >feature/**
 - Branch verbs use targets starting with >
 - File verbs use ./ file path targets
 - TWO INDEPENDENT checks — branch ops AND file ops must both pass
@@ -87,7 +87,7 @@ permissions:
     - founders push >*
     - founders merge >*
     - founders create >*
-    - founders edit ./.repobox.yml
+    - founders edit ./.repobox/config.yml
     - agents:
         push:
           - ">feature/**"
@@ -96,9 +96,9 @@ permissions:
           - ">feature/**"
           - ">fix/**"
         append:
-          - "./.repobox.yml"
+          - "./.repobox/config.yml"
 
-This config: founders can do anything. Agents can only push/create feature and fix branches. Only founders can edit .repobox.yml (agents can append). Since default is allow and no edit rules exist for source files, anyone can edit any file.
+This config: founders can do anything. Agents can only push/create feature and fix branches. Only founders can edit .repobox/config.yml (agents can append). Since default is allow and no edit rules exist for source files, anyone can edit any file.
 
 ANOTHER EXAMPLE (file lockdown):
 
@@ -115,7 +115,7 @@ permissions:
     - maintainers merge >*
     - maintainers create >*
     - maintainers edit ./contracts/**
-    - maintainers edit ./.repobox.yml
+    - maintainers edit ./.repobox/config.yml
     - contributors:
         push:
           - ">contributor/**"
@@ -138,7 +138,7 @@ permissions:
     - founders push >*
     - founders merge >*
     - founders create >*
-    - founders edit ./.repobox.yml
+    - founders edit ./.repobox/config.yml
     - agents:
         push:
           - ">feature/**"
@@ -150,7 +150,7 @@ permissions:
           - "./* >feature/**"
           - "./* >fix/**"
         append:
-          - "./.repobox.yml"
+          - "./.repobox/config.yml"
 
 This config: agents can edit files ONLY on their branches (./* >feature/** means all files but only on feature branches).
 
@@ -188,7 +188,7 @@ permissions:
   rules:
     - founders push >*
     - founders merge >*
-    - founders edit ./.repobox.yml
+    - founders edit ./.repobox/config.yml
     - agents:
         push:
           - ">feature/**"
@@ -200,7 +200,7 @@ permissions:
           - "./* >feature/**"
           - "./* >fix/**"
         append:
-          - "./.repobox.yml"`,
+          - "./.repobox/config.yml"`,
 
   `groups:
   orchestrator:
@@ -236,5 +236,5 @@ permissions:
           - "./* >worker-3/**"
           - "./* >worker-4/**"
         append:
-          - "./.repobox.yml"`,
+          - "./.repobox/config.yml"`,
 ];

@@ -1,11 +1,11 @@
 ---
 title: "Configuration"
-description: "How to write .repobox.yml files: groups, permissions, and rule formats."
+description: "How to write .repobox/config.yml files: groups, permissions, and rule formats."
 ---
 
 # Configuration
 
-All repo.box rules live in a single file: `.repobox.yml` at the repo root. It has two top-level keys: `groups` and `permissions`.
+All repo.box rules live in a single file: `.repobox/config.yml` at the repo root. It has two top-level keys: `groups` and `permissions`.
 
 ## Groups
 
@@ -40,7 +40,7 @@ permissions:
   rules:
     - founders push >main
     - founders merge >main
-    - agents not edit ./.repobox.yml
+    - agents not edit ./.repobox/config.yml
 ```
 
 ### Format B: Subject-grouped
@@ -53,7 +53,7 @@ permissions:
       - push >main
       - merge >main
     agents:
-      - not edit ./.repobox.yml
+      - not edit ./.repobox/config.yml
 ```
 
 ### Format C: Verb-mapping
@@ -67,7 +67,7 @@ permissions:
         - ">feature/**"
         - ">fix/**"
       append:
-        - "./.repobox.yml"
+        - "./.repobox/config.yml"
 ```
 
 ## Rule Syntax
@@ -118,13 +118,13 @@ When rules exist for a target, identities not mentioned are denied. This is per-
 
 ```yaml
 rules:
-  - founders edit .repobox.yml
+  - founders edit .repobox/config.yml
 ```
 
-- Only `.repobox.yml` is locked down
+- Only `.repobox/config.yml` is locked down
 - Other files follow `default`
 - Agents editing `src/app.rs` → ✅ (no rule covers it)
-- Agents editing `.repobox.yml` → ❌ (rule exists, agent not matched)
+- Agents editing `.repobox/config.yml` → ❌ (rule exists, agent not matched)
 
 ### Common Mistake
 

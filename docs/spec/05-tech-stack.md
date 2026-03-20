@@ -20,7 +20,7 @@ Chosen for type safety (security-critical permission engine), crypto ecosystem a
 - **tower** — Middleware layer. ERC-8128 verification as a tower middleware that extracts identity before hitting route handlers.
 
 ### Config
-- **serde + serde_yaml** — Parse `.repobox.yml` YAML.
+- **serde + serde_yaml** — Parse `.repobox/config.yml` YAML.
 - Custom permission parser for the free-form permission syntax.
 
 ### Storage
@@ -44,7 +44,7 @@ Chosen for type safety (security-critical permission engine), crypto ecosystem a
 │  └──────────┘  └──────────┘  └───────────┘  │
 │        │              │             │        │
 │  ┌─────────────────────────────────────────┐ │
-│  │    .repobox.yml parser + gitoxide diffs   │ │
+│  │    .repobox/config.yml parser + gitoxide diffs   │ │
 │  └─────────────────────────────────────────┘ │
 └─────────────────────────────────────────────┘
                       │
@@ -89,9 +89,9 @@ Single binary, two modes:
 
 **Git shim mode** (invoked as `git` via PATH/symlink):
 - Intercepts `git commit`, `git merge`, `git push`, `git checkout -b`, `git branch`
-- Checks permissions against `.repobox.yml`, then delegates to real git
+- Checks permissions against `.repobox/config.yml`, then delegates to real git
 - Read-only commands pass through unchanged
-- `git repobox init` — set up a repo with `.repobox.yml`
+- `git repobox init` — set up a repo with `.repobox/config.yml`
 - `git repobox lint`, `git repobox check` — config tooling
 
 **Server mode:**
@@ -126,7 +126,7 @@ Tokio. Required by axum, alloy, and beneficial for concurrent onchain resolver c
 repobox/
   crates/
     reporepobox-core/          # Identity types, group interface, permission engine
-    repobox-config/        # .repobox.yml YAML parser, permission syntax parser
+    repobox-config/        # .repobox/config.yml YAML parser, permission syntax parser
     reporepobox-git/           # gitoxide wrappers, smart HTTP protocol
     reporepobox-auth/          # ERC-8128 verification, alloy integration
     reporepobox-groups/        # Group resolvers (static, onchain, http)

@@ -71,7 +71,7 @@ export function LandingHero() {
           maxWidth: 560,
         }}
       >
-        EVM keys, a git shim, and a <code style={{ color: "var(--bp-accent)", background: "rgba(79,195,247,0.08)", padding: "1px 6px", borderRadius: 3 }}>.repobox.yml</code> file
+        EVM keys, a git shim, and a <code style={{ color: "var(--bp-accent)", background: "rgba(79,195,247,0.08)", padding: "1px 6px", borderRadius: 3 }}>.repobox/config.yml</code> file
         that stands between your agents and your codebase. One config file. Per-agent permissions. Enforced before anything touches your repo.
       </p>
       <div

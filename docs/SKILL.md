@@ -1,11 +1,11 @@
 # repo.box — Permission System Reference
 
-> Canonical reference for the repo.box permission model. Read this before writing or reviewing `.repobox.yml` files.
+> Canonical reference for the repo.box permission model. Read this before writing or reviewing `.repobox/config.yml` files.
 
 
 ## What is repo.box?
 
-repo.box makes git repositories safe for AI agents. It shims the `git` command so agents use normal git workflows — but every commit, merge, and push is silently checked against a `.repobox.yml` file before it lands. If the action violates a rule, it's blocked before anything touches your repo.
+repo.box makes git repositories safe for AI agents. It shims the `git` command so agents use normal git workflows — but every commit, merge, and push is silently checked against a `.repobox/config.yml` file before it lands. If the action violates a rule, it's blocked before anything touches your repo.
 
 Each agent gets its own EVM keypair as identity. Each commit is signed. Permissions live in the repo, not on a server. One YAML file controls who can push where, which files they can touch, and which branches they can create — with first-match-wins evaluation and implicit deny on any target that has rules.
 
@@ -23,7 +23,7 @@ permissions:
   rules:
     - founders push >main
     - founders merge >main
-    - agents not edit ./.repobox.yml
+    - agents not edit ./.repobox/config.yml
 ```
 
 ### Format B: Subject-grouped (subject → list of "verb target" strings)
@@ -36,7 +36,7 @@ permissions:
       - push >main
       - merge >main
     agents:
-      - not edit ./.repobox.yml
+      - not edit ./.repobox/config.yml
 ```
 
 ### Format C: Verb-mapping (subject → verb → targets)
@@ -58,7 +58,7 @@ permissions:
         - ">feature/**"
         - ">fix/**"
       append:
-        - "./.repobox.yml"
+        - "./.repobox/config.yml"
 ```
 
 ### Mixing formats
@@ -73,12 +73,12 @@ rules:
       push:
         - ">feature/**"
       append:
-        - "./.repobox.yml"
+        - "./.repobox/config.yml"
 ```
 
 Formats B and C use a top-level mapping for `rules:` (subjects as keys). Write it however feels natural.
 
-## Complete `.repobox.yml` Reference
+## Complete `.repobox/config.yml` Reference
 
 The config file is YAML with exactly two top-level keys: `groups` and `permissions`. Nothing else.
 
@@ -130,7 +130,7 @@ permissions:
     - founders force-push >*               # founders rewrite history anywhere
 
     # File control — who can modify which files
-    - founders edit ./.repobox.yml      # only founders can fully edit config
+    - founders edit ./.repobox/config.yml      # only founders can fully edit config
     - founders edit *                      # founders can edit all files
 
     # Deny rules — prefix verb with "not"
@@ -154,7 +154,7 @@ permissions:
           - "./* >feature/**"               # agents edit any file ON feature branches
           - "./* >fix/**"                   # agents edit any file ON fix branches
         append:
-          - "./.repobox.yml"             # agents can append to config (not full edit)
+          - "./.repobox/config.yml"             # agents can append to config (not full edit)
 
     - deploy-bots:
         push:
@@ -243,11 +243,11 @@ Every git operation triggers up to two checks:
 
 **Implicit deny is per-target, NOT per-verb globally.**
 
-When you write `founders edit .repobox.yml`:
-- Only `.repobox.yml` is locked down
+When you write `founders edit .repobox/config.yml`:
+- Only `.repobox/config.yml` is locked down
 - Other files are unaffected (follow `default`)
 - agents editing `src/app.rs` → ✅ allowed (no rule covers it)
-- agents editing `.repobox.yml` → ❌ denied (rule exists, agent not matched)
+- agents editing `.repobox/config.yml` → ❌ denied (rule exists, agent not matched)
 
 When you write `founders edit *`:
 - ALL files are locked down (`*` matches everything)
@@ -305,12 +305,12 @@ claude = evm:0xBBB...456
 - `git repobox identity set <key> --alias alice`
 - CLI shows `alice`, `claude` everywhere (errors, logs, whoami)
 - Sub-agents use `+` notation: `claude+roudy-piglet`
-- `.repobox.yml` always stores raw `evm:0x...` addresses (canonical)
+- `.repobox/config.yml` always stores raw `evm:0x...` addresses (canonical)
 
 ## Priority Model
 
 Top-to-bottom, first match wins. Safe because:
-- **Founders** write rules at the top (full `edit` on `.repobox.yml`)
+- **Founders** write rules at the top (full `edit` on `.repobox/config.yml`)
 - **Agents** can only `append` (bottom of file = lowest priority)
 - Append-only + top-wins = permission escalation is structurally impossible
 
@@ -321,7 +321,7 @@ Top-to-bottom, first match wins. Safe because:
 ```bash
 # Initialize repo.box in an existing git repo
 git repobox init
-# → Creates .repobox.yml template
+# → Creates .repobox/config.yml template
 # → Sets gpg.program = repobox in git config
 
 # Generate a new EVM key pair
@@ -357,7 +357,7 @@ git repobox alias list
 
 The CLI resolves aliases everywhere — errors, logs, signature display:
 ```
-❌ claude cannot edit .repobox.yml on >main
+❌ claude cannot edit .repobox/config.yml on >main
 ```
 
 If no alias exists, the raw `evm:0x...` address is shown.
@@ -369,7 +369,7 @@ If no alias exists, the raw `evm:0x...` address is shown.
 git repobox keys generate --alias claude
 # → claude (evm:0xBBB...456)
 
-# Add to .repobox.yml groups + commit
+# Add to .repobox/config.yml groups + commit
 # Then spawn with identity via env:
 GIT_CONFIG_COUNT=1 \
 GIT_CONFIG_KEY_0=user.signingkey \
@@ -393,7 +393,7 @@ git repobox check evm:0xBBB...456 push >main
 git repobox check evm:0xBBB...456 push >feature/fix
 # ✅ allowed — rule: agents push >feature/**
 
-# Validate .repobox.yml syntax
+# Validate .repobox/config.yml syntax
 git repobox lint
 
 # Show permission changes between versions
@@ -467,7 +467,7 @@ permissions:
     - founders push >*
     - founders merge >*
     - founders create >*
-    - founders edit ./.repobox.yml
+    - founders edit ./.repobox/config.yml
     - agents:
         push:
           - ">feature/**"
@@ -479,11 +479,11 @@ permissions:
           - "./* >feature/**"
           - "./* >fix/**"
         append:
-          - "./.repobox.yml"
+          - "./.repobox/config.yml"
 ```
 
 - Agents can edit files only on their branches
-- `.repobox.yml` is founder-only for full edits, agents can append
+- `.repobox/config.yml` is founder-only for full edits, agents can append
 - Agents can't edit anything on main even if they could somehow push
 
 ### File-scoped main access (CI bot)

@@ -1,11 +1,11 @@
 ---
 title: "Examples"
-description: "Worked examples of .repobox.yml configurations from minimal to strict."
+description: "Worked examples of .repobox/config.yml configurations from minimal to strict."
 ---
 
 # Examples
 
-Real `.repobox.yml` configurations for common setups.
+Real `.repobox/config.yml` configurations for common setups.
 
 ## Minimal: Just Protect Main
 
@@ -59,7 +59,7 @@ permissions:
     - founders push >*
     - founders merge >*
     - founders create >*
-    - founders edit ./.repobox.yml
+    - founders edit ./.repobox/config.yml
     - agents:
         push:
           - ">feature/**"
@@ -71,11 +71,11 @@ permissions:
           - "./* >feature/**"
           - "./* >fix/**"
         append:
-          - "./.repobox.yml"
+          - "./.repobox/config.yml"
 ```
 
 - Agents edit files only on their branches
-- `.repobox.yml` is founder-only for full edits, agents can append
+- `.repobox/config.yml` is founder-only for full edits, agents can append
 - Agents can't edit anything on main
 
 ## CI Bot: File-Scoped Main Access
@@ -107,6 +107,6 @@ permissions:
 
 Rules evaluate top-to-bottom, first match wins. This is safe because:
 
-- **Founders** write rules at the top (they have full `edit` on `.repobox.yml`)
+- **Founders** write rules at the top (they have full `edit` on `.repobox/config.yml`)
 - **Agents** can only `append` (bottom of file = lowest priority)
 - Append-only + top-wins = permission escalation is structurally impossible

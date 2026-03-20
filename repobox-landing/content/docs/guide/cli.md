@@ -12,7 +12,7 @@ All commands run as `git repobox <command>`.
 ```bash
 # Initialize repo.box in an existing git repo
 git repobox init
-# → Creates .repobox.yml template
+# → Creates .repobox/config.yml template
 # → Sets gpg.program = repobox in git config
 
 # Check current identity
@@ -61,7 +61,7 @@ git repobox alias list
 
 Aliases resolve everywhere in CLI output:
 ```
-❌ claude cannot edit .repobox.yml on >main
+❌ claude cannot edit .repobox/config.yml on >main
 ```
 
 ## Spawning Agents
@@ -70,7 +70,7 @@ Aliases resolve everywhere in CLI output:
 # Generate a key for the agent
 git repobox keys generate --alias claude
 
-# Add to .repobox.yml groups, then spawn:
+# Add to .repobox/config.yml groups, then spawn:
 GIT_CONFIG_COUNT=1 \
 GIT_CONFIG_KEY_0=user.signingkey \
 GIT_CONFIG_VALUE_0=evm:0xBBB...456 \
@@ -92,7 +92,7 @@ git repobox check evm:0xBBB...456 push >main
 git repobox check evm:0xBBB...456 push >feature/fix
 # ✅ allowed — rule: agents push >feature/**
 
-# Validate .repobox.yml syntax
+# Validate .repobox/config.yml syntax
 git repobox lint
 
 # Show permission changes between versions

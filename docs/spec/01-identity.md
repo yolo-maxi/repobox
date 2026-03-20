@@ -130,7 +130,7 @@ Standard git config resolution, no custom mechanisms:
 
 ### Multi-Agent Setup
 
-**Granting access to a new agent (requires .repobox.yml edit permission):**
+**Granting access to a new agent (requires .repobox/config.yml edit permission):**
 
 ```bash
 # 1. Generate a key for the agent
@@ -138,14 +138,14 @@ git repobox keys generate
 # → Created: ~/.repobox/keys/0xCCC...def.key
 # → Address: evm:0xCCC...def
 
-# 2. Add the address to .repobox.yml (you need edit permission)
+# 2. Add the address to .repobox/config.yml (you need edit permission)
 # Under groups:
 #   agents:
 #     members:
 #       - evm:0xCCC...def
 
-# 3. Commit the change (only @founders can edit .repobox.yml)
-git add .repobox.yml
+# 3. Commit the change (only @founders can edit .repobox/config.yml)
+git add .repobox/config.yml
 git commit -m "onboard agent-1"
 ```
 
@@ -180,9 +180,9 @@ Author: alice <alice@example.com>
 Every commit is cryptographically tied to a specific EVM address. You know exactly which agent (or human) made which change.
 
 **Security properties:**
-- Agents cannot grant themselves access (editing .repobox.yml requires @founders permission)
+- Agents cannot grant themselves access (editing .repobox/config.yml requires @founders permission)
 - Agents cannot impersonate other identities (signing requires the private key)
-- The orchestrator controls onboarding — generates keys, edits .repobox.yml, assigns identities
+- The orchestrator controls onboarding — generates keys, edits .repobox/config.yml, assigns identities
 - Post-hoc audit: any commit's authorship is cryptographically verifiable
 
 ## Local Aliases (Address Book)
@@ -221,8 +221,8 @@ git repobox identity set <private-key> --alias alice
 The CLI resolves aliases everywhere — error messages, logs, permission checks:
 
 ```
-❌ permission denied: @claude cannot edit .repobox.yml
-   (only @founders can edit .repobox.yml on main)
+❌ permission denied: @claude cannot edit .repobox/config.yml
+   (only @founders can edit .repobox/config.yml on main)
 ```
 
 ```
@@ -241,7 +241,7 @@ If no alias exists for an address, the raw `evm:0x...` is shown.
 
 Both use `@` prefix but they're different things:
 
-- **`@founders`** — a group defined in `.repobox.yml`, resolves to multiple addresses
+- **`@founders`** — a group defined in `.repobox/config.yml`, resolves to multiple addresses
 - **`@alice`** — a local alias in `~/.repobox/aliases`, resolves to one address
 
 The CLI distinguishes by checking the alias file first, then the config groups. Groups always contain multiple members; aliases are always 1:1.
