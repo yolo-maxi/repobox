@@ -35,17 +35,97 @@ struct ResolveResponse {
     error: Option<String>,
 }
 
-/// Alchemy chain ID → subdomain mapping
+/// Alchemy chain ID → subdomain mapping.
+/// Covers all EVM chains Alchemy supports (mainnets + testnets).
 fn alchemy_rpc_url(chain: u64, api_key: &str) -> Option<String> {
     let network = match chain {
+        // Ethereum
         1 => "eth-mainnet",
-        5 => "eth-goerli",
         11155111 => "eth-sepolia",
+        17000 => "eth-holesky",
+        // Optimism
         10 => "opt-mainnet",
-        137 => "polygon-mainnet",
+        11155420 => "opt-sepolia",
+        // Arbitrum
         42161 => "arb-mainnet",
+        421614 => "arb-sepolia",
+        // Base
         8453 => "base-mainnet",
         84532 => "base-sepolia",
+        // Polygon
+        137 => "polygon-mainnet",
+        80002 => "polygon-amoy",
+        // zkSync
+        324 => "zksync-mainnet",
+        300 => "zksync-sepolia",
+        // Blast
+        81457 => "blast-mainnet",
+        168587773 => "blast-sepolia",
+        // Linea
+        59144 => "linea-mainnet",
+        59141 => "linea-sepolia",
+        // Scroll
+        534352 => "scroll-mainnet",
+        534351 => "scroll-sepolia",
+        // Mantle
+        5000 => "mantle-mainnet",
+        5003 => "mantle-sepolia",
+        // Gnosis
+        100 => "gnosis-mainnet",
+        // Celo
+        42220 => "celo-mainnet",
+        // Avalanche
+        43114 => "avax-mainnet",
+        43113 => "avax-fuji",
+        // BNB Chain
+        56 => "bnb-mainnet",
+        97 => "bnb-testnet",
+        // Metis
+        1088 => "metis-mainnet",
+        // Zora
+        7777777 => "zora-mainnet",
+        999999999 => "zora-sepolia",
+        // World Chain
+        480 => "worldchain-mainnet",
+        // Shape
+        360 => "shape-mainnet",
+        // Soneium
+        1868 => "soneium-mainnet",
+        // ZetaChain
+        7000 => "zetachain-mainnet",
+        // Berachain
+        80094 => "berachain-mainnet",
+        // Unichain
+        130 => "unichain-mainnet",
+        1301 => "unichain-sepolia",
+        // Ink
+        57073 => "ink-mainnet",
+        763373 => "ink-sepolia",
+        // Abstract
+        2741 => "abstract-mainnet",
+        // Lens
+        37111 => "lens-sepolia",
+        // Anime
+        69000 => "anime-mainnet",
+        // Sonic
+        146 => "sonic-mainnet",
+        57054 => "sonic-blaze",
+        // Degen
+        666666666 => "degen-mainnet",
+        // Frax
+        252 => "frax-mainnet",
+        // Polynomial
+        8008 => "polynomial-mainnet",
+        // Apechain
+        33139 => "apechain-mainnet",
+        // Boba
+        288 => "boba-mainnet",
+        // opBNB
+        204 => "opbnb-mainnet",
+        // Rootstock
+        30 => "rootstock-mainnet",
+        // Morph
+        2818 => "morph-mainnet",
         _ => return None,
     };
     Some(format!("https://{network}.g.alchemy.com/v2/{api_key}"))
