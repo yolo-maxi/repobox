@@ -49,6 +49,7 @@ fn build_router(state: Arc<AppState>) -> Router {
         .merge(routes::router())
         .merge(resolve::router())
         .layer(CorsLayer::permissive())
+        .layer(axum::extract::DefaultBodyLimit::max(512 * 1024 * 1024)) // 512MB
         .with_state(state)
 }
 
