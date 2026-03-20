@@ -19,8 +19,8 @@ function ProjectCard({ title, tag, description, href }: ProjectCardProps) {
         background: "var(--bp-surface)",
         border: "1px solid var(--bp-border)",
         borderRadius: 8,
-        padding: 20,
-        marginBottom: 20,
+        padding: "clamp(16px, 4vw, 20px)",
+        marginBottom: "clamp(16px, 4vw, 20px)",
         transition: "border-color 0.2s",
       }}
     >
@@ -44,8 +44,8 @@ function ProjectCard({ title, tag, description, href }: ProjectCardProps) {
           <div
             style={{
               fontWeight: 700,
-              fontSize: 16,
-              lineHeight: "20px",
+              fontSize: "clamp(14px, 3.5vw, 16px)",
+              lineHeight: "clamp(18px, 4vw, 20px)",
               color: "#ffffff",
             }}
           >
@@ -53,11 +53,11 @@ function ProjectCard({ title, tag, description, href }: ProjectCardProps) {
           </div>
           <span
             style={{
-              fontSize: 12,
-              lineHeight: "20px",
+              fontSize: "clamp(11px, 2.5vw, 12px)",
+              lineHeight: "clamp(18px, 4vw, 20px)",
               color: "var(--bp-accent)",
               background: "rgba(79,195,247,0.15)",
-              padding: "0 12px",
+              padding: "0 clamp(8px, 2vw, 12px)",
               borderRadius: 2,
               fontWeight: 600,
             }}
@@ -67,8 +67,8 @@ function ProjectCard({ title, tag, description, href }: ProjectCardProps) {
         </div>
         <div
           style={{
-            fontSize: 12,
-            lineHeight: "20px",
+            fontSize: "clamp(11px, 2.5vw, 12px)",
+            lineHeight: "clamp(18px, 4vw, 20px)",
             color: "var(--bp-text)",
           }}
         >
