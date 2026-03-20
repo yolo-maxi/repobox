@@ -453,78 +453,829 @@ div[style*="scroll-snap-type"]::-webkit-scrollbar {
   color: var(--bp-accent);
 }
 
-/* Explorer background — deep ocean with subtle bioluminescent hints at edges */
-.explore-bg {
-  background: 
-    radial-gradient(ellipse 80% 50% at 0% 0%, rgba(79, 195, 247, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(79, 195, 247, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse 50% 80% at 100% 20%, rgba(100, 180, 220, 0.04) 0%, transparent 40%),
-    radial-gradient(ellipse 40% 60% at 0% 80%, rgba(60, 140, 180, 0.05) 0%, transparent 40%),
-    linear-gradient(180deg, #050c16 0%, #0a1628 50%, #081420 100%);
-  background-attachment: fixed;
+/* ===== EXPLORER STYLES ===== */
+
+/* Explorer Container */
+.explore-container {
+  min-height: 100vh;
+  background: #0a0e17;
+  color: #e8f4fd;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 
-/* Glass panel for explorer — solid dark with subtle glow */
-.glass-panel {
-  background: linear-gradient(180deg, rgba(10, 20, 32, 0.98) 0%, rgba(8, 16, 28, 0.99) 100%);
-  border: 1px solid rgba(50, 100, 160, 0.15);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(100, 160, 220, 0.06);
+/* Explorer Page Layout */
+.explore-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
 }
 
-.glass-panel-inner {
-  background: rgba(13, 31, 53, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(50, 100, 160, 0.15);
+/* Header */
+.explore-header {
+  margin-bottom: 3rem;
 }
 
-.glass-card {
-  background: rgba(13, 31, 53, 0.5);
-  border: 1px solid rgba(50, 100, 160, 0.18);
-  transition: border-color 0.2s ease, background 0.2s ease;
+.explore-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.5rem;
 }
 
-.glass-card:hover {
-  border-color: rgba(79, 195, 247, 0.35);
-  background: rgba(13, 31, 53, 0.7);
+.explore-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #e8f4fd;
+  margin: 0;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
 }
 
-.glass-stat {
-  background: rgba(13, 31, 53, 0.4);
-  border: 1px solid rgba(50, 100, 160, 0.15);
+.explore-title-dot {
+  color: #4fc3f7;
 }
 
-.glass-input {
-  background: rgba(10, 22, 40, 0.6);
-  border: 1px solid rgba(50, 100, 160, 0.25);
-  color: var(--bp-text);
+.explore-search {
+  display: flex;
+}
+
+.explore-search-input {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e8f4fd;
+  font-size: 0.875rem;
+  width: 300px;
   transition: border-color 0.2s ease;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
 }
 
-.glass-input:focus {
-  border-color: var(--bp-accent);
+.explore-search-input:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.1);
+  border-color: #4fc3f7;
 }
 
-.glass-tab {
-  border: 1px solid rgba(50, 100, 160, 0.15);
-  color: var(--bp-dim);
+.explore-search-input::placeholder {
+  color: #5a7a94;
+}
+
+/* Loading State */
+.explore-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  color: #5a7a94;
+}
+
+.explore-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(79, 195, 247, 0.2);
+  border-top: 2px solid #4fc3f7;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Stats */
+.explore-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.explore-stat-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.explore-stat-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #4fc3f7;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  margin-bottom: 0.25rem;
+}
+
+.explore-stat-label {
+  font-size: 0.75rem;
+  color: #5a7a94;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+}
+
+/* Main Content */
+.explore-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 3rem;
+}
+
+/* Section Headers */
+.explore-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.explore-section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #e8f4fd;
+  margin: 0;
+}
+
+.explore-repos-section {
+  margin-bottom: 3rem;
+}
+
+.explore-repos-section .explore-section-title {
+  margin-bottom: 1.5rem;
+}
+
+/* Sort Tabs */
+.explore-sort-tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.explore-sort-tab {
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #5a7a94;
+  font-size: 0.875rem;
+  cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.glass-tab:hover {
-  color: var(--bp-text);
-  border-color: rgba(50, 100, 160, 0.3);
+.explore-sort-tab:hover {
+  color: #b8d4e3;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-.glass-tab-active {
-  background: rgba(79, 195, 247, 0.12);
+.explore-sort-tab.active {
+  background: rgba(79, 195, 247, 0.15);
+  border-color: #4fc3f7;
+  color: #4fc3f7;
+}
+
+/* Repository List */
+.explore-repo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.explore-repo-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.explore-repo-card:hover {
   border-color: rgba(79, 195, 247, 0.3);
-  color: var(--bp-accent);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+.explore-repo-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.explore-repo-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e8f4fd;
+  margin: 0;
+}
+
+.explore-repo-owner {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: #5a7a94;
+}
+
+.explore-repo-description {
+  color: #b8d4e3;
+  font-size: 0.875rem;
+  margin: 0.5rem 0;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+.explore-repo-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.explore-repo-commits,
+.explore-repo-updated {
+  font-size: 0.75rem;
+  color: #5a7a94;
+}
+
+.explore-repo-commits {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+/* Activity Feed */
+.explore-activity {
+  position: sticky;
+  top: 2rem;
+  height: fit-content;
+}
+
+.explore-activity .explore-section-title {
+  margin-bottom: 1.5rem;
+}
+
+.explore-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.explore-activity-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.explore-activity-repo {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #e8f4fd;
+  text-decoration: none;
+  display: block;
+  margin-bottom: 0.5rem;
+  transition: color 0.2s ease;
+}
+
+.explore-activity-repo:hover {
+  color: #4fc3f7;
+}
+
+.explore-activity-message {
+  font-size: 0.75rem;
+  color: #b8d4e3;
+  margin: 0.5rem 0;
+  opacity: 0.7;
+  line-height: 1.3;
+}
+
+.explore-activity-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #5a7a94;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+.explore-activity-empty {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+  color: #5a7a94;
+}
+
+/* Empty States */
+.explore-empty {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.explore-empty h3 {
+  font-size: 1.25rem;
+  color: #e8f4fd;
+  margin: 0 0 0.5rem 0;
+}
+
+.explore-empty p {
+  color: #5a7a94;
+  margin: 0 0 1.5rem 0;
+}
+
+.explore-code-snippet {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  display: inline-block;
+  text-align: left;
+}
+
+.explore-code-snippet code {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: #5a7a94;
+  line-height: 1.4;
+}
+
+/* Back Navigation */
+.explore-back {
+  margin-bottom: 2rem;
+}
+
+.explore-back-link {
+  color: #4fc3f7;
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: opacity 0.2s ease;
+}
+
+.explore-back-link:hover {
+  opacity: 0.8;
+}
+
+/* Address Page */
+.explore-address-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.explore-address-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.explore-address-avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4fc3f7;
+}
+
+.explore-address-details {
+  flex: 1;
+}
+
+.explore-address-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.explore-address-text {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  color: #5a7a94;
+  word-break: break-all;
+}
+
+.explore-address-stats {
+  display: flex;
+  gap: 1rem;
+}
+
+.explore-stat-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  min-width: 80px;
+}
+
+.explore-stat-value {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #4fc3f7;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+.explore-stat-label {
+  font-size: 0.75rem;
+  color: #5a7a94;
+}
+
+/* Repository Page */
+.explore-repo-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.explore-repo-info {
+  flex: 1;
+}
+
+.explore-repo-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #e8f4fd;
+  margin: 0 0 1rem 0;
+}
+
+.explore-repo-owner-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.explore-repo-owner {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  color: #5a7a94;
+}
+
+.explore-clone-url {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.explore-clone-url code {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: #5a7a94;
+}
+
+.explore-repo-stats {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Copy Button */
+.explore-copy-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  color: #5a7a94;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.explore-copy-btn:hover {
+  color: #b8d4e3;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Tabs */
+.explore-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.explore-tab {
+  background: transparent;
+  border: none;
+  padding: 0.75rem 1rem;
+  color: #5a7a94;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.explore-tab:hover {
+  color: #b8d4e3;
+}
+
+.explore-tab.active {
+  color: #4fc3f7;
+  border-bottom-color: #4fc3f7;
+}
+
+/* Tab Content */
+.explore-tab-content {
+  min-height: 400px;
+}
+
+/* Breadcrumb */
+.explore-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.explore-breadcrumb-back {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.25rem;
+  padding: 0.25rem;
+  color: #4fc3f7;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.explore-breadcrumb-item {
+  background: transparent;
+  border: none;
+  color: #4fc3f7;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.explore-breadcrumb-item:hover {
+  opacity: 0.8;
+}
+
+.explore-breadcrumb-separator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #5a7a94;
+  font-size: 0.875rem;
+}
+
+.explore-breadcrumb-file {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  color: #b8d4e3;
+  font-size: 0.875rem;
+}
+
+/* File List */
+.explore-file-list {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.explore-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.explore-file-item:not(:last-child) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.explore-file-item:hover {
+  background: rgba(79, 195, 247, 0.05);
+}
+
+.explore-file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.explore-file-icon {
+  font-size: 1rem;
+}
+
+.explore-file-name {
+  color: #b8d4e3;
+  font-size: 0.875rem;
+}
+
+.explore-file-size {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: #5a7a94;
+}
+
+/* File Viewer */
+.explore-file-viewer {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.explore-file-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.explore-file-name {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  color: #5a7a94;
+}
+
+.explore-file-content {
+  padding: 1rem;
+  overflow-x: auto;
+  max-height: 600px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.explore-file-content code {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #b8d4e3;
+}
+
+/* Commits */
+.explore-commit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.explore-commit-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.explore-commit-message {
+  color: #b8d4e3;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.explore-commit-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.explore-commit-author,
+.explore-commit-time,
+.explore-commit-hash {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: #5a7a94;
+}
+
+.explore-commit-hash {
+  color: #4fc3f7;
+}
+
+/* README */
+.explore-readme {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 2rem;
+}
+
+.explore-readme-content {
+  color: #b8d4e3;
+  line-height: 1.6;
+}
+
+.explore-readme-content h1,
+.explore-readme-content h2,
+.explore-readme-content h3,
+.explore-readme-content h4,
+.explore-readme-content h5,
+.explore-readme-content h6 {
+  color: #e8f4fd;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+.explore-readme-content h1 {
+  font-size: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.5rem;
+}
+
+.explore-readme-content code {
+  background: rgba(79, 195, 247, 0.1);
+  color: #4fc3f7;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.875em;
+}
+
+.explore-readme-content pre {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.explore-readme-content pre code {
+  background: none;
+  color: #b8d4e3;
+  padding: 0;
+}
+
+.explore-readme-content a {
+  color: #4fc3f7;
+  text-decoration: none;
+}
+
+.explore-readme-content a:hover {
+  opacity: 0.8;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .explore-page {
+    padding: 1rem;
+  }
+  
+  .explore-header-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .explore-search-input {
+    width: 100%;
+  }
+  
+  .explore-content {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .explore-activity {
+    position: static;
+  }
+  
+  .explore-repo-header,
+  .explore-address-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .explore-address-stats,
+  .explore-repo-stats {
+    justify-content: flex-start;
+  }
+  
+  .explore-breadcrumb {
+    font-size: 0.75rem;
+  }
+  
+  .explore-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .playground-output {

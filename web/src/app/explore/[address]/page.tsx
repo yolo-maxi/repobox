@@ -19,7 +19,6 @@ export default function AddressPage() {
   const params = useParams();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [ensName, setEnsName] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const address = Array.isArray(params.address) ? params.address[0] : params.address;
@@ -33,15 +32,6 @@ export default function AddressPage() {
           const data = await res.json();
           setRepos(data.repos || []);
         }
-
-        // Try ENS reverse lookup
-        if (address.endsWith('.eth')) {
-          const resolveRes = await fetch(`/api/explorer/resolve/${address}`);
-          if (resolveRes.ok) {
-            const data = await resolveRes.json();
-            if (data.address) setEnsName(address);
-          }
-        }
       } catch (error) {
         console.error('Error:', error);
       } finally {
@@ -51,89 +41,100 @@ export default function AddressPage() {
     fetchData();
   }, [address]);
 
+  const handleCopyAddress = async () => {
+    if (!address) return;
+    await copyToClipboard(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   if (!address) return null;
 
   return (
-    <div className="p-6 md:p-10">
-      <Link href="/explore" className="text-[var(--bp-accent)] text-sm hover:opacity-80 mb-6 inline-block">
-        ← Explorer
-      </Link>
+    <div className="explore-page">
+      {/* Back Link */}
+      <div className="explore-back">
+        <Link href="/explore" className="explore-back-link">
+          ← Back to Explorer
+        </Link>
+      </div>
 
-      {/* Profile header */}
-      <div className="mb-10">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="w-14 h-14 rounded-full glass-stat flex items-center justify-center text-2xl">
-            🔑
+      {/* Address Header */}
+      <header className="explore-address-header">
+        <div className="explore-address-info">
+          <div className="explore-address-avatar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21A2 2 0 0 0 5 23H19A2 2 0 0 0 21 21V9H21ZM15 3H19L15 7V3Z"/>
+            </svg>
           </div>
-          <div>
-            {ensName && (
-              <div className="text-lg font-bold text-[var(--bp-accent)] mb-0.5">{ensName}</div>
-            )}
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-mono text-[var(--bp-dim)]">{address}</span>
-              <button
-                onClick={async () => {
-                  await copyToClipboard(address);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-                className="glass-tab text-xs px-2 py-1 rounded"
-              >
+          <div className="explore-address-details">
+            <div className="explore-address-main">
+              <span className="explore-address-text">{address}</span>
+              <button onClick={handleCopyAddress} className="explore-copy-btn">
                 {copied ? '✓' : 'Copy'}
               </button>
             </div>
           </div>
         </div>
 
-        <div className="flex gap-4 mt-4">
-          <div className="glass-stat rounded-lg px-4 py-2">
-            <span className="text-lg font-bold text-[var(--bp-accent)] font-mono">{repos.length}</span>
-            <span className="text-xs text-[var(--bp-dim)] ml-2">repos</span>
+        <div className="explore-address-stats">
+          <div className="explore-stat-item">
+            <span className="explore-stat-value">{repos.length}</span>
+            <span className="explore-stat-label">repositories</span>
           </div>
-          <div className="glass-stat rounded-lg px-4 py-2">
-            <span className="text-lg font-bold text-[var(--bp-heading)] font-mono">
+          <div className="explore-stat-item">
+            <span className="explore-stat-value">
               {repos.reduce((sum, r) => sum + r.commit_count, 0)}
             </span>
-            <span className="text-xs text-[var(--bp-dim)] ml-2">commits</span>
+            <span className="explore-stat-label">commits</span>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Repos */}
-      <h2 className="text-lg font-semibold text-[var(--bp-heading)] mb-5">Repositories</h2>
+      {/* Repositories */}
+      <section className="explore-repos-section">
+        <h2 className="explore-section-title">Repositories</h2>
 
-      {loading ? (
-        <div className="text-center py-10">
-          <div className="animate-pulse text-[var(--bp-accent)] text-sm">Loading...</div>
-        </div>
-      ) : repos.length === 0 ? (
-        <div className="glass-panel-inner rounded-xl p-10 text-center">
-          <div className="text-[var(--bp-dim)]">No repositories found for this address</div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {repos.map((repo) => (
-            <Link
-              key={`${repo.address}/${repo.name}`}
-              href={`/explore/${repo.address}/${repo.name}`}
-              className="glass-card block rounded-xl p-5"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-[var(--bp-heading)] mb-1">{repo.name}</h3>
-                  {repo.description && (
-                    <p className="text-sm text-[var(--bp-text)] opacity-70 mb-2">{repo.description}</p>
-                  )}
-                  <div className="flex gap-4 text-xs text-[var(--bp-dim)] font-mono">
-                    <span>{repo.commit_count} commits</span>
-                    {repo.last_commit_date && <span>Updated {formatTimeAgo(repo.last_commit_date)}</span>}
-                  </div>
+        {loading ? (
+          <div className="explore-loading">
+            <div className="explore-loading-spinner"></div>
+            <p>Loading repositories...</p>
+          </div>
+        ) : repos.length === 0 ? (
+          <div className="explore-empty">
+            <p>No repositories found for this address</p>
+          </div>
+        ) : (
+          <div className="explore-repo-list">
+            {repos.map((repo) => (
+              <Link
+                key={`${repo.address}/${repo.name}`}
+                href={`/explore/${repo.address}/${repo.name}`}
+                className="explore-repo-card"
+              >
+                <div className="explore-repo-header">
+                  <h3 className="explore-repo-name">{repo.name}</h3>
                 </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+                
+                {repo.description && (
+                  <p className="explore-repo-description">
+                    {repo.description.replace(/\n/g, ' ').trim()}
+                  </p>
+                )}
+                
+                <div className="explore-repo-meta">
+                  <span className="explore-repo-commits">{repo.commit_count} commits</span>
+                  {repo.last_commit_date && (
+                    <span className="explore-repo-updated">
+                      Updated {formatTimeAgo(repo.last_commit_date)}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -71,123 +71,110 @@ export default function ExplorePage() {
   );
 
   return (
-    <div className="p-6 md:p-10">
+    <div className="explore-page">
       {/* Header */}
-      <div className="mb-10">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-[var(--bp-heading)] mb-1">
-              repo<span className="logo-dot">.</span>box
-              <span className="text-[var(--bp-dim)] font-normal text-lg ml-3">explorer</span>
-            </h1>
+      <header className="explore-header">
+        <div className="explore-header-content">
+          <h1 className="explore-title">
+            repo<span className="explore-title-dot">.</span>box
+          </h1>
+          <div className="explore-search">
+            <input
+              type="text"
+              placeholder="Search repositories..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="explore-search-input"
+            />
           </div>
-          
-          <input
-            type="text"
-            placeholder="Search repos or addresses..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="glass-input rounded-lg px-4 py-2.5 text-sm w-72 font-mono"
-          />
         </div>
-      </div>
+      </header>
 
       {loading ? (
-        <div className="text-center py-20">
-          <div className="animate-pulse text-[var(--bp-accent)] text-sm">Loading...</div>
+        <div className="explore-loading">
+          <div className="explore-loading-spinner"></div>
+          <p>Loading repositories...</p>
         </div>
       ) : (
         <>
           {/* Stats */}
           {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-              {[
-                { label: 'Repositories', value: stats.totalRepos, icon: '📦' },
-                { label: 'Unique Owners', value: stats.totalOwners, icon: '🔑' },
-                { label: 'Total Commits', value: stats.totalCommits, icon: '📝' },
-              ].map((stat) => (
-                <div key={stat.label} className="glass-stat rounded-xl p-5">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">{stat.icon}</span>
-                    <div>
-                      <div className="text-2xl font-bold text-[var(--bp-accent)] font-mono">
-                        {stat.value.toLocaleString()}
-                      </div>
-                      <div className="text-xs text-[var(--bp-dim)] uppercase tracking-wider">
-                        {stat.label}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <section className="explore-stats">
+              <div className="explore-stat-card">
+                <div className="explore-stat-number">{stats.totalRepos.toLocaleString()}</div>
+                <div className="explore-stat-label">Repositories</div>
+              </div>
+              <div className="explore-stat-card">
+                <div className="explore-stat-number">{stats.totalOwners.toLocaleString()}</div>
+                <div className="explore-stat-label">Owners</div>
+              </div>
+              <div className="explore-stat-card">
+                <div className="explore-stat-number">{stats.totalCommits.toLocaleString()}</div>
+                <div className="explore-stat-label">Commits</div>
+              </div>
+            </section>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Repos */}
-            <div className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-semibold text-[var(--bp-heading)]">Repositories</h2>
-                <div className="flex gap-1.5">
-                  {(['latest', 'commits'] as const).map((sort) => (
-                    <button
-                      key={sort}
-                      onClick={() => setSortBy(sort)}
-                      className={`glass-tab px-3 py-1.5 text-xs rounded-lg capitalize ${
-                        sortBy === sort ? 'glass-tab-active' : ''
-                      }`}
-                    >
-                      {sort}
-                    </button>
-                  ))}
+          {/* Main Content */}
+          <div className="explore-content">
+            {/* Repositories */}
+            <div className="explore-repos">
+              <div className="explore-section-header">
+                <h2 className="explore-section-title">Repositories</h2>
+                <div className="explore-sort-tabs">
+                  <button
+                    onClick={() => setSortBy('latest')}
+                    className={`explore-sort-tab ${sortBy === 'latest' ? 'active' : ''}`}
+                  >
+                    Latest
+                  </button>
+                  <button
+                    onClick={() => setSortBy('commits')}
+                    className={`explore-sort-tab ${sortBy === 'commits' ? 'active' : ''}`}
+                  >
+                    Commits
+                  </button>
                 </div>
               </div>
 
               {filteredRepos.length === 0 ? (
-                <div className="glass-panel-inner rounded-xl p-14 text-center">
-                  <div className="text-4xl mb-4">🪸</div>
-                  <div className="text-[var(--bp-heading)] text-lg mb-2">No repos yet</div>
-                  <div className="text-[var(--bp-dim)] text-sm max-w-xs mx-auto">
-                    Push your first signed commit to get started.
+                <div className="explore-empty">
+                  <h3>No repos yet</h3>
+                  <p>Push your first signed commit to get started</p>
+                  <div className="explore-code-snippet">
+                    <code>
+                      repobox init<br />
+                      git add . && git commit -S -m "init"<br />
+                      git push
+                    </code>
                   </div>
-                  <pre className="mt-6 text-xs text-[var(--bp-dim)] font-mono bg-[rgba(0,0,0,0.2)] rounded-lg p-4 inline-block text-left">
-{`repobox init
-git add . && git commit -S -m "init"
-git push`}
-                  </pre>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="explore-repo-list">
                   {filteredRepos.map((repo) => (
                     <Link
                       key={`${repo.address}/${repo.name}`}
                       href={`/explore/${repo.address}/${repo.name}`}
-                      className="glass-card block rounded-xl p-5"
+                      className="explore-repo-card"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2.5 mb-1.5">
-                            <h3 className="font-semibold text-[var(--bp-heading)]">
-                              {repo.name}
-                            </h3>
-                            <span className="text-[var(--bp-dim)] text-xs font-mono">
-                              {formatAddress(repo.owner_address)}
-                            </span>
-                          </div>
-                          
-                          {repo.description && (
-                            <p className="text-[var(--bp-text)] text-sm mb-2 line-clamp-1 opacity-80">
-                              {repo.description}
-                            </p>
-                          )}
-                          
-                          <div className="flex items-center gap-4 text-xs text-[var(--bp-dim)]">
-                            <span className="font-mono">{repo.commit_count} commits</span>
-                            {repo.last_commit_date && (
-                              <span>Updated {formatTimeAgo(repo.last_commit_date)}</span>
-                            )}
-                          </div>
-                        </div>
+                      <div className="explore-repo-header">
+                        <h3 className="explore-repo-name">{repo.name}</h3>
+                        <span className="explore-repo-owner">{formatAddress(repo.owner_address)}</span>
+                      </div>
+                      
+                      {repo.description && (
+                        <p className="explore-repo-description">
+                          {repo.description.replace(/\n/g, ' ').trim()}
+                        </p>
+                      )}
+                      
+                      <div className="explore-repo-meta">
+                        <span className="explore-repo-commits">{repo.commit_count} commits</span>
+                        {repo.last_commit_date && (
+                          <span className="explore-repo-updated">
+                            Updated {formatTimeAgo(repo.last_commit_date)}
+                          </span>
+                        )}
                       </div>
                     </Link>
                   ))}
@@ -195,43 +182,34 @@ git push`}
               )}
             </div>
 
-            {/* Activity */}
-            <div>
-              <h2 className="text-lg font-semibold text-[var(--bp-heading)] mb-5">Latest Activity</h2>
+            {/* Activity Feed */}
+            <div className="explore-activity">
+              <h2 className="explore-section-title">Recent Activity</h2>
               
               {activity.length === 0 ? (
-                <div className="glass-panel-inner rounded-xl p-8 text-center">
-                  <div className="text-[var(--bp-dim)] text-sm">No recent activity</div>
+                <div className="explore-activity-empty">
+                  <p>No recent activity</p>
                 </div>
               ) : (
-                <div className="space-y-2.5">
+                <div className="explore-activity-list">
                   {activity.map((item) => (
-                    <div key={item.id} className="glass-card rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="text-[var(--bp-accent)] text-sm mt-0.5">⟫</div>
-                        <div className="flex-1 min-w-0">
-                          <Link
-                            href={`/explore/${item.address}/${item.name}`}
-                            className="text-sm font-medium text-[var(--bp-heading)] hover:text-[var(--bp-accent)] transition-colors"
-                          >
-                            {item.name}
-                          </Link>
-                          
-                          {item.commit_message && (
-                            <div className="text-xs text-[var(--bp-text)] mt-1 truncate opacity-70">
-                              {item.commit_message}
-                            </div>
-                          )}
-                          
-                          <div className="text-xs text-[var(--bp-dim)] mt-1.5 font-mono">
-                            {formatTimeAgo(item.pushed_at)}
-                            {item.pusher_address && (
-                              <span className="ml-2">
-                                by {formatAddress(item.pusher_address)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                    <div key={item.id} className="explore-activity-item">
+                      <Link
+                        href={`/explore/${item.address}/${item.name}`}
+                        className="explore-activity-repo"
+                      >
+                        {item.name}
+                      </Link>
+                      
+                      {item.commit_message && (
+                        <p className="explore-activity-message">{item.commit_message}</p>
+                      )}
+                      
+                      <div className="explore-activity-meta">
+                        <span>{formatTimeAgo(item.pushed_at)}</span>
+                        {item.pusher_address && (
+                          <span>by {formatAddress(item.pusher_address)}</span>
+                        )}
                       </div>
                     </div>
                   ))}
