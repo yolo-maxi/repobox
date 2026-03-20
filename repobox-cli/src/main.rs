@@ -10,6 +10,39 @@ use repobox::identity;
 use repobox::parser;
 use repobox::shim::{self, ShimAction};
 
+const CONFIG_TEMPLATE: &str = r#"# repo.box configuration
+# Docs: https://repo.box/docs
+
+groups:
+  founders:
+    # - evm:0xYOUR_ADDRESS_HERE
+  agents:
+    # - evm:0xAGENT_ADDRESS_HERE
+
+permissions:
+  default: allow
+  rules:
+    # Flat rules:
+    #   - founders push >*
+    #   - founders merge >*
+    #   - founders edit ./.repobox-config
+    #
+    # Subject-grouped rules:
+    #   founders:
+    #     - push >*
+    #     - merge >*
+    #
+    # Verb-mapping rules:
+    #   agents:
+    #       push:
+    #         - ">feature/**"
+    #         - ">fix/**"
+    #       create:
+    #         - ">feature/**"
+    #       append:
+    #         - "./.repobox-config"
+"#;
+
 #[derive(Parser)]
 #[command(name = "repobox", about = "Git permission layer for AI agents")]
 struct Cli {
@@ -190,35 +223,7 @@ fn cmd_init(force: bool) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let template = r#"# repo.box configuration
-# Docs: https://repo.box/docs
-
-groups:
-  founders:
-    # - evm:0xYOUR_ADDRESS_HERE
-  agents:
-    # - evm:0xAGENT_ADDRESS_HERE
-
-permissions:
-  default: allow
-  rules:
-    # Flat rules:
-    #   - founders push >*
-    #   - founders merge >*
-    #   - founders edit ./.repobox-config
-    #
-    # Nested rules:
-    #   - agents:
-    #       push:
-    #         - ">feature/**"
-    #         - ">fix/**"
-    #       create:
-    #         - ">feature/**"
-    #       append:
-    #         - "./.repobox-config"
-"#;
-
-    if let Err(e) = std::fs::write(config_path, template) {
+    if let Err(e) = std::fs::write(config_path, CONFIG_TEMPLATE) {
         eprintln!("error: failed to write .repobox-config: {e}");
         return ExitCode::FAILURE;
     }
@@ -986,6 +991,19 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                 });
 
             if status.success() {
+                // After successful git init, drop .repobox-config template
+                if args.first().map(|s| s.as_str()) == Some("init") {
+                    // Determine the init target dir (git init [dir])
+                    let init_dir = args.iter()
+                        .skip(1)
+                        .find(|a| !a.starts_with('-'))
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|| PathBuf::from("."));
+                    let config_path = init_dir.join(".repobox-config");
+                    if !config_path.exists() {
+                        let _ = std::fs::write(&config_path, CONFIG_TEMPLATE);
+                    }
+                }
                 ExitCode::SUCCESS
             } else {
                 ExitCode::FAILURE
