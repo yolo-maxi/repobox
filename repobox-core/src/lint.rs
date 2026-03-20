@@ -40,6 +40,7 @@ pub fn lint(config: &Config) -> Vec<LintWarning> {
     check_deny_after_wildcard_subject(config, &mut warnings);
     check_branch_rules_no_file_rules_with_default_deny(config, &mut warnings);
     check_unused_groups(config, &mut warnings);
+    check_read_rules_must_be_repo_level(config, &mut warnings);
 
     warnings
 }
@@ -311,6 +312,45 @@ fn check_unused_groups(config: &Config, warnings: &mut Vec<LintWarning>) {
                 severity: Severity::Info,
                 message: format!("group '{name}' is defined but never used in any rule"),
                 hint: "Remove the group or add rules that reference it.".into(),
+            });
+        }
+    }
+}
+
+/// 9. Read rules must be repo-level (>* only).
+/// Git transport is all-or-nothing — branch/path scoped reads are dead rules.
+/// Skips read rules that came from `own` expansion (detected by same-line sibling verbs).
+fn check_read_rules_must_be_repo_level(config: &Config, warnings: &mut Vec<LintWarning>) {
+    let rules = &config.permissions.rules;
+    for (i, rule) in rules.iter().enumerate() {
+        if rule.verb != Verb::Read {
+            continue;
+        }
+
+        let is_repo_level = match (&rule.target.branch, &rule.target.path) {
+            (Some(b), None) if b == "*" => true,
+            (None, None) => true,
+            _ => false,
+        };
+
+        if !is_repo_level {
+            // Skip if this came from `own` expansion (same line, same subject, different verb)
+            let from_own = rules.iter().enumerate().any(|(j, other)| {
+                j != i && other.line == rule.line && other.verb != Verb::Read
+                    && same_subject(&other.subject, &rule.subject)
+            });
+            if from_own {
+                continue;
+            }
+
+            let subj = subject_name(&rule.subject);
+            let target = target_display(&rule.target);
+            warnings.push(LintWarning {
+                severity: Severity::Warning,
+                message: format!(
+                    "read rule '{subj} read {target}' has a branch or path scope — this won't work"
+                ),
+                hint: "Read access is repo-level (git transport is all-or-nothing). Use: read >*".into(),
             });
         }
     }
@@ -591,5 +631,79 @@ permissions:
         // Filter out only warnings (not info)
         let warns: Vec<_> = w.iter().filter(|w| w.severity == Severity::Warning).collect();
         assert!(warns.is_empty(), "clean config should have no warnings, got: {warns:?}");
+    }
+
+    #[test]
+    fn test_read_rule_repo_level_ok() {
+        let w = lint_yaml(r#"
+groups:
+  team:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    - team read >*
+"#);
+        let warns: Vec<_> = w.iter().filter(|w| w.message.contains("read rule")).collect();
+        assert!(warns.is_empty(), "read >* should be fine: {warns:?}");
+    }
+
+    #[test]
+    fn test_read_rule_branch_scoped_warns() {
+        let w = lint_yaml(r#"
+groups:
+  team:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    - team read >main
+"#);
+        let warns: Vec<_> = w.iter().filter(|w| w.message.contains("read rule")).collect();
+        assert_eq!(warns.len(), 1, "branch-scoped read should warn");
+        assert!(warns[0].message.contains("won't work"));
+    }
+
+    #[test]
+    fn test_read_rule_path_scoped_warns() {
+        let w = lint_yaml(r#"
+groups:
+  team:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    - team read ./docs/**
+"#);
+        let warns: Vec<_> = w.iter().filter(|w| w.message.contains("read rule")).collect();
+        assert_eq!(warns.len(), 1, "path-scoped read should warn");
+    }
+
+    #[test]
+    fn test_own_scoped_no_read_warning() {
+        // own >feature/** gives implicit read >* — no warning
+        let w = lint_yaml(r#"
+groups:
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000002
+permissions:
+  default: deny
+  rules:
+    - agents own >feature/**
+"#);
+        let warns: Vec<_> = w.iter().filter(|w| w.message.contains("read rule")).collect();
+        assert!(warns.is_empty(), "own-expanded read should not warn: {warns:?}");
+    }
+
+    #[test]
+    fn test_wildcard_read_ok() {
+        let w = lint_yaml(r#"
+permissions:
+  default: deny
+  rules:
+    - "* read >*"
+"#);
+        let warns: Vec<_> = w.iter().filter(|w| w.message.contains("read rule")).collect();
+        assert!(warns.is_empty(), "wildcard read >* should be fine: {warns:?}");
     }
 }

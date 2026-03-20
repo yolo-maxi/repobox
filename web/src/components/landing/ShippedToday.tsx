@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 interface CommitEntry {
   time: string;
@@ -50,11 +50,22 @@ export function LandingShippedToday() {
           letterSpacing: "0.12em",
           color: "var(--bp-dim)",
           fontWeight: 500,
-          marginBottom: 20,
+          marginBottom: 4,
         }}
       >
         What We Shipped Today
       </h2>
+      <p
+        style={{
+          fontSize: 12,
+          lineHeight: "20px",
+          color: "var(--bp-dim)",
+          marginBottom: 20,
+          opacity: 0.7,
+        }}
+      >
+        March 20, 2026
+      </p>
 
       {SHIPPED_DATA.map((repo) => (
         <div

@@ -128,7 +128,7 @@ export function LandingProjects() {
       <ProjectCard
         title="Permission Layer"
         tag="git shim"
-        description="Intercepts git commands. Every commit, merge, push is checked against .repobox.yml before it happens."
+        description="Intercepts git commands. Every commit, merge, push is checked against .repobox/config.yml before it happens."
       />
 
       <ProjectCard

@@ -245,8 +245,16 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
                                     let target = Target::parse(&target_str)?;
 
                                     // "own" expands to all verbs
+                                    // Read is always repo-level (>*) regardless of own's target
                                     if verb_str == "own" {
-                                        for &verb in OWN_VERBS {
+                                        rules.push(Rule {
+                                            subject: subject.clone(),
+                                            verb: Verb::Read,
+                                            deny,
+                                            target: own_read_target(),
+                                            line,
+                                        });
+                                        for &verb in OWN_WRITE_VERBS {
                                             rules.push(Rule {
                                                 subject: subject.clone(),
                                                 verb,
@@ -293,9 +301,17 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
                                         let target = Target::parse(t)?;
 
                                         // "own" expands to all verbs
+                                        // Read is always repo-level (>*) regardless of own's target
                                         if verb_str == "own" || verb_str == "not own" {
                                             let deny = verb_str.starts_with("not");
-                                            for &verb in OWN_VERBS {
+                                            rules.push(Rule {
+                                                subject: subject.clone(),
+                                                verb: Verb::Read,
+                                                deny,
+                                                target: own_read_target(),
+                                                line,
+                                            });
+                                            for &verb in OWN_WRITE_VERBS {
                                                 rules.push(Rule {
                                                     subject: subject.clone(),
                                                     verb,
@@ -409,9 +425,17 @@ fn parse_rule_value(
                         let target = Target::parse(target_str)?;
 
                         // "own" expands to all verbs
+                        // Read is always repo-level (>*) regardless of own's target
                         if verb_str == "own" || verb_str == "not own" {
                             let deny = verb_str.starts_with("not");
-                            for &verb in OWN_VERBS {
+                            rules.push(Rule {
+                                subject: subject.clone(),
+                                verb: Verb::Read,
+                                deny,
+                                target: own_read_target(),
+                                line,
+                            });
+                            for &verb in OWN_WRITE_VERBS {
                                 rules.push(Rule {
                                     subject: subject.clone(),
                                     verb,
@@ -444,11 +468,17 @@ fn parse_rule_value(
 
 /// Parse a flat rule string like "founders edit *" or "agents not merge >main".
 /// All verbs that `own` expands to.
-const OWN_VERBS: &[Verb] = &[
-    Verb::Read,
+/// Write-oriented verbs expanded by `own`. Read is handled separately
+/// because it's always repo-level (>*) regardless of the own target.
+const OWN_WRITE_VERBS: &[Verb] = &[
     Verb::Push, Verb::Merge, Verb::Create, Verb::Delete, Verb::ForcePush,
     Verb::Edit, Verb::Write, Verb::Append,
 ];
+
+/// The repo-level read target, always >*
+fn own_read_target() -> Target {
+    Target { branch: Some("*".to_string()), path: None }
+}
 
 fn parse_flat_rule(s: &str, line: usize) -> Result<Vec<Rule>, ConfigError> {
     let parts: Vec<&str> = s.split_whitespace().collect();
@@ -477,14 +507,22 @@ fn parse_flat_rule(s: &str, line: usize) -> Result<Vec<Rule>, ConfigError> {
     let target = Target::parse(&target_str)?;
 
     // "own" expands to all verbs
+    // Read is always repo-level (>*) regardless of own's target
     if verb_str == "own" {
-        let rules = OWN_VERBS.iter().map(|&verb| Rule {
+        let mut rules = vec![Rule {
+            subject: subject.clone(),
+            verb: Verb::Read,
+            deny,
+            target: own_read_target(),
+            line,
+        }];
+        rules.extend(OWN_WRITE_VERBS.iter().map(|&verb| Rule {
             subject: subject.clone(),
             verb,
             deny,
             target: target.clone(),
             line,
-        }).collect();
+        }));
         return Ok(rules);
     }
 

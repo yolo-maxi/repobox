@@ -6,7 +6,7 @@
   --bp-border: rgba(50, 100, 160, 0.25);
   --bp-text: #b8d4e3;
   --bp-heading: #e8f4fd;
-  --bp-dim: #5a7a94;
+  --bp-dim: #7a9ab4;
   --bp-accent: #4fc3f7;
   --bp-accent2: #81d4fa;
 }
@@ -162,6 +162,13 @@ a:hover {
   left: 0;
 }
 
+/* Hide registration marks on mobile */
+@media (max-width: 768px) {
+  .reg-mark {
+    display: none;
+  }
+}
+
 /* ASCII canvas */
 .ascii-canvas {
   position: absolute;
@@ -204,6 +211,20 @@ a:hover {
 /* Hide scrollbar on horizontal card row */
 div[style*="scroll-snap-type"]::-webkit-scrollbar {
   display: none;
+}
+
+/* Case studies — stack vertically on mobile */
+@media (max-width: 640px) {
+  .case-studies-row {
+    flex-direction: column !important;
+    overflow-x: visible !important;
+  }
+  .case-study-card {
+    flex: 1 1 auto !important;
+  }
+  .case-studies-fade {
+    display: none !important;
+  }
 }
 
 /* Playground styles */

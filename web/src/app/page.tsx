@@ -4,6 +4,7 @@ import { LandingProjects } from "@/components/landing/Projects";
 import { LandingShippedToday } from "@/components/landing/ShippedToday";
 import { LandingCaseStudies } from "@/components/landing/CaseStudies";
 import { LandingEthos } from "@/components/landing/Ethos";
+import { ConfigExample } from "@/components/landing/ConfigExample";
 import { LandingCTA } from "@/components/landing/CTA";
 import { LandingWriting } from "@/components/landing/Writing";
 import { LandingFooter } from "@/components/landing/Footer";
@@ -24,10 +25,11 @@ export default function Home() {
         }}
       >
         <LandingHero />
-        <div style={{ height: "clamp(40px, 10vw, 80px)" }} />
+        <div style={{ height: "clamp(20px, 5vw, 32px)" }} />
         <LandingProjects />
         <LandingShippedToday />
         <LandingCaseStudies />
+        <ConfigExample />
         <LandingEthos />
         <LandingCTA />
         <LandingWriting />

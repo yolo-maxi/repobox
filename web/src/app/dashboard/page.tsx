@@ -118,13 +118,13 @@ export default function Dashboard() {
         <div>
           <div style={styles.pitch}>
             <strong style={{ color: '#fff' }}>repo.box</strong> makes git repositories safe for AI agents. 
-            It shims the <code style={styles.code}>git</code> command so agents use normal git workflows — but every commit, merge, and push is silently checked against a <code style={styles.code}>.repobox.yml</code> file before it lands. 
+            It shims the <code style={styles.code}>git</code> command so agents use normal git workflows — but every commit, merge, and push is silently checked against a <code style={styles.code}>.repobox/config.yml</code> file before it lands. 
             Each agent gets its own EVM keypair as identity. Each commit is signed. Permissions live in the repo, not on a server. Five agents, five keys, one repo, zero risk.
           </div>
           <h3 style={styles.sectionTitle}>TIMELINE</h3>
           {[
             { date: 'Mar 17 ✅', title: 'Design & Spec', desc: 'Four primitives designed. Five specs written. Test plan created.' },
-            { date: 'Mar 18-19 🔨', title: 'Foundation', desc: '.repobox.yml parser. Permission engine. Git shim skeleton. Identity.' },
+            { date: 'Mar 18-19 🔨', title: 'Foundation', desc: '.repobox/config.yml parser. Permission engine. Git shim skeleton. Identity.' },
             { date: 'Mar 20-21', title: 'Enforcement', desc: 'git commit/merge/push interception. Branch create/delete. Edge cases.' },
             { date: 'Mar 22-23', title: 'Demo & Ship', desc: 'Landing page. Demo video. README. Hackathon submission.' },
           ].map((item, i) => (

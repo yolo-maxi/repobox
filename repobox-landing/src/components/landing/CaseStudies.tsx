@@ -61,28 +61,31 @@ export function LandingCaseStudies() {
         Use Cases
       </h2>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 16,
-          overflowX: "auto",
-          scrollSnapType: "x mandatory",
-          WebkitOverflowScrolling: "touch",
-          paddingBottom: 8,
-        }}
-      >
-        {CASE_STUDIES.map((study) => (
-          <div
-            key={study.title}
-            style={{
-              flex: "0 0 280px",
-              scrollSnapAlign: "start",
-              background: "var(--bp-surface)",
-              border: "1px solid var(--bp-border)",
-              borderRadius: 8,
-              padding: 20,
-            }}
-          >
+      <div style={{ position: "relative" }}>
+        <div
+          className="case-studies-row"
+          style={{
+            display: "flex",
+            gap: 16,
+            overflowX: "auto",
+            scrollSnapType: "x mandatory",
+            WebkitOverflowScrolling: "touch",
+            paddingBottom: 8,
+          }}
+        >
+          {CASE_STUDIES.map((study) => (
+            <div
+              key={study.title}
+              className="case-study-card"
+              style={{
+                flex: "0 0 280px",
+                scrollSnapAlign: "start",
+                background: "var(--bp-surface)",
+                border: "1px solid var(--bp-border)",
+                borderRadius: 8,
+                padding: 20,
+              }}
+            >
             <div
               style={{
                 display: "flex",
@@ -124,6 +127,21 @@ export function LandingCaseStudies() {
             </div>
           </div>
         ))}
+        </div>
+        {/* Right-edge gradient fade to hint scrollability */}
+        <div
+          className="case-studies-fade"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            width: 40,
+            height: "100%",
+            background: "linear-gradient(to right, transparent, var(--bp-bg))",
+            pointerEvents: "none",
+            borderRadius: "0 8px 8px 0",
+          }}
+        />
       </div>
     </section>
   );

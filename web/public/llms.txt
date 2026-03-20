@@ -3,7 +3,7 @@
 > Git permission layer that makes repositories safe for AI agents.
 
 ## What is repo.box?
-repo.box makes git repositories safe for AI agents. It shims the `git` command so agents use normal git workflows — but every commit, merge, and push is silently checked against a `.repobox-config` file before it lands. If the action violates a rule, it's blocked before anything touches your repo.
+repo.box makes git repositories safe for AI agents. It shims the `git` command so agents use normal git workflows — but every commit, merge, and push is silently checked against a `.repobox/config.yml` file before it lands. If the action violates a rule, it's blocked before anything touches your repo.
 
 Each agent gets its own EVM keypair as identity. Each commit is signed. Permissions live in the repo, not on a server. One YAML file controls who can push where, which files they can touch, and which branches they can create.
 
@@ -13,7 +13,7 @@ Five agents, five keys, one repo, zero risk.
 - Shims the `git` command — agents use normal git, the permission layer is invisible
 - Every agent gets its own EVM keypair as identity
 - Every commit is signed with the agent's key
-- `.repobox-config` defines who can do what (branches, files, verbs)
+- `.repobox/config.yml` defines who can do what (branches, files, verbs)
 - Permissions are enforced locally, in the repo itself
 - First match wins, top-to-bottom rule evaluation
 
