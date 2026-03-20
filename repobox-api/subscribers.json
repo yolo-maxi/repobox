@@ -1,0 +1,18 @@
+[
+  {
+    "email": "test@example.com",
+    "ts": "2026-02-22T16:47:18.786Z"
+  },
+  {
+    "email": "ocean@repo.box",
+    "ts": "2026-02-24T06:42:10.818Z"
+  },
+  {
+    "email": "tudor@enverge.ai",
+    "ts": "2026-03-03T07:05:03.352Z"
+  },
+  {
+    "email": "tudor+2@enverge.ai",
+    "ts": "2026-03-03T07:05:04.034Z"
+  }
+]
