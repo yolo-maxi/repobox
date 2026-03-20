@@ -565,6 +565,34 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
         }
     };
 
+    let target = repobox::config::Target::parse(target_str).unwrap();
+    let display = aliases::display_identity(home, &resolved);
+
+    // "own" → check all verbs
+    if verb_str == "own" {
+        let all_verbs = ["push", "merge", "create", "delete", "force-push", "edit", "write", "append"];
+        let mut all_pass = true;
+        let mut denied = Vec::new();
+        for vname in &all_verbs {
+            let v = Verb::parse(vname).unwrap();
+            let r = engine::check(&config, &identity, v, target.branch.as_deref(), target.path.as_deref());
+            if r.is_allowed() {
+                println!("  ✅ {vname} {target_str}");
+            } else {
+                println!("  ❌ {vname} {target_str}");
+                denied.push(*vname);
+                all_pass = false;
+            }
+        }
+        if all_pass {
+            println!("\n✅ {display} owns {target_str}");
+            return ExitCode::SUCCESS;
+        } else {
+            println!("\n❌ {display} does NOT own {target_str} (denied: {})", denied.join(", "));
+            return ExitCode::FAILURE;
+        }
+    }
+
     let verb = match Verb::parse(verb_str) {
         Ok(v) => v,
         Err(e) => {
@@ -573,8 +601,6 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
         }
     };
 
-    let target = repobox::config::Target::parse(target_str).unwrap();
-
     let result = engine::check(
         &config,
         &identity,
@@ -582,8 +608,6 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
         target.branch.as_deref(),
         target.path.as_deref(),
     );
-
-    let display = aliases::display_identity(home, &resolved);
 
     if result.is_allowed() {
         println!("✅ allowed — {display} {verb_str} {target_str}");
