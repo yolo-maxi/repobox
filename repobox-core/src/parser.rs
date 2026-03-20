@@ -165,32 +165,45 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
                                     if parts.is_empty() {
                                         return Err(ConfigError::InvalidRule("empty rule".into()));
                                     }
-                                    let (deny, verb, target_start) = if parts[0] == "not" {
+                                    let (deny, verb_str, target_start) = if parts[0] == "not" {
                                         if parts.len() < 3 {
                                             return Err(ConfigError::InvalidRule(format!(
                                                 "deny rule needs at least 'not verb target', got: '{s}'"
                                             )));
                                         }
-                                        let (_, verb) = parse_verb_str(parts[1])?;
-                                        (true, verb, 2)
+                                        (true, parts[1], 2)
                                     } else {
                                         if parts.len() < 2 {
                                             return Err(ConfigError::InvalidRule(format!(
                                                 "rule needs at least 'verb target', got: '{s}'"
                                             )));
                                         }
-                                        let (deny, verb) = parse_verb_str(parts[0])?;
-                                        (deny, verb, 1)
+                                        (false, parts[0], 1)
                                     };
                                     let target_str = parts[target_start..].join(" ");
                                     let target = Target::parse(&target_str)?;
-                                    rules.push(Rule {
-                                        subject: subject.clone(),
-                                        verb,
-                                        deny,
-                                        target,
-                                        line,
-                                    });
+
+                                    // "own" expands to all verbs
+                                    if verb_str == "own" {
+                                        for &verb in OWN_VERBS {
+                                            rules.push(Rule {
+                                                subject: subject.clone(),
+                                                verb,
+                                                deny,
+                                                target: target.clone(),
+                                                line,
+                                            });
+                                        }
+                                    } else {
+                                        let (deny2, verb) = parse_verb_str(verb_str)?;
+                                        rules.push(Rule {
+                                            subject: subject.clone(),
+                                            verb,
+                                            deny: deny || deny2,
+                                            target,
+                                            line,
+                                        });
+                                    }
                                     line += 1;
                                 }
                             }
@@ -200,8 +213,6 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
                                     let verb_str = vkey.as_str().ok_or_else(|| {
                                         ConfigError::InvalidRule("verb key must be a string".into())
                                     })?;
-                                    let (deny, verb) = parse_verb_str(verb_str)?;
-
                                     let targets = match vval {
                                         serde_yaml::Value::Sequence(tlist) => tlist.clone(),
                                         serde_yaml::Value::String(s) => {
@@ -219,13 +230,29 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
                                             ConfigError::InvalidRule("target must be a string".into())
                                         })?;
                                         let target = Target::parse(t)?;
-                                        rules.push(Rule {
-                                            subject: subject.clone(),
-                                            verb,
-                                            deny,
-                                            target,
-                                            line,
-                                        });
+
+                                        // "own" expands to all verbs
+                                        if verb_str == "own" || verb_str == "not own" {
+                                            let deny = verb_str.starts_with("not");
+                                            for &verb in OWN_VERBS {
+                                                rules.push(Rule {
+                                                    subject: subject.clone(),
+                                                    verb,
+                                                    deny,
+                                                    target: target.clone(),
+                                                    line,
+                                                });
+                                            }
+                                        } else {
+                                            let (deny, verb) = parse_verb_str(verb_str)?;
+                                            rules.push(Rule {
+                                                subject: subject.clone(),
+                                                verb,
+                                                deny,
+                                                target,
+                                                line,
+                                            });
+                                        }
                                         line += 1;
                                     }
                                 }
@@ -278,8 +305,8 @@ fn parse_rule_value(
     match value {
         // Flat rule: "founders edit *"
         serde_yaml::Value::String(s) => {
-            let rule = parse_flat_rule(s, line)?;
-            Ok(vec![rule])
+            let rules = parse_flat_rule(s, line)?;
+            Ok(rules)
         }
         // Nested rule: { "agents": { push: [">feature/**"], ... } }
         serde_yaml::Value::Mapping(map) => {
@@ -308,8 +335,6 @@ fn parse_rule_value(
                         ConfigError::InvalidRule("verb must be a string".into())
                     })?;
 
-                    let (deny, verb) = parse_verb_str(verb_str)?;
-
                     let targets = targets_val.as_sequence().ok_or_else(|| {
                         ConfigError::InvalidRule(format!(
                             "expected list of targets for verb '{verb_str}'"
@@ -321,6 +346,23 @@ fn parse_rule_value(
                             ConfigError::InvalidRule("target must be a string".into())
                         })?;
                         let target = Target::parse(target_str)?;
+
+                        // "own" expands to all verbs
+                        if verb_str == "own" || verb_str == "not own" {
+                            let deny = verb_str.starts_with("not");
+                            for &verb in OWN_VERBS {
+                                rules.push(Rule {
+                                    subject: subject.clone(),
+                                    verb,
+                                    deny,
+                                    target: target.clone(),
+                                    line,
+                                });
+                            }
+                            continue;
+                        }
+
+                        let (deny, verb) = parse_verb_str(verb_str)?;
                         rules.push(Rule {
                             subject: subject.clone(),
                             verb,
@@ -340,7 +382,13 @@ fn parse_rule_value(
 }
 
 /// Parse a flat rule string like "founders edit *" or "agents not merge >main".
-fn parse_flat_rule(s: &str, line: usize) -> Result<Rule, ConfigError> {
+/// All verbs that `own` expands to.
+const OWN_VERBS: &[Verb] = &[
+    Verb::Push, Verb::Merge, Verb::Create, Verb::Delete, Verb::ForcePush,
+    Verb::Edit, Verb::Write, Verb::Append,
+];
+
+fn parse_flat_rule(s: &str, line: usize) -> Result<Vec<Rule>, ConfigError> {
     let parts: Vec<&str> = s.split_whitespace().collect();
 
     if parts.len() < 3 {
@@ -351,30 +399,43 @@ fn parse_flat_rule(s: &str, line: usize) -> Result<Rule, ConfigError> {
 
     let subject = parse_subject(parts[0])?;
 
-    let (deny, verb, target_start) = if parts[1] == "not" {
+    let (deny, verb_str, target_start) = if parts[1] == "not" {
         if parts.len() < 4 {
             return Err(ConfigError::InvalidRule(format!(
                 "deny rule needs 4 parts (subject not verb target), got: '{s}'"
             )));
         }
-        let (_, verb) = parse_verb_str(parts[2])?;
-        (true, verb, 3)
+        (true, parts[2], 3)
     } else {
-        let (deny, verb) = parse_verb_str(parts[1])?;
-        (deny, verb, 2)
+        (false, parts[1], 2)
     };
 
     // Remaining parts form the target (e.g. "contracts/** >main")
     let target_str = parts[target_start..].join(" ");
     let target = Target::parse(&target_str)?;
 
-    Ok(Rule {
+    // "own" expands to all verbs
+    if verb_str == "own" {
+        let rules = OWN_VERBS.iter().map(|&verb| Rule {
+            subject: subject.clone(),
+            verb,
+            deny,
+            target: target.clone(),
+            line,
+        }).collect();
+        return Ok(rules);
+    }
+
+    let (deny2, verb) = parse_verb_str(verb_str)?;
+    let deny = deny || deny2;
+
+    Ok(vec![Rule {
         subject,
         verb,
         deny,
         target,
         line,
-    })
+    }])
 }
 
 /// Parse a subject string: bare group name, "evm:0x...", or legacy "%groupname".
@@ -1049,5 +1110,95 @@ permissions:
         assert!(r.is_allowed(), "founder should push to dev");
         let r = engine::check(&config, &agent, Verb::Push, Some("dev"), None);
         assert!(r.is_allowed(), "agent should push to dev");
+    }
+
+    // ========== "own" verb expansion ==========
+
+    #[test]
+    fn test_own_expands_to_all_verbs() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    - founders own >main
+"#;
+        let config = parse(yaml).unwrap();
+        // own expands to 8 verbs
+        assert_eq!(config.permissions.rules.len(), 8);
+
+        let founder = Identity::parse("evm:0xAAA0000000000000000000000000000000000001").unwrap();
+        use crate::engine;
+
+        // All verbs should be allowed
+        assert!(engine::check(&config, &founder, Verb::Push, Some("main"), None).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Merge, Some("main"), None).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Create, Some("main"), None).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Delete, Some("main"), None).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::ForcePush, Some("main"), None).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Edit, Some("main"), Some("any.txt")).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Write, Some("main"), Some("any.txt")).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Append, Some("main"), Some("any.txt")).is_allowed());
+    }
+
+    #[test]
+    fn test_own_format_b() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    founders:
+      - own >main
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.permissions.rules.len(), 8);
+    }
+
+    #[test]
+    fn test_own_format_c() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    founders:
+      own:
+        - ">main"
+        - ">dev"
+"#;
+        let config = parse(yaml).unwrap();
+        // 8 verbs × 2 targets = 16 rules
+        assert_eq!(config.permissions.rules.len(), 16);
+    }
+
+    #[test]
+    fn test_own_with_deny_exception() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    - founders not force-push >main
+    - founders own >main
+"#;
+        let config = parse(yaml).unwrap();
+        let founder = Identity::parse("evm:0xAAA0000000000000000000000000000000000001").unwrap();
+        use crate::engine;
+
+        // force-push denied (first match wins — deny comes before own)
+        assert!(!engine::check(&config, &founder, Verb::ForcePush, Some("main"), None).is_allowed());
+        // everything else allowed
+        assert!(engine::check(&config, &founder, Verb::Push, Some("main"), None).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Merge, Some("main"), None).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Edit, Some("main"), Some("f.txt")).is_allowed());
     }
 }
