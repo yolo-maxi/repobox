@@ -99,8 +99,6 @@ async fn receive_pack(
         Err(status) => return status.into_response(),
     };
 
-    let is_new_repo = !git::repo_dir(&state.data_dir, &repo).exists();
-
     if let Err(error) = ensure_repo_initialized(&state, &repo) {
         return internal_error(error);
     }
@@ -113,13 +111,14 @@ async fn receive_pack(
         body,
     );
 
-    // For new repos: require a signed first commit to establish ownership.
-    // If unsigned or invalid, delete the repo — we only host compliant repos.
-    if is_new_repo {
-        tracing::debug!(
-            repo = %format!("{}/{}", repo.address, repo.name),
-            "new repo push completed, checking for EVM signature"
-        );
+    // Check if this repo has an owner yet. If not, this is the first push
+    // and we need to verify the first commit is EVM-signed.
+    let has_owner = matches!(
+        db::get_repo(&state.db_path, &repo.address, &repo.name),
+        Ok(Some(_))
+    );
+
+    if !has_owner {
         match git::extract_owner_from_first_commit(&state.data_dir, &repo) {
             Ok(Some(signer)) => {
                 let _ = db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
@@ -130,14 +129,19 @@ async fn receive_pack(
                 );
             }
             _ => {
-                // No valid signature — reject by removing the repo
+                // No valid signature — delete the repo
                 let repo_dir = git::repo_dir(&state.data_dir, &repo);
-                let _ = std::fs::remove_dir_all(&repo_dir);
+                if let Err(e) = std::fs::remove_dir_all(&repo_dir) {
+                    tracing::error!(
+                        repo = %format!("{}/{}", repo.address, repo.name),
+                        error = %e,
+                        "failed to clean up unsigned repo"
+                    );
+                }
                 tracing::warn!(
                     repo = %format!("{}/{}", repo.address, repo.name),
-                    "rejected: first commit must be EVM-signed"
+                    "rejected: first commit must be EVM-signed — repo deleted"
                 );
-                return (StatusCode::FORBIDDEN, "first commit must be EVM-signed to establish ownership").into_response();
             }
         }
     }

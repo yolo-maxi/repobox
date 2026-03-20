@@ -93,7 +93,7 @@ fn unsigned_push_is_rejected_and_cleaned_up() {
         .args(["push", "-u", "origin", "HEAD:refs/heads/main"])
         .output()
         .unwrap();
-    eprintln!("[unsigned push] exit={} stderr={}", output.status, String::from_utf8_lossy(&output.stderr));
+    let _ = output;
 
     // Bare repo should NOT exist — server cleaned it up
     let bare_repo = data_dir.join(address).join(format!("{repo_name}.git"));
@@ -205,7 +205,7 @@ fn start_server(bind: SocketAddr, data_dir: &Path) -> ServerGuard {
     let child = Command::new(env!("CARGO_BIN_EXE_repobox-server"))
         .args(["--bind", &bind.to_string(), "--data-dir", data_dir.to_string_lossy().as_ref()])
         .stdout(Stdio::null())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::null())
         .spawn()
         .unwrap();
 
