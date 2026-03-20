@@ -80,6 +80,8 @@ pub struct Rule {
 /// The subject of a rule — either a group or a direct identity.
 #[derive(Debug, Clone)]
 pub enum Subject {
+    /// Matches everyone — wildcard subject `*`
+    All,
     Group(String),
     Identity(Identity),
 }
@@ -88,6 +90,7 @@ impl Subject {
     /// Check if the given identity matches this subject, using the group map for resolution.
     pub fn matches(&self, identity: &Identity, groups: &HashMap<String, Vec<Identity>>) -> bool {
         match self {
+            Subject::All => true,
             Subject::Group(name) => groups
                 .get(name)
                 .map(|members| members.contains(identity))

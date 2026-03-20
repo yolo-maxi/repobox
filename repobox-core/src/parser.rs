@@ -379,7 +379,9 @@ fn parse_flat_rule(s: &str, line: usize) -> Result<Rule, ConfigError> {
 
 /// Parse a subject string: bare group name, "evm:0x...", or legacy "%groupname".
 fn parse_subject(s: &str) -> Result<Subject, ConfigError> {
-    if s.starts_with("evm:") {
+    if s == "*" {
+        Ok(Subject::All)
+    } else if s.starts_with("evm:") {
         Ok(Subject::Identity(Identity::parse(s)?))
     } else {
         // Bare word = group name. Strip legacy % prefix if present.
@@ -967,5 +969,85 @@ permissions:
         assert!(matches!(&config.permissions.rules[2].subject, Subject::Group(g) if g == "agents"));
         assert_eq!(config.permissions.rules[2].verb, Verb::Push);
         assert_eq!(config.permissions.rules[3].verb, Verb::Create);
+    }
+
+    // ========== Wildcard subject * ==========
+
+    #[test]
+    fn test_wildcard_subject_flat() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    - founders push >*
+    - "* not push >main"
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.permissions.rules.len(), 2);
+        assert!(matches!(&config.permissions.rules[1].subject, Subject::All));
+        assert!(config.permissions.rules[1].deny);
+    }
+
+    #[test]
+    fn test_wildcard_subject_matches_everyone() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    - "* push >dev"
+"#;
+        let config = parse(yaml).unwrap();
+        let random = Identity::parse("evm:0xCCC0000000000000000000000000000000000003").unwrap();
+        let founder = Identity::parse("evm:0xAAA0000000000000000000000000000000000001").unwrap();
+
+        use crate::engine;
+
+        // Both match — * means everyone
+        let r = engine::check(&config, &random, Verb::Push, Some("dev"), None);
+        assert!(r.is_allowed(), "random identity should be allowed by wildcard");
+        let r = engine::check(&config, &founder, Verb::Push, Some("dev"), None);
+        assert!(r.is_allowed(), "founder should be allowed by wildcard");
+    }
+
+    #[test]
+    fn test_wildcard_deny_with_exceptions() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000002
+permissions:
+  default: deny
+  rules:
+    - founders push >main
+    - "* not push >main"
+    - "* push >dev"
+"#;
+        let config = parse(yaml).unwrap();
+        let founder = Identity::parse("evm:0xAAA0000000000000000000000000000000000001").unwrap();
+        let agent = Identity::parse("evm:0xBBB0000000000000000000000000000000000002").unwrap();
+
+        use crate::engine;
+
+        // Founder can push to main (matched by first rule before wildcard deny)
+        let r = engine::check(&config, &founder, Verb::Push, Some("main"), None);
+        assert!(r.is_allowed(), "founder should push to main");
+
+        // Agent cannot push to main (wildcard deny catches them)
+        let r = engine::check(&config, &agent, Verb::Push, Some("main"), None);
+        assert!(!r.is_allowed(), "agent should NOT push to main");
+
+        // Both can push to dev
+        let r = engine::check(&config, &founder, Verb::Push, Some("dev"), None);
+        assert!(r.is_allowed(), "founder should push to dev");
+        let r = engine::check(&config, &agent, Verb::Push, Some("dev"), None);
+        assert!(r.is_allowed(), "agent should push to dev");
     }
 }
