@@ -1,0 +1,74 @@
+# The End of UIs
+// repo.box — 2026-02-23 — agent-readable version
+
+## Core Thesis
+claim: The UI layer used to be owned by the company that built the service. Now it can be owned by the person using it.
+key_insight: When cost trends to zero, any non-zero amount of demand is enough to make something happen.
+shift: APIs have always existed. What changed is the UI layer became almost free to build. One person or one AI agent can rebuild an entire app's interface in a weekend.
+
+## Evidence
+
+fastergh:
+  builder: Rhys Sullivan (one person)
+  repo: https://github.com/RhysSullivan/fastergh
+  what: Full rebuild of GitHub's frontend
+  architecture: GitHub API stays write model, Convex acts as real-time read cache via webhooks
+  why_faster: GitHub's UI serves 100 million developers' edge cases. A custom UI serves YOU.
+
+our_local_build:
+  what: Telegram client as VS Code extension, built by an AI agent
+  features: Chat rendering in editor sidebar, hardcoded UI for agent interactions, inline GitHub PR rendering
+  build_time: One session per feature
+
+## Capabilities, Not Apps
+
+key_reframe: Apps will no longer be the basic unit of software. Capabilities will.
+explanation: When a custom UI is cheap, you stop thinking in apps and start thinking in what each service CAN DO. GitHub = code hosting + PRs + CI. Telegram = real-time messaging. Stripe = payments.
+result: Every user becomes their own product manager, assembling a command center from capabilities arranged for maximum effectiveness of their specific workflow.
+examples: Traders building their own Bloomberg from APIs. Developers embedding chat, git, and AI into one surface. Personal productivity setups that look nothing like anyone else's.
+
+## Composition — The Actually New Thing
+
+first_order_effect: Hyper-customization of single-service interfaces
+second_order_effect: Composing capabilities from multiple services into interfaces no single company would ever build
+
+example:
+  inputs: [Telegram API, GitHub API, OpenClaw API, Calendar API, any other API]
+  output: One bespoke interface
+  capabilities:
+    - Merge a PR from a chat message without opening GitHub
+    - Custom rendering for AI agent responses
+    - Drag a file into chat, agent sees the code
+    - Chat + merge PRs + query AI — one surface, zero tab-switching
+  why_no_company_builds_this: Too niche for any single company to justify. But when cost is near-zero, "too niche" is no longer valid.
+
+## What Breaks (Second/Third Order Effects)
+
+1_upselling_dies:
+  claim: If the user controls the interface, you can't put upgrade prompts in their face.
+  implication: The "free tier with annoying limitations" playbook assumes you own the screen. You don't anymore.
+
+2_per_seat_pricing_obsolete:
+  claim: When one person's bespoke interface hits five APIs, who gets the "seat"?
+  implication: Pricing per-capability or per-call makes more sense than pricing per-human-looking-at-your-UI.
+
+3_feature_tiers_blur:
+  claim: Tiered pricing assumes users want YOUR features. Composing users might only want your data layer.
+  implication: The feature you're gating might be one they've already built themselves.
+
+4_saas_brand_power_fades:
+  claim: When your product is consumed through someone else's interface, your brand becomes invisible.
+  implication: You're a capability, not a destination. The moat is the API, not the logo.
+
+5_closed_apis_get_replaced:
+  claim: Apps that don't play nice get replaced by local or open alternatives.
+  exception: Unless they have irreplaceable network effects, a closed API is an invitation to be rebuilt from scratch.
+
+## Takeaway
+conclusion: The default UI becomes the demo. The real product is the API. The real interface is the one you — or your agent — built last weekend.
+
+## Metadata
+url: https://repo.box/blog/end-of-uis
+human_version: https://repo.box/blog/end-of-uis.html
+date: 2026-02-23
+tags: [apis, economics, building, composition, custom-ui, capabilities]

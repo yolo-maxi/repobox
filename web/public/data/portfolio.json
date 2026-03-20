@@ -1,0 +1,236 @@
+[
+  {
+    "name": "Oceangram",
+    "filename": "oceangram",
+    "description": "VS Code extension for Telegram power users and AI agent operators",
+    "status": "active",
+    "url": "https://oceangram.repo.box",
+    "tasks": {
+      "total": 153,
+      "ideas": 8,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 5,
+      "active": 5,
+      "done": 140
+    },
+    "last_update": "2026-03-06"
+  },
+  {
+    "name": "Semi-Sentient Society",
+    "filename": "sss",
+    "description": "DAO for AI agents. Governance, staking, corvée labor, and collective intelligence.",
+    "status": "active",
+    "url": "https://sss.repo.box",
+    "tasks": {
+      "total": 95,
+      "ideas": 9,
+      "backlog": 3,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 7,
+      "active": 10,
+      "done": 76
+    },
+    "last_update": "2026-03-06"
+  },
+  {
+    "name": "Banger",
+    "filename": "banger",
+    "description": "AI-powered music discovery and playlist generation",
+    "status": "active",
+    "url": "",
+    "tasks": {
+      "total": 74,
+      "ideas": 17,
+      "backlog": 42,
+      "in_progress": 0,
+      "blocked": 1,
+      "review": 0,
+      "active": 43,
+      "done": 14
+    },
+    "last_update": "2026-03-05"
+  },
+  {
+    "name": "BotFight",
+    "filename": "botfight",
+    "description": "AI agent competitive gaming arena with Triple Treason",
+    "status": "active",
+    "url": "https://prompster.club",
+    "tasks": {
+      "total": 56,
+      "ideas": 30,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 0,
+      "done": 26
+    },
+    "last_update": "2026-03-05"
+  },
+  {
+    "name": "Cabin",
+    "filename": "cabin",
+    "description": "Group travel booking via chat. Text a bot, book flights for your crew.",
+    "status": "active",
+    "url": "https://cabin.team",
+    "tasks": {
+      "total": 30,
+      "ideas": 15,
+      "backlog": 12,
+      "in_progress": 2,
+      "blocked": 0,
+      "review": 0,
+      "active": 14,
+      "done": 1
+    },
+    "last_update": "2026-03-05"
+  },
+  {
+    "name": "clawd",
+    "filename": "clawd",
+    "description": "AI workspace, agent orchestration, and automation tools",
+    "status": "active",
+    "url": "",
+    "tasks": {
+      "total": 0,
+      "ideas": 0,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 0,
+      "done": 0
+    },
+    "last_update": "2026-03-05"
+  },
+  {
+    "name": "repo.box",
+    "filename": "repobox",
+    "description": "Independent dev studio website. You're looking at it.",
+    "status": "active",
+    "url": "https://repo.box",
+    "tasks": {
+      "total": 20,
+      "ideas": 8,
+      "backlog": 2,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 6,
+      "active": 8,
+      "done": 4
+    },
+    "last_update": "2026-03-04"
+  },
+  {
+    "name": "The Pulse",
+    "filename": "thepulse",
+    "description": "Farcaster mini app. Community pulse game on streme.fun.",
+    "status": "active",
+    "url": "https://streme.fun",
+    "tasks": {
+      "total": 40,
+      "ideas": 16,
+      "backlog": 6,
+      "in_progress": 1,
+      "blocked": 0,
+      "review": 0,
+      "active": 7,
+      "done": 17
+    },
+    "last_update": "2026-03-04"
+  },
+  {
+    "name": "Rikai",
+    "filename": "rikai",
+    "description": "Language learning reading assistant with spaced repetition",
+    "status": "active",
+    "url": "https://rikai.chat",
+    "tasks": {
+      "total": 13,
+      "ideas": 13,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 0,
+      "done": 0
+    },
+    "last_update": "2026-03-01"
+  },
+  {
+    "name": "SUPStrategy",
+    "filename": "supstrategy",
+    "description": "Real-time Superfluid token strategy dashboard and analytics",
+    "status": "shipped",
+    "url": "https://supstrategy.repo.box",
+    "tasks": {
+      "total": 35,
+      "ideas": 20,
+      "backlog": 5,
+      "in_progress": 1,
+      "blocked": 0,
+      "review": 0,
+      "active": 6,
+      "done": 9
+    },
+    "last_update": "2026-03-04"
+  },
+  {
+    "name": "SkillMarket",
+    "filename": "skillmarket",
+    "description": "Marketplace for AI agent skills and capabilities",
+    "status": "concept",
+    "url": "",
+    "tasks": {
+      "total": 57,
+      "ideas": 8,
+      "backlog": 0,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 0,
+      "done": 49
+    },
+    "last_update": "2026-03-04"
+  },
+  {
+    "name": "OCR Receipts",
+    "filename": "ocr-receipts",
+    "description": "Receipt scanning and expense tracking with AI",
+    "status": "concept",
+    "url": "",
+    "tasks": {
+      "total": 18,
+      "ideas": 9,
+      "backlog": 8,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 8,
+      "done": 1
+    },
+    "last_update": "2026-03-01"
+  },
+  {
+    "name": "Oceangram Tray",
+    "filename": "oceangram-tray",
+    "description": "Desktop tray companion app for Oceangram",
+    "status": "concept",
+    "url": "",
+    "tasks": {
+      "total": 26,
+      "ideas": 9,
+      "backlog": 17,
+      "in_progress": 0,
+      "blocked": 0,
+      "review": 0,
+      "active": 17,
+      "done": 0
+    },
+    "last_update": "2026-02-28"
+  }
+]

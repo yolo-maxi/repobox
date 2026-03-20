@@ -1,0 +1,622 @@
+[
+  {
+    "name": "1. .repobox.yml Parser",
+    "tests": [
+      {
+        "text": "Given a valid YAML with one group and one permission rule, produce a Config struct with correct group members and one parsed rule",
+        "status": "passing"
+      },
+      {
+        "text": "Given groups with 'include' references (A includes B), resolve membership: checking A returns members of both A and B",
+        "status": "passing"
+      },
+      {
+        "text": "Given a group containing 'evm:0xABC...', store it as a valid EVM identity in the group's member list",
+        "status": "passing"
+      },
+      {
+        "text": "Given a permission rule referencing 'founders', link it to the 'founders' group defined in the groups section",
+        "status": "passing"
+      },
+      {
+        "text": "Given a permission rule referencing 'nonexistent' (no matching group), return error: 'unknown group: nonexistent'",
+        "status": "passing"
+      },
+      {
+        "text": "Given group A includes B and group B includes A, detect the cycle and return error: 'circular dependency: A → B → A'",
+        "status": "passing"
+      },
+      {
+        "text": "Given groups nested 6 levels deep (A→B→C→D→E→F→G), return error: 'max include depth exceeded (5)'",
+        "status": "passing"
+      },
+      {
+        "text": "Given '>main' in a permission target, classify it as a branch target with pattern 'main'",
+        "status": "passing"
+      },
+      {
+        "text": "Given 'contracts/**' in a permission target (no > prefix), classify it as a path target with glob 'contracts/**'",
+        "status": "passing"
+      },
+      {
+        "text": "Given 'contracts/** >main' in a permission target, classify it as a combined target: path 'contracts/**' AND branch 'main'",
+        "status": "passing"
+      },
+      {
+        "text": "Given a .repobox.yml with groups defined but empty permissions section, produce a valid Config with no rules (everything unrestricted)",
+        "status": "passing"
+      },
+      {
+        "text": "Given 'not edit' in a permission rule, mark the rule as deny=true with verb='edit'",
+        "status": "passing"
+      },
+      {
+        "text": "Given invalid YAML (e.g. bad indentation), return a parse error with the line number where it failed",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "2. Permission Engine — Branches",
+    "tests": [
+      {
+        "text": "Identity evm:0xAAA is in founders. Rule: 'founders push >main'. Check push to main → returns ALLOW",
+        "status": "passing"
+      },
+      {
+        "text": "Identity evm:0xCCC is NOT in founders. Rule: 'founders push >main'. Check push to main → returns DENY (implicit: someone else is explicitly allowed)",
+        "status": "passing"
+      },
+      {
+        "text": "Identity evm:0xAgent is in agents. Rule: 'agents push >feature/*'. Check push to 'feature/my-thing' → returns ALLOW (glob matches)",
+        "status": "passing"
+      },
+      {
+        "text": "Identity evm:0xAgent is in agents. No rule mentions >main. Check push to main → returns DENY",
+        "status": "passing"
+      },
+      {
+        "text": "Identity evm:0xAgent is in agents. Rule: 'agents create >feature/*'. Check create branch 'feature/new' → returns ALLOW",
+        "status": "passing"
+      },
+      {
+        "text": "Identity evm:0xAgent is in agents. Rule: 'agents create >feature/*'. Check create branch 'release/v1' → returns DENY (pattern doesn't match)",
+        "status": "passing"
+      },
+      {
+        "text": "Identity evm:0xDev is in devs. Rule: 'devs merge >develop'. Check merge into develop → returns ALLOW",
+        "status": "passing"
+      },
+      {
+        "text": "Identity evm:0xAgent is in agents. No merge rule exists for any branch. Check merge into anything → returns DENY",
+        "status": "passing"
+      },
+      {
+        "text": "Rule: 'evm:0xBob push >main' (direct identity, no group). Check evm:0xBob push main → ALLOW. Check evm:0xAlice push main → DENY",
+        "status": "passing"
+      },
+      {
+        "text": "evm:0xBob is in devs. Rule 1: 'devs push >main'. Rule 2: 'evm:0xBob not push >main'. Check Bob push main → DENY (explicit deny overrides group allow)",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "3. Permission Engine — Files",
+    "tests": [
+      {
+        "text": "Commit touches 'src/app.rs'. No file rules in config. Check → returns ALLOW (no restrictions on this path)",
+        "status": "passing"
+      },
+      {
+        "text": "Commit touches '.repobox.yml'. Rule: 'founders edit .repobox.yml'. Identity is in founders → ALLOW. Identity is in agents → DENY",
+        "status": "passing"
+      },
+      {
+        "text": "Commit touches 'package.json'. Rule: 'devs edit package.json'. Identity is in devs → ALLOW. Identity is in agents → DENY",
+        "status": "passing"
+      },
+      {
+        "text": "Commit touches 'contracts/Vault.sol'. Rule: 'devs edit contracts/**'. Identity is in devs → ALLOW (glob matches)",
+        "status": "passing"
+      },
+      {
+        "text": "Commit touches 'contracts/Vault.sol'. Rule: 'devs edit contracts/**'. Identity is in agents (not devs) → DENY",
+        "status": "passing"
+      },
+      {
+        "text": "Commit touches both 'src/app.rs' (unrestricted) and '.repobox.yml' (restricted to founders). Identity is agents → DENY (all files must pass)",
+        "status": "passing"
+      },
+      {
+        "text": "evm:0xBob is in devs. Rule: 'devs edit contracts/**'. Rule: 'evm:0xBob not edit contracts/**'. Check Bob edits contracts/X.sol → DENY (explicit deny)",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "4. Permission Engine — Priority (top-to-bottom)",
+    "tests": [
+      {
+        "text": "Rule 1 (line 10): 'evm:0xAlice edit .repobox.yml'. Rule 2 (line 20): 'devs not edit .repobox.yml'. Alice is in devs. Check Alice edits .repobox.yml → ALLOW (rule 1 is higher, wins)",
+        "status": "passing"
+      },
+      {
+        "text": "Rule 1 (line 10): 'founders not merge >main'. Rule 2 (line 20): 'devs merge >main'. Identity is in both groups. Check merge to main → DENY (rule 1 is higher, wins)",
+        "status": "passing"
+      },
+      {
+        "text": "Same permission rule appears at line 10 and line 30. Evaluation uses line 10 (first occurrence wins)",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "5. Shim Setup",
+    "tests": [
+      {
+        "text": "Run 'git repobox init' inside a git repo → creates .repobox.yml template file + writes real git path to .repobox/config",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git repobox init' in a directory without .git → returns error: 'not a git repository'",
+        "status": "passing"
+      },
+      {
+        "text": "After 'git repobox init', .repobox/config contains the absolute path to the real git binary (e.g. /usr/bin/git)",
+        "status": "passing"
+      },
+      {
+        "text": "After shim is installed, running 'git --version' → delegates to real git, returns real git version string",
+        "status": "passing"
+      },
+      {
+        "text": "Shim is invoked in a repo WITHOUT .repobox.yml → all commands pass through to real git unchanged (transparent)",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "6. Identity",
+    "tests": [
+      {
+        "text": "Run 'git repobox identity set 0xPRIVATEKEY' → derives EVM address, stores in ~/.repobox/identity, prints 'Identity set: evm:0xABC...'",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git repobox identity set 0xPRIVATEKEY --alias alice' → sets identity AND registers alias alice in ~/.repobox/aliases",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git repobox whoami' with alias set → prints 'alice (evm:0xABC...)'",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git repobox whoami' with NO alias set → prints 'evm:0xABC...' (raw address)",
+        "status": "passing"
+      },
+      {
+        "text": "Identity file is stored at ~/.repobox/identity (global, not per-repo)",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git commit' with no identity set → returns error: 'no identity configured. Run: git repobox identity set <private-key>'",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "7. Shim — git commit interception",
+    "tests": [
+      {
+        "text": "Run 'git commit' in a repo with no .repobox.yml → delegates to real git, commit succeeds normally",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git commit' with .repobox.yml present, all staged files are allowed for this identity → delegates to real git, commit succeeds",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git commit' with .repobox.yml present, staged file '.repobox.yml' is restricted to founders, identity is agents → BLOCKED before real git runs. Error: 'permission denied: evm:0xAgent cannot edit .repobox.yml'",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git commit' with multiple staged files, one is restricted → BLOCKED. Error message names the specific restricted file",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git commit --no-verify' with restricted file → still BLOCKED (shim is not a hook, --no-verify is irrelevant)",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git commit -m \"my message\"' with allowed files → '-m' flag is passed through to real git, commit message is set correctly",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git commit --amend' → shim re-checks the full amended diff against permissions before delegating",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "8. Shim — git merge interception",
+    "tests": [
+      {
+        "text": "On branch 'main', run 'git merge feature/x'. Identity has merge permission for >main → delegates to real git, merge succeeds",
+        "status": "passing"
+      },
+      {
+        "text": "On branch 'main', run 'git merge feature/x'. Identity lacks merge permission for >main → BLOCKED. Error: 'permission denied: evm:0xAgent cannot merge into main'",
+        "status": "passing"
+      },
+      {
+        "text": "Merge would bring in changes to '.repobox.yml' from feature branch. Identity can merge the branch but can't edit .repobox.yml → BLOCKED. Error: 'merge contains changes to .repobox.yml which you cannot edit'",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git merge --no-ff feature/x' with permission → '--no-ff' flag passed through to real git",
+        "status": "passing"
+      },
+      {
+        "text": "Fast-forward merge (no merge commit needed) → same permission checks still apply",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "9. Shim — git push interception",
+    "tests": [
+      {
+        "text": "Run 'git push origin feature/x'. Identity has push permission for >feature/* → delegates to real git",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git push origin main'. Identity lacks push permission for >main → BLOCKED. Error: 'permission denied: evm:0xAgent cannot push to main'",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git push --force origin main'. No force-push permission for >main → BLOCKED. Error mentions force-push specifically",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git push' with no explicit branch. Shim detects current branch from HEAD, checks permissions for that branch",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "10. Shim — git checkout/branch interception",
+    "tests": [
+      {
+        "text": "Run 'git checkout -b feature/new'. Identity has create permission for >feature/* → delegates to real git, branch created",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git checkout -b release/v1'. Identity lacks create permission for >release/* → BLOCKED",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git checkout feature/existing' (switching to existing branch, not creating) → passes through, no permission check needed",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git branch new-branch' → same create permission check as 'git checkout -b'",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git branch -d feature/old' → checks delete permission for >feature/* before delegating",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "11. Shim — Passthrough (no interception)",
+    "tests": [
+      {
+        "text": "Run 'git status' → passes through to real git unchanged, no permission checks",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git log', 'git diff', 'git add', 'git stash', 'git fetch', 'git clone' → all pass through unchanged",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git pull' that triggers a merge → the merge portion gets permission-checked (same as git merge)",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git whatever-unknown-command' → passes through to real git (unknown commands are not intercepted)",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "12. Shim — Edge Cases",
+    "tests": [
+      {
+        "text": "Repo has no .repobox.yml file → ALL git commands pass through unchanged (shim is completely transparent)",
+        "status": "passing"
+      },
+      {
+        "text": ".repobox.yml exists but has a YAML syntax error → permission-checked commands (commit/merge/push) are BLOCKED with parse error. Read-only commands (status/log/diff) still pass through",
+        "status": "passing"
+      },
+      {
+        "text": "Shim is invoked outside any git repository → passes through to real git (which will show its own error)",
+        "status": "passing"
+      },
+      {
+        "text": "Binary is invoked as 'box' (not 'git') → shows box-specific help: init, whoami, identity, serve",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "13. Aliases (Local Address Book)",
+    "tests": [
+      {
+        "text": "Run 'git repobox alias add claude evm:0xBBB...456' → writes to ~/.repobox/aliases",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git repobox alias list' → prints all aliases with addresses",
+        "status": "passing"
+      },
+      {
+        "text": "Run 'git repobox alias remove claude' → removes from ~/.repobox/aliases",
+        "status": "passing"
+      },
+      {
+        "text": "Aliases file (~/.repobox/aliases) is per-machine, not per-repo",
+        "status": "passing"
+      },
+      {
+        "text": "Permission denied errors show alias when available: '❌ claude cannot edit .repobox.yml' instead of raw address",
+        "status": "passing"
+      },
+      {
+        "text": "git log --show-signature shows alias: 'EVM-signed by claude (evm:0xBBB...456)'",
+        "status": "passing"
+      },
+      {
+        "text": "Sub-agent alias uses plus notation: 'git repobox alias add claude+roudy-piglet evm:0xCCC...789'",
+        "status": "passing"
+      },
+      {
+        "text": "'git repobox keys generate --alias claude+roudy-piglet' generates key AND registers the alias in one step",
+        "status": "passing"
+      },
+      {
+        "text": "If no alias exists for an address, CLI falls back to showing raw evm:0x... address",
+        "status": "passing"
+      },
+      {
+        "text": "Alias names cannot start with special characters (no @ or % prefix needed)",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "14. CLI — git repobox init",
+    "tests": [
+      {
+        "text": "Run `git repobox init` inside a git repo → creates .repobox.yml template with empty groups and default:allow permissions",
+        "status": "passing"
+      },
+      {
+        "text": "The generated .repobox.yml template includes commented examples showing flat and nested rule syntax",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox init` when .repobox.yml already exists → error: \".repobox.yml already exists. Use --force to overwrite\"",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox init --force` when .repobox.yml exists → overwrites with fresh template",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox init` outside a git repo → error: \"not a git repository\"",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "15. CLI — git repobox keys",
+    "tests": [
+      {
+        "text": "Run `git repobox keys generate` → creates new key pair in ~/.repobox/keys/<address>.key, prints address",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox keys generate --alias claude` → creates key AND registers alias in ~/.repobox/aliases",
+        "status": "passing"
+      },
+      {
+        "text": "Generated key file has 0600 permissions (owner-only read/write)",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox keys import <hex>` → stores key, derives and prints address",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox keys import <invalid-hex>` → error with clear message",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox keys list` → prints all key addresses in ~/.repobox/keys/",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "16. CLI — git repobox identity & whoami",
+    "tests": [
+      {
+        "text": "Run `git repobox identity set <private-key>` → derives address, stores in ~/.repobox/identity, sets user.signingkey in git config",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox identity set <private-key> --alias alice` → sets identity AND registers alias",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox whoami` with alias → prints \"alice (evm:0xAAA...)\"",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox whoami` without alias → prints \"evm:0xAAA...\"",
+        "status": "passing"
+      },
+      {
+        "text": "Run `git repobox whoami` with no identity set → error: \"no identity configured\"",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "17. CLI — git repobox check & lint",
+    "tests": [
+      {
+        "text": "`git repobox check alice push >main` → resolves alias to address, checks permission, prints result with rule that matched",
+        "status": "passing"
+      },
+      {
+        "text": "`git repobox check evm:0xBBB... edit .repobox.yml` → prints ❌ denied with reason (implicit deny or explicit rule)",
+        "status": "passing"
+      },
+      {
+        "text": "`git repobox check` with no .repobox.yml → error: \"no .repobox.yml found\"",
+        "status": "passing"
+      },
+      {
+        "text": "`git repobox lint` with valid config → prints \"✅ .repobox.yml is valid\" + summary (N groups, N rules)",
+        "status": "passing"
+      },
+      {
+        "text": "`git repobox lint` with unknown group ref → prints error with line info",
+        "status": "passing"
+      },
+      {
+        "text": "`git repobox lint` warns about unreachable rules (broader allow above narrower deny for same subject)",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "18. Shim Mode — git command interception",
+    "tests": [
+      {
+        "text": "Binary installed as git shim (PATH override or git alias). Running `git status` → delegates to real git transparently",
+        "status": "passing"
+      },
+      {
+        "text": "Running `git commit` with .repobox.yml present → shim checks file permissions before delegating",
+        "status": "passing"
+      },
+      {
+        "text": "Running `git push origin main` where identity lacks permission → prints error and exits non-zero (real git never invoked)",
+        "status": "passing"
+      },
+      {
+        "text": "Running `git repobox <subcommand>` → routes to repobox CLI, not to real git",
+        "status": "passing"
+      },
+      {
+        "text": "Shim reads identity from user.signingkey in git config (standard git config resolution)",
+        "status": "passing"
+      },
+      {
+        "text": "Shim discovers real git binary path (not itself) to delegate to. Stores path in .repobox/config on init",
+        "status": "passing"
+      },
+      {
+        "text": "Error messages include alias when available: \"❌ claude cannot push to main\" instead of raw address",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "19. EVM Commit Signing",
+    "tests": [
+      {
+        "text": "When gpg.program = repobox, git commit calls repobox to sign. Repobox signs the commit data with the secp256k1 private key",
+        "status": "passing"
+      },
+      {
+        "text": "Signed commit contains a valid EVM signature that can be verified with ecrecover",
+        "status": "passing"
+      },
+      {
+        "text": "`git verify-commit HEAD` with repobox as gpg.program → verifies the EVM signature, prints signer address",
+        "status": "passing"
+      },
+      {
+        "text": "`git log --show-signature` shows \"EVM-signed by alice (evm:0xAAA...)\" for signed commits",
+        "status": "passing"
+      },
+      {
+        "text": "Signing uses the key from user.signingkey config (not hardcoded)",
+        "status": "passing"
+      },
+      {
+        "text": "If the signing key file is missing from ~/.repobox/keys/ → clear error: \"key not found for evm:0xAAA...\"",
+        "status": "passing"
+      }
+    ]
+  },
+  {
+    "name": "20. Agent Chaos Prevention (Integration)",
+    "tests": [
+      {
+        "text": "Setup: `git repobox setup` creates ~/.repobox/bin/git symlink. When PATH includes ~/.repobox/bin, all git commands route through repobox",
+        "status": "passing"
+      },
+      {
+        "text": "Agent with no push permission runs `git push origin main` → exit code 1, stderr shows \"❌ denied — agent-1 push >main\"",
+        "status": "passing"
+      },
+      {
+        "text": "Agent tries to commit changes to .repobox.yml (no edit permission) → blocked BEFORE commit is created",
+        "status": "passing"
+      },
+      {
+        "text": "Agent with `push >feature/**` permission runs `git push origin feature/test` → succeeds, real git executes",
+        "status": "passing"
+      },
+      {
+        "text": "Agent runs `git checkout -b feature/new` (has create permission) → succeeds",
+        "status": "passing"
+      },
+      {
+        "text": "Agent runs `git checkout -b hotfix/urgent` (no create permission for hotfix/) → blocked",
+        "status": "passing"
+      },
+      {
+        "text": "Blocked commands never reach real git — no partial state, no broken repo",
+        "status": "passing"
+      },
+      {
+        "text": "If .repobox.yml is missing or invalid, git commands still work (permissive fallback for non-repobox repos)",
+        "status": "passing"
+      },
+      {
+        "text": "Error messages include the agent alias if known: \"claude+roudy-piglet\" not raw \"evm:0xBBB...\"",
+        "status": "passing"
+      },
+      {
+        "text": "`git commit --no-verify` still checks permissions — shim is not a hook, cannot be bypassed",
+        "status": "passing"
+      },
+      {
+        "text": "`git push --no-verify` still checks permissions — shim intercepts before git even runs",
+        "status": "passing"
+      },
+      {
+        "text": "Shim detects real git location (stored in ~/.repobox/real-git), never calls itself recursively",
+        "status": "passing"
+      }
+    ]
+  }
+]

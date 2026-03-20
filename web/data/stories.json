@@ -1,0 +1,101 @@
+[
+  {
+    "name": "1. Human sets up a new repo with repo.box",
+    "steps": [
+      "Human has an existing git repo with code",
+      "Runs `git repobox init` → creates .repobox.yml template, sets gpg.program = repobox",
+      "Runs `git repobox keys generate --alias alice` → creates EVM key pair, registers alias alice",
+      "Sets `git config --local user.signingkey evm:0xAAA...123`",
+      "Edits .repobox.yml: creates founders group with their address",
+      "Adds permission rules: founders edit everything, founders merge >main",
+      "Commits and pushes → first signed commit in the repo, shown as alice"
+    ],
+    "status": "draft",
+    "notes": ""
+  },
+  {
+    "name": "2. Human onboards an AI agent with scoped permissions",
+    "steps": [
+      "Human generates a key for the agent: `git repobox keys generate --alias claude` → claude (evm:0xBBB...456)",
+      "Edits .repobox.yml: adds evm:0xBBB...456 to agents group",
+      "Adds rules: agents push >feature/*, agents create >feature/*, agents append .repobox.yml",
+      "Commits the .repobox.yml change (human is founders, has edit permission)",
+      "Spawns the agent with: GIT_CONFIG_KEY_0=user.signingkey GIT_CONFIG_VALUE_0=evm:0xBBB...456",
+      "Agent clones the repo, creates feature/fix, makes changes, commits, pushes",
+      "Every commit is signed and shows as claude. Agent cannot touch main."
+    ],
+    "status": "draft",
+    "notes": ""
+  },
+  {
+    "name": "3. Agent spawns a sub-agent on a feature branch",
+    "steps": [
+      "Agent (claude) is working on feature/big-refactor",
+      "Agent generates a key: `git repobox keys generate --alias claude+roudy-piglet` → claude+roudy-piglet (evm:0xCCC...789)",
+      "Agent appends a direct permission rule to .repobox.yml: `evm:0xCCC...789 write >feature/big-refactor/*`",
+      "Commits the .repobox.yml change → ✅ (agent has append permission for .repobox.yml on feature branch)",
+      "Spawns sub-agent with GIT_CONFIG_VALUE_0=evm:0xCCC...789",
+      "Sub-agent works on the same feature branch, commits shown as claude+roudy-piglet",
+      "Work done. Agent reverts .repobox.yml changes (removes the permission line)",
+      "Agent merges feature/big-refactor into main → ✅ (no .repobox.yml changes in diff)",
+      "If agent forgot to revert: merge blocked with clear error about .repobox.yml changes"
+    ],
+    "status": "draft",
+    "notes": "Append = add lines at end of file only. Agent can't modify groups (they're above permissions). Instead, agent appends a direct identity rule at the bottom — lowest priority, scoped to the feature branch. Sub-agent alias uses plus notation: parent+childname."
+  },
+  {
+    "name": "4. Agent tries to exceed its permissions",
+    "steps": [
+      "Agent (claude) is in agents group, can push to >feature/* only",
+      "Agent tries: git checkout main → ✅ (read-only, passthrough)",
+      "Agent tries: git checkout -b release/v1 → ❌ no create permission for >release/*",
+      "Agent tries: git push origin main → ❌ no push permission for >main",
+      "Agent tries: git merge feature/x into main → ❌ main's .repobox.yml blocks this",
+      "Agent tries to edit .repobox.yml on main → ❌ only founders can edit .repobox.yml on main",
+      "Every rejection uses aliases: '❌ claude cannot edit .repobox.yml on >main'"
+    ],
+    "status": "draft",
+    "notes": ""
+  },
+  {
+    "name": "5. Founder reviews and merges agent's work",
+    "steps": [
+      "Agent pushed commits to feature/fix (all signed, shown as claude)",
+      "Founder runs: git log --show-signature feature/fix → sees all commits verified by claude",
+      "Founder runs: git checkout main && git merge feature/fix",
+      "Shim checks: is alice allowed to merge into >main? → ✅",
+      "Shim checks: does the merge contain .repobox.yml changes? → No (agent reverted them)",
+      "Merge succeeds. main now has the agent's code, every commit traceable."
+    ],
+    "status": "draft",
+    "notes": ""
+  },
+  {
+    "name": "6. Audit trail: who did what",
+    "steps": [
+      "Run: git log --show-signature",
+      "Every commit shows the alias + EVM address that signed it",
+      "Founder commits: signed by alice (evm:0xAAA...123)",
+      "Agent commits: signed by claude (evm:0xBBB...456)",
+      "Sub-agent commits: signed by claude+roudy-piglet (evm:0xCCC...789)",
+      "Lineage is immediately visible: claude+roudy-piglet was spawned by claude",
+      "Full accountability: no unsigned commits possible when shim is active"
+    ],
+    "status": "draft",
+    "notes": ""
+  },
+  {
+    "name": "7. Agent pushes to main — file-scoped access",
+    "steps": [
+      "Founder sets up @deploy-bot with narrow file permissions on main:",
+      "Rule: `@deploy-bot write >main` scoped to `k8s/**` and `CHANGELOG.md`",
+      "@deploy-bot pushes a commit that only touches k8s/deploy.yaml → ✅ allowed",
+      "@deploy-bot pushes a commit that only touches CHANGELOG.md → ✅ allowed",
+      "@deploy-bot pushes a commit touching k8s/deploy.yaml AND src/app.rs → ❌ blocked (src/app.rs not in scope)",
+      "Error: '❌ @deploy-bot cannot edit src/app.rs on >main'",
+      "All files in the commit must pass — one unauthorized file blocks the whole push"
+    ],
+    "status": "draft",
+    "notes": "Key principle: push permission + file scope = surgical access to protected branches. Every file in the diff is checked independently."
+  }
+]

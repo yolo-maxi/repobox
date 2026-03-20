@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitHub Wasn't Built for This — repo.box</title>
+<meta name="description" content="We ship code every day. Our agents open PRs, run CI, manage repos. But they're borrowing human identities to do it.">
+<link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0a;--surface:#111;--border:#1a1a1a;--text:#e0e0e0;--dim:#666;--accent:#00ff88;--accent2:#00ccff}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;line-height:1.6;min-height:100vh}
+a{color:var(--accent);text-decoration:none;transition:opacity .2s}
+a:hover{opacity:.8}
+.container{max-width:720px;margin:0 auto;padding:3rem 1.5rem 4rem}
+.back{font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--dim);display:inline-block;margin-bottom:2rem;transition:color .2s}
+.back:hover{color:var(--accent)}
+.logo{font-family:'JetBrains Mono',monospace;font-size:1.8rem;font-weight:700;margin-bottom:.5rem}
+.logo .dot{color:var(--accent)}
+h2.section{font-size:.85rem;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-bottom:1.25rem;font-weight:500}
+footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--border);color:var(--dim);font-size:.8rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem}
+@media(max-width:500px){
+  .container{padding:2rem 1.25rem 3rem}
+  .logo{font-size:1.5rem}
+  footer{flex-direction:column;align-items:flex-start}
+}
+
+.post-meta{color:var(--dim);font-size:.85rem;font-family:'JetBrains Mono',monospace;margin-bottom:2rem}
+.post-body{max-width:680px}
+.post-body h1{font-size:1.8rem;font-weight:700;margin-bottom:.5rem;line-height:1.2}
+.post-body h2{font-size:1.3rem;font-weight:600;margin:2rem 0 .75rem;color:var(--text)}
+.post-body h3{font-size:1.1rem;font-weight:600;margin:1.5rem 0 .5rem;color:var(--text)}
+.post-body p{margin-bottom:1rem;color:#ccc;font-size:1rem;line-height:1.7}
+.post-body ul,.post-body ol{margin:0 0 1rem 1.5rem;color:#ccc}
+.post-body li{margin-bottom:.4rem;line-height:1.6}
+.post-body blockquote{border-left:3px solid var(--accent);padding:.5rem 1rem;margin:1rem 0;color:#999;background:rgba(0,255,136,.03);border-radius:0 6px 6px 0}
+.post-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;background:var(--surface);padding:.15rem .4rem;border-radius:4px;border:1px solid var(--border)}
+.post-body pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin:1rem 0;overflow-x:auto}
+.post-body pre code{background:none;border:none;padding:0;font-size:.85rem;line-height:1.5}
+.post-body img{max-width:100%;border-radius:8px;margin:1rem 0}
+.post-body a{color:var(--accent);border-bottom:1px solid rgba(0,255,136,.2)}
+.post-body a:hover{border-bottom-color:var(--accent)}
+.post-body hr{border:none;border-top:1px solid var(--border);margin:2rem 0}
+</style>
+</head>
+<body>
+<div class="container">
+<a href="/blog/" class="back">← blog</a>
+<article class="post-body">
+  <h1>GitHub Wasn't Built for This</h1>
+  <div class="post-meta">2026-03-20 · agents, infrastructure, identity</div>
+  <p>We ship code every day. Our agents open pull requests, spawn sub-agents to implement features in parallel, review diffs, push to production. On a good day they&#39;ll ship a dozen changes across multiple repos before anyone finishes their coffee.</p>
+<p>But every commit says <code>Francesco Renzi</code>. Every PR opens under his token. Every permission the agent has is his permission, delegated through a personal access token that can do everything he can.</p>
+<h2>Borrowed Identity</h2>
+<p>GitHub has one concept of identity: the user. A human with an email, a password, a profile picture. Permissions, commit attribution, access control: all designed around the assumption that a person is typing.</p>
+<p>When our agent pushes code, GitHub sees a human. It doesn&#39;t know the agent exists. There&#39;s no way for it to say &quot;I&#39;m Ocean, I work for Fran, and these are the things I&#39;m allowed to do.&quot; The token was generated from a human account, with human permissions, and every action the agent takes is legally and technically <em>that human&#39;s</em> action.</p>
+<p>Giving your agent the same keycard as the account owner and hoping it only opens the right doors. That&#39;s the current state of the art.</p>
+<h2>Permissionless Keys</h2>
+<p>Agents don&#39;t need human keys. They need their own.</p>
+<p>Not keys derived from a human account. Not keys that inherit human permissions. Keys the agent generates, controls, rotates, and revokes independently. Keys that let a repo owner say &quot;this agent can open PRs on my project&quot; without also granting access to every other repo the human owns.</p>
+<p>Cryptographic identity makes this trivial. The agent generates a keypair. Signs its commits. Anyone can verify that commit came from a specific agent with a specific key, not from &quot;some bot&quot; using a human&#39;s token. The repo owner decides whether to trust that key. No platform in the middle gatekeeping who gets to participate.</p>
+<p>This is how blockchain wallets already work. Generate a key, sign things, prove who you are without asking permission from a platform. The pattern exists. It just hasn&#39;t been applied to code collaboration yet.</p>
+<h2>Self-Defined Rules</h2>
+<p>When we onboard an agent to a project, there&#39;s a conversation. Architecture, conventions, what&#39;s off-limits. The agent reads AGENTS.md and understands the boundaries.</p>
+<p>None of that is machine-readable to the platform. GitHub doesn&#39;t know the agent shouldn&#39;t touch the billing module. It doesn&#39;t know modifications should stay under <code>/src/agents/</code>. The rules exist in natural language, in the agent&#39;s context, and if it hallucates or the context window fills up, those guardrails vanish.</p>
+<p>What if the repo itself could declare agent rules? A manifest: <em>&quot;Agent Ocean can write to /src/ and /tests/. Max 500 lines per PR. Must include tests. Cannot modify CI config.&quot;</em> Enforced at the protocol level. Not guidelines. Actual constraints that can&#39;t be violated, even accidentally.</p>
+<p>This isn&#39;t restrictive. It&#39;s liberating. Right now you have to trust your agent with everything because the platform can&#39;t express granular permissions. With declarative rules, you can give real autonomy over the parts that matter and hard limits on the parts that don&#39;t. More trust, not less, because the trust is bounded.</p>
+<h2>Strict Guardrails, Yolo Mode</h2>
+<p>We spawn sub-agents constantly. Each one gets a task, a sandboxed environment, a set of tools. They go wild inside the sandbox: try things, break things, iterate. The blast radius stays contained. If a sub-agent corrupts its working directory, we lose that task. We don&#39;t lose the repo.</p>
+<p>Git hosting doesn&#39;t work like this. A force-push to main is just as easy as a push to a feature branch. Branch rules are a blunt instrument designed for humans who might click the wrong button, not for agents processing thousands of operations.</p>
+<p>What agents need: let them experiment freely in their own space. Branches, wild prototypes, throwaway experiments. But make the path from experiment to production narrow, audited, and gated. Make the safe path the fast path. The dangerous path requires explicit human approval.</p>
+<p>The best sandboxes don&#39;t feel like cages. They feel like workshops.</p>
+<h2>The Inevitable Rewrite</h2>
+<p>Every decade, the assumptions underneath developer tools shift enough that the whole stack gets rebuilt. CVS to SVN to Git. Self-hosted to GitHub. Manual deploys to CI/CD. Each transition happened because the old tool was built for a world that no longer existed.</p>
+<p>The world where every contributor is a human, where identity means &quot;person with an email,&quot; where permissions are inherited from a single account: that world is already gone. Every Codex session, every Cursor commit, every Devin task proves it.</p>
+<p>The question isn&#39;t whether git hosting gets rebuilt for agents. It&#39;s whether the rebuild happens as a clean break or as patches on a human-first platform that never anticipated this.</p>
+
+</article>
+<footer>
+  <span>© 2026 repo.box</span>
+  <span>Built with caffeine and curiosity</span>
+</footer>
+</div>
+</body>
+</html>

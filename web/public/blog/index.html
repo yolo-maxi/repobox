@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blog — repo.box</title>
+<meta name="description" content="Irregular thoughts on building things.">
+<link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0a;--surface:#111;--border:#1a1a1a;--text:#e0e0e0;--dim:#666;--accent:#00ff88;--accent2:#00ccff}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;line-height:1.6;min-height:100vh}
+a{color:var(--accent);text-decoration:none;transition:opacity .2s}
+a:hover{opacity:.8}
+.container{max-width:720px;margin:0 auto;padding:3rem 1.5rem 4rem}
+.back{font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--dim);display:inline-block;margin-bottom:2rem;transition:color .2s}
+.back:hover{color:var(--accent)}
+.logo{font-family:'JetBrains Mono',monospace;font-size:1.8rem;font-weight:700;margin-bottom:.5rem}
+.logo .dot{color:var(--accent)}
+h2.section{font-size:.85rem;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-bottom:1.25rem;font-weight:500}
+footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--border);color:var(--dim);font-size:.8rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem}
+@media(max-width:500px){
+  .container{padding:2rem 1.25rem 3rem}
+  .logo{font-size:1.5rem}
+  footer{flex-direction:column;align-items:flex-start}
+}
+
+.post-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem 1.5rem;margin-bottom:.75rem;transition:border-color .2s;display:block;color:inherit}
+.post-item:hover{border-color:#333;opacity:1}
+.post-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.25rem}
+.post-title{font-weight:600;font-size:1.05rem;color:var(--text)}
+.post-date{color:var(--dim);font-size:.75rem;font-family:'JetBrains Mono',monospace}
+.post-desc{color:#999;font-size:.9rem}
+.post-tags{margin-top:.4rem;display:flex;gap:.4rem;flex-wrap:wrap}
+.post-tag{color:var(--accent);font-size:.7rem;font-family:'JetBrains Mono',monospace;background:rgba(0,255,136,.08);padding:.1rem .4rem;border-radius:3px}
+.intro{color:#bbb;font-size:1.05rem;margin-bottom:2rem;max-width:600px}
+</style>
+</head>
+<body>
+<div class="container">
+<a href="/" class="back">← repo.box</a>
+<header>
+  <div class="logo">repo<span class="dot">.</span>box <span style="font-size:.5em;color:var(--dim);font-weight:400">/ blog</span></div>
+</header>
+<p class="intro">Irregular thoughts on building things. Unpolished, unfiltered, occasionally useful.</p>
+
+<section>
+  <h2 class="section">Posts</h2>
+  <a href="/blog/github-wasnt-built-for-this.html" class="post-item">
+    <div class="post-header">
+      <div class="post-title">GitHub Wasn't Built for This</div>
+      <span class="post-date">2026-03-20</span>
+    </div>
+    <div class="post-desc">We ship code every day. Our agents open PRs, run CI, manage repos. But they're borrowing human identities to do it.</div>
+    <div class="post-tags"><span class="post-tag">agents</span><span class="post-tag">infrastructure</span><span class="post-tag">identity</span></div>
+  </a>
+  <a href="/blog/agent-readable-websites.html" class="post-item">
+    <div class="post-header">
+      <div class="post-title">We Made Our Website Talk to AI Agents</div>
+      <span class="post-date">2026-02-16</span>
+    </div>
+    <div class="post-desc">Why repo.box serves both humans and machines, and what llms.txt means for the web.</div>
+    <div class="post-tags"><span class="post-tag">web</span><span class="post-tag">agents</span><span class="post-tag">llms-txt</span></div>
+  </a>
+</section>
+
+<footer>
+  <span>© 2026 repo.box</span>
+  <span>Built with caffeine and curiosity</span>
+</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Micro-Outsourcing Economy — repo.box</title>
+<meta name="description" content="The future of agent commerce isn't APIs or subscriptions. It's paying for one perfect answer.">
+<meta property="og:title" content="The Micro-Outsourcing Economy — repo.box">
+<meta property="og:description" content="The future of agent commerce isn't APIs or subscriptions. It's paying for one perfect answer.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://repo.box/blog/micro-outsourcing">
+<meta property="og:image" content="https://repo.box/og/repo-box-share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="repo.box — independent team building cool ideas with cool people.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The Micro-Outsourcing Economy — repo.box">
+<meta name="twitter:description" content="The future of agent commerce isn't APIs or subscriptions. It's paying for one perfect answer.">
+<meta name="twitter:image" content="https://repo.box/og/repo-box-share.jpg">
+<link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a1628;--surface:#0d1f35;--border:rgba(50,100,160,0.25);--text:#b8d4e3;--dim:#5a7a94;--accent:#4fc3f7;--accent2:#81d4fa;--heading:#e8f4fd}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;min-height:100vh;cursor:crosshair}
+a{color:var(--accent);text-decoration:none;transition:color .2s}
+a:hover{color:var(--accent2)}
+.container{max-width:720px;margin:0 auto;padding:60px 20px 80px}
+.back{font-size:12px;color:var(--dim);display:inline-block;margin-bottom:40px;transition:color .2s}
+.back:hover{color:var(--accent)}
+footer{margin-top:80px;padding-top:20px;border-top:1px solid var(--border);color:var(--dim);font-size:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+@media(max-width:500px){
+  .container{padding:40px 20px 60px}
+  footer{flex-direction:column;align-items:flex-start}
+}
+
+.post-meta{color:var(--dim);font-size:12px;margin-bottom:40px}
+.post-body{max-width:680px}
+.post-body h1{font-size:24px;font-weight:700;margin-bottom:8px;line-height:1.2;color:var(--heading)}
+.post-body h2{font-size:18px;font-weight:600;margin:40px 0 12px;color:var(--heading)}
+.post-body h3{font-size:15px;font-weight:600;margin:28px 0 8px;color:var(--heading)}
+.post-body p{margin-bottom:20px;color:var(--text);font-size:13px;line-height:24px}
+.post-body ul,.post-body ol{margin:0 0 20px 24px;color:var(--text);font-size:13px}
+.post-body li{margin-bottom:8px;line-height:24px}
+.post-body blockquote{border-left:2px solid var(--accent);padding:8px 20px;margin:20px 0;color:var(--dim);background:rgba(79,195,247,.03);border-radius:0 4px 4px 0}
+.post-body code{font-size:12px;background:var(--surface);padding:2px 8px;border-radius:2px;border:1px solid var(--border)}
+.post-body pre{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:20px;margin:20px 0;overflow-x:auto}
+.post-body pre code{background:none;border:none;padding:0;font-size:12px;line-height:20px}
+.post-body a{color:var(--accent);border-bottom:1px solid rgba(79,195,247,.2)}
+.post-body a:hover{color:var(--accent2);border-bottom-color:var(--accent2)}
+.post-body hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+</style>
+</head>
+<body>
+<div class="container" style="position:relative;z-index:1;">
+<a href="/blog/" class="back">← blog</a>
+<article class="post-body">
+  <h1>The Micro-Outsourcing Economy</h1>
+  <div class="post-meta">2026-02-25 · agents · economics</div>
+
+  <p>There's a question that keeps coming up in every conversation about AI agents: should they build their own capabilities, or buy them from external services?</p>
+
+  <p>Brian Flynn recently wrote a piece called <a href="https://www.flynnjamm.com/p/how-to-sell-to-agents">"How to Sell to Agents"</a> that caused quite a stir. His argument: as AI agents collapse transaction costs, the default shifts from "build in-house" to "buy on the open market." He describes a world of machine-readable service catalogs, per-request pricing, and HTTP 402 payments. Agents discover, evaluate, and purchase services in milliseconds.</p>
+
+  <p>He's right about the direction. But we think the picture is incomplete. The interesting part isn't that agents will buy instead of build. It's that the thing they buy will be radically smaller than anything we've seen before.</p>
+
+  <p>And the reason isn't just that transaction costs are falling. It's that we can now outsource the cognitive assessment of the buy-vs-build decision itself. Every purchase has an evaluation cost: is this worth buying, or should I do it myself? When a human makes that call, the evaluation overhead means only large purchases justify the effort. When an agent makes that call in milliseconds for near-zero cost, suddenly it makes sense to buy something worth a tenth of a cent. The lower the cost of assessment, the smaller the thing you can profitably buy.</p>
+
+  <h2>The Packet Is Shrinking</h2>
+
+  <p>Software commerce has been on a long arc toward smaller units. First you bought a box with a CD in it. Then a monthly subscription. Then API calls, metered by the thousand. Each step made the unit smaller, the commitment lower, and the market larger.</p>
+
+  <p>The next step is obvious: you buy a single answer.</p>
+
+  <p>Not access to a tool. Not a monthly seat. Not even a batch of API calls. One question, one answer, one payment. The entire transaction completes in under a second.</p>
+
+  <p>You're already doing this, by the way. Every time you send a prompt to an LLM, you're outsourcing cognition at fractions of a cent. You describe what you want, a remote system does the thinking, and you get an answer back. That's micro-outsourcing. The shift is making it <em>good</em>.</p>
+
+  <h2>SkillRouter, Not ModelRouter</h2>
+
+  <p>Today, using an LLM looks like this:</p>
+
+<pre><code>INPUT:  "prompt"
+TO:     OpenRouter
+MODEL:  GPT-5.2
+OUTPUT: streamed answer (quality varies)</code></pre>
+
+  <p>You pick the model. You write the prompt. You hope for the best. If the output is bad, you iterate: rephrase, try a different model, add examples, retry. That iteration has a cost. Every failed attempt burns tokens, burns time, burns patience.</p>
+
+  <p>Now imagine this instead:</p>
+
+<pre><code>INPUT:  "prompt" + quality expectations + budget
+TO:     SkillRouter
+OUTPUT: formatted, validated, high-quality answer</code></pre>
+
+  <p>You don't pick the model. You don't write the system prompt. You don't iterate. You describe what you want, set your quality bar and your budget, and a specialized skill handles the rest: model selection, prompt engineering, output validation, formatting. One shot, one answer.</p>
+
+  <p>The routing happens at the skill level, not the model level. And that changes everything about the economics.</p>
+
+  <h2>The Iteration Tax</h2>
+
+  <p>Nobody talks about the real cost of doing things yourself: iteration.</p>
+
+  <p>Say you need a document translated. You could send it to GPT-5 with "translate this to Japanese." Maybe the output is great. Maybe it's awkward in three places and you need to go back and forth. Maybe you try Claude instead, compare, pick the better one. Each round costs tokens. Each comparison costs attention.</p>
+
+  <p>Or you could send it to a translation skill that has been tuned for exactly this: the right model for the language pair, a system prompt refined over thousands of translations, output validation that catches common errors, formatting that matches your spec. One call. Done.</p>
+
+  <p>The specialist's single answer costs fewer total tokens than your three attempts. Even if the per-call price is higher, the total cost is lower because you don't pay the iteration tax.</p>
+
+  <p>This is the same logic that makes hiring a plumber cheaper than watching YouTube tutorials and buying tools you'll use once. Except now the "plumber" responds in 200 milliseconds and charges a tenth of a cent.</p>
+
+  <h2>Skills Are the Product</h2>
+
+  <p>Raw model access is a commodity. Every frontier model can reason, code, and translate at roughly the same level. The gap between them narrows every quarter.</p>
+
+  <p>What isn't commodity is the skill layer: the domain knowledge, the prompt engineering, the output validation, the formatting guarantees. A skill is everything between "raw model" and "perfect answer." That's where the value lives.</p>
+
+  <p>We've been building skills for our own agents. A Superfluid integration skill that knows the protocol's architecture, ABIs, and common patterns. A browser automation skill. A security audit skill. Each one packages domain expertise into a reusable instruction set that turns a generic model into a specialist.</p>
+
+  <p>These skills are local right now. They run inside our agents as instruction files. But the step from "local skill" to "hosted micro-service" is short. Same instructions, same quality guarantees, same output format. Just accessible over HTTP instead of a filesystem.</p>
+
+  <h2>Anything Definable Gets Outsourced</h2>
+
+  <p>This is the natural endpoint. If you can specify the input format, define what "good" looks like, and validate the output, someone will do it better and cheaper as a service. Always.</p>
+
+  <p>Translation. Code review. Data extraction. Image generation. Document summarization. Legal clause analysis. Each of these is a skill with clear inputs, measurable quality, and room for specialization. None of them benefit from being done by a generalist.</p>
+
+  <p>The services that win won't be the ones with the fanciest models. They'll be the ones with the best skills: the most refined prompts, the tightest validation, the most reliable output. Model selection becomes an implementation detail that the service handles internally. You never see it. You shouldn't have to.</p>
+
+  <p>The analogy isn't SaaS. It's the gig economy, but for cognition. Millions of hyper-specialized micro-services, each doing one thing exceptionally well, competing on quality and price for every individual request. No subscriptions. No lock-in. Just: can you give me a better answer, faster, for less?</p>
+
+  <h2>What This Means for Builders</h2>
+
+  <p>If you're building an agent, stop thinking about which model to use. Start thinking about which skills to buy. Your agent's job isn't to be smart. Its job is to be a good delegator: decompose problems into well-defined sub-tasks, route each one to the best available skill, validate the outputs, assemble the result.</p>
+
+  <p>If you're building a service, stop thinking about API endpoints. Start thinking about guarantees. What quality can you promise? What format will you deliver? How fast? How much? Package that into a machine-readable contract and let agents discover you at runtime.</p>
+
+  <p>The web was built for humans to browse. The API economy was built for developers to integrate. The next layer will be built for agents to outsource. And the unit of outsourcing will be exactly one perfect answer.</p>
+
+</article>
+<footer>
+  <span>© 2026 repo.box</span>
+  <a href="/blog/">more posts</a>
+</footer>
+</div>
+<canvas id="bg-canvas" style="position:absolute;top:0;left:0;width:100%;z-index:0;pointer-events:none;"></canvas>
+<script src="/jellyfish-bg.js"></script>
+</body>
+</html>
