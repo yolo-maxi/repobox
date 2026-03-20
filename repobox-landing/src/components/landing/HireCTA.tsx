@@ -93,7 +93,7 @@ export function LandingHireCTA() {
         {/* Secondary CTA */}
         <div>
           <a
-            href="/projects"
+            href="/docs"
             style={{
               fontFamily: "var(--font-mono), monospace",
               fontSize: 14,
@@ -111,7 +111,7 @@ export function LandingHireCTA() {
               e.currentTarget.style.color = "var(--bp-accent2)";
             }}
           >
-            <span style={{ fontSize: 16 }}>🚀</span> See what we've built
+            <span style={{ fontSize: 16 }}>📖</span> Read the docs
           </a>
         </div>
       </div>

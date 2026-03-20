@@ -22,12 +22,12 @@ export function LandingHero() {
         }}
       >
         <Link
-          href="/projects"
+          href="/docs"
           style={{ color: "var(--bp-dim)", transition: "color 0.2s" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
           onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
         >
-          projects
+          docs
         </Link>
         <Link
           href="/playground"
@@ -38,7 +38,7 @@ export function LandingHero() {
           playground
         </Link>
         <Link
-          href="/blog/bring-your-own-brain.html"
+          href="/blog/"
           style={{ color: "var(--bp-dim)", transition: "color 0.2s" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
           onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}

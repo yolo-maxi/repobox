@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { LandingHero } from "@/components/landing/Hero";
 import { AgentHeatmap } from "@/components/landing/AgentHeatmap";
-import { LandingProjects } from "@/components/landing/Projects";
 import { LandingShippedToday } from "@/components/landing/ShippedToday";
 import { LandingCaseStudies } from "@/components/landing/CaseStudies";
 import { LandingEthos } from "@/components/landing/Ethos";
@@ -23,7 +22,6 @@ export default function Home() {
         <div style={{ height: 80 }} />
         <AgentHeatmap />
         <div style={{ height: 80 }} />
-        <LandingProjects />
         <LandingHireCTA />
         <LandingShippedToday />
         <LandingCaseStudies />
