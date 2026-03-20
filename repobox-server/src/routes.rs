@@ -13,10 +13,10 @@ use crate::AppState;
 
 pub(crate) fn router() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/:address/:repo/info/refs", get(info_refs))
-        .route("/:address/:repo/git-upload-pack", post(upload_pack))
-        .route("/:address/:repo/git-receive-pack", post(receive_pack))
-        .route("/:address/:repo/HEAD", get(head))
+        .route("/{address}/{repo}/info/refs", get(info_refs))
+        .route("/{address}/{repo}/git-upload-pack", post(upload_pack))
+        .route("/{address}/{repo}/git-receive-pack", post(receive_pack))
+        .route("/{address}/{repo}/HEAD", get(head))
 }
 
 async fn info_refs(
@@ -43,18 +43,18 @@ async fn info_refs(
         return StatusCode::NOT_FOUND.into_response();
     }
 
+    let qs = if service == "git-upload-pack" {
+        "service=git-upload-pack"
+    } else {
+        "service=git-receive-pack"
+    };
+
     match git::run_backend(
         &state.data_dir,
         BackendRequest {
             method: "GET",
-            path_info: format!("/{}/{repo_name}.git/info/refs", repo.address, repo_name = repo.name),
-            query_string: query.service.as_deref().map(|_| service.as_str()).map(|_| {
-                if service == "git-upload-pack" {
-                    "service=git-upload-pack"
-                } else {
-                    "service=git-receive-pack"
-                }
-            }),
+            path_info: format!("/{}/{}.git/info/refs", repo.address, repo.name),
+            query_string: Some(qs),
             content_type: header_value(&headers, "content-type"),
             body: Bytes::new(),
         },

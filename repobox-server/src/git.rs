@@ -1,8 +1,7 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use axum::body::Bytes;
+use axum::body::{Body, Bytes};
 use http::{HeaderMap, HeaderName, HeaderValue, Response, StatusCode};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,7 +74,7 @@ pub(crate) fn read_head(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Str
 pub(crate) fn run_backend(
     data_dir: &Path,
     request: BackendRequest<'_>,
-) -> std::io::Result<Response<Vec<u8>>> {
+) -> std::io::Result<Response<Body>> {
     let mut command = Command::new("git");
     command.arg("http-backend");
     command.env("GIT_PROJECT_ROOT", data_dir);
@@ -105,7 +104,7 @@ pub(crate) fn run_backend(
     parse_backend_response(&output.stdout)
 }
 
-fn parse_backend_response(output: &[u8]) -> std::io::Result<Response<Vec<u8>>> {
+fn parse_backend_response(output: &[u8]) -> std::io::Result<Response<Body>> {
     let (raw_headers, body) = split_cgi_response(output)?;
     let headers_text = String::from_utf8_lossy(raw_headers);
     let mut status = StatusCode::OK;
@@ -146,7 +145,7 @@ fn parse_backend_response(output: &[u8]) -> std::io::Result<Response<Vec<u8>>> {
         .ok_or_else(|| std::io::Error::other("failed to build response headers"))?;
     response_headers.extend(headers);
     builder
-        .body(body.to_vec())
+        .body(Body::from(body.to_vec()))
         .map_err(|error| std::io::Error::other(error.to_string()))
 }
 

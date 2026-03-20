@@ -29,19 +29,21 @@ fn repo_creation_on_first_push_and_clone_after_push() {
 
     let source_repo = init_working_repo(temp.path().join("source"));
     write_file(&source_repo.join("README.md"), "# repo.box\n");
-    git(&source_repo, ["add", "README.md"]);
-    git(&source_repo, ["commit", "-m", "initial commit"]);
+    git(&source_repo, &["add", "README.md"]);
+    git(&source_repo, &["commit", "-m", "initial commit"]);
 
     let remote = format!("http://{bind}/{address}/{repo_name}.git");
-    git(&source_repo, ["remote", "add", "origin", &remote]);
-    git(&source_repo, ["push", "-u", "origin", "HEAD:refs/heads/main"]);
+    git(&source_repo, &["remote", "add", "origin", &remote]);
+    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
 
     let bare_repo = data_dir.join(address).join(format!("{repo_name}.git"));
     assert!(bare_repo.exists(), "expected bare repo to be created");
     assert!(bare_repo.join("hooks").join("pre-receive").exists());
 
     let clone_dir = temp.path().join("clone");
-    git_in(temp.path(), ["clone", &remote, clone_dir.to_string_lossy().as_ref()]);
+    let clone_str = clone_dir.to_string_lossy().to_string();
+    git_in(temp.path(), &["clone", &remote, &clone_str]);
+    assert!(clone_dir.exists(), "clone dir should exist after clone");
     let cloned_readme = std::fs::read_to_string(clone_dir.join("README.md")).unwrap();
     assert_eq!(cloned_readme, "# repo.box\n");
 }
@@ -57,12 +59,12 @@ fn sqlite_ownership_record_is_created() {
 
     let source_repo = init_working_repo(temp.path().join("source"));
     write_file(&source_repo.join("owned.txt"), "owned\n");
-    git(&source_repo, ["add", "owned.txt"]);
-    git(&source_repo, ["commit", "-m", "ownership"]);
+    git(&source_repo, &["add", "owned.txt"]);
+    git(&source_repo, &["commit", "-m", "ownership"]);
 
     let remote = format!("http://{bind}/{address}/{repo_name}.git");
-    git(&source_repo, ["remote", "add", "origin", &remote]);
-    git(&source_repo, ["push", "-u", "origin", "HEAD:refs/heads/main"]);
+    git(&source_repo, &["remote", "add", "origin", &remote]);
+    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
 
     let db = Connection::open(data_dir.join("repobox.db")).unwrap();
     let row = db
@@ -90,9 +92,10 @@ fn start_server(bind: SocketAddr, data_dir: &Path) -> ServerGuard {
 
 fn init_working_repo(path: PathBuf) -> PathBuf {
     std::fs::create_dir_all(&path).unwrap();
-    git_in(path.parent().unwrap(), ["init", path.to_string_lossy().as_ref()]);
-    git(&path, ["config", "user.name", "repo.box"]);
-    git(&path, ["config", "user.email", "repobox@example.com"]);
+    let path_str = path.to_string_lossy().to_string();
+    git_in(path.parent().unwrap(), &["init", &path_str]);
+    git(&path, &["config", "user.name", "repo.box"]);
+    git(&path, &["config", "user.email", "repobox@example.com"]);
     path
 }
 
@@ -100,15 +103,11 @@ fn write_file(path: &Path, contents: &str) {
     std::fs::write(path, contents).unwrap();
 }
 
-fn git(repo: &Path, args: [&str; 3]) {
+fn git(repo: &Path, args: &[&str]) {
     git_in(repo, args);
 }
 
-fn git<const N: usize>(repo: &Path, args: [&str; N]) {
-    git_in(repo, args);
-}
-
-fn git_in<const N: usize>(cwd: &Path, args: [&str; N]) {
+fn git_in(cwd: &Path, args: &[&str]) {
     let output = Command::new("git").current_dir(cwd).args(args).output().unwrap();
     assert!(
         output.status.success(),

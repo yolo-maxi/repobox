@@ -1315,6 +1315,7 @@ dependencies = [
  "http",
  "reqwest",
  "rusqlite",
+ "serde",
  "tempdir",
  "tokio",
  "tower-http",
