@@ -217,11 +217,12 @@ permissions:
         return ExitCode::FAILURE;
     }
 
-    // Store real git path
+    // Store real git path in ~/.repobox/real-git (system-level, not per-repo)
     let real_git = find_real_git();
-    let repobox_dir = Path::new(".repobox");
-    let _ = std::fs::create_dir_all(repobox_dir);
-    let _ = std::fs::write(repobox_dir.join("config"), format!("git = {real_git}"));
+    let home = home_dir();
+    let repobox_home = identity::repobox_home_with_base(&home);
+    let _ = std::fs::create_dir_all(&repobox_home);
+    let _ = std::fs::write(repobox_home.join("real-git"), &real_git);
 
     println!("✅ Initialized repo.box");
     println!("   Created .repobox-config (edit to add groups and rules)");
