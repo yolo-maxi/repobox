@@ -1,4 +1,4 @@
-//! Lint warnings for .repobox.yml configs.
+//! Lint warnings for .repobox/config.yml configs.
 //!
 //! These are not errors — the config is valid — but likely footguns.
 
@@ -180,7 +180,7 @@ fn check_duplicate_rules(config: &Config, warnings: &mut Vec<LintWarning>) {
     }
 }
 
-/// 4. Non-founders with `edit *` (no branch scope) — includes .repobox.yml
+/// 4. Non-founders with `edit *` (no branch scope) — includes .repobox/config.yml
 fn check_wildcard_edit_includes_config(config: &Config, warnings: &mut Vec<LintWarning>) {
     for rule in &config.permissions.rules {
         if rule.deny {
@@ -206,10 +206,10 @@ fn check_wildcard_edit_includes_config(config: &Config, warnings: &mut Vec<LintW
         warnings.push(LintWarning {
             severity: Severity::Warning,
             message: format!(
-                "'{} edit *' grants access to ALL files including .repobox.yml",
+                "'{} edit *' grants access to ALL files including .repobox/config.yml",
                 subject_name(&rule.subject)
             ),
-            hint: "Scope to branches: 'edit * >feature/**' or add 'not edit ./.repobox.yml'".into(),
+            hint: "Scope to branches: 'edit * >feature/**' or add 'not edit ./.repobox/config.yml'".into(),
         });
     }
 }
@@ -446,7 +446,7 @@ permissions:
   rules:
     - agents edit *
 "#);
-        assert!(has_warning_containing(&w, ".repobox.yml"), "expected config warning, got: {w:?}");
+        assert!(has_warning_containing(&w, ".repobox/config.yml"), "expected config warning, got: {w:?}");
     }
 
     #[test]
@@ -460,7 +460,7 @@ permissions:
   rules:
     - agents edit * >feature/**
 "#);
-        assert!(!has_warning_containing(&w, ".repobox.yml"),
+        assert!(!has_warning_containing(&w, ".repobox/config.yml"),
             "should NOT warn about scoped edit: {w:?}");
     }
 
@@ -475,7 +475,7 @@ permissions:
   rules:
     - founders edit *
 "#);
-        assert!(!has_warning_containing(&w, ".repobox.yml"),
+        assert!(!has_warning_containing(&w, ".repobox/config.yml"),
             "should NOT warn about founders edit *: {w:?}");
     }
 
@@ -586,7 +586,7 @@ permissions:
     - agents push >feature/**
     - agents create >feature/**
     - agents edit * >feature/**
-    - agents append ./.repobox.yml
+    - agents append ./.repobox/config.yml
 "#);
         // Filter out only warnings (not info)
         let warns: Vec<_> = w.iter().filter(|w| w.severity == Severity::Warning).collect();

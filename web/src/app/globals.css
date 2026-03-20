@@ -453,6 +453,70 @@ div[style*="scroll-snap-type"]::-webkit-scrollbar {
   color: var(--bp-accent);
 }
 
+/* Glass panel for explorer */
+.glass-panel {
+  background: rgba(10, 22, 40, 0.82);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid rgba(50, 100, 160, 0.2);
+  box-shadow:
+    0 0 80px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(100, 160, 220, 0.08);
+}
+
+.glass-panel-inner {
+  background: rgba(13, 31, 53, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(50, 100, 160, 0.15);
+}
+
+.glass-card {
+  background: rgba(13, 31, 53, 0.5);
+  border: 1px solid rgba(50, 100, 160, 0.18);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.glass-card:hover {
+  border-color: rgba(79, 195, 247, 0.35);
+  background: rgba(13, 31, 53, 0.7);
+}
+
+.glass-stat {
+  background: rgba(13, 31, 53, 0.4);
+  border: 1px solid rgba(50, 100, 160, 0.15);
+}
+
+.glass-input {
+  background: rgba(10, 22, 40, 0.6);
+  border: 1px solid rgba(50, 100, 160, 0.25);
+  color: var(--bp-text);
+  transition: border-color 0.2s ease;
+}
+
+.glass-input:focus {
+  border-color: var(--bp-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.1);
+}
+
+.glass-tab {
+  border: 1px solid rgba(50, 100, 160, 0.15);
+  color: var(--bp-dim);
+  transition: all 0.2s ease;
+}
+
+.glass-tab:hover {
+  color: var(--bp-text);
+  border-color: rgba(50, 100, 160, 0.3);
+}
+
+.glass-tab-active {
+  background: rgba(79, 195, 247, 0.12);
+  border-color: rgba(79, 195, 247, 0.3);
+  color: var(--bp-accent);
+}
+
 .playground-output {
   background: #060e1a;
   border: 1px solid var(--bp-border);

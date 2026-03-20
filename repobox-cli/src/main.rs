@@ -25,7 +25,7 @@ permissions:
     # Flat rules:
     #   - founders push >*
     #   - founders merge >*
-    #   - founders edit ./.repobox.yml
+    #   - founders edit ./.repobox/config.yml
     #
     # Subject-grouped rules:
     #   founders:
@@ -40,7 +40,7 @@ permissions:
     #       create:
     #         - ">feature/**"
     #       append:
-    #         - "./.repobox.yml"
+    #         - "./.repobox/config.yml"
 "#;
 
 #[derive(Parser)]
@@ -58,7 +58,7 @@ struct Cli {
 enum Commands {
     /// Initialize repo.box in the current git repo
     Init {
-        /// Overwrite existing .repobox.yml
+        /// Overwrite existing .repobox/config.yml
         #[arg(long)]
         force: bool,
     },
@@ -93,7 +93,7 @@ enum Commands {
         /// Target (>main, contracts/**, etc.)
         target: String,
     },
-    /// Validate .repobox.yml
+    /// Validate .repobox/config.yml
     Lint,
     /// Show current status: identity, groups, permissions summary
     Status,
@@ -220,14 +220,20 @@ fn cmd_init(force: bool) -> ExitCode {
         }
     }
 
-    let config_path = Path::new(".repobox.yml");
+    let config_dir = Path::new(".repobox");
+    let config_path = config_dir.join("config.yml");
     if config_path.exists() && !force {
-        eprintln!("error: .repobox.yml already exists. Use --force to overwrite");
+        eprintln!("error: .repobox/config.yml already exists. Use --force to overwrite");
         return ExitCode::FAILURE;
     }
 
-    if let Err(e) = std::fs::write(config_path, CONFIG_TEMPLATE) {
-        eprintln!("error: failed to write .repobox.yml: {e}");
+    if let Err(e) = std::fs::create_dir_all(config_dir) {
+        eprintln!("error: failed to create .repobox/ directory: {e}");
+        return ExitCode::FAILURE;
+    }
+
+    if let Err(e) = std::fs::write(&config_path, CONFIG_TEMPLATE) {
+        eprintln!("error: failed to write .repobox/config.yml: {e}");
         return ExitCode::FAILURE;
     }
 
@@ -246,7 +252,7 @@ fn cmd_init(force: bool) -> ExitCode {
     let _ = std::fs::write(repobox_home.join("real-git"), &real_git);
 
     println!("✅ Initialized repo.box");
-    println!("   Created .repobox.yml (edit to add groups and rules)");
+    println!("   Created .repobox/config.yml (edit to add groups and rules)");
 
     ExitCode::SUCCESS
 }
@@ -523,16 +529,16 @@ fn cmd_alias(action: AliasAction, home: &Path) -> ExitCode {
 // ── Check ─────────────────────────────────────────────────────────────
 
 fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> ExitCode {
-    let config_path = Path::new(".repobox.yml");
+    let config_path = Path::new(".repobox/config.yml");
     if !config_path.exists() {
-        eprintln!("error: no .repobox.yml found");
+        eprintln!("error: no .repobox/config.yml found");
         return ExitCode::FAILURE;
     }
 
     let content = match std::fs::read_to_string(config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("error reading .repobox.yml: {e}");
+            eprintln!("error reading .repobox/config.yml: {e}");
             return ExitCode::FAILURE;
         }
     };
@@ -777,8 +783,8 @@ fn find_system_git() -> String {
 // ── Hook ──────────────────────────────────────────────────────────────
 
 fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
-    // Read .repobox.yml
-    let config_path = Path::new(".repobox.yml");
+    // Read .repobox/config.yml
+    let config_path = Path::new(".repobox/config.yml");
     if !config_path.exists() {
         // No config → allow everything
         return ExitCode::SUCCESS;
@@ -787,7 +793,7 @@ fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
     let config_content = match std::fs::read_to_string(config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("error reading .repobox.yml: {e}");
+            eprintln!("error reading .repobox/config.yml: {e}");
             return ExitCode::FAILURE;
         }
     };
@@ -795,7 +801,7 @@ fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
     let config = match parser::parse(&config_content) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("❌ .repobox.yml error: {e}");
+            eprintln!("❌ .repobox/config.yml error: {e}");
             return ExitCode::FAILURE;
         }
     };
@@ -918,16 +924,16 @@ fn cmd_status(home: &Path) -> ExitCode {
     println!("  Branch:   {branch}");
 
     // Config
-    let config_path = Path::new(".repobox.yml");
+    let config_path = Path::new(".repobox/config.yml");
     if !config_path.exists() {
-        println!("  Config:   no .repobox.yml found");
+        println!("  Config:   no .repobox/config.yml found");
         return ExitCode::SUCCESS;
     }
 
     let content = match std::fs::read_to_string(config_path) {
         Ok(c) => c,
         Err(e) => {
-            println!("  Config:   error reading .repobox.yml: {e}");
+            println!("  Config:   error reading .repobox/config.yml: {e}");
             return ExitCode::FAILURE;
         }
     };
@@ -994,16 +1000,16 @@ fn cmd_status(home: &Path) -> ExitCode {
 // ── Lint ──────────────────────────────────────────────────────────────
 
 fn cmd_lint() -> ExitCode {
-    let config_path = Path::new(".repobox.yml");
+    let config_path = Path::new(".repobox/config.yml");
     if !config_path.exists() {
-        eprintln!("error: no .repobox.yml found");
+        eprintln!("error: no .repobox/config.yml found");
         return ExitCode::FAILURE;
     }
 
     let content = match std::fs::read_to_string(config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("error reading .repobox.yml: {e}");
+            eprintln!("error reading .repobox/config.yml: {e}");
             return ExitCode::FAILURE;
         }
     };
@@ -1012,7 +1018,7 @@ fn cmd_lint() -> ExitCode {
         Ok(config) => {
             let n_groups = config.groups.len();
             let n_rules = config.permissions.rules.len();
-            println!("✅ .repobox.yml is valid");
+            println!("✅ .repobox/config.yml is valid");
             println!("   {n_groups} groups, {n_rules} rules, default: {:?}", config.permissions.default);
 
             let warnings = repobox::lint::lint(&config);
@@ -1116,7 +1122,7 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                 });
 
             if status.success() {
-                // After successful git init, drop .repobox.yml template
+                // After successful git init, drop .repobox/config.yml template
                 if args.first().map(|s| s.as_str()) == Some("init") {
                     // Determine the init target dir (git init [dir])
                     let init_dir = args.iter()
@@ -1124,8 +1130,10 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                         .find(|a| !a.starts_with('-'))
                         .map(PathBuf::from)
                         .unwrap_or_else(|| PathBuf::from("."));
-                    let config_path = init_dir.join(".repobox.yml");
+                    let config_dir = init_dir.join(".repobox");
+                    let config_path = config_dir.join("config.yml");
                     if !config_path.exists() {
+                        let _ = std::fs::create_dir_all(&config_dir);
                         let _ = std::fs::write(&config_path, CONFIG_TEMPLATE);
                     }
                 }

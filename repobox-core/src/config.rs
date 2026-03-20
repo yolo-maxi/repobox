@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-/// A parsed .repobox.yml file.
+/// A parsed .repobox/config.yml file.
 #[derive(Debug, Clone)]
 pub struct Config {
     pub groups: HashMap<String, Group>,

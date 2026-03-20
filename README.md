@@ -32,7 +32,7 @@ permissions:
     - agents push >feature/**            # agents push to feature branches only
     - agents edit * >feature/**          # agents edit files on feature branches
     - agents append ./CHANGELOG.md       # agents can append to changelog anywhere
-    - agents not edit .repobox.yml       # agents can never touch the config
+    - agents not edit .repobox/config.yml       # agents can never touch the config
     - weth-holders push >*               # token holders can push anywhere
 ```
 
@@ -79,8 +79,8 @@ git repobox keys generate --alias claude
 git repobox whoami
 # → alice (evm:0x7D5b...)
 
-# Edit .repobox.yml to define permissions, then:
-git add .repobox.yml
+# Edit .repobox/config.yml to define permissions, then:
+git add .repobox/
 git commit -m "configure permissions"
 ```
 
@@ -155,7 +155,7 @@ rules:
   - agents push >main              # specific branch
   - agents push >feature/**        # glob pattern
   - agents push >*                 # all branches
-  - agents edit .repobox.yml       # specific file
+  - agents edit .repobox/config.yml       # specific file
   - agents edit src/**             # file glob
   - agents edit *                  # all files
   - agents edit * >feature/**     # files + branch scope
@@ -194,7 +194,7 @@ git rb status                 # Show identity, groups, permissions
 
 ## Lint
 
-repo.box includes a built-in linter with 8 checks that auto-runs when `.repobox.yml` is staged for commit:
+repo.box includes a built-in linter with 8 checks that auto-runs when `.repobox/config.yml` is staged for commit:
 
 - Unreachable rules (shadowed by earlier rules)
 - Unknown group references

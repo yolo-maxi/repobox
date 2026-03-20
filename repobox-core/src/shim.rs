@@ -62,9 +62,9 @@ pub fn process_command_with_resolver(
         return ShimAction::RepoboxCommand;
     }
 
-    // Check if .repobox.yml exists
+    // Check if .repobox/config.yml exists
     let config_path = match repo_root {
-        Some(root) => root.join(".repobox.yml"),
+        Some(root) => root.join(".repobox/config.yml"),
         None => return ShimAction::Passthrough, // Not in a git repo
     };
 
@@ -96,7 +96,7 @@ pub fn process_command_with_resolver(
     let config_content = match std::fs::read_to_string(&config_path) {
         Ok(c) => c,
         Err(e) => {
-            return ShimAction::Block(format!("failed to read .repobox.yml: {e}"));
+            return ShimAction::Block(format!("failed to read .repobox/config.yml: {e}"));
         }
     };
 
@@ -104,7 +104,7 @@ pub fn process_command_with_resolver(
         Ok(c) => c,
         Err(e) => {
             // Parse errors block permission-checked commands
-            return ShimAction::Block(format!(".repobox.yml error: {e}"));
+            return ShimAction::Block(format!(".repobox/config.yml error: {e}"));
         }
     };
 
@@ -143,10 +143,10 @@ fn check_commit(
     repo_root: &Path,
     resolver: Option<&RemoteResolver>,
 ) -> ShimAction {
-    // Run lint on .repobox.yml if it's being committed
+    // Run lint on .repobox/config.yml if it's being committed
     let staged_files = get_staged_files(repo_root);
 
-    if staged_files.iter().any(|f| f == ".repobox.yml") {
+    if staged_files.iter().any(|f| f == ".repobox/config.yml") {
         let warnings = crate::lint::lint(config);
         if !warnings.is_empty() {
             eprintln!("repo.box lint warnings:");
@@ -235,8 +235,8 @@ fn check_merge(
         ));
     }
 
-    // TODO: Check if merge would bring in .repobox.yml changes
-    // and verify the identity can edit .repobox.yml on the target branch.
+    // TODO: Check if merge would bring in .repobox/config.yml changes
+    // and verify the identity can edit .repobox/config.yml on the target branch.
     // For now, this is checked at commit time.
 
     ShimAction::Delegate
@@ -468,7 +468,8 @@ mod tests {
             .unwrap();
 
         if !config_content.is_empty() {
-            std::fs::write(repo.join(".repobox.yml"), config_content).unwrap();
+            std::fs::create_dir_all(repo.join(".repobox")).unwrap();
+            std::fs::write(repo.join(".repobox/config.yml"), config_content).unwrap();
         }
 
         (tmp, repo)
@@ -490,7 +491,7 @@ mod tests {
     fn test_no_config_passthrough() {
         let (_tmp, repo) = setup_repo_with_config("");
         // Remove config file
-        let _ = std::fs::remove_file(repo.join(".repobox.yml"));
+        let _ = std::fs::remove_file(repo.join(".repobox/config.yml"));
 
         let action = process_command(
             &args("commit -m test"),
@@ -563,7 +564,7 @@ mod tests {
     #[test]
     fn test_commit_no_config_delegates() {
         let (_tmp, repo) = setup_repo_with_config("");
-        let _ = std::fs::remove_file(repo.join(".repobox.yml"));
+        let _ = std::fs::remove_file(repo.join(".repobox/config.yml"));
 
         let action = process_command(
             &args("commit -m test"),
@@ -601,7 +602,7 @@ permissions:
 permissions:
   default: allow
   rules:
-    - "founders edit .repobox.yml"
+    - "founders edit .repobox/config.yml"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -623,11 +624,11 @@ groups:
 permissions:
   default: allow
   rules:
-    - "founders edit .repobox.yml"
+    - "founders edit .repobox/config.yml"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
-        // Stage .repobox.yml
+        // Stage .repobox/config.yml
         std::fs::write(repo.join("test.txt"), "hello").unwrap();
         Command::new("git").args(["add", "test.txt"]).current_dir(&repo).output().unwrap();
 
@@ -947,7 +948,7 @@ permissions:
     #[test]
     fn test_no_config_all_passthrough() {
         let (_tmp, repo) = setup_repo_with_config("");
-        let _ = std::fs::remove_file(repo.join(".repobox.yml"));
+        let _ = std::fs::remove_file(repo.join(".repobox/config.yml"));
 
         for cmd in &["commit -m test", "merge feature/x", "push origin main", "checkout -b new"] {
             let action = process_command(
@@ -1004,7 +1005,7 @@ permissions:
     // Section 14: Config file protection — append vs edit
     // ================================================================
 
-    /// Agent with only append on .repobox.yml should be BLOCKED from editing it.
+    /// Agent with only append on .repobox/config.yml should be BLOCKED from editing it.
     /// This reproduces the bug where claude could commit edits to the config file.
     #[test]
     fn test_agent_edit_config_blocked_when_only_append() {
@@ -1022,12 +1023,12 @@ permissions:
     - founders edit *
     - agents push >feature/**
     - agents edit * >feature/**
-    - agents append ./.repobox.yml
+    - agents append ./.repobox/config.yml
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
         // Commit the initial config first so git diff --cached works
-        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
         Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
 
         // Now stage a non-config file to simulate agent editing config
@@ -1064,11 +1065,11 @@ permissions:
     - founders edit *
     - agents edit * >feature/**
     - agents write * >feature/**
-    - agents append ./.repobox.yml
+    - agents append ./.repobox/config.yml
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
-        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
         Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
 
         std::fs::write(repo.join("src.txt"), "code").unwrap();
@@ -1099,19 +1100,19 @@ groups:
 permissions:
   default: allow
   rules:
-    - founders edit ./.repobox.yml
-    - agents not edit ./.repobox.yml
+    - founders edit ./.repobox/config.yml
+    - agents not edit ./.repobox/config.yml
     - agents edit *
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
-        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
         Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
 
         // Now modify config and stage it
         let new_config = config.to_string() + "\n# modified\n";
-        std::fs::write(repo.join(".repobox.yml"), &new_config).unwrap();
-        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        std::fs::write(repo.join(".repobox/config.yml"), &new_config).unwrap();
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
 
         let founder = id("evm:0xAAA0000000000000000000000000000000000001");
         let agent = id("evm:0xBBB0000000000000000000000000000000000002");
@@ -1151,21 +1152,21 @@ groups:
 permissions:
   default: allow
   rules:
-    - founders edit ./.repobox.yml
+    - founders edit ./.repobox/config.yml
     - agents edit *
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
-        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
         Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
 
         let new_config = config.to_string() + "\n# sneaky addition\n";
-        std::fs::write(repo.join(".repobox.yml"), &new_config).unwrap();
-        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        std::fs::write(repo.join(".repobox/config.yml"), &new_config).unwrap();
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
 
         let agent = id("evm:0xBBB0000000000000000000000000000000000002");
 
-        // agents edit * matches .repobox.yml — the founders rule only creates
+        // agents edit * matches .repobox/config.yml — the founders rule only creates
         // implicit deny for identities NOT matching ANY rule for that target.
         // But agents DO match via `edit *`, so they're allowed.
         let action = process_command(
@@ -1190,7 +1191,7 @@ permissions:
   rules: []
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
-        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
         Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
 
         // Test 1: New file → Write
@@ -1228,7 +1229,7 @@ permissions:
     - editors edit *
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
-        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
         Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
 
         let editor = id("evm:0xAAA0000000000000000000000000000000000001");
