@@ -206,6 +206,20 @@ div[style*="scroll-snap-type"]::-webkit-scrollbar {
   display: none;
 }
 
+/* Case studies — stack vertically on mobile */
+@media (max-width: 640px) {
+  .case-studies-row {
+    flex-direction: column !important;
+    overflow-x: visible !important;
+  }
+  .case-study-card {
+    flex: 1 1 auto !important;
+  }
+  .case-studies-fade {
+    display: none !important;
+  }
+}
+
 /* Playground styles */
 .playground-mode-btn {
   padding: 8px 16px;
