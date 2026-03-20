@@ -406,6 +406,7 @@ export function BackgroundCanvas() {
         width: "100%",
         zIndex: 1,
         pointerEvents: "none",
+        opacity: 0.8,
       }}
     />
   );
