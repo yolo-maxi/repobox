@@ -6,6 +6,7 @@ import { LandingShippedToday } from "@/components/landing/ShippedToday";
 import { LandingCaseStudies } from "@/components/landing/CaseStudies";
 import { LandingEthos } from "@/components/landing/Ethos";
 import { LandingCTA } from "@/components/landing/CTA";
+import { LandingHireCTA } from "@/components/landing/HireCTA";
 import { LandingWriting } from "@/components/landing/Writing";
 import { LandingFooter } from "@/components/landing/Footer";
 import { RegMarks } from "@/components/RegMarks";
@@ -23,6 +24,7 @@ export default function Home() {
         <AgentHeatmap />
         <div style={{ height: 80 }} />
         <LandingProjects />
+        <LandingHireCTA />
         <LandingShippedToday />
         <LandingCaseStudies />
         <LandingEthos />
