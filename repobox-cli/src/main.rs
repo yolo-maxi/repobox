@@ -653,15 +653,55 @@ fn cmd_setup(remove: bool) -> ExitCode {
         }
     }
 
-    println!("✅ Shim installed");
+    // Auto-add to shell profile
+    let path_line = "export PATH=\"$HOME/.repobox/bin:$PATH\"";
+    let shell = std::env::var("SHELL").unwrap_or_default();
+    let profile = if shell.ends_with("zsh") {
+        home.join(".zshrc")
+    } else if shell.ends_with("fish") {
+        // fish uses a different syntax, just print instructions
+        home.join(".config/fish/config.fish")
+    } else {
+        home.join(".bashrc")
+    };
+
+    let already_in_profile = std::fs::read_to_string(&profile)
+        .map(|c| c.contains(".repobox/bin"))
+        .unwrap_or(false);
+
+    if already_in_profile {
+        println!("✅ Shim installed (PATH already configured in {})", profile.file_name().unwrap_or_default().to_string_lossy());
+    } else if shell.ends_with("fish") {
+        println!("✅ Shim installed");
+        println!("   Add to ~/.config/fish/config.fish:");
+        println!("     fish_add_path $HOME/.repobox/bin");
+    } else {
+        // Append to profile
+        let line = format!("\n# repo.box shim\n{path_line}\n");
+        match std::fs::OpenOptions::new().append(true).open(&profile) {
+            Ok(mut f) => {
+                use std::io::Write;
+                if f.write_all(line.as_bytes()).is_ok() {
+                    println!("✅ Shim installed + PATH added to {}", profile.file_name().unwrap_or_default().to_string_lossy());
+                    println!("   Run `source {}` or open a new terminal.", profile.display());
+                } else {
+                    println!("✅ Shim installed");
+                    println!("   Could not write to {}. Add manually:", profile.display());
+                    println!("     {path_line}");
+                }
+            }
+            Err(_) => {
+                println!("✅ Shim installed");
+                println!("   Could not open {}. Add manually:", profile.display());
+                println!("     {path_line}");
+            }
+        }
+    }
+
+    println!();
     println!("   Real git: {real_git}");
     println!("   Shim: {}", shim_path.display());
-    println!();
-    println!("   Add this to your shell profile (.bashrc, .zshrc, etc.):");
-    println!();
-    println!("     export PATH=\"$HOME/.repobox/bin:$PATH\"");
-    println!();
-    println!("   Then every `git` command routes through repobox.");
+    println!("   Every `git` command now routes through repobox.");
     println!("   --no-verify won't help — this is a shim, not a hook.");
     println!();
     println!("   Run `git repobox setup --remove` to undo.");
