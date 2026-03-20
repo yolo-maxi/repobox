@@ -37,15 +37,12 @@ No `edit`/`write`/`append` rules → no file restrictions. Anyone who can push c
 
 ## Rule Syntax
 
-Rules can be written in two forms: **flat** (one-liners) and **nested** (grouped by subject).
+Rules can be written in **three formats**. All are equivalent — use whichever feels natural, and mix freely.
 
-### Flat rules
+### Format A: Flat list (one-liners)
 
-```
-<subject> <verb> <target>
-```
+`rules:` is a YAML list. Each entry is a string: `<subject> [not] <verb> <target>`
 
-Examples:
 ```yaml
 rules:
   - founders edit *
@@ -54,28 +51,61 @@ rules:
   - evm:0xBBB...456 push >feature/**
 ```
 
-### Nested rules
+### Format B: Subject-grouped (subject → list of "verb target" strings)
 
-Group multiple verbs and targets under a subject to avoid repetition:
+`rules:` is a YAML mapping. Each key is a subject, value is a list of "verb target" strings:
 
 ```yaml
 rules:
-  - agents:
-      push:
-        - >feature/**
-        - >fix/**
-        - >chore/**
-      create:
-        - >feature/**
-        - >fix/**
-        - >chore/**
-      merge:
-        - >chore/**
-      append:
-        - .repobox-config
+  founders:
+    - push >*
+    - merge >*
+    - edit *
+  agents:
+    - not merge >main
+    - push >feature/**
+    - push >fix/**
+    - create >feature/**
+    - create >fix/**
 ```
 
-**Both forms are equivalent.** Use flat for simple rules, nested when a subject has many verb/target combinations. They can be mixed in the same `rules:` list.
+### Format C: Verb-mapping (subject → verb → targets)
+
+`rules:` is a YAML mapping. Each key is a subject, value is a mapping of verb → target list:
+
+```yaml
+rules:
+  agents:
+    push:
+      - ">feature/**"
+      - ">fix/**"
+      - ">chore/**"
+    create:
+      - ">feature/**"
+      - ">fix/**"
+      - ">chore/**"
+    merge:
+      - ">chore/**"
+    append:
+      - "./.repobox-config"
+```
+
+### Mixing formats
+
+In Format A (list), individual entries can be flat strings OR nested mappings (C-style):
+
+```yaml
+rules:
+  - founders push >*
+  - founders merge >*
+  - agents:
+      push:
+        - ">feature/**"
+      append:
+        - "./.repobox-config"
+```
+
+Formats B and C both use a top-level mapping for `rules:`. Write it however feels natural.
 
 ### Subjects
 
@@ -146,11 +176,9 @@ If only a path is specified (`contracts/**`), the rule applies on all branches.
 ```yaml
 groups:
   founders:
-    members:
-      - evm:0xAAA...123
+    - evm:0xAAA...123
   agents:
-    members:
-      - evm:0xBBB...456
+    - evm:0xBBB...456
 
 permissions:
   default: allow

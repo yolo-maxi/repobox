@@ -9,35 +9,70 @@ A git permission layer. Shims the `git` command so every commit, merge, and push
 
 ## Config Structure
 
+Rules can be written in **three formats**. All are equivalent — mix freely.
+
+### Format A: Flat list (one-liners)
+
 ```yaml
-groups:
-  founders:
-    - evm:0xAAA...123
-  agents:
-    - evm:0xBBB...456
-
 permissions:
-  default: allow    # or "deny"
+  default: allow
   rules:
-    # Flat rules (one-liners)
-    - founders push >*
-    - founders merge >*
-    - founders create >*
-    - founders edit ./.repobox-config
-
-    # Nested rules (grouped by subject)
-    - agents:
-        push:
-          - ">feature/**"
-          - ">fix/**"
-        create:
-          - ">feature/**"
-          - ">fix/**"
-        append:
-          - "./.repobox-config"
+    - founders push >main
+    - founders merge >main
+    - agents not edit ./.repobox-config
 ```
 
-Both flat and nested are equivalent. Mix freely in the same `rules:` list.
+### Format B: Subject-grouped (subject → list of "verb target" strings)
+
+```yaml
+permissions:
+  default: allow
+  rules:
+    founders:
+      - push >main
+      - merge >main
+    agents:
+      - not edit ./.repobox-config
+```
+
+### Format C: Verb-mapping (subject → verb → targets)
+
+```yaml
+permissions:
+  default: allow
+  rules:
+    founders:
+      push:
+        - ">main"
+      merge:
+        - ">main"
+    agents:
+      push:
+        - ">feature/**"
+        - ">fix/**"
+      create:
+        - ">feature/**"
+        - ">fix/**"
+      append:
+        - "./.repobox-config"
+```
+
+### Mixing formats
+
+In Format A (list), each entry can be a flat string OR a nested mapping (C-style):
+
+```yaml
+rules:
+  - founders push >*
+  - founders merge >*
+  - agents:
+      push:
+        - ">feature/**"
+      append:
+        - "./.repobox-config"
+```
+
+Formats B and C use a top-level mapping for `rules:` (subjects as keys). Write it however feels natural.
 
 ## Complete `.repobox-config` Reference
 
