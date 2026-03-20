@@ -157,15 +157,58 @@ fn check_commit(
         }
     }
 
-    // Check file permissions for each staged file
+    // Check file permissions for each staged file.
+    // Classify the change type (write/append/edit) and check permissions.
+    //
+    // Hierarchy: `edit` is the general file-modification verb.
+    // `write` and `append` are specific sub-verbs.
+    //
+    // Logic:
+    // 1. Check the specific verb (write/append). If explicitly allowed → OK.
+    // 2. Check `edit` (general). If explicitly allowed → OK (edit covers all).
+    // 3. If `edit` is explicitly denied → BLOCKED (deny on edit blocks all sub-verbs).
+    // 4. Otherwise → use the specific verb's result.
     for file in &staged_files {
-        let result = engine::check_with_resolver(config, identity, Verb::Edit, current_branch, Some(file), resolver);
-        if !result.is_allowed() {
-            return ShimAction::Block(format!(
-                "permission denied: {} cannot edit {file}",
-                identity
-            ));
+        let verb = classify_staged_file(file, repo_root);
+
+        if verb == Verb::Edit {
+            // Already the general verb, just check it
+            let result = engine::check_with_resolver(config, identity, Verb::Edit, current_branch, Some(file), resolver);
+            if !result.is_allowed() {
+                return ShimAction::Block(format!(
+                    "permission denied: {} cannot edit {file}",
+                    identity
+                ));
+            }
+            continue;
         }
+
+        // For write/append: check both the specific verb and `edit`
+        let specific = engine::check_with_resolver(config, identity, verb, current_branch, Some(file), resolver);
+        let general = engine::check_with_resolver(config, identity, Verb::Edit, current_branch, Some(file), resolver);
+
+        // If either explicitly allows → OK
+        if specific.is_allowed() || general.is_allowed() {
+            // But also check: if `edit` explicitly denies, block regardless
+            if matches!(general, engine::CheckResult::Deny { .. }) {
+                return ShimAction::Block(format!(
+                    "permission denied: {} cannot edit {file}",
+                    identity
+                ));
+            }
+            continue;
+        }
+
+        // Neither allowed
+        let verb_name = match verb {
+            Verb::Write => "write",
+            Verb::Append => "append to",
+            _ => "edit",
+        };
+        return ShimAction::Block(format!(
+            "permission denied: {} cannot {verb_name} {file}",
+            identity
+        ));
     }
 
     ShimAction::Delegate
@@ -331,6 +374,52 @@ pub fn get_staged_files(repo_root: &Path) -> Vec<String> {
         Err(_) => Vec::new(),
     }
 }
+
+/// Classify a staged file change into the appropriate verb.
+///
+/// - New file (git status `A`) → `Verb::Write`
+/// - Append-only (only additions, no deletions in diff body) → `Verb::Append`
+/// - Modified with deletions → `Verb::Edit`
+pub fn classify_staged_file(file: &str, repo_root: &Path) -> Verb {
+    let git = std::env::var("REPOBOX_REAL_GIT").unwrap_or_else(|_| "git".to_string());
+
+    // Check if file is newly added
+    let status_output = Command::new(&git)
+        .args(["diff", "--cached", "--diff-filter=A", "--name-only"])
+        .current_dir(repo_root)
+        .output();
+
+    if let Ok(out) = status_output {
+        let added_files = String::from_utf8_lossy(&out.stdout);
+        if added_files.lines().any(|l| l == file) {
+            return Verb::Write;
+        }
+    }
+
+    // For modified files, use --numstat to check if it's append-only.
+    // Append-only = additions > 0, deletions == 0.
+    let numstat = Command::new(&git)
+        .args(["diff", "--cached", "--numstat", "--", file])
+        .current_dir(repo_root)
+        .output();
+
+    if let Ok(out) = numstat {
+        let line = String::from_utf8_lossy(&out.stdout);
+        // Format: "additions\tdeletions\tfilename"
+        let parts: Vec<&str> = line.trim().split('\t').collect();
+        if parts.len() >= 2 {
+            let additions: u64 = parts[0].parse().unwrap_or(0);
+            let deletions: u64 = parts[1].parse().unwrap_or(0);
+            if additions > 0 && deletions == 0 {
+                return Verb::Append;
+            }
+        }
+    }
+
+    Verb::Edit
+}
+
+
 
 /// Detect which branch a push targets.
 fn detect_push_target(args: &[String], current_branch: Option<&str>) -> Option<String> {
@@ -956,8 +1045,8 @@ permissions:
             Some(&agent),
             Some("main"),
         );
-        assert!(matches!(action, ShimAction::Block(ref msg) if msg.contains("cannot edit")),
-            "Agent should be blocked from editing files on main, got: {:?}", action);
+        assert!(matches!(action, ShimAction::Block(ref msg) if msg.contains("cannot write") || msg.contains("cannot edit")),
+            "Agent should be blocked from writing files on main, got: {:?}", action);
     }
 
     /// Agent CAN edit files on feature branches when they have edit * >feature/**
@@ -974,6 +1063,7 @@ permissions:
   rules:
     - founders edit *
     - agents edit * >feature/**
+    - agents write * >feature/**
     - agents append ./.repobox.yml
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
@@ -986,7 +1076,7 @@ permissions:
 
         let agent = id("evm:0xBBB0000000000000000000000000000000000002");
 
-        // On feature branch — agents have `edit * >feature/**`
+        // On feature branch — agents have `edit * >feature/**` and `write * >feature/**`
         let action = process_command(
             &args("commit -m ok"),
             Some(&repo),
@@ -994,7 +1084,7 @@ permissions:
             Some("feature/test"),
         );
         assert!(matches!(action, ShimAction::Delegate),
-            "Agent should be able to edit files on feature branches, got: {:?}", action);
+            "Agent should be able to write files on feature branches, got: {:?}", action);
     }
 
     /// Founder can edit config, agent cannot — with explicit deny rule.
@@ -1043,8 +1133,8 @@ permissions:
             Some(&agent),
             Some("main"),
         );
-        assert!(matches!(action, ShimAction::Block(ref msg) if msg.contains("cannot edit")),
-            "Agent should be blocked from editing config, got: {:?}", action);
+        assert!(matches!(action, ShimAction::Block(ref msg) if msg.contains("cannot")),
+            "Agent should be blocked from modifying config, got: {:?}", action);
     }
 
     /// Fran's actual config scenario: agents have `edit *` which includes config.
@@ -1086,5 +1176,68 @@ permissions:
         );
         assert!(matches!(action, ShimAction::Delegate),
             "agents edit * includes config file — correct but surprising, got: {:?}", action);
+    }
+
+    /// Test verb classification: new file = write, append-only = append, modification = edit
+    #[test]
+    fn test_verb_classification_write_append_edit() {
+        let config = r#"
+groups:
+  all:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: allow
+  rules: []
+"#;
+        let (_tmp, repo) = setup_repo_with_config(config);
+        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
+
+        // Test 1: New file → Write
+        std::fs::write(repo.join("new.txt"), "hello\n").unwrap();
+        Command::new("git").args(["add", "new.txt"]).current_dir(&repo).output().unwrap();
+        assert_eq!(classify_staged_file("new.txt", &repo), Verb::Write, "New file should be Write");
+
+        // Commit it so we can test modifications
+        Command::new("git").args(["commit", "-m", "add"]).current_dir(&repo).output().unwrap();
+
+        // Test 2: Append-only (add lines, no deletions) → Append
+        std::fs::write(repo.join("new.txt"), "hello\nworld\n").unwrap();
+        Command::new("git").args(["add", "new.txt"]).current_dir(&repo).output().unwrap();
+        assert_eq!(classify_staged_file("new.txt", &repo), Verb::Append, "Append-only should be Append");
+
+        // Commit and do a real edit
+        Command::new("git").args(["commit", "-m", "append"]).current_dir(&repo).output().unwrap();
+
+        // Test 3: Modification (change existing line) → Edit
+        std::fs::write(repo.join("new.txt"), "CHANGED\nworld\n").unwrap();
+        Command::new("git").args(["add", "new.txt"]).current_dir(&repo).output().unwrap();
+        assert_eq!(classify_staged_file("new.txt", &repo), Verb::Edit, "Modification should be Edit");
+    }
+
+    /// `edit` permission covers write and append (it's the superset)
+    #[test]
+    fn test_edit_covers_write_and_append() {
+        let config = r#"
+groups:
+  editors:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    - editors edit *
+"#;
+        let (_tmp, repo) = setup_repo_with_config(config);
+        Command::new("git").args(["add", ".repobox.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
+
+        let editor = id("evm:0xAAA0000000000000000000000000000000000001");
+
+        // New file (classified as write) — edit permission covers it
+        std::fs::write(repo.join("new.txt"), "hello").unwrap();
+        Command::new("git").args(["add", "new.txt"]).current_dir(&repo).output().unwrap();
+
+        let action = process_command(&args("commit -m new"), Some(&repo), Some(&editor), Some("main"));
+        assert!(matches!(action, ShimAction::Delegate), "Editor should be able to create files (edit covers write), got: {action:?}");
     }
 }

@@ -7,6 +7,14 @@
       ]
     },
     {
+      "title": "Guide",
+      "items": [
+        { "title": "Configuration", "slug": "guide/configuration" },
+        { "title": "CLI Reference", "slug": "guide/cli" },
+        { "title": "Examples", "slug": "guide/examples" }
+      ]
+    },
+    {
       "title": "Specification",
       "items": [
         { "title": "Identity", "slug": "spec/identity" },
