@@ -43,6 +43,10 @@ pub(crate) fn repo_dir(data_dir: &Path, repo: &RepoPath) -> PathBuf {
     data_dir.join(&repo.address).join(format!("{}.git", repo.name))
 }
 
+pub(crate) fn staging_repo_dir(data_dir: &Path, repo_name: &str) -> PathBuf {
+    data_dir.join("_staging").join(format!("{}.git", repo_name))
+}
+
 pub(crate) fn ensure_repo_exists(data_dir: &Path, repo: &RepoPath) -> std::io::Result<bool> {
     let repo_dir = repo_dir(data_dir, repo);
     if repo_dir.exists() {
@@ -75,6 +79,68 @@ pub(crate) fn ensure_repo_exists(data_dir: &Path, repo: &RepoPath) -> std::io::R
     Ok(true)
 }
 
+pub(crate) fn ensure_staging_repo_exists(data_dir: &Path, repo_name: &str) -> std::io::Result<bool> {
+    let staging_dir = staging_repo_dir(data_dir, repo_name);
+    if staging_dir.exists() {
+        return Ok(false);
+    }
+
+    let parent = staging_dir
+        .parent()
+        .ok_or_else(|| std::io::Error::other("invalid staging path"))?;
+    std::fs::create_dir_all(parent)?;
+
+    run_git(&["init", "--bare", staging_dir.to_string_lossy().as_ref()])?;
+    run_git(&[
+        "--git-dir",
+        staging_dir.to_string_lossy().as_ref(),
+        "config",
+        "http.receivepack",
+        "true",
+    ])?;
+    run_git(&[
+        "--git-dir",
+        staging_dir.to_string_lossy().as_ref(),
+        "symbolic-ref",
+        "HEAD",
+        "refs/heads/main",
+    ])?;
+
+    install_pre_receive_hook(&staging_dir)?;
+    Ok(true)
+}
+
+pub(crate) fn move_repo_from_staging(data_dir: &Path, repo_name: &str, target_address: &str) -> std::io::Result<()> {
+    let staging_dir = staging_repo_dir(data_dir, repo_name);
+    let target_repo = RepoPath {
+        address: target_address.to_string(),
+        name: repo_name.to_string(),
+    };
+    let target_dir = repo_dir(data_dir, &target_repo);
+
+    if !staging_dir.exists() {
+        return Err(std::io::Error::other("staging repo does not exist"));
+    }
+
+    // Create the target directory parent
+    if let Some(parent) = target_dir.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Move the staging repo to the final location
+    std::fs::rename(&staging_dir, &target_dir)?;
+    
+    Ok(())
+}
+
+pub(crate) fn clean_staging_repo(data_dir: &Path, repo_name: &str) -> std::io::Result<()> {
+    let staging_dir = staging_repo_dir(data_dir, repo_name);
+    if staging_dir.exists() {
+        std::fs::remove_dir_all(&staging_dir)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn read_head(data_dir: &Path, repo: &RepoPath) -> std::io::Result<String> {
     std::fs::read_to_string(repo_dir(data_dir, repo).join("HEAD"))
 }
@@ -85,6 +151,16 @@ pub(crate) fn read_head(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Str
 /// Returns None if no signed commits are found.
 pub(crate) fn extract_owner_from_first_commit(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Option<String>> {
     let repo_dir = repo_dir(data_dir, repo);
+    extract_owner_from_repo_dir(&repo_dir)
+}
+
+/// Extract the EVM signer address from the first signed commit in a staging repo.
+pub(crate) fn extract_owner_from_staging_repo(data_dir: &Path, repo_name: &str) -> std::io::Result<Option<String>> {
+    let staging_dir = staging_repo_dir(data_dir, repo_name);
+    extract_owner_from_repo_dir(&staging_dir)
+}
+
+fn extract_owner_from_repo_dir(repo_dir: &Path) -> std::io::Result<Option<String>> {
     let repo_dir_str = repo_dir.to_string_lossy().to_string();
 
     // Get the root commit (first commit in history)

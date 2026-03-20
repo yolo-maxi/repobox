@@ -70,6 +70,30 @@ pub(crate) fn get_repo(
         .map_err(to_io_error)
 }
 
+pub(crate) fn find_repo_by_name(
+    db_path: &Path,
+    name: &str,
+) -> std::io::Result<Option<RepoRecord>> {
+    let connection = Connection::open(db_path).map_err(to_io_error)?;
+    connection
+        .query_row(
+            "SELECT address, name, owner_address, created_at
+             FROM repos
+             WHERE name = ?1",
+            params![name],
+            |row| {
+                Ok(RepoRecord {
+                    address: row.get(0)?,
+                    name: row.get(1)?,
+                    owner_address: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(to_io_error)
+}
+
 fn now_string() -> String {
     let seconds = SystemTime::now()
         .duration_since(UNIX_EPOCH)

@@ -200,6 +200,188 @@ fn subsequent_pushes_work_after_ownership_established() {
     assert!(log.lines().count() >= 2, "should have at least 2 commits, got: {log}");
 }
 
+#[test]
+fn addressless_push_with_signed_commit_creates_repo() {
+    let temp = TempDir::new("repobox-server-addressless-test").unwrap();
+    let data_dir = temp.path().join("data");
+    let bind = free_addr();
+    let _server = start_server(bind, &data_dir);
+
+    let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    let expected_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+    let source_repo = init_working_repo(temp.path().join("source"));
+    let repobox_home = setup_repobox_key(temp.path(), private_key, expected_address);
+
+    write_file(&source_repo.join("README.md"), "# address-less push\n");
+    git(&source_repo, &["add", "README.md"]);
+    let commit_hash = create_signed_commit(
+        &source_repo,
+        &repobox_home,
+        expected_address,
+        "address-less initial commit",
+    );
+    git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
+
+    let repo_name = "addressless-repo";
+    let remote = format!("http://{bind}/{repo_name}.git"); // No address prefix
+    git(&source_repo, &["remote", "add", "origin", &remote]);
+    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+
+    // Repo should be created under the signer's address
+    let final_repo = data_dir.join(expected_address).join(format!("{repo_name}.git"));
+    assert!(final_repo.exists(), "repo should be created under signer's address");
+
+    // Staging area should be cleaned up
+    let staging_repo = data_dir.join("_staging").join(format!("{repo_name}.git"));
+    assert!(!staging_repo.exists(), "staging repo should be cleaned up");
+
+    // Check ownership in database
+    let db = Connection::open(data_dir.join("repobox.db")).unwrap();
+    let owner: String = db
+        .query_row(
+            "SELECT owner_address FROM repos WHERE address = ?1 AND name = ?2",
+            [expected_address, repo_name],
+            |row| row.get(0),
+        )
+        .expect("ownership record should exist");
+    
+    assert_eq!(
+        owner.to_lowercase(),
+        expected_address.to_lowercase(),
+        "owner should be the EVM address that signed the first commit"
+    );
+
+    // Should be able to clone from the full path
+    let clone_dir = temp.path().join("clone");
+    let clone_str = clone_dir.to_string_lossy().to_string();
+    let full_remote = format!("http://{bind}/{expected_address}/{repo_name}.git");
+    git_in(temp.path(), &["clone", &full_remote, &clone_str]);
+    let readme = std::fs::read_to_string(clone_dir.join("README.md")).unwrap();
+    assert_eq!(readme, "# address-less push\n");
+}
+
+#[test]
+fn addressless_push_unsigned_is_rejected() {
+    let temp = TempDir::new("repobox-server-addressless-unsigned-test").unwrap();
+    let data_dir = temp.path().join("data");
+    let bind = free_addr();
+    let _server = start_server(bind, &data_dir);
+
+    let source_repo = init_working_repo(temp.path().join("source"));
+    write_file(&source_repo.join("file.txt"), "unsigned content\n");
+    git(&source_repo, &["add", "file.txt"]);
+    git(&source_repo, &["commit", "-m", "unsigned commit"]);
+
+    let repo_name = "unsigned-addressless";
+    let remote = format!("http://{bind}/{repo_name}.git"); // No address prefix
+    git(&source_repo, &["remote", "add", "origin", &remote]);
+
+    // Push will complete from git's perspective, but server should reject it
+    let output = Command::new("git")
+        .current_dir(&source_repo)
+        .args(["push", "-u", "origin", "HEAD:refs/heads/main"])
+        .output()
+        .unwrap();
+    let _ = output;
+
+    // No repo should exist anywhere
+    let staging_repo = data_dir.join("_staging").join(format!("{repo_name}.git"));
+    assert!(!staging_repo.exists(), "staging repo should be cleaned up");
+
+    // No ownership record should exist
+    let db = Connection::open(data_dir.join("repobox.db")).unwrap();
+    let count: i64 = db
+        .query_row(
+            "SELECT COUNT(*) FROM repos WHERE name = ?1",
+            [repo_name],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 0, "unsigned address-less push should NOT create an ownership record");
+}
+
+#[test]
+fn addressless_clone_returns_404() {
+    let temp = TempDir::new("repobox-server-addressless-clone-test").unwrap();
+    let data_dir = temp.path().join("data");
+    let bind = free_addr();
+    let _server = start_server(bind, &data_dir);
+
+    // First create a repo the normal way
+    let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    let expected_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+    
+    let source_repo = init_working_repo(temp.path().join("source"));
+    let repobox_home = setup_repobox_key(temp.path(), private_key, expected_address);
+
+    write_file(&source_repo.join("README.md"), "# test repo\n");
+    git(&source_repo, &["add", "README.md"]);
+    let commit_hash = create_signed_commit(&source_repo, &repobox_home, expected_address, "initial");
+    git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
+
+    let repo_name = "clone-test";
+    let full_remote = format!("http://{bind}/{expected_address}/{repo_name}.git");
+    git(&source_repo, &["remote", "add", "origin", &full_remote]);
+    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+
+    // Try to clone using address-less URL - should fail
+    let addressless_remote = format!("http://{bind}/{repo_name}.git");
+    let clone_dir = temp.path().join("clone");
+    let clone_str = clone_dir.to_string_lossy().to_string();
+    let output = Command::new("git")
+        .current_dir(temp.path())
+        .args(["clone", &addressless_remote, &clone_str])
+        .output()
+        .unwrap();
+    
+    assert!(!output.status.success(), "address-less clone should fail");
+    assert!(!clone_dir.exists(), "clone directory should not exist after failed clone");
+}
+
+#[test]
+fn addressless_subsequent_push_to_existing_repo() {
+    let temp = TempDir::new("repobox-server-subsequent-addressless-test").unwrap();
+    let data_dir = temp.path().join("data");
+    let bind = free_addr();
+    let _server = start_server(bind, &data_dir);
+
+    let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    let expected_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+    let source_repo = init_working_repo(temp.path().join("source"));
+    let repobox_home = setup_repobox_key(temp.path(), private_key, expected_address);
+
+    // First push: address-less signed commit
+    write_file(&source_repo.join("README.md"), "# v1\n");
+    git(&source_repo, &["add", "README.md"]);
+    let commit1 = create_signed_commit(&source_repo, &repobox_home, expected_address, "first commit");
+    git(&source_repo, &["update-ref", "HEAD", &commit1]);
+
+    let repo_name = "subsequent-test";
+    let addressless_remote = format!("http://{bind}/{repo_name}.git");
+    git(&source_repo, &["remote", "add", "origin", &addressless_remote]);
+    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+
+    // Verify repo was created under signer's address
+    let final_repo = data_dir.join(expected_address).join(format!("{repo_name}.git"));
+    assert!(final_repo.exists(), "repo should exist under signer's address");
+
+    // Second push: address-less to the same repo name (should route to existing repo)
+    write_file(&source_repo.join("README.md"), "# v2 updated\n");
+    git(&source_repo, &["add", "README.md"]);
+    git(&source_repo, &["commit", "-m", "second commit"]);
+    git(&source_repo, &["push", "origin", "HEAD:refs/heads/main"]);
+
+    // Clone from full path and verify content
+    let clone_dir = temp.path().join("clone");
+    let clone_str = clone_dir.to_string_lossy().to_string();
+    let full_remote = format!("http://{bind}/{expected_address}/{repo_name}.git");
+    git_in(temp.path(), &["clone", &full_remote, &clone_str]);
+    let readme = std::fs::read_to_string(clone_dir.join("README.md")).unwrap();
+    assert_eq!(readme, "# v2 updated\n", "subsequent push should update the existing repo");
+}
+
 fn setup_repobox_key(temp_dir: &Path, private_key: &str, address: &str) -> PathBuf {
     let repobox_home = temp_dir.join("repobox-home");
     let keys_dir = repobox_home.join(".repobox").join("keys");

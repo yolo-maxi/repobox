@@ -13,6 +13,12 @@ use crate::AppState;
 
 pub(crate) fn router() -> Router<Arc<AppState>> {
     Router::new()
+        // Address-less routes (for auto-routing based on EVM signer)
+        .route("/{repo}/info/refs", get(addressless_info_refs))
+        .route("/{repo}/git-upload-pack", post(addressless_upload_pack))
+        .route("/{repo}/git-receive-pack", post(addressless_receive_pack))
+        .route("/{repo}/HEAD", get(addressless_head))
+        // Regular two-segment routes (existing functionality)
         .route("/{address}/{repo}/info/refs", get(info_refs))
         .route("/{address}/{repo}/git-upload-pack", post(upload_pack))
         .route("/{address}/{repo}/git-receive-pack", post(receive_pack))
@@ -218,4 +224,194 @@ fn internal_error(error: std::io::Error) -> Response {
 #[derive(Debug, serde::Deserialize)]
 struct InfoRefsQuery {
     service: Option<String>,
+}
+
+// Address-less route handlers
+async fn addressless_info_refs(
+    State(state): State<Arc<AppState>>,
+    Path(repo): Path<String>,
+    Query(query): Query<InfoRefsQuery>,
+    headers: HeaderMap,
+) -> Response {
+    let repo_name = match git::parse_repo(&repo) {
+        Ok(name) => name,
+        Err(status) => return status.into_response(),
+    };
+
+    let _service = match query.service.as_deref() {
+        Some("git-upload-pack") => {
+            // For clones/fetches, require the full /{address}/{repo}.git path
+            return StatusCode::NOT_FOUND.into_response();
+        }
+        Some("git-receive-pack") => query.service.unwrap(),
+        _ => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    // Check if this repo already exists under some address
+    if let Ok(Some(existing)) = db::find_repo_by_name(&state.db_path, &repo_name) {
+        // Repo exists - proxy to the existing location
+        let repo_path = RepoPath {
+            address: existing.address,
+            name: repo_name,
+        };
+        let qs = "service=git-receive-pack";
+        
+        match git::run_backend(
+            &state.data_dir,
+            BackendRequest {
+                method: "GET",
+                path_info: format!("/{}/{}.git/info/refs", repo_path.address, repo_path.name),
+                query_string: Some(qs),
+                content_type: header_value(&headers, "content-type"),
+                body: Bytes::new(),
+            },
+        ) {
+            Ok(response) => response.into_response(),
+            Err(error) => internal_error(error),
+        }
+    } else {
+        // New repo - create staging repo
+        if let Err(error) = git::ensure_staging_repo_exists(&state.data_dir, &repo_name) {
+            return internal_error(error);
+        }
+
+        let _staging_dir = git::staging_repo_dir(&state.data_dir, &repo_name);
+        let qs = "service=git-receive-pack";
+
+        match git::run_backend(
+            &state.data_dir,
+            BackendRequest {
+                method: "GET",
+                path_info: format!("/_staging/{}.git/info/refs", repo_name),
+                query_string: Some(qs),
+                content_type: header_value(&headers, "content-type"),
+                body: Bytes::new(),
+            },
+        ) {
+            Ok(response) => response.into_response(),
+            Err(error) => internal_error(error),
+        }
+    }
+}
+
+async fn addressless_upload_pack(
+    State(_state): State<Arc<AppState>>,
+    Path(_repo): Path<String>,
+    _headers: HeaderMap,
+    _body: Bytes,
+) -> Response {
+    // Clones/fetches require the full /{address}/{repo}.git path
+    StatusCode::NOT_FOUND.into_response()
+}
+
+async fn addressless_receive_pack(
+    State(state): State<Arc<AppState>>,
+    Path(repo): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let repo_name = match git::parse_repo(&repo) {
+        Ok(name) => name,
+        Err(status) => return status.into_response(),
+    };
+
+    // Check if this repo already exists under some address
+    if let Ok(Some(existing)) = db::find_repo_by_name(&state.db_path, &repo_name) {
+        // Repo exists - proxy to the existing location
+        let repo_path = RepoPath {
+            address: existing.address,
+            name: repo_name,
+        };
+        
+        backend_post(
+            &state,
+            &repo_path,
+            "/git-receive-pack",
+            header_value(&headers, "content-type"),
+            body,
+        )
+    } else {
+        // New repo - use staging area
+        if let Err(error) = git::ensure_staging_repo_exists(&state.data_dir, &repo_name) {
+            return internal_error(error);
+        }
+
+        // Process the push to staging
+        let response = match git::run_backend(
+            &state.data_dir,
+            BackendRequest {
+                method: "POST",
+                path_info: format!("/_staging/{}.git/git-receive-pack", repo_name),
+                query_string: None,
+                content_type: header_value(&headers, "content-type"),
+                body,
+            },
+        ) {
+            Ok(response) => response,
+            Err(error) => return internal_error(error),
+        };
+
+        // Extract the signer from the first commit
+        match git::extract_owner_from_staging_repo(&state.data_dir, &repo_name) {
+            Ok(Some(signer)) => {
+                // Move from staging to final location
+                if let Err(error) = git::move_repo_from_staging(&state.data_dir, &repo_name, &signer) {
+                    let _ = git::clean_staging_repo(&state.data_dir, &repo_name);
+                    return internal_error(error);
+                }
+                
+                // Record ownership in database
+                let _ = db::insert_repo_if_missing(&state.db_path, &signer, &repo_name, &signer);
+                
+                tracing::info!(
+                    repo = %format!("{}/{}", signer, repo_name),
+                    owner = %signer,
+                    "ownership established via address-less push"
+                );
+
+                response.into_response()
+            }
+            _ => {
+                // No valid signature — clean up staging repo
+                let _ = git::clean_staging_repo(&state.data_dir, &repo_name);
+                tracing::warn!(
+                    repo = %repo_name,
+                    "rejected: address-less push requires EVM-signed first commit"
+                );
+                response.into_response()
+            }
+        }
+    }
+}
+
+async fn addressless_head(
+    State(state): State<Arc<AppState>>,
+    Path(repo): Path<String>,
+) -> Response {
+    let repo_name = match git::parse_repo(&repo) {
+        Ok(name) => name,
+        Err(status) => return status.into_response(),
+    };
+
+    // Check if this repo exists under some address
+    if let Ok(Some(existing)) = db::find_repo_by_name(&state.db_path, &repo_name) {
+        let repo_path = RepoPath {
+            address: existing.address,
+            name: repo_name,
+        };
+        match git::read_head(&state.data_dir, &repo_path) {
+            Ok(head) => {
+                let mut response = head.into_response();
+                response.headers_mut().insert(
+                    axum::http::header::CONTENT_TYPE,
+                    HeaderValue::from_static("text/plain; charset=utf-8"),
+                );
+                response
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => StatusCode::NOT_FOUND.into_response(),
+            Err(error) => internal_error(error),
+        }
+    } else {
+        StatusCode::NOT_FOUND.into_response()
+    }
 }
