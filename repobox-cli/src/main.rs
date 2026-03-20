@@ -165,16 +165,22 @@ fn main() -> ExitCode {
 // ── Init ──────────────────────────────────────────────────────────────
 
 fn cmd_init(force: bool) -> ExitCode {
-    // Check we're in a git repo
+    // If not a git repo, run git init first
     let git_check = Command::new(find_real_git())
         .args(["rev-parse", "--git-dir"])
         .output();
 
-    match git_check {
-        Ok(out) if out.status.success() => {}
-        _ => {
-            eprintln!("error: not a git repository");
-            return ExitCode::FAILURE;
+    let is_git_repo = matches!(&git_check, Ok(out) if out.status.success());
+    if !is_git_repo {
+        let status = Command::new(find_real_git())
+            .arg("init")
+            .status();
+        match status {
+            Ok(s) if s.success() => {}
+            _ => {
+                eprintln!("error: failed to initialize git repository");
+                return ExitCode::FAILURE;
+            }
         }
     }
 
