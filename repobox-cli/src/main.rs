@@ -223,16 +223,22 @@ permissions:
         return ExitCode::FAILURE;
     }
 
-    // Store real git path in ~/.repobox/real-git (system-level, not per-repo)
-    let real_git = find_real_git();
+    // Run shim setup if not already done (once per machine)
     let home = home_dir();
     let repobox_home = identity::repobox_home_with_base(&home);
+    let shim_path = repobox_home.join("bin").join("git");
+    if !shim_path.exists() {
+        println!("   Setting up git shim (first time on this machine)...");
+        cmd_setup(false);
+    }
+
+    // Store real git path in ~/.repobox/real-git (system-level, not per-repo)
+    let real_git = find_real_git();
     let _ = std::fs::create_dir_all(&repobox_home);
     let _ = std::fs::write(repobox_home.join("real-git"), &real_git);
 
     println!("✅ Initialized repo.box");
     println!("   Created .repobox-config (edit to add groups and rules)");
-    println!("   Real git: {real_git}");
 
     ExitCode::SUCCESS
 }
