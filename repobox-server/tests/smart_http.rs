@@ -157,6 +157,49 @@ fn signed_push_establishes_ownership() {
     );
 }
 
+#[test]
+fn subsequent_pushes_work_after_ownership_established() {
+    let temp = TempDir::new("repobox-server-multi-push-test").unwrap();
+    let data_dir = temp.path().join("data");
+    let bind = free_addr();
+    let _server = start_server(bind, &data_dir);
+
+    let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    let expected_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+    let source_repo = init_working_repo(temp.path().join("source"));
+    let repobox_home = setup_repobox_key(temp.path(), private_key, expected_address);
+
+    // First push: signed commit establishes ownership
+    write_file(&source_repo.join("README.md"), "# v1\n");
+    git(&source_repo, &["add", "README.md"]);
+    let commit1 = create_signed_commit(&source_repo, &repobox_home, expected_address, "first commit");
+    git(&source_repo, &["update-ref", "HEAD", &commit1]);
+
+    let namespace = "0xmulti";
+    let repo_name = "incremental";
+    let remote = format!("http://{bind}/{namespace}/{repo_name}.git");
+    git(&source_repo, &["remote", "add", "origin", &remote]);
+    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+
+    // Second push: regular unsigned commit (just a normal git workflow)
+    write_file(&source_repo.join("README.md"), "# v2 — updated\n");
+    git(&source_repo, &["add", "README.md"]);
+    git(&source_repo, &["commit", "-m", "second commit (unsigned)"]);
+    git(&source_repo, &["push", "origin", "HEAD:refs/heads/main"]);
+
+    // Clone and verify we get the latest content
+    let clone_dir = temp.path().join("clone");
+    let clone_str = clone_dir.to_string_lossy().to_string();
+    git_in(temp.path(), &["clone", &remote, &clone_str]);
+    let readme = std::fs::read_to_string(clone_dir.join("README.md")).unwrap();
+    assert_eq!(readme, "# v2 — updated\n", "clone should have the latest pushed content");
+
+    // Verify git log has both commits
+    let log = git_output(&clone_dir, &["log", "--oneline"]);
+    assert!(log.lines().count() >= 2, "should have at least 2 commits, got: {log}");
+}
+
 fn setup_repobox_key(temp_dir: &Path, private_key: &str, address: &str) -> PathBuf {
     let repobox_home = temp_dir.join("repobox-home");
     let keys_dir = repobox_home.join(".repobox").join("keys");
