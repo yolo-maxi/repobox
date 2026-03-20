@@ -1,8 +1,21 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { MobileBackgroundGradient } from "./MobileBackgroundGradient";
 
 export function BackgroundCanvas() {
+  const isMobile = useIsMobile();
+
+  // On mobile, render the lightweight gradient instead
+  if (isMobile) {
+    return <MobileBackgroundGradient />;
+  }
+
+  return <DesktopCanvas />;
+}
+
+function DesktopCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
 

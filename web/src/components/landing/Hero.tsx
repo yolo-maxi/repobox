@@ -7,7 +7,7 @@ export function LandingHero() {
     <header
       style={{
         marginBottom: 0,
-        minHeight: "70vh",
+        minHeight: "clamp(60vh, 80vh, 70vh)",
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
@@ -16,9 +16,10 @@ export function LandingHero() {
       <nav
         style={{
           display: "flex",
-          gap: 16,
-          marginBottom: 24,
-          fontSize: 12,
+          gap: "clamp(12px, 3vw, 16px)",
+          marginBottom: "clamp(16px, 4vw, 24px)",
+          fontSize: "clamp(11px, 2.5vw, 12px)",
+          flexWrap: "wrap",
         }}
       >
         <Link
@@ -48,25 +49,29 @@ export function LandingHero() {
       </nav>
       <div
         className="font-mono font-bold"
-        style={{ fontSize: 56, lineHeight: 1.1, marginBottom: 24 }}
+        style={{ 
+          fontSize: "clamp(32px, 8vw, 56px)", 
+          lineHeight: 1.1, 
+          marginBottom: "clamp(16px, 4vw, 24px)" 
+        }}
       >
         repo<span className="logo-dot">.</span>box
       </div>
       <p
         style={{
-          fontSize: 18,
-          lineHeight: "28px",
+          fontSize: "clamp(16px, 4vw, 18px)",
+          lineHeight: "clamp(24px, 5vw, 28px)",
           color: "var(--bp-dim)",
           maxWidth: 500,
-          marginBottom: 48,
+          marginBottom: "clamp(32px, 6vw, 48px)",
         }}
       >
         Git permission layer that makes repositories safe for AI agents.
       </p>
       <p
         style={{
-          fontSize: 15,
-          lineHeight: "24px",
+          fontSize: "clamp(14px, 3.5vw, 15px)",
+          lineHeight: "clamp(20px, 5vw, 24px)",
           color: "#8eafc4",
           maxWidth: 560,
         }}

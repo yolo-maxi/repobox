@@ -33,7 +33,7 @@ export function LandingCTA() {
           background: "rgba(6, 14, 26, 0.85)",
           border: "1px solid var(--bp-border)",
           borderRadius: 8,
-          padding: "40px 36px",
+          padding: "clamp(24px, 6vw, 40px) clamp(20px, 5vw, 36px)",
           backdropFilter: "blur(8px)",
           WebkitBackdropFilter: "blur(8px)",
           textAlign: "center",
@@ -41,21 +41,21 @@ export function LandingCTA() {
       >
         <h2
           style={{
-            fontSize: 28,
-            lineHeight: "36px",
+            fontSize: "clamp(22px, 5vw, 28px)",
+            lineHeight: "clamp(28px, 6vw, 36px)",
             color: "var(--bp-heading)",
             fontWeight: 700,
-            marginBottom: 8,
+            marginBottom: "clamp(6px, 2vw, 8px)",
           }}
         >
           Get started
         </h2>
         <p
           style={{
-            fontSize: 14,
-            lineHeight: "22px",
+            fontSize: "clamp(13px, 3vw, 14px)",
+            lineHeight: "clamp(18px, 4vw, 22px)",
             color: "var(--bp-dim)",
-            marginBottom: 32,
+            marginBottom: "clamp(24px, 5vw, 32px)",
           }}
         >
           One command. Secure your first repo in under a minute.
@@ -68,15 +68,16 @@ export function LandingCTA() {
             background: "rgba(0, 0, 0, 0.5)",
             border: "1px solid var(--bp-border)",
             borderRadius: 8,
-            padding: "20px 24px",
+            padding: "clamp(16px, 4vw, 20px) clamp(16px, 4vw, 24px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 16,
+            gap: "clamp(12px, 3vw, 16px)",
             cursor: "pointer",
             transition: "border-color 0.2s",
-            marginBottom: 28,
+            marginBottom: "clamp(20px, 5vw, 28px)",
           }}
+          className="cta-command-box"
         >
           <div
             style={{

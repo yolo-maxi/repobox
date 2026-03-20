@@ -15,10 +15,16 @@ export default function Home() {
     <>
       <RegMarks />
       <div
-        style={{ maxWidth: 720, margin: "0 auto", position: "relative", zIndex: 2, padding: "80px 40px 100px" }}
+        style={{ 
+          maxWidth: 720, 
+          margin: "0 auto", 
+          position: "relative", 
+          zIndex: 2, 
+          padding: "clamp(20px, 8vw, 80px) clamp(20px, 5vw, 40px) 100px" 
+        }}
       >
         <LandingHero />
-        <div style={{ height: 80 }} />
+        <div style={{ height: "clamp(40px, 10vw, 80px)" }} />
         <LandingProjects />
         <LandingShippedToday />
         <LandingCaseStudies />

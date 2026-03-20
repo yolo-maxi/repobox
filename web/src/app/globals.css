@@ -201,6 +201,14 @@ a:hover {
   }
 }
 
+/* Mobile responsive for CTA and other landing components */
+@media (max-width: 768px) {
+  .cta-command-box {
+    flex-direction: column !important;
+    text-align: left !important;
+  }
+}
+
 /* Hide scrollbar on horizontal card row */
 div[style*="scroll-snap-type"]::-webkit-scrollbar {
   display: none;
