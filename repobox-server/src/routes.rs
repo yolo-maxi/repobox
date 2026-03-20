@@ -103,13 +103,28 @@ async fn receive_pack(
         return internal_error(error);
     }
 
-    backend_post(
+    let response = backend_post(
         &state,
         &repo,
         "/git-receive-pack",
         header_value(&headers, "content-type"),
         body,
-    )
+    );
+
+    // After a successful push, check if this repo needs an owner.
+    // Ownership is established by the EVM signature on the first commit.
+    if let Ok(None) = db::get_repo(&state.db_path, &repo.address, &repo.name) {
+        if let Ok(Some(signer)) = git::extract_owner_from_first_commit(&state.data_dir, &repo) {
+            let _ = db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
+            tracing::info!(
+                repo = %format!("{}/{}", repo.address, repo.name),
+                owner = %signer,
+                "ownership established via signed commit"
+            );
+        }
+    }
+
+    response
 }
 
 async fn head(
@@ -164,10 +179,9 @@ fn repo_path(address: String, repo: String) -> Result<RepoPath, StatusCode> {
 }
 
 fn ensure_repo_initialized(state: &AppState, repo: &RepoPath) -> std::io::Result<()> {
-    let created = git::ensure_repo_exists(&state.data_dir, repo)?;
-    if created {
-        db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &repo.address)?;
-    }
+    // Just ensure the bare repo exists — ownership is established
+    // after push via the EVM signature on the first commit.
+    let _created = git::ensure_repo_exists(&state.data_dir, repo)?;
     Ok(())
 }
 

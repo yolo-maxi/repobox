@@ -49,32 +49,122 @@ fn repo_creation_on_first_push_and_clone_after_push() {
 }
 
 #[test]
-fn sqlite_ownership_record_is_created() {
-    let temp = TempDir::new("repobox-server-db-test").unwrap();
+fn unsigned_push_does_not_create_ownership() {
+    let temp = TempDir::new("repobox-server-unsigned-test").unwrap();
     let data_dir = temp.path().join("data");
     let address = "0xfeedbeef";
-    let repo_name = "owners";
+    let repo_name = "unsigned";
     let bind = free_addr();
     let _server = start_server(bind, &data_dir);
 
     let source_repo = init_working_repo(temp.path().join("source"));
-    write_file(&source_repo.join("owned.txt"), "owned\n");
-    git(&source_repo, &["add", "owned.txt"]);
-    git(&source_repo, &["commit", "-m", "ownership"]);
+    write_file(&source_repo.join("file.txt"), "unsigned\n");
+    git(&source_repo, &["add", "file.txt"]);
+    git(&source_repo, &["commit", "-m", "unsigned commit"]);
 
     let remote = format!("http://{bind}/{address}/{repo_name}.git");
     git(&source_repo, &["remote", "add", "origin", &remote]);
     git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
 
+    // Repo should exist on disk but NOT have an ownership record
+    let bare_repo = data_dir.join(address).join(format!("{repo_name}.git"));
+    assert!(bare_repo.exists(), "bare repo should be created");
+
     let db = Connection::open(data_dir.join("repobox.db")).unwrap();
-    let row = db
+    let count: i64 = db
         .query_row(
-            "SELECT owner_address FROM repos WHERE address = ?1 AND name = ?2",
+            "SELECT COUNT(*) FROM repos WHERE address = ?1 AND name = ?2",
             [address, repo_name],
-            |row| row.get::<_, String>(0),
+            |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(row, address);
+    assert_eq!(count, 0, "unsigned push should NOT create an ownership record");
+}
+
+#[test]
+fn signed_push_establishes_ownership() {
+    let temp = TempDir::new("repobox-server-signed-test").unwrap();
+    let data_dir = temp.path().join("data");
+    let bind = free_addr();
+    let _server = start_server(bind, &data_dir);
+
+    // Known test key (Hardhat account #0)
+    let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    let expected_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+    let source_repo = init_working_repo(temp.path().join("source"));
+
+    // Set up repobox key for signing
+    let repobox_home = temp.path().join("repobox-home");
+    let keys_dir = repobox_home.join(".repobox").join("keys");
+    std::fs::create_dir_all(&keys_dir).unwrap();
+    write_file(
+        &keys_dir.join(format!("{expected_address}.key")),
+        &format!("0x{private_key}"),
+    );
+
+    // Create a signing script that uses repobox-cli (or we can sign manually)
+    // For the test, we'll create a signed commit manually using git commit-tree
+    write_file(&source_repo.join("README.md"), "# signed repo\n");
+    git(&source_repo, &["add", "README.md"]);
+
+    // Create the commit object manually with a signature
+    let tree_hash = git_output(&source_repo, &["write-tree"]);
+
+    // Build the commit content (without signature) — this is what gets signed
+    let commit_content = format!(
+        "tree {tree_hash}\n\
+         author Test <test@test.com> 1234567890 +0000\n\
+         committer Test <test@test.com> 1234567890 +0000\n\
+         \n\
+         signed initial commit\n"
+    );
+
+    // Sign the commit content using repobox-core
+    let sig = repobox::signing::sign(
+        &repobox_home,
+        expected_address,
+        commit_content.as_bytes(),
+    )
+    .expect("signing should succeed");
+    let sig_hex = hex::encode(&sig);
+
+    // Build the full commit with gpgsig header
+    let signed_commit = format!(
+        "tree {tree_hash}\n\
+         author Test <test@test.com> 1234567890 +0000\n\
+         committer Test <test@test.com> 1234567890 +0000\n\
+         gpgsig {sig_hex}\n\
+         \n\
+         signed initial commit\n"
+    );
+
+    // Write the commit object via git hash-object
+    let commit_hash = git_output_stdin(&source_repo, &["hash-object", "-t", "commit", "-w", "--stdin"], &signed_commit);
+    // Update the branch ref to point to this commit
+    git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
+
+    let namespace = expected_address;
+    let repo_name = "signed-repo";
+    let remote = format!("http://{bind}/{namespace}/{repo_name}.git");
+    git(&source_repo, &["remote", "add", "origin", &remote]);
+    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+
+    // Check ownership in SQLite
+    let db = Connection::open(data_dir.join("repobox.db")).unwrap();
+    let owner: String = db
+        .query_row(
+            "SELECT owner_address FROM repos WHERE address = ?1 AND name = ?2",
+            [namespace, repo_name],
+            |row| row.get(0),
+        )
+        .expect("ownership record should exist");
+
+    assert_eq!(
+        owner.to_lowercase(),
+        expected_address.to_lowercase(),
+        "owner should be the EVM address that signed the first commit"
+    );
 }
 
 fn start_server(bind: SocketAddr, data_dir: &Path) -> ServerGuard {
@@ -82,7 +172,7 @@ fn start_server(bind: SocketAddr, data_dir: &Path) -> ServerGuard {
     let child = Command::new(env!("CARGO_BIN_EXE_repobox-server"))
         .args(["--bind", &bind.to_string(), "--data-dir", data_dir.to_string_lossy().as_ref()])
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
 
@@ -116,6 +206,42 @@ fn git_in(cwd: &Path, args: &[&str]) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn git_output(repo: &Path, args: &[&str]) -> String {
+    let output = Command::new("git").current_dir(repo).args(args).output().unwrap();
+    assert!(
+        output.status.success(),
+        "git {:?} failed: {}",
+        args,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+fn git_output_stdin(repo: &Path, args: &[&str], stdin_data: &str) -> String {
+    let mut child = Command::new("git")
+        .current_dir(repo)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    if let Some(stdin) = child.stdin.as_mut() {
+        use std::io::Write;
+        stdin.write_all(stdin_data.as_bytes()).unwrap();
+    }
+
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "git {:?} failed: {}",
+        args,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
 fn free_addr() -> SocketAddr {

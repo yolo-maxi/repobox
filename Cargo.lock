@@ -1312,7 +1312,9 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
+ "hex",
  "http",
+ "repobox-core",
  "reqwest",
  "rusqlite",
  "serde",

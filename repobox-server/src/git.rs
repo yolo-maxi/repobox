@@ -79,6 +79,120 @@ pub(crate) fn read_head(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Str
     std::fs::read_to_string(repo_dir(data_dir, repo).join("HEAD"))
 }
 
+/// Extract the EVM signer address from the first signed commit in a repo.
+/// Walks the default branch (HEAD) and finds the root commit.
+/// If the root commit has an EVM signature (65-byte gpgsig), recovers the signer address.
+/// Returns None if no signed commits are found.
+pub(crate) fn extract_owner_from_first_commit(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Option<String>> {
+    let repo_dir = repo_dir(data_dir, repo);
+    let repo_dir_str = repo_dir.to_string_lossy().to_string();
+
+    // Get the root commit (first commit in history)
+    let output = Command::new("git")
+        .args(["--git-dir", &repo_dir_str, "rev-list", "--max-parents=0", "HEAD"])
+        .output()?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let root_hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if root_hash.is_empty() {
+        return Ok(None);
+    }
+
+    // Get the raw commit object to extract the gpgsig
+    let output = Command::new("git")
+        .args(["--git-dir", &repo_dir_str, "cat-file", "commit", &root_hash])
+        .output()?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let commit_text = String::from_utf8_lossy(&output.stdout);
+    extract_signer_from_commit_text(&commit_text)
+}
+
+/// Parse a raw commit object and extract the EVM signer address from the gpgsig header.
+/// The gpgsig is a hex-encoded 65-byte recoverable ECDSA signature.
+/// The signed data is the commit content WITHOUT the gpgsig header.
+fn extract_signer_from_commit_text(commit_text: &str) -> std::io::Result<Option<String>> {
+    // Extract the gpgsig header value
+    let sig_hex = match extract_gpgsig(commit_text) {
+        Some(s) => s,
+        None => return Ok(None),
+    };
+
+    let sig_bytes = hex::decode(&sig_hex).map_err(|e| {
+        std::io::Error::other(format!("invalid gpgsig hex: {e}"))
+    })?;
+
+    if sig_bytes.len() != 65 {
+        return Ok(None); // Not a repobox EVM signature
+    }
+
+    // Reconstruct the commit content without the gpgsig header (that's what was signed)
+    let signed_data = strip_gpgsig(commit_text);
+
+    match repobox::signing::recover_address(signed_data.as_bytes(), &sig_bytes) {
+        Ok(address) => Ok(Some(address)),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Extract the gpgsig value from a raw commit object.
+/// Git stores it as a multi-line header with continuation lines starting with a space.
+fn extract_gpgsig(commit_text: &str) -> Option<String> {
+    let mut in_gpgsig = false;
+    let mut sig_lines = Vec::new();
+
+    for line in commit_text.lines() {
+        if line.starts_with("gpgsig ") {
+            in_gpgsig = true;
+            sig_lines.push(line.strip_prefix("gpgsig ").unwrap().trim());
+        } else if in_gpgsig && line.starts_with(' ') {
+            sig_lines.push(line.trim());
+        } else if in_gpgsig {
+            break;
+        }
+    }
+
+    if sig_lines.is_empty() {
+        return None;
+    }
+
+    // Join and clean — for our EVM sigs this should be a single hex string
+    let combined: String = sig_lines.join("");
+    Some(combined.trim().to_string())
+}
+
+/// Strip the gpgsig header from a commit to reconstruct the signed content.
+fn strip_gpgsig(commit_text: &str) -> String {
+    let mut result = String::new();
+    let mut in_gpgsig = false;
+
+    for line in commit_text.lines() {
+        if line.starts_with("gpgsig ") {
+            in_gpgsig = true;
+            continue;
+        }
+        if in_gpgsig && line.starts_with(' ') {
+            continue;
+        }
+        in_gpgsig = false;
+        result.push_str(line);
+        result.push('\n');
+    }
+
+    // Remove trailing newline if the original didn't have one
+    if !commit_text.ends_with('\n') && result.ends_with('\n') {
+        result.pop();
+    }
+
+    result
+}
+
 pub(crate) fn run_backend(
     data_dir: &Path,
     request: BackendRequest<'_>,
@@ -203,4 +317,59 @@ fn is_safe_segment(segment: &str) -> bool {
         && segment
             .bytes()
             .all(|byte| matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b':' ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_gpgsig() {
+        let commit = "tree abc123\n\
+                       author Test <test@test.com> 1234567890 +0000\n\
+                       committer Test <test@test.com> 1234567890 +0000\n\
+                       gpgsig deadbeef01\n\
+                       \n\
+                       initial commit\n";
+        let sig = extract_gpgsig(commit);
+        assert_eq!(sig, Some("deadbeef01".to_string()));
+    }
+
+    #[test]
+    fn test_extract_gpgsig_multiline() {
+        let commit = "tree abc123\n\
+                       author Test <test@test.com> 1234567890 +0000\n\
+                       committer Test <test@test.com> 1234567890 +0000\n\
+                       gpgsig aabb\n \
+                       ccdd\n\
+                       \n\
+                       initial commit\n";
+        let sig = extract_gpgsig(commit);
+        assert_eq!(sig, Some("aabbccdd".to_string()));
+    }
+
+    #[test]
+    fn test_extract_gpgsig_none() {
+        let commit = "tree abc123\n\
+                       author Test <test@test.com> 1234567890 +0000\n\
+                       committer Test <test@test.com> 1234567890 +0000\n\
+                       \n\
+                       unsigned commit\n";
+        let sig = extract_gpgsig(commit);
+        assert_eq!(sig, None);
+    }
+
+    #[test]
+    fn test_strip_gpgsig() {
+        let commit = "tree abc123\n\
+                       author Test <test@test.com> 1234567890 +0000\n\
+                       committer Test <test@test.com> 1234567890 +0000\n\
+                       gpgsig deadbeef01\n\
+                       \n\
+                       initial commit\n";
+        let stripped = strip_gpgsig(commit);
+        assert!(!stripped.contains("gpgsig"));
+        assert!(stripped.contains("tree abc123"));
+        assert!(stripped.contains("initial commit"));
+    }
 }

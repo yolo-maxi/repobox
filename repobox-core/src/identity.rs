@@ -60,6 +60,12 @@ pub fn derive_address(private_key_hex: &str) -> Result<String, ConfigError> {
     Ok(eip55_checksum(&address))
 }
 
+/// EIP-55 checksum from raw address bytes (20 bytes).
+pub fn eip55_checksum_bytes(address_bytes: &[u8]) -> String {
+    let addr_hex = hex::encode(address_bytes);
+    eip55_checksum(&format!("0x{addr_hex}"))
+}
+
 /// EIP-55 mixed-case checksum encoding.
 fn eip55_checksum(address: &str) -> String {
     let addr = address.strip_prefix("0x").unwrap_or(address).to_lowercase();

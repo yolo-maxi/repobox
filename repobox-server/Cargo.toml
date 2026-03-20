@@ -11,7 +11,9 @@ path = "src/main.rs"
 [dependencies]
 axum = "0.8"
 clap = { version = "4", features = ["derive"] }
+hex = "0.4"
 http = "1"
+repobox = { package = "repobox-core", path = "../repobox-core" }
 serde = { version = "1", features = ["derive"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 tokio = { version = "1", features = ["full"] }
@@ -20,6 +22,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 [dev-dependencies]
+hex = "0.4"
+repobox = { package = "repobox-core", path = "../repobox-core" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 tempdir = "0.3"

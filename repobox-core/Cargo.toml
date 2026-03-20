@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 hex = "0.4"
-k256 = { version = "0.13", features = ["ecdsa"] }
+k256 = { version = "0.13", features = ["ecdsa", "ecdsa-core"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 sha3 = "0.10"
