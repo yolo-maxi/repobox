@@ -173,6 +173,17 @@ fn main() -> ExitCode {
         return cmd_shim(&args, &home);
     }
 
+    // GPG program mode: git calls us with args like:
+    //   repobox --status-fd=2 -bsau <signing-key>
+    //   repobox --status-fd=2 --verify <sig-file> -
+    let raw_args: Vec<String> = std::env::args().skip(1).collect();
+    if is_gpg_sign_args(&raw_args) {
+        return cmd_gpg_sign(&raw_args);
+    }
+    if is_gpg_verify_args(&raw_args) {
+        return cmd_gpg_verify(&raw_args);
+    }
+
     // Normal CLI mode
     let cli = Cli::parse();
     let home = home_dir();
@@ -251,8 +262,22 @@ fn cmd_init(force: bool) -> ExitCode {
     let _ = std::fs::create_dir_all(&repobox_home);
     let _ = std::fs::write(repobox_home.join("real-git"), &real_git);
 
+    // Configure git to use repobox as gpg.program for signing
+    let our_binary = std::env::current_exe()
+        .unwrap_or_else(|_| PathBuf::from("repobox"));
+    let our_binary_str = our_binary.to_string_lossy().to_string();
+
+    let _ = Command::new(&real_git)
+        .args(["config", "--local", "gpg.program", &our_binary_str])
+        .output();
+    let _ = Command::new(&real_git)
+        .args(["config", "--local", "commit.gpgsign", "true"])
+        .output();
+
     println!("✅ Initialized repo.box");
     println!("   Created .repobox/config.yml (edit to add groups and rules)");
+    println!("   Configured git to sign commits with repobox (gpg.program)");
+    println!("   Every `git commit` will now be EVM-signed automatically.");
 
     ExitCode::SUCCESS
 }
@@ -1175,6 +1200,186 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
             }
         }
     }
+}
+
+// ── GPG Program Mode ──────────────────────────────────────────────────
+
+/// Detect if args match git's gpg.program signing invocation:
+/// --status-fd=N -bsau <key>  or  -bsau <key> --status-fd=N
+fn is_gpg_sign_args(args: &[String]) -> bool {
+    args.iter().any(|a| a.starts_with("-bsau") || a == "-bsau")
+}
+
+/// Detect if args match git's gpg.program verify invocation:
+/// --status-fd=N --verify <sig-file> -
+fn is_gpg_verify_args(args: &[String]) -> bool {
+    args.iter().any(|a| a == "--verify")
+}
+
+/// Handle gpg.program --sign mode: read commit/tag content from stdin, sign it, write sig to stdout
+fn cmd_gpg_sign(args: &[String]) -> ExitCode {
+    use std::io::Read;
+
+    let home = home_dir();
+
+    // Extract the signing key (address) from -bsau <key> or -bsau<key>
+    let address = extract_gpg_key(args);
+    let address = match address {
+        Some(a) => a,
+        None => {
+            // Fall back to identity from git config or ~/.repobox/identity
+            match read_identity_from_git_config()
+                .or_else(|| identity::get_identity(&home).ok().flatten())
+            {
+                Some(id) => id.address.clone(),
+                None => {
+                    eprintln!("error: no signing key specified and no repobox identity set");
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
+    };
+
+    // Read data from stdin
+    let mut data = Vec::new();
+    if let Err(e) = std::io::stdin().read_to_end(&mut data) {
+        eprintln!("error reading stdin: {e}");
+        return ExitCode::FAILURE;
+    }
+
+    // Sign
+    match repobox::signing::handle_gpg_sign(None, &data, &home, &address) {
+        Ok(sig) => {
+            use std::io::Write;
+
+            // Write status to fd 2 (stderr) — git expects [GNUPG:] markers
+            let status_fd = extract_status_fd(args);
+            if status_fd == Some(2) || status_fd.is_none() {
+                eprintln!("[GNUPG:] SIG_CREATED D 1 0 00 {} 0 10 {address}", chrono_timestamp());
+                eprintln!("[GNUPG:] BEGIN_SIGNING");
+            }
+
+            // Write the signature to stdout in a block format that git can parse.
+            // Git expects multi-line output (like PGP armor) so it properly
+            // inserts the gpgsig header with continuation lines.
+            let sig_hex = hex::encode(&sig);
+            let output = format!(
+                "-----BEGIN REPOBOX SIGNATURE-----\n{sig_hex}\n-----END REPOBOX SIGNATURE-----\n"
+            );
+            std::io::stdout().write_all(output.as_bytes()).unwrap();
+            std::io::stdout().flush().unwrap();
+
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error signing: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Handle gpg.program --verify mode
+fn cmd_gpg_verify(args: &[String]) -> ExitCode {
+    use std::io::Read;
+
+    // --verify <sig-file> - (or --verify <sig-file> <data-file>)
+    let sig_file = args.iter()
+        .skip_while(|a| *a != "--verify")
+        .nth(1)
+        .cloned();
+
+    let sig_file = match sig_file {
+        Some(f) => f,
+        None => {
+            eprintln!("error: missing signature file for --verify");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Read signature from file
+    let sig_hex = match std::fs::read_to_string(&sig_file) {
+        Ok(s) => s.trim().to_string(),
+        Err(e) => {
+            eprintln!("error reading signature file: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let sig_bytes = match hex::decode(&sig_hex) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("error decoding signature: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Read data from stdin or the second file arg
+    let data_source = args.iter()
+        .skip_while(|a| *a != "--verify")
+        .nth(2)
+        .cloned();
+
+    let data = if data_source.as_deref() == Some("-") || data_source.is_none() {
+        let mut buf = Vec::new();
+        std::io::stdin().read_to_end(&mut buf).unwrap_or_default();
+        buf
+    } else {
+        std::fs::read(data_source.as_ref().unwrap()).unwrap_or_default()
+    };
+
+    // Extract signer address — identity from git config, or try all known addresses
+    let address = read_identity_from_git_config()
+        .map(|id| id.address.clone())
+        .unwrap_or_default();
+
+    match repobox::signing::handle_gpg_verify(&data, &sig_bytes, &address) {
+        Ok(msg) => {
+            eprintln!("[GNUPG:] GOODSIG {address} {address}");
+            eprintln!("{msg}");
+            ExitCode::SUCCESS
+        }
+        Err(_) => {
+            eprintln!("[GNUPG:] BADSIG {address}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn extract_gpg_key(args: &[String]) -> Option<String> {
+    let raw = 'outer: {
+        for (i, arg) in args.iter().enumerate() {
+            // -bsau <key> (separate arg)
+            if arg == "-bsau" {
+                break 'outer args.get(i + 1).cloned();
+            }
+            // -bsau<key> (merged)
+            if let Some(key) = arg.strip_prefix("-bsau") {
+                if !key.is_empty() {
+                    break 'outer Some(key.to_string());
+                }
+            }
+        }
+        None
+    };
+
+    // Strip "evm:" prefix if present (user.signingkey stores "evm:0x...")
+    raw.map(|k| k.strip_prefix("evm:").unwrap_or(&k).to_string())
+}
+
+fn extract_status_fd(args: &[String]) -> Option<i32> {
+    for arg in args {
+        if let Some(fd) = arg.strip_prefix("--status-fd=") {
+            return fd.parse().ok();
+        }
+    }
+    None
+}
+
+fn chrono_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────

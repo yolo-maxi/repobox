@@ -303,7 +303,19 @@ fn extract_gpgsig(commit_text: &str) -> Option<String> {
 
     // Join and clean — for our EVM sigs this should be a single hex string
     let combined: String = sig_lines.join("");
-    Some(combined.trim().to_string())
+    let combined = combined.trim().to_string();
+    
+    // Strip REPOBOX SIGNATURE armor if present
+    let combined = combined
+        .replace("-----BEGIN REPOBOX SIGNATURE-----", "")
+        .replace("-----END REPOBOX SIGNATURE-----", "")
+        .trim()
+        .to_string();
+    
+    if combined.is_empty() {
+        return None;
+    }
+    Some(combined)
 }
 
 /// Strip the gpgsig header from a commit to reconstruct the signed content.
