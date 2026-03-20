@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::config::*;
 use crate::parser::resolve_group_members;
+use crate::resolver::RemoteResolver;
 
 /// Result of a permission check.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,7 +29,7 @@ impl CheckResult {
     }
 }
 
-/// Evaluate a permission check against the config.
+/// Evaluate a permission check against the config (static groups only).
 pub fn check(
     config: &Config,
     identity: &Identity,
@@ -36,7 +37,19 @@ pub fn check(
     branch: Option<&str>,
     path: Option<&str>,
 ) -> CheckResult {
-    // Build resolved group membership map
+    check_with_resolver(config, identity, verb, branch, path, None)
+}
+
+/// Evaluate a permission check, optionally using remote resolvers.
+pub fn check_with_resolver(
+    config: &Config,
+    identity: &Identity,
+    verb: Verb,
+    branch: Option<&str>,
+    path: Option<&str>,
+    resolver: Option<&RemoteResolver>,
+) -> CheckResult {
+    // Build resolved group membership map (static)
     let resolved_groups = resolve_all_groups(&config.groups);
 
     // Collect rules that match this verb AND whose target matches
@@ -56,7 +69,7 @@ pub fn check(
 
     // Walk top-to-bottom, find first rule where subject matches
     for rule in &matching_rules {
-        if rule.subject.matches(identity, &resolved_groups) {
+        if subject_matches_with_resolver(&rule.subject, identity, &resolved_groups, &config.groups, resolver) {
             if rule.deny {
                 return CheckResult::Deny {
                     rule_line: rule.line,
@@ -72,6 +85,53 @@ pub fn check(
 
     // Rules exist but none matched this identity → implicit deny
     CheckResult::ImplicitDeny { verb }
+}
+
+/// Check if a subject matches an identity, considering both static and remote resolvers.
+fn subject_matches_with_resolver(
+    subject: &Subject,
+    identity: &Identity,
+    resolved_static: &HashMap<String, Vec<Identity>>,
+    groups: &HashMap<String, Group>,
+    resolver: Option<&RemoteResolver>,
+) -> bool {
+    // First check static membership (fast path)
+    if subject.matches(identity, resolved_static) {
+        return true;
+    }
+
+    // If no remote resolver, static check is final
+    let resolver = match resolver {
+        Some(r) => r,
+        None => return false,
+    };
+
+    // For group subjects, check if the group (or any included group) has a resolver
+    match subject {
+        Subject::All => true, // Already handled by static matches
+        Subject::Identity(_) => false, // Already handled by static matches
+        Subject::Group(name) => {
+            // Check this group's resolver
+            if let Some(group) = groups.get(name) {
+                if let Some(is_member) = resolver.check_membership(group, identity) {
+                    if is_member {
+                        return true;
+                    }
+                }
+                // Check included groups' resolvers recursively
+                for inc in &group.includes {
+                    if let Some(inc_group) = groups.get(inc) {
+                        if let Some(is_member) = resolver.check_membership(inc_group, identity) {
+                            if is_member {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            false
+        }
+    }
 }
 
 /// Resolve all groups to their full member lists (following includes).

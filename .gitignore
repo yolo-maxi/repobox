@@ -4,3 +4,7 @@
 # Added by cargo
 
 /target
+repobox-landing/
+repobox-dashboard/
+repobox-blog/
+repobox-api/

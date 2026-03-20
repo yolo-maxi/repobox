@@ -7,12 +7,30 @@ pub struct Config {
     pub permissions: Permissions,
 }
 
-/// A named group with members and optional includes.
+/// A named group with members, optional includes, and optional resolver.
 #[derive(Debug, Clone)]
 pub struct Group {
     pub name: String,
     pub members: Vec<Identity>,
     pub includes: Vec<String>,
+    pub resolver: Option<GroupResolver>,
+}
+
+/// Remote group resolver — checks membership dynamically.
+#[derive(Debug, Clone)]
+pub enum GroupResolver {
+    /// HTTP endpoint: GET <url>/members/<address> → { "member": true/false }
+    Http {
+        url: String,
+        cache_ttl: u64, // seconds, 0 = no cache
+    },
+    /// On-chain: calls function(address) → bool via server proxy
+    Onchain {
+        chain: u64,
+        contract: String,
+        function: String,
+        cache_ttl: u64,
+    },
 }
 
 /// An EVM identity.

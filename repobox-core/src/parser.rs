@@ -13,13 +13,21 @@ struct RawConfig {
     permissions: Option<RawPermissions>,
 }
 
-/// A group can be either:
-///   - A plain list: `founders: [evm:0xAAA...]` (simple form)
-///   - A mapping: `founders: { members: [...], includes: [...] }` (full form)
+/// A group can be:
+///   - A plain list: `founders: [evm:0xAAA..., other-group]` (static)
+///   - A mapping with `members`/`includes`: `founders: { members: [...] }` (static)
+///   - A mapping with `resolver`: (dynamic — http or onchain)
 #[derive(Debug)]
 struct RawGroup {
     members: Vec<String>,
     includes: Vec<String>,
+    resolver: Option<RawResolver>,
+}
+
+#[derive(Debug)]
+enum RawResolver {
+    Http { url: String, cache_ttl: u64 },
+    Onchain { chain: u64, contract: String, function: String, cache_ttl: u64 },
 }
 
 impl<'de> Deserialize<'de> for RawGroup {
@@ -29,15 +37,7 @@ impl<'de> Deserialize<'de> for RawGroup {
     {
         use serde::de;
 
-        #[derive(Deserialize)]
-        struct FullGroup {
-            #[serde(default)]
-            members: Vec<String>,
-            #[serde(default)]
-            includes: Vec<String>,
-        }
-
-        // Try as sequence first (simple form), then as mapping (full form)
+        // Try as sequence first (simple form), then as mapping
         let value = serde_yaml::Value::deserialize(deserializer)?;
         match &value {
             serde_yaml::Value::Sequence(seq) => {
@@ -50,23 +50,69 @@ impl<'de> Deserialize<'de> for RawGroup {
                     if s.starts_with("evm:") {
                         members.push(s.to_string());
                     } else {
-                        // Bare word or group: prefix = group include
                         let name = s.strip_prefix("group:").unwrap_or(s);
                         includes.push(name.to_string());
                     }
                 }
-                Ok(RawGroup { members, includes })
+                Ok(RawGroup { members, includes, resolver: None })
             }
-            serde_yaml::Value::Mapping(_) => {
-                let full: FullGroup =
-                    serde_yaml::from_value(value).map_err(de::Error::custom)?;
-                Ok(RawGroup {
-                    members: full.members,
-                    includes: full.includes,
-                })
+            serde_yaml::Value::Mapping(map) => {
+                // Check if this is a resolver group
+                if let Some(resolver_val) = map.get(&serde_yaml::Value::String("resolver".into())) {
+                    let resolver_type = resolver_val.as_str()
+                        .ok_or_else(|| de::Error::custom("resolver must be a string"))?;
+
+                    let get_str = |key: &str| -> Result<String, D::Error> {
+                        map.get(&serde_yaml::Value::String(key.into()))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .ok_or_else(|| de::Error::custom(format!("resolver requires '{key}' field")))
+                    };
+                    let get_u64 = |key: &str, default: u64| -> u64 {
+                        map.get(&serde_yaml::Value::String(key.into()))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(default)
+                    };
+
+                    let resolver = match resolver_type {
+                        "http" => {
+                            let url = get_str("url")?;
+                            let cache_ttl = get_u64("cache_ttl", 300);
+                            RawResolver::Http { url, cache_ttl }
+                        }
+                        "onchain" => {
+                            let chain = map.get(&serde_yaml::Value::String("chain".into()))
+                                .and_then(|v| v.as_u64())
+                                .ok_or_else(|| de::Error::custom("onchain resolver requires 'chain' field"))?;
+                            let contract = get_str("contract")?;
+                            let function = get_str("function").unwrap_or_else(|_| "isMember".to_string());
+                            let cache_ttl = get_u64("cache_ttl", 300);
+                            RawResolver::Onchain { chain, contract, function, cache_ttl }
+                        }
+                        other => return Err(de::Error::custom(format!("unknown resolver type: '{other}' (expected 'http' or 'onchain')"))),
+                    };
+
+                    Ok(RawGroup { members: vec![], includes: vec![], resolver: Some(resolver) })
+                } else {
+                    // Static group with members/includes mapping
+                    #[derive(Deserialize)]
+                    struct FullGroup {
+                        #[serde(default)]
+                        members: Vec<String>,
+                        #[serde(default)]
+                        includes: Vec<String>,
+                    }
+                    let full: FullGroup =
+                        serde_yaml::from_value(value).map_err(de::Error::custom)?;
+                    Ok(RawGroup {
+                        members: full.members,
+                        includes: full.includes,
+                        resolver: None,
+                    })
+                }
             }
             _ => Err(de::Error::custom(
-                "group must be a list of members or a mapping with 'members' key",
+                "group must be a list, a mapping with members, or a resolver config",
             )),
         }
     }
@@ -101,12 +147,27 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
             .map(|s| Identity::parse(s))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let resolver = match &raw_group.resolver {
+            Some(RawResolver::Http { url, cache_ttl }) => Some(GroupResolver::Http {
+                url: url.clone(),
+                cache_ttl: *cache_ttl,
+            }),
+            Some(RawResolver::Onchain { chain, contract, function, cache_ttl }) => Some(GroupResolver::Onchain {
+                chain: *chain,
+                contract: contract.clone(),
+                function: function.clone(),
+                cache_ttl: *cache_ttl,
+            }),
+            None => None,
+        };
+
         groups.insert(
             name.clone(),
             Group {
                 name: name.clone(),
                 members,
                 includes: raw_group.includes.clone(),
+                resolver,
             },
         );
     }
@@ -1200,5 +1261,151 @@ permissions:
         assert!(engine::check(&config, &founder, Verb::Push, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Merge, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Edit, Some("main"), Some("f.txt")).is_allowed());
+    }
+
+    // ========== Remote resolver group parsing ==========
+
+    #[test]
+    fn test_http_resolver_group() {
+        let yaml = r#"
+groups:
+  company:
+    resolver: http
+    url: https://api.example.com/groups/company
+    cache_ttl: 60
+permissions:
+  default: allow
+  rules:
+    - company push >*
+"#;
+        let config = parse(yaml).unwrap();
+        let group = &config.groups["company"];
+        assert!(group.members.is_empty());
+        assert!(group.includes.is_empty());
+        match &group.resolver {
+            Some(GroupResolver::Http { url, cache_ttl }) => {
+                assert_eq!(url, "https://api.example.com/groups/company");
+                assert_eq!(*cache_ttl, 60);
+            }
+            other => panic!("expected Http resolver, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_onchain_resolver_group() {
+        let yaml = r#"
+groups:
+  holders:
+    resolver: onchain
+    chain: 8453
+    contract: "0xDDD0000000000000000000000000000000000004"
+    function: isMember
+    cache_ttl: 300
+permissions:
+  default: allow
+  rules:
+    - holders push >*
+"#;
+        let config = parse(yaml).unwrap();
+        let group = &config.groups["holders"];
+        match &group.resolver {
+            Some(GroupResolver::Onchain { chain, contract, function, cache_ttl }) => {
+                assert_eq!(*chain, 8453);
+                assert_eq!(contract, "0xDDD0000000000000000000000000000000000004");
+                assert_eq!(function, "isMember");
+                assert_eq!(*cache_ttl, 300);
+            }
+            other => panic!("expected Onchain resolver, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_onchain_default_function_and_ttl() {
+        let yaml = r#"
+groups:
+  holders:
+    resolver: onchain
+    chain: 1
+    contract: "0xDDD0000000000000000000000000000000000004"
+permissions:
+  default: allow
+  rules: []
+"#;
+        let config = parse(yaml).unwrap();
+        match &config.groups["holders"].resolver {
+            Some(GroupResolver::Onchain { function, cache_ttl, .. }) => {
+                assert_eq!(function, "isMember"); // default
+                assert_eq!(*cache_ttl, 300); // default
+            }
+            other => panic!("expected Onchain resolver, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_hybrid_via_composition() {
+        let yaml = r#"
+groups:
+  token-holders:
+    resolver: onchain
+    chain: 8453
+    contract: "0xDDD0000000000000000000000000000000000004"
+    function: isMember
+  company:
+    resolver: http
+    url: https://api.example.com/groups/company
+  hybrid:
+    - evm:0xAAA0000000000000000000000000000000000001
+    - token-holders
+    - company
+permissions:
+  default: allow
+  rules:
+    - hybrid push >*
+"#;
+        let config = parse(yaml).unwrap();
+        let hybrid = &config.groups["hybrid"];
+        assert_eq!(hybrid.members.len(), 1); // direct member
+        assert_eq!(hybrid.includes.len(), 2); // token-holders + company
+        assert!(hybrid.resolver.is_none()); // no resolver on hybrid itself
+    }
+
+    #[test]
+    fn test_unknown_resolver_type_errors() {
+        let yaml = r#"
+groups:
+  bad:
+    resolver: graphql
+    url: https://example.com
+permissions:
+  default: allow
+  rules: []
+"#;
+        let err = parse(yaml);
+        assert!(err.is_err());
+        let msg = format!("{}", err.unwrap_err());
+        assert!(msg.contains("graphql"), "error should mention bad resolver type: {msg}");
+    }
+
+    #[test]
+    fn test_static_and_resolver_groups_coexist() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+  dao:
+    resolver: onchain
+    chain: 8453
+    contract: "0xDDD0000000000000000000000000000000000004"
+    function: isMember
+permissions:
+  default: deny
+  rules:
+    - founders own >*
+    - dao push >feature/**
+"#;
+        let config = parse(yaml).unwrap();
+        assert!(config.groups["founders"].resolver.is_none());
+        assert!(config.groups["dao"].resolver.is_some());
+        assert_eq!(config.permissions.rules.len(), 9); // 8 from own + 1
     }
 }
