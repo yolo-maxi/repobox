@@ -54,13 +54,21 @@ pub(crate) fn ensure_repo_exists(data_dir: &Path, repo: &RepoPath) -> std::io::R
         .ok_or_else(|| std::io::Error::other("invalid repository path"))?;
     std::fs::create_dir_all(parent)?;
 
-    run_git(["init", "--bare", repo_dir.to_string_lossy().as_ref()])?;
-    run_git([
+    run_git(&["init", "--bare", repo_dir.to_string_lossy().as_ref()])?;
+    run_git(&[
         "--git-dir",
         repo_dir.to_string_lossy().as_ref(),
         "config",
         "http.receivepack",
         "true",
+    ])?;
+    // Default HEAD to main (most repos use main now)
+    run_git(&[
+        "--git-dir",
+        repo_dir.to_string_lossy().as_ref(),
+        "symbolic-ref",
+        "HEAD",
+        "refs/heads/main",
     ])?;
 
     install_pre_receive_hook(&repo_dir)?;
@@ -174,7 +182,7 @@ fn install_pre_receive_hook(repo_dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn run_git<const N: usize>(args: [&str; N]) -> std::io::Result<()> {
+fn run_git(args: &[&str]) -> std::io::Result<()> {
     let output = Command::new("git").args(args).output()?;
     if output.status.success() {
         return Ok(());
