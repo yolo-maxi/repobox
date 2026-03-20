@@ -531,18 +531,19 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
         }
     };
 
-    // Resolve alias to address
-    let resolved = if id_str.starts_with('%') {
-        let name = &id_str[1..];
+    // Resolve alias to address — accept bare alias names, %alias, or raw evm:0x...
+    let resolved = if id_str.starts_with("evm:") {
+        id_str.to_string()
+    } else {
+        let name = id_str.strip_prefix('%').unwrap_or(id_str);
         match aliases::resolve_alias(home, name) {
             Ok(Some(addr)) => addr,
             _ => {
-                eprintln!("error: unknown alias: {id_str}");
+                eprintln!("error: invalid identity: {id_str}");
+                eprintln!("       use an alias name or evm:0x... address");
                 return ExitCode::FAILURE;
             }
         }
-    } else {
-        id_str.to_string()
     };
 
     let identity = match Identity::parse(&resolved) {
