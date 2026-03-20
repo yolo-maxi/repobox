@@ -26,14 +26,14 @@ export function LandingHero() {
       <nav
         style={{
           display: "flex",
-          gap: 16,
+          gap: 8,
           marginBottom: 24,
           fontSize: 12,
         }}
       >
         <Link
           href="/docs"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s" }}
+          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
           onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
         >
@@ -41,7 +41,7 @@ export function LandingHero() {
         </Link>
         <Link
           href="/playground"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s" }}
+          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
           onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
         >
@@ -49,7 +49,7 @@ export function LandingHero() {
         </Link>
         <Link
           href="/blog/"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s" }}
+          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
           onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
         >
