@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runQueryOne } from '@/lib/database';
-import { getFileTree } from '@/lib/git';
+import { getFileTree, branchExists } from '@/lib/git';
 
 interface RouteContext {
   params: Promise<{ address: string; name: string; path: string[] }>;
@@ -12,6 +12,8 @@ export async function GET(
 ) {
   try {
     const { address, name, path } = await context.params;
+    const { searchParams } = new URL(request.url);
+    const branch = searchParams.get('branch') || 'HEAD';
     
     if (!address || !name) {
       return NextResponse.json(
@@ -30,11 +32,19 @@ export async function GET(
       );
     }
     
+    // Validate branch if specified
+    if (branch !== 'HEAD' && !branchExists(address, name, branch)) {
+      return NextResponse.json(
+        { error: `Branch '${branch}' does not exist` },
+        { status: 404 }
+      );
+    }
+    
     // Join path segments
     const treePath = path ? path.join('/') : '';
     
     try {
-      const fileTree = getFileTree(address, name, treePath);
+      const fileTree = getFileTree(address, name, treePath, branch);
       
       return NextResponse.json({
         path: treePath,

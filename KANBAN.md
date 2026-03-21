@@ -35,11 +35,6 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## 📋 Backlog
 
-### Branch selector in repo detail
-- **Priority**: P1
-- **Tags**: explorer, ui
-Dropdown to switch between branches in the repo detail page. Currently hardcoded to main. File tree, commits, and README should all update when switching branches. Show branch count badge.
-
 ### Search across all repos
 - **Priority**: P1
 - **Tags**: explorer, ui
@@ -77,7 +72,10 @@ Replace "No recent activity", "No repositories found", etc with illustrated empt
 
 ## 🔨 In Progress
 
-
+### Branch selector in repo detail
+- **Priority**: P1
+- **Tags**: explorer, ui
+Dropdown to switch between branches in the repo detail page. Currently hardcoded to main. File tree, commits, and README should all update when switching branches. Show branch count badge.
 
 ## 🚧 Blocked
 

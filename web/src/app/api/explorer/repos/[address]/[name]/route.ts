@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runQueryOne } from '@/lib/database';
-import { getCommitCount, getDefaultBranch, getFileTree, getReadmeContent } from '@/lib/git';
+import { getCommitCount, getDefaultBranch, getFileTree, getReadmeContent, branchExists } from '@/lib/git';
 
 interface RouteContext {
   params: Promise<{ address: string; name: string }>;
@@ -12,6 +12,8 @@ export async function GET(
 ) {
   try {
     const { address, name } = await context.params;
+    const { searchParams } = new URL(request.url);
+    const branch = searchParams.get('branch') || 'HEAD';
     
     if (!address || !name) {
       return NextResponse.json(
@@ -30,17 +32,26 @@ export async function GET(
       );
     }
     
+    // Validate branch if specified
+    if (branch !== 'HEAD' && !branchExists(address, name, branch)) {
+      return NextResponse.json(
+        { error: `Branch '${branch}' does not exist` },
+        { status: 404 }
+      );
+    }
+    
     try {
       // Get git metadata
-      const commitCount = getCommitCount(address, name);
+      const commitCount = getCommitCount(address, name, branch);
       const defaultBranch = getDefaultBranch(address, name);
-      const fileTree = getFileTree(address, name);
-      const readmeContent = getReadmeContent(address, name);
+      const fileTree = getFileTree(address, name, '', branch);
+      const readmeContent = getReadmeContent(address, name, branch);
       
       return NextResponse.json({
         ...repo,
         commit_count: commitCount,
         default_branch: defaultBranch,
+        current_branch: branch === 'HEAD' ? defaultBranch : branch,
         file_tree: fileTree,
         readme_content: readmeContent
       });
@@ -50,6 +61,7 @@ export async function GET(
         ...repo,
         commit_count: 0,
         default_branch: 'main',
+        current_branch: branch === 'HEAD' ? 'main' : branch,
         file_tree: [],
         readme_content: null
       });

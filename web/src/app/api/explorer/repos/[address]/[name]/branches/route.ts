@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runQueryOne } from '@/lib/database';
-import { getCommitHistory, branchExists } from '@/lib/git';
+import { getBranches, getDefaultBranch } from '@/lib/git';
 
 interface RouteContext {
   params: Promise<{ address: string; name: string }>;
@@ -12,9 +12,6 @@ export async function GET(
 ) {
   try {
     const { address, name } = await context.params;
-    const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const branch = searchParams.get('branch') || 'HEAD';
     
     if (!address || !name) {
       return NextResponse.json(
@@ -33,32 +30,31 @@ export async function GET(
       );
     }
     
-    // Validate branch if specified
-    if (branch !== 'HEAD' && !branchExists(address, name, branch)) {
-      return NextResponse.json(
-        { error: `Branch '${branch}' does not exist` },
-        { status: 404 }
-      );
-    }
-    
     try {
-      const commits = getCommitHistory(address, name, limit, branch);
+      const branches = getBranches(address, name);
+      const defaultBranch = getDefaultBranch(address, name);
+      
+      // Mark default branch
+      const branchesWithDefault = branches.map(branch => ({
+        ...branch,
+        is_default: branch.name === defaultBranch
+      }));
       
       return NextResponse.json({
-        commits,
-        total: commits.length
+        default_branch: defaultBranch,
+        branches: branchesWithDefault
       });
     } catch (gitError) {
-      // Empty repo or git error
+      // Empty repo or no commits
       return NextResponse.json({
-        commits: [],
-        total: 0
+        default_branch: 'main',
+        branches: []
       });
     }
   } catch (error) {
-    console.error('Error fetching commits:', error);
+    console.error('Error fetching branches:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch commits' },
+      { error: 'Failed to fetch branches' },
       { status: 500 }
     );
   }

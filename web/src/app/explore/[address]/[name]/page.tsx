@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress, formatBytes, getFileIcon, copyToClipboard } from '@/lib/utils';
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
+import BranchSelector from '@/components/BranchSelector';
 
 interface RepoDetails {
   address: string;
@@ -40,6 +41,16 @@ interface RepoConfig {
   content: string;
 }
 
+interface Branch {
+  name: string;
+  is_default: boolean;
+  last_commit: {
+    hash: string;
+    timestamp: number;
+    message: string;
+  };
+}
+
 export default function RepoPage() {
   const params = useParams();
   const [repo, setRepo] = useState<RepoDetails | null>(null);
@@ -52,6 +63,9 @@ export default function RepoPage() {
   const [loading, setLoading] = useState(true);
   const [cloneCopied, setCloneCopied] = useState(false);
   const [addrCopied, setAddrCopied] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState<string>('HEAD');
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchLoading, setBranchLoading] = useState(false);
 
   const address = Array.isArray(params.address) ? params.address[0] : params.address;
   const name = Array.isArray(params.name) ? params.name[0] : params.name;
@@ -62,10 +76,15 @@ export default function RepoPage() {
     if (!address || !name) return;
     const fetchRepo = async () => {
       try {
-        const [repoRes, commitsRes] = await Promise.all([
-          fetch(`/api/explorer/repos/${address}/${name}`),
-          fetch(`/api/explorer/repos/${address}/${name}/commits?limit=30`)
+        const branchParam = selectedBranch !== 'HEAD' ? `?branch=${selectedBranch}` : '';
+        const configBranchParam = selectedBranch !== 'HEAD' ? `?branch=${selectedBranch}` : '';
+        
+        const [repoRes, commitsRes, branchesRes] = await Promise.all([
+          fetch(`/api/explorer/repos/${address}/${name}${branchParam}`),
+          fetch(`/api/explorer/repos/${address}/${name}/commits?limit=30${selectedBranch !== 'HEAD' ? `&branch=${selectedBranch}` : ''}`),
+          fetch(`/api/explorer/repos/${address}/${name}/branches`)
         ]);
+        
         if (repoRes.ok) {
           const data = await repoRes.json();
           setRepo(data);
@@ -73,12 +92,24 @@ export default function RepoPage() {
           // If no README, default to files tab
           if (!data.readme_content) setActiveTab('files');
         }
+        
         if (commitsRes.ok) {
           const data = await commitsRes.json();
           setCommits(data.commits || []);
         }
+        
+        if (branchesRes.ok) {
+          const branchData = await branchesRes.json();
+          setBranches(branchData.branches || []);
+          
+          // Set initial branch if this is the first load
+          if (selectedBranch === 'HEAD' && branchData.default_branch) {
+            setSelectedBranch(branchData.default_branch);
+          }
+        }
+        
         // Try to fetch .repobox/config.yml
-        const configRes = await fetch(`/api/explorer/repos/${address}/${name}/blob/.repobox/config.yml`);
+        const configRes = await fetch(`/api/explorer/repos/${address}/${name}/blob/.repobox/config.yml${configBranchParam}`);
         if (configRes.ok) {
           const data = await configRes.json();
           if (data.content) {
@@ -89,14 +120,16 @@ export default function RepoPage() {
         console.error('Error:', error);
       } finally {
         setLoading(false);
+        setBranchLoading(false);
       }
     };
     fetchRepo();
-  }, [address, name]);
+  }, [address, name, selectedBranch]);
 
   const navigateToPath = async (path: string) => {
     if (!address || !name) return;
-    const res = await fetch(`/api/explorer/repos/${address}/${name}/tree/${path}`);
+    const branchParam = selectedBranch !== repo?.default_branch ? `?branch=${selectedBranch}` : '';
+    const res = await fetch(`/api/explorer/repos/${address}/${name}/tree/${path}${branchParam}`);
     if (res.ok) {
       const data = await res.json();
       setCurrentPath(path);
@@ -107,12 +140,24 @@ export default function RepoPage() {
 
   const viewFile = async (filePath: string) => {
     if (!address || !name) return;
-    const res = await fetch(`/api/explorer/repos/${address}/${name}/blob/${filePath}`);
+    const branchParam = selectedBranch !== repo?.default_branch ? `?branch=${selectedBranch}` : '';
+    const res = await fetch(`/api/explorer/repos/${address}/${name}/blob/${filePath}${branchParam}`);
     if (res.ok) {
       const data = await res.json();
       setFileContent(data);
       setActiveTab('files');
     }
+  };
+
+  const handleBranchChange = async (newBranch: string) => {
+    setBranchLoading(true);
+    setSelectedBranch(newBranch);
+    
+    // Reset current path and file content when switching branches
+    setCurrentPath('');
+    setFileContent(null);
+    
+    // Data will be refetched via useEffect dependency on selectedBranch
   };
 
   const goBack = () => {
@@ -198,8 +243,18 @@ export default function RepoPage() {
             <span className="explore-stat-value">{repo.commit_count}</span>
             <span className="explore-stat-label">COMMITS</span>
           </div>
-          <div className="explore-stat-item">
-            <span className="explore-stat-value">{repo.default_branch}</span>
+          <div className="explore-stat-item explore-stat-branch">
+            {branches.length > 0 ? (
+              <BranchSelector
+                branches={branches}
+                currentBranch={selectedBranch}
+                defaultBranch={repo.default_branch}
+                onChange={handleBranchChange}
+                disabled={branchLoading}
+              />
+            ) : (
+              <span className="explore-stat-value">{repo.default_branch}</span>
+            )}
             <span className="explore-stat-label">BRANCH</span>
           </div>
         </div>
