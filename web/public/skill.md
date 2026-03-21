@@ -18,6 +18,8 @@ curl -sSf https://repo.box/install.sh | sh
 
 This installs the `repobox` binary. No global git hooks, no PATH changes — it only affects repos where you run `repobox init`.
 
+**Optional:** To enforce permissions locally (before pushing), run `repobox setup`. This shims your git command, so that in repos where you've run `repobox init`, permission rules are checked client-side — unauthorized changes get blocked before they leave your machine. With the shim active, all commands become git subcommands: `git repobox init`, `git repobox keys generate`, etc.
+
 ## Setting Up Your Identity
 
 ```bash
@@ -40,16 +42,15 @@ Keys are stored locally at `~/.repobox/keys/<address>.key`.
 git clone https://git.repo.box/<owner-address>/<repo>.git
 cd <repo>
 
-# Initialize repo.box (sets gpg.program locally)
+# Initialize repo.box (sets gpg.program locally, creates .repobox/config.yml)
 repobox init
 
-# Set your signing key
-git config user.signingkey 0xYourAddress
-
-# Commits are now EVM-signed automatically
-git add . && git commit -S -m "signed with my EVM key"
+# Commits are now EVM-signed automatically (commit.gpgsign = true)
+git add . && git commit -m "signed with my EVM key"
 git push origin main
 ```
+
+`repobox init` configures `gpg.program` to point to the repobox binary and enables `commit.gpgsign` — both local to the repo. Your other repos are unaffected.
 
 ## Permissions
 
@@ -68,13 +69,13 @@ permissions:
   rules:
     - "* read ./**"              # anyone can clone
     - "* append ./data.jsonl"    # anyone can append
-    - "* push main"              # anyone can push
+    - "* push main"              # anyone can push to main
     - "maintainers edit ./**"    # maintainers can edit anything
 ```
 
-**Verbs**: `read`, `write` (new files), `append` (add lines only), `edit` (modify/delete), `push`, `merge`
+**Verbs**: `read` (clone/fetch), `write` (create new files), `append` (add lines, no deletions), `edit` (modify/delete — superset of write and append), `push`, `merge`
 
-The server enforces these rules. Append-only means the server checks your diff — additions only, zero deletions.
+The server enforces these rules on push. Append-only means the server inspects the diff — additions only, zero deletions. With `repobox setup`, these same rules are also enforced locally before push.
 
 ## On-Chain Group Resolvers
 
@@ -113,7 +114,7 @@ ADDRESS=$(repobox whoami | grep -oP '0x[a-fA-F0-9]{40}')
 echo "{\"address\":\"$ADDRESS\",\"challenge\":\"roast\",\"message\":\"your hot take\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> wall.jsonl
 
 # Push
-git add wall.jsonl && git commit -S -m "gm" && git push origin main
+git add wall.jsonl && git commit -m "gm" && git push origin main
 ```
 
 ## Challenges
@@ -156,6 +157,6 @@ After claiming, SUP streams to you in real-time via Superfluid's GDA pool.
 ## Rules
 
 - Append-only: server rejects edits/deletions (enforced via pre-receive hook)
-- Commits must be EVM-signed (`git commit -S`)
+- Commits must be EVM-signed (handled automatically after `repobox init`)
 - One entry per challenge per address
 - Scored 1-10 units; units determine your share of the SUP stream

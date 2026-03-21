@@ -4,10 +4,13 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
 
-// Helper function to truncate commit messages
-function truncateMessage(message: string, maxLength: number = 120): string {
+function truncateMessage(message: string, maxLength: number = 80): string {
   if (message.length <= maxLength) return message;
-  return message.substring(0, maxLength).trim() + '...';
+  return message.substring(0, maxLength).trim() + '…';
+}
+
+function pluralize(count: number, singular: string, plural?: string): string {
+  return count === 1 ? `${count} ${singular}` : `${count} ${plural || singular + 's'}`;
 }
 
 interface Stats {
@@ -34,33 +37,6 @@ interface Activity {
   commit_hash?: string;
   commit_message?: string;
   pushed_at: string;
-  owner_address?: string;
-  repo_created_at?: string;
-}
-
-interface SearchRepo {
-  address: string;
-  name: string;
-  owner_address: string;
-  created_at: string;
-}
-
-interface SearchCommit {
-  id: number;
-  address: string;
-  name: string;
-  pusher_address?: string;
-  commit_hash?: string;
-  commit_message?: string;
-  pushed_at: string;
-}
-
-interface SearchResults {
-  repos: SearchRepo[];
-  commits: SearchCommit[];
-  query: string;
-  total_repos: number;
-  total_commits: number;
 }
 
 export default function ExplorePage() {
@@ -69,9 +45,7 @@ export default function ExplorePage() {
   const [activity, setActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'latest' | 'commits'>('latest');
-  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
+  const [sortBy, setSortBy] = useState<'latest' | 'commits' | 'name'>('latest');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,9 +53,8 @@ export default function ExplorePage() {
         const [statsRes, reposRes, activityRes] = await Promise.all([
           fetch('/api/explorer/stats'),
           fetch(`/api/explorer/repos?sort=${sortBy}&limit=50`),
-          fetch('/api/explorer/activity?limit=10')
+          fetch('/api/explorer/activity?limit=15')
         ]);
-
         if (statsRes.ok) setStats(await statsRes.json());
         if (reposRes.ok) {
           const data = await reposRes.json();
@@ -97,293 +70,308 @@ export default function ExplorePage() {
         setLoading(false);
       }
     };
-    
     fetchData();
-    
-    // Auto-refresh activity every 30 seconds
+
     const interval = setInterval(() => {
-      fetch('/api/explorer/activity?limit=10')
+      fetch('/api/explorer/activity?limit=15')
         .then(res => res.ok ? res.json() : null)
-        .then(data => {
-          if (data?.activity) {
-            setActivity(data.activity);
-          }
-        })
-        .catch(error => {
-          console.error('Error refreshing activity:', error);
-        });
+        .then(data => { if (data?.activity) setActivity(data.activity); })
+        .catch(() => {});
     }, 30000);
-    
     return () => clearInterval(interval);
   }, [sortBy]);
 
-  // Search functionality with debouncing
-  useEffect(() => {
-    const searchHandler = async () => {
-      if (!searchTerm.trim()) {
-        setSearchResults(null);
-        return;
-      }
-
-      setIsSearching(true);
-      try {
-        const response = await fetch(`/api/explorer/search?q=${encodeURIComponent(searchTerm)}`);
-        if (response.ok) {
-          const results = await response.json();
-          setSearchResults(results);
-        }
-      } catch (error) {
-        console.error('Search error:', error);
-      } finally {
-        setIsSearching(false);
-      }
-    };
-
-    // Debounce search
-    const timeoutId = setTimeout(searchHandler, 300);
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
-
-
+  const filteredRepos = repos.filter(repo =>
+    repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    repo.address.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <div className="explore-page">
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#0d1117',
+      color: '#e6edf3',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif',
+    }}>
       {/* Header */}
-      <header className="explore-header">
-        <div className="explore-header-content">
-          <h1 className="explore-title">
-            repo<span className="explore-title-dot">.</span>box
-          </h1>
-          <div className="explore-search">
+      <header style={{
+        borderBottom: '1px solid #21262d',
+        backgroundColor: '#010409',
+        padding: '12px 24px',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+      }}>
+        <div style={{
+          maxWidth: 1200,
+          margin: '0 auto',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 24,
+        }}>
+          <Link href="/" style={{
+            fontSize: 20,
+            fontWeight: 600,
+            color: '#e6edf3',
+            textDecoration: 'none',
+            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+            letterSpacing: '-0.5px',
+          }}>
+            repo<span style={{ color: '#58a6ff' }}>.</span>box
+          </Link>
+
+          <nav style={{ display: 'flex', gap: 16, fontSize: 14 }}>
+            <Link href="/" style={{ color: '#8b949e', textDecoration: 'none' }}>Home</Link>
+            <Link href="/explore" style={{ color: '#e6edf3', textDecoration: 'none', fontWeight: 500 }}>Explore</Link>
+            <Link href="/docs" style={{ color: '#8b949e', textDecoration: 'none' }}>Docs</Link>
+            <Link href="/playground" style={{ color: '#8b949e', textDecoration: 'none' }}>Playground</Link>
+          </nav>
+
+          <div style={{ marginLeft: 'auto', position: 'relative', width: 280 }}>
+            <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} width="16" height="16" viewBox="0 0 16 16" fill="#8b949e">
+              <path d="M10.68 11.74a6 6 0 0 1-7.92-8.98 6 6 0 0 1 8.98 7.92l3.81 3.81a.75.75 0 0 1-1.06 1.06l-3.81-3.81zM6.5 11a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z"/>
+            </svg>
             <input
               type="text"
-              placeholder="Search repositories..."
+              placeholder="Search repositories…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="explore-search-input"
+              style={{
+                width: '100%',
+                padding: '6px 12px 6px 32px',
+                backgroundColor: '#0d1117',
+                border: '1px solid #30363d',
+                borderRadius: 6,
+                color: '#e6edf3',
+                fontSize: 14,
+                outline: 'none',
+              }}
             />
           </div>
         </div>
       </header>
 
-      {loading ? (
-        <div className="explore-loading">
-          <div className="explore-loading-spinner"></div>
-          <p>Loading repositories...</p>
-        </div>
-      ) : (
-        <>
+      {/* Main layout */}
+      <div style={{
+        maxWidth: 1200,
+        margin: '0 auto',
+        padding: '24px 24px',
+        display: 'grid',
+        gridTemplateColumns: '260px 1fr',
+        gap: 24,
+      }}>
+        {/* Sidebar */}
+        <aside style={{ fontSize: 14 }}>
           {/* Stats */}
           {stats && (
-            <section className="explore-stats">
-              <div className="explore-stat-card">
-                <div className="explore-stat-number">{stats.totalRepos.toLocaleString()}</div>
-                <div className="explore-stat-label">Repositories</div>
+            <div style={{
+              padding: '16px',
+              backgroundColor: '#161b22',
+              border: '1px solid #21262d',
+              borderRadius: 6,
+              marginBottom: 16,
+            }}>
+              <h3 style={{ fontSize: 12, fontWeight: 600, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+                Overview
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#8b949e' }}>Repositories</span>
+                  <span style={{ fontWeight: 600 }}>{stats.totalRepos}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#8b949e' }}>Owners</span>
+                  <span style={{ fontWeight: 600 }}>{stats.totalOwners}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#8b949e' }}>Commits</span>
+                  <span style={{ fontWeight: 600 }}>{stats.totalCommits}</span>
+                </div>
               </div>
-              <div className="explore-stat-card">
-                <div className="explore-stat-number">{stats.totalOwners.toLocaleString()}</div>
-                <div className="explore-stat-label">Owners</div>
-              </div>
-              <div className="explore-stat-card">
-                <div className="explore-stat-number">{stats.totalCommits.toLocaleString()}</div>
-                <div className="explore-stat-label">Commits</div>
-              </div>
-            </section>
+            </div>
           )}
 
-          {/* Main Content */}
-          <div className="explore-content">
-            {/* Search Results */}
-            {searchTerm && searchResults && (
-              <div className="explore-search-results">
-                <h2 className="explore-section-title">
-                  Search Results for "{searchTerm}"
-                  {isSearching && <span className="explore-loading-spinner" style={{ marginLeft: '8px' }}></span>}
-                </h2>
-                
-                {/* Repository Results */}
-                {searchResults.repos.length > 0 && (
-                  <div className="explore-search-section">
-                    <h3>Repositories ({searchResults.total_repos})</h3>
-                    <div className="explore-repo-list">
-                      {searchResults.repos.map((repo) => (
-                        <Link
-                          key={`${repo.address}/${repo.name}`}
-                          href={`/explore/${repo.address}/${repo.name}`}
-                          className="explore-repo-card"
-                        >
-                          <div className="explore-repo-header">
-                            <h3 className="explore-repo-name">{repo.name}</h3>
-                            <span className="explore-repo-owner">{formatAddress(repo.owner_address)}</span>
-                          </div>
-                          <div className="explore-repo-meta">
-                            <span className="explore-repo-updated">
-                              Created {formatTimeAgo(repo.created_at)}
-                            </span>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
+          {/* Sort */}
+          <div style={{
+            padding: '16px',
+            backgroundColor: '#161b22',
+            border: '1px solid #21262d',
+            borderRadius: 6,
+            marginBottom: 16,
+          }}>
+            <h3 style={{ fontSize: 12, fontWeight: 600, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+              Sort by
+            </h3>
+            {(['latest', 'commits', 'name'] as const).map(opt => (
+              <button
+                key={opt}
+                onClick={() => setSortBy(opt)}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '6px 8px',
+                  marginBottom: 2,
+                  borderRadius: 4,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  backgroundColor: sortBy === opt ? '#1f6feb22' : 'transparent',
+                  color: sortBy === opt ? '#58a6ff' : '#e6edf3',
+                  fontWeight: sortBy === opt ? 500 : 400,
+                }}
+              >
+                {opt === 'latest' ? '🕐 Recently updated' : opt === 'commits' ? '📊 Most commits' : '🔤 Name'}
+              </button>
+            ))}
+          </div>
 
-                {/* Commit Results */}
-                {searchResults.commits.length > 0 && (
-                  <div className="explore-search-section">
-                    <h3>Commits ({searchResults.total_commits})</h3>
-                    <div className="explore-activity-list">
-                      {searchResults.commits.map((commit) => (
-                        <div key={commit.id} className="explore-activity-item">
-                          <Link
-                            href={`/explore/${commit.address}/${commit.name}`}
-                            className="explore-activity-repo"
-                          >
-                            {commit.name}
-                          </Link>
-                          
-                          {commit.commit_message && (
-                            <p className="explore-activity-message">{commit.commit_message}</p>
-                          )}
-                          
-                          <div className="explore-activity-meta">
-                            <span>{formatTimeAgo(commit.pushed_at)}</span>
-                            {commit.pusher_address && (
-                              <span>by {formatAddress(commit.pusher_address)}</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {searchResults.repos.length === 0 && searchResults.commits.length === 0 && !isSearching && (
-                  <div className="explore-empty">
-                    <h3>No results found</h3>
-                    <p>Try a different search term</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Default Repository List (when not searching) */}
-            {!searchTerm && (
-              <div className="explore-repos">
-                <div className="explore-section-header">
-                  <h2 className="explore-section-title">Repositories</h2>
-                  <div className="explore-sort-tabs">
-                    <button
-                      onClick={() => setSortBy('latest')}
-                      className={`explore-sort-tab ${sortBy === 'latest' ? 'active' : ''}`}
+          {/* Recent Activity - sidebar version */}
+          <div style={{
+            padding: '16px',
+            backgroundColor: '#161b22',
+            border: '1px solid #21262d',
+            borderRadius: 6,
+          }}>
+            <h3 style={{ fontSize: 12, fontWeight: 600, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+              Recent Activity
+            </h3>
+            {activity.length === 0 ? (
+              <p style={{ color: '#484f58', fontSize: 13 }}>No recent activity</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {activity.slice(0, 8).map(item => (
+                  <div key={item.id} style={{ fontSize: 13 }}>
+                    <Link
+                      href={`/explore/${item.address}/${item.name}`}
+                      style={{ color: '#58a6ff', textDecoration: 'none', fontWeight: 500 }}
                     >
-                      Latest
-                    </button>
-                    <button
-                      onClick={() => setSortBy('commits')}
-                      className={`explore-sort-tab ${sortBy === 'commits' ? 'active' : ''}`}
-                    >
-                      Commits
-                    </button>
+                      {item.name}
+                    </Link>
+                    {item.commit_message && (
+                      <p style={{ color: '#8b949e', margin: '2px 0 0', fontSize: 12, lineHeight: 1.4 }}>
+                        {truncateMessage(item.commit_message, 60)}
+                      </p>
+                    )}
+                    <span style={{ color: '#484f58', fontSize: 11 }}>
+                      {formatTimeAgo(item.pushed_at)}
+                    </span>
                   </div>
-                </div>
-
-                {repos.length === 0 ? (
-                  <div className="explore-empty">
-                    <h3>No repos yet</h3>
-                    <p>Push your first signed commit to get started</p>
-                    <div className="explore-code-snippet">
-                      <code>
-                        repobox init<br />
-                        git add . && git commit -S -m "init"<br />
-                        git push
-                      </code>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="explore-repo-list">
-                    {repos.map((repo) => (
-                      <Link
-                        key={`${repo.address}/${repo.name}`}
-                        href={`/explore/${repo.address}/${repo.name}`}
-                        className="explore-repo-card"
-                      >
-                        <div className="explore-repo-header">
-                          <h3 className="explore-repo-name">{repo.name}</h3>
-                          <span className="explore-repo-owner">{formatAddress(repo.owner_address)}</span>
-                        </div>
-                        
-                        {repo.description && (
-                          <p className="explore-repo-description">
-                            {repo.description.replace(/\n/g, ' ').trim()}
-                          </p>
-                        )}
-                        
-                        <div className="explore-repo-meta">
-                          <span className="explore-repo-commits">{repo.commit_count} commits</span>
-                          {repo.last_commit_date && (
-                            <span className="explore-repo-updated">
-                              Updated {formatTimeAgo(repo.last_commit_date)}
-                            </span>
-                          )}
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Activity Feed (only show when not searching) */}
-            {!searchTerm && (
-              <div className="explore-activity">
-                <h2 className="explore-section-title">Recent Activity</h2>
-                
-                {activity.length === 0 ? (
-                  <div className="explore-activity-empty">
-                    <p>No recent activity</p>
-                  </div>
-                ) : (
-                  <div className="explore-activity-list">
-                    {activity.map((item) => (
-                      <div key={item.id} className="explore-activity-item">
-                        <div className="explore-activity-header">
-                          <Link
-                            href={`/explore/${item.address}/${item.name}`}
-                            className="explore-activity-repo"
-                          >
-                            {item.name}
-                          </Link>
-                          {item.commit_hash && (
-                            <Link
-                              href={`/explore/${item.address}/${item.name}/commit/${item.commit_hash}`}
-                              className="explore-activity-commit"
-                            >
-                              {item.commit_hash.substring(0, 8)}
-                            </Link>
-                          )}
-                        </div>
-                        
-                        {item.commit_message && (
-                          <p className="explore-activity-message">
-                            {truncateMessage(item.commit_message, 120)}
-                          </p>
-                        )}
-                        
-                        <div className="explore-activity-meta">
-                          <span>{formatTimeAgo(item.pushed_at)}</span>
-                          {item.pusher_address && (
-                            <span>by {formatAddress(item.pusher_address)}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ))}
               </div>
             )}
           </div>
-        </>
-      )}
+        </aside>
+
+        {/* Main content */}
+        <main>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[1,2,3,4,5].map(i => (
+                <div key={i} style={{
+                  height: 72,
+                  backgroundColor: '#161b22',
+                  border: '1px solid #21262d',
+                  borderRadius: 6,
+                  animation: 'pulse 2s ease-in-out infinite',
+                }} />
+              ))}
+            </div>
+          ) : (
+            <>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 16,
+                paddingBottom: 12,
+                borderBottom: '1px solid #21262d',
+              }}>
+                <h2 style={{ fontSize: 16, fontWeight: 600 }}>
+                  {searchTerm ? `Results for "${searchTerm}"` : 'Repositories'}
+                </h2>
+                <span style={{ fontSize: 13, color: '#8b949e' }}>
+                  {filteredRepos.length} {filteredRepos.length === 1 ? 'repository' : 'repositories'}
+                </span>
+              </div>
+
+              {filteredRepos.length === 0 ? (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '48px 24px',
+                  color: '#8b949e',
+                }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>📦</div>
+                  <h3 style={{ color: '#e6edf3', marginBottom: 8 }}>
+                    {searchTerm ? 'No matching repositories' : 'No repositories yet'}
+                  </h3>
+                  <p style={{ fontSize: 14, maxWidth: 400, margin: '0 auto' }}>
+                    {searchTerm
+                      ? 'Try a different search term'
+                      : 'Push your first signed commit to get started'
+                    }
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {filteredRepos.map((repo, idx) => (
+                    <Link
+                      key={`${repo.address}/${repo.name}`}
+                      href={`/explore/${repo.address}/${repo.name}`}
+                      style={{
+                        display: 'block',
+                        padding: '16px 16px',
+                        borderBottom: idx < filteredRepos.length - 1 ? '1px solid #21262d' : 'none',
+                        textDecoration: 'none',
+                        color: 'inherit',
+                        transition: 'background-color 0.15s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#161b22')}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+                        <span style={{ color: '#58a6ff', fontSize: 16, fontWeight: 600 }}>
+                          {repo.name}
+                        </span>
+                        <span style={{
+                          color: '#484f58',
+                          fontSize: 12,
+                          fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                        }}>
+                          {formatAddress(repo.owner_address)}
+                        </span>
+                      </div>
+
+                      {repo.description && (
+                        <p style={{ color: '#8b949e', fontSize: 14, margin: '0 0 6px', lineHeight: 1.4 }}>
+                          {repo.description.replace(/\n/g, ' ').trim()}
+                        </p>
+                      )}
+
+                      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#484f58' }}>
+                        <span>{pluralize(repo.commit_count, 'commit')}</span>
+                        {repo.last_commit_date && (
+                          <span>Updated {formatTimeAgo(repo.last_commit_date)}</span>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </main>
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        @media (max-width: 768px) {
+          /* Stack sidebar below on mobile */
+        }
+      `}</style>
     </div>
   );
 }
