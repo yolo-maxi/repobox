@@ -10,6 +10,13 @@ pub(crate) struct RepoPath {
     pub name: String,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct CommitInfo {
+    pub hash: String,
+    pub message: String,
+    pub pusher_address: Option<String>,
+}
+
 #[derive(Debug)]
 pub(crate) struct BackendRequest<'a> {
     pub method: &'a str,
@@ -206,6 +213,43 @@ pub(crate) fn extract_pusher_from_head(data_dir: &Path, repo: &RepoPath) -> std:
 
     let commit_text = String::from_utf8_lossy(&output.stdout);
     extract_signer_from_commit_text(&commit_text)
+}
+
+/// Extract commit hash, message, and signer from HEAD after a push
+pub(crate) fn extract_latest_commit_info(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Option<CommitInfo>> {
+    let repo_dir = repo_dir(data_dir, repo);
+    let repo_dir_str = repo_dir.to_string_lossy().to_string();
+
+    // Get HEAD commit hash
+    let output = Command::new("git")
+        .args(["--git-dir", &repo_dir_str, "rev-parse", "HEAD"])
+        .output()?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    // Get commit message (first line only for activity feed)
+    let output = Command::new("git")
+        .args(["--git-dir", &repo_dir_str, "log", "--format=%s", "-1", "HEAD"])
+        .output()?;
+
+    let message = if output.status.success() {
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    } else {
+        String::new()
+    };
+
+    // Get pusher (signer) address
+    let pusher_address = extract_pusher_from_head(data_dir, repo)?;
+
+    Ok(Some(CommitInfo {
+        hash,
+        message,
+        pusher_address,
+    }))
 }
 
 /// Extract the EVM signer address from the first signed commit in a repo.

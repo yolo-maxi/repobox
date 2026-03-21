@@ -129,6 +129,27 @@ async fn receive_pack(
         body,
     );
 
+    // Log the push event after successful processing
+    if response.status() == StatusCode::OK {
+        if let Ok(Some(commit_info)) = git::extract_latest_commit_info(&state.data_dir, &repo) {
+            let _ = db::insert_push_log(
+                &state.db_path,
+                &repo.address,
+                &repo.name,
+                commit_info.pusher_address.as_deref(),
+                Some(&commit_info.hash),
+                Some(&commit_info.message),
+            );
+            
+            tracing::info!(
+                repo = %format!("{}/{}", repo.address, repo.name),
+                pusher = ?commit_info.pusher_address,
+                commit = %commit_info.hash.get(..8).unwrap_or(&commit_info.hash),
+                "push logged to activity feed"
+            );
+        }
+    }
+
     // Check ownership and authorization.
     let existing_owner = db::get_repo(&state.db_path, &repo.address, &repo.name);
 
@@ -511,13 +532,36 @@ async fn addressless_receive_pack(
             name: repo_name,
         };
         
-        backend_post(
+        let response = backend_post(
             &state,
             &repo_path,
             "/git-receive-pack",
             header_value(&headers, "content-type"),
             body,
-        )
+        );
+
+        // Log the push event for existing repos accessed via addressless route
+        if response.status() == StatusCode::OK {
+            if let Ok(Some(commit_info)) = git::extract_latest_commit_info(&state.data_dir, &repo_path) {
+                let _ = db::insert_push_log(
+                    &state.db_path,
+                    &repo_path.address,
+                    &repo_path.name,
+                    commit_info.pusher_address.as_deref(),
+                    Some(&commit_info.hash),
+                    Some(&commit_info.message),
+                );
+                
+                tracing::info!(
+                    repo = %format!("{}/{}", repo_path.address, repo_path.name),
+                    pusher = ?commit_info.pusher_address,
+                    commit = %commit_info.hash.get(..8).unwrap_or(&commit_info.hash),
+                    "addressless push to existing repo logged to activity feed"
+                );
+            }
+        }
+
+        response
     } else {
         // New repo - use staging area
         if let Err(error) = git::ensure_staging_repo_exists(&state.data_dir, &repo_name) {
@@ -556,6 +600,31 @@ async fn addressless_receive_pack(
                     owner = %signer,
                     "ownership established via address-less push"
                 );
+
+                // Log the push event for addressless pushes too
+                let repo_path = RepoPath {
+                    address: signer.clone(),
+                    name: repo_name.clone(),
+                };
+                if response.status() == StatusCode::OK {
+                    if let Ok(Some(commit_info)) = git::extract_latest_commit_info(&state.data_dir, &repo_path) {
+                        let _ = db::insert_push_log(
+                            &state.db_path,
+                            &signer,
+                            &repo_name,
+                            commit_info.pusher_address.as_deref(),
+                            Some(&commit_info.hash),
+                            Some(&commit_info.message),
+                        );
+                        
+                        tracing::info!(
+                            repo = %format!("{}/{}", signer, repo_name),
+                            pusher = ?commit_info.pusher_address,
+                            commit = %commit_info.hash.get(..8).unwrap_or(&commit_info.hash),
+                            "addressless push logged to activity feed"
+                        );
+                    }
+                }
 
                 response.into_response()
             }

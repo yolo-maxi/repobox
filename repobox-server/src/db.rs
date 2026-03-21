@@ -25,6 +25,25 @@ pub(crate) fn init(db_path: &Path) -> std::io::Result<()> {
             [],
         )
         .map_err(to_io_error)?;
+
+    // Create push_log table if it doesn't exist
+    connection
+        .execute(
+            "CREATE TABLE IF NOT EXISTS push_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                address TEXT NOT NULL,
+                name TEXT NOT NULL,
+                pusher_address TEXT,
+                commit_hash TEXT,
+                commit_message TEXT,
+                pushed_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(to_io_error)?;
+
+    // Create indexes for performance
+    create_push_log_indexes(&connection).map_err(to_io_error)?;
     Ok(())
 }
 
@@ -100,6 +119,44 @@ fn now_string() -> String {
         .unwrap_or_default()
         .as_secs();
     seconds.to_string()
+}
+
+pub(crate) fn insert_push_log(
+    db_path: &Path,
+    address: &str,
+    name: &str,
+    pusher_address: Option<&str>,
+    commit_hash: Option<&str>,
+    commit_message: Option<&str>,
+) -> std::io::Result<()> {
+    let connection = Connection::open(db_path).map_err(to_io_error)?;
+    connection
+        .execute(
+            "INSERT INTO push_log(address, name, pusher_address, commit_hash, commit_message, pushed_at)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                address,
+                name,
+                pusher_address,
+                commit_hash,
+                commit_message,
+                now_string()
+            ],
+        )
+        .map_err(to_io_error)?;
+    Ok(())
+}
+
+fn create_push_log_indexes(connection: &Connection) -> Result<(), rusqlite::Error> {
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_push_log_timestamp ON push_log(pushed_at DESC)",
+        [],
+    )?;
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_push_log_repo ON push_log(address, name)",
+        [],
+    )?;
+    Ok(())
 }
 
 fn to_io_error(error: rusqlite::Error) -> std::io::Error {
