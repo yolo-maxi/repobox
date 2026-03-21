@@ -52,10 +52,7 @@ Repo detail pages (`/explore/[address]/[name]`) and owner pages (`/explore/[addr
 - **Tags**: feature, explorer, ui, ens
 Build a reusable `<AddressDisplay>` component for the explorer. Resolution priority: (1) ENS name (e.g. `vitalik.eth`), (2) repo.box subdomain/alias (e.g. `ocean`), (3) truncated hex as fallback. On hover: show full address tooltip. On click: copy full address to clipboard. When space permits, show both: `ocean (0xDbbA…2048)`. All addresses everywhere in the explorer should be clickable links to `/explore/{address}`. Human-readable URL routing: `/explore/{ens-name}/` resolves ENS → address → show that owner's repos (if exists, else 404). `/explore/{subdomain}/` resolves repo.box alias → address → show repos. Server-side: add `/api/explorer/resolve/{name}` endpoint that tries ENS first, then subdomain lookup. The explore routes need a catch-all that checks if the param is a valid hex address, ENS name, or subdomain and redirects accordingly.
 
-### Verb refactor: create → new files, branch → new branches
-- **Priority**: P1
-- **Tags**: feature, permissions, breaking
-Currently `create` means "create new branch". Change semantics: (1) `create` = create new files (useful for append-only patterns — agents can add files but not modify existing ones), (2) `branch` = new verb for creating branches. Update everywhere: parser, engine, shim, specs, docs, config examples, landing page playground prompt, tests, SKILL.md. The `own` verb expansion needs updating too (should include both `create` and `branch`). This is a breaking change to config format — existing configs using `create` for branches will need migration.
+
 
 ### Dark/light theme toggle
 - **Priority**: P2
@@ -94,6 +91,10 @@ Comprehensive mobile-responsive implementation for explorer pages. Stats grid: 3
 ### Full E2E demo script
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
 Complete hackathon demo: `repobox init` → `keys generate` → signed commit → push → clone → verify. Scripts: demo-e2e.sh (724 lines, quick/full modes), demo-reset.sh, docs/DEMO.md. Multi-agent simulation, visual progress indicators, error handling with cleanup. See detailed spec in In Progress section.
+
+### Verb refactor: create → new files, branch → new branches
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+Separated file creation (`create`) from branch creation (`branch`) with semantic validation. Updated parser, engine, documentation, and comprehensive test coverage. All 184 tests pass with proper rejection of invalid `create` with branch targets and helpful error messages. Breaking change to config format with clear migration path.
 
 ### Search across all repos
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)

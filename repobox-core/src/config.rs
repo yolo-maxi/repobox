@@ -138,13 +138,14 @@ pub enum Verb {
     // Branch verbs
     Push,
     Merge,
-    Create,
+    Branch,
     Delete,
     ForcePush,
     // File verbs
     Edit,
     Write,
     Append,
+    Create,
 }
 
 impl Verb {
@@ -153,6 +154,7 @@ impl Verb {
             "read" => Ok(Verb::Read),
             "push" => Ok(Verb::Push),
             "merge" => Ok(Verb::Merge),
+            "branch" => Ok(Verb::Branch),
             "create" => Ok(Verb::Create),
             "delete" => Ok(Verb::Delete),
             "force-push" => Ok(Verb::ForcePush),
@@ -166,12 +168,12 @@ impl Verb {
     pub fn is_branch_verb(self) -> bool {
         matches!(
             self,
-            Verb::Push | Verb::Merge | Verb::Create | Verb::Delete | Verb::ForcePush
+            Verb::Push | Verb::Merge | Verb::Branch | Verb::Delete | Verb::ForcePush
         )
     }
 
     pub fn is_file_verb(self) -> bool {
-        matches!(self, Verb::Edit | Verb::Write | Verb::Append)
+        matches!(self, Verb::Edit | Verb::Write | Verb::Append | Verb::Create)
     }
 
     pub fn is_access_verb(self) -> bool {
@@ -185,6 +187,7 @@ impl std::fmt::Display for Verb {
             Verb::Read => write!(f, "read"),
             Verb::Push => write!(f, "push"),
             Verb::Merge => write!(f, "merge"),
+            Verb::Branch => write!(f, "branch"),
             Verb::Create => write!(f, "create"),
             Verb::Delete => write!(f, "delete"),
             Verb::ForcePush => write!(f, "force-push"),

@@ -549,7 +549,7 @@ permissions:
   default: deny
   rules:
     - agents push >feature/**
-    - agents create >feature/**
+    - agents branch >feature/**
 "#);
         assert!(has_warning_containing(&w, "no file rules"),
             "expected missing file rules warning, got: {w:?}");
@@ -565,7 +565,7 @@ permissions:
   default: allow
   rules:
     - agents push >feature/**
-    - agents create >feature/**
+    - agents branch >feature/**
 "#);
         assert!(!has_warning_containing(&w, "no file rules"),
             "should NOT warn with default: allow: {w:?}");
@@ -624,7 +624,7 @@ permissions:
     - founders own >main
     - agents not push >main
     - agents push >feature/**
-    - agents create >feature/**
+    - agents branch >feature/**
     - agents edit * >feature/**
     - agents append ./.repobox/config.yml
 "#);

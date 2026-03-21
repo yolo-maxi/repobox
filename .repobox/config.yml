@@ -29,14 +29,14 @@ permissions:
 
     # ── Devs ── feature branches only ────────────
     - devs push >feature/**
-    - devs create >feature/**
+    - devs branch >feature/**
     - devs edit * >feature/**
     - devs append ./KANBAN.md >feature/**
     - devs not edit .repobox/config.yml
 
     # ── Reviewer ── review branches + log ────────
     - reviewers push >review/**
-    - reviewers create >review/**
+    - reviewers branch >review/**
     - reviewers edit * >review/**
     - reviewers append ./REVIEWS.md
     - reviewers not edit .repobox/config.yml
