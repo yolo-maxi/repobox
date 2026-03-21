@@ -677,6 +677,10 @@ Script that runs the complete flow: `repobox init` → `keys generate` → signe
 
 ## ✅ Done
 
+### Activity feed from push events
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+Server-side push logging in db.rs/git.rs/routes.rs (+172 lines). Both push routes covered, non-blocking error handling. Reviewed and approved.
+
 ### Rust server compilation + deployment
 - **Completed**: 2026-03-20
 Axum 0.8 fixes, deployed at git.repo.box:3490. PM2: repobox-git.
