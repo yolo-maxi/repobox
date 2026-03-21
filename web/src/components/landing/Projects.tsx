@@ -9,30 +9,30 @@ interface FeatureItem {
 }
 
 const AGENT_FEATURES: FeatureItem[] = [
-  { icon: "🔑", label: "Per-agent keys", detail: "Every agent gets a secp256k1 wallet. Every commit is signed." },
-  { icon: "🛡️", label: "Git shim", detail: "Intercepts push, merge, edit. Rules enforced before anything lands." },
-  { icon: "📄", label: "Config as code", detail: "One YAML file in your repo. Permissions travel with the code." },
-  { icon: "🔒", label: "Default deny", detail: "Agents only get what you explicitly allow. No implicit trust." },
+  { icon: "🔑", label: "Per-agent keys", detail: "Every agent gets its own wallet. Every commit signed." },
+  { icon: "🛡️", label: "Git shim", detail: "Intercepts push, merge, edit before anything lands." },
+  { icon: "📄", label: "Config as code", detail: "One YAML file. Permissions travel with the repo." },
+  { icon: "🔒", label: "Default deny", detail: "Agents only get what you explicitly allow." },
 ];
 
 const ONCHAIN_FEATURES: FeatureItem[] = [
-  { icon: "🏷️", label: "ENS identity", detail: "Use ENS names instead of raw addresses. On-chain resolution." },
-  { icon: "🪙", label: "Token-gated access", detail: "Gate repo access by NFT or ERC-20 ownership." },
-  { icon: "💸", label: "Streaming payments", detail: "Pay contributors via Superfluid streams proportional to commits." },
-  { icon: "🐛", label: "Bug bounties", detail: "ERC-8183 escrow. Agents report bugs, evaluator pays out." },
-  { icon: "🌐", label: "x402 paid reads", detail: "Monetize repo access. Pay-per-clone via HTTP 402." },
+  { icon: "🏷️", label: "ENS identity", detail: "Use ENS names instead of raw addresses." },
+  { icon: "🪙", label: "Token-gated access", detail: "Gate repos by NFT or ERC-20 ownership." },
+  { icon: "💸", label: "Streaming payments", detail: "Pay contributors via Superfluid streams." },
+  { icon: "🐛", label: "Bug bounties", detail: "ERC-8183 escrow for agent bug reports." },
+  { icon: "🌐", label: "x402 paid reads", detail: "Monetize repo access via HTTP 402." },
 ];
 
 function FeatureList({ items }: { items: FeatureItem[] }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {items.map((f) => (
-        <div key={f.label} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-          <span style={{ fontSize: 16, lineHeight: "22px", flexShrink: 0 }}>{f.icon}</span>
-          <div>
+        <div key={f.label} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+          <span style={{ fontSize: 14, flexShrink: 0 }}>{f.icon}</span>
+          <span style={{ whiteSpace: "nowrap" }}>
             <span style={{ color: "#ffffff", fontWeight: 600, fontSize: 13 }}>{f.label}</span>
             <span style={{ color: "var(--bp-dim)", fontSize: 12 }}> — {f.detail}</span>
-          </div>
+          </span>
         </div>
       ))}
     </div>
@@ -57,7 +57,7 @@ export function LandingProjects() {
 
   return (
     <section ref={sectionRef} className="reveal" style={{ marginBottom: 60 }}>
-      <div style={{ marginBottom: 32 }}>
+      <div style={{ marginBottom: 28 }}>
         <h2
           style={{
             fontSize: 12,
@@ -65,7 +65,7 @@ export function LandingProjects() {
             letterSpacing: "0.12em",
             color: "var(--bp-accent)",
             fontWeight: 500,
-            marginBottom: 16,
+            marginBottom: 14,
           }}
         >
           🤖 For AI Agents
@@ -81,7 +81,7 @@ export function LandingProjects() {
             letterSpacing: "0.12em",
             color: "var(--bp-accent2)",
             fontWeight: 500,
-            marginBottom: 16,
+            marginBottom: 14,
           }}
         >
           ⛓️ On-Chain Integrations
