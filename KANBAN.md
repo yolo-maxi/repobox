@@ -48,13 +48,7 @@ Each commit should show which EVM address signed it. Different agents = differen
 
 ## 🔨 In Progress
 
-### Enforce .repobox-config opt-in on server
-- **Priority**: P2
-- **Tags**: server
-- **Assignee**: pm-agent (0x9aBA6b1a5175CA8fd97D6c83c2Dd66dA6f47234b)
-- **Status**: Specification Complete, Ready for Implementation
 
-Change server permission enforcement from "all repos" to "opt-in only". Repositories must contain `.repobox/config.yml` in their tree to have permission rules enforced. Repos without this config file will have no permission enforcement (public read/write with signature requirements only).
 
   **DETAILED SPECIFICATION**: [`docs/specs/config-opt-in.md`](./docs/specs/config-opt-in.md)
 
@@ -720,6 +714,10 @@ Script that runs the complete flow: `repobox init` → `keys generate` → signe
 - **Tags**: infra
 
 ## ✅ Done
+
+### Config opt-in enforcement
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+Permission enforcement now opt-in only. Repos without .repobox/config.yml skip permission checks, just require EVM signatures.
 
 ### Explorer: signer address per commit
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
