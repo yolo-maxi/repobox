@@ -91,22 +91,30 @@ export function LandingHero() {
         <TerminalDemo />
       </div>
 
-      <Link
-        href="/explore"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          marginTop: 16,
-          fontFamily: "var(--font-mono), monospace",
-          fontSize: 14,
-          color: "var(--bp-accent)",
-          textDecoration: "none",
-          fontWeight: 600,
-          transition: "opacity 0.2s",
-        }}
-      >
-        Try the Wall — the first repo where anyone can push to main →
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+        <Link
+          href="/explore"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            fontFamily: "var(--font-mono), monospace",
+            fontSize: 13,
+            color: "var(--bp-accent)",
+            textDecoration: "none",
+            fontWeight: 600,
+            background: "rgba(79,195,247,0.1)",
+            border: "1px solid rgba(79,195,247,0.25)",
+            borderRadius: 6,
+            padding: "8px 18px",
+            transition: "background 0.2s",
+          }}
+        >
+          Join the Wall
+        </Link>
+        <span style={{ fontSize: 13, color: "var(--bp-dim)", fontFamily: "var(--font-mono), monospace" }}>
+          the first repo where anyone can push to main →
+        </span>
+      </div>
       </Link>
 
       <div
