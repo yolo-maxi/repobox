@@ -39,11 +39,6 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## 📋 Backlog
 
-### Wire up activity feed from push events
-- **Priority**: P1
-- **Tags**: explorer, server
-Server needs to log pushes to a table, API needs to return them. Explorer already has the UI.
-
 ### Add .repobox/config.yml to all studio projects
 - **Priority**: P1
 - **Tags**: dogfood
@@ -65,6 +60,409 @@ Each commit should show which EVM address signed it. Different agents = differen
 Server should check if `.repobox/config.yml` exists in the pushed tree. Repos without config = no permission enforcement.
 
 ## 🔨 In Progress
+
+### Wire up activity feed from push events
+- **Priority**: P1
+- **Tags**: explorer, server
+Server needs to log pushes to a table, API needs to return them. Explorer already has the UI.
+
+  **DETAILED SPECIFICATION:**
+
+  #### Database Schema Design
+  
+  The `push_log` table already exists in the SQLite database with the correct schema:
+  ```sql
+  CREATE TABLE IF NOT EXISTS push_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    address TEXT NOT NULL,           -- Repository owner EVM address  
+    name TEXT NOT NULL,              -- Repository name
+    pusher_address TEXT,             -- EVM address who made the push
+    commit_hash TEXT,                -- Latest commit hash from the push
+    commit_message TEXT,             -- Latest commit message
+    pushed_at TEXT NOT NULL          -- ISO timestamp of push event
+  );
+  ```
+  
+  **Indexes needed for performance:**
+  ```sql
+  CREATE INDEX IF NOT EXISTS idx_push_log_timestamp ON push_log(pushed_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_push_log_repo ON push_log(address, name);
+  ```
+
+  #### Architecture Overview
+  
+  **Current State:**
+  - ✅ UI exists: `web/src/app/explore/page.tsx` shows activity feed
+  - ✅ API exists: `web/src/app/api/explorer/activity/route.ts` queries push_log 
+  - ✅ Database helper: `web/src/lib/database.ts` with runQuery function
+  - ✅ Table schema: push_log table auto-created on first query
+  - ❌ **Missing**: Server-side logging when pushes happen
+  
+  **Integration Points:**
+  1. **Server logging**: Add push_log inserts in `repobox-server` 
+  2. **API optimization**: Add database indexes for query performance
+  3. **UI enhancement**: Activity feed already consuming the API correctly
+
+  #### Implementation Plan
+
+  ##### Phase 1: Database Schema Updates
+  **Files to modify:**
+  - `repobox-server/src/db.rs`
+    - Add `create_push_log_indexes()` function
+    - Add `insert_push_log()` function
+    - Update `init()` to create indexes
+  
+  **Database functions needed:**
+  ```rust
+  pub(crate) fn insert_push_log(
+      db_path: &Path,
+      address: &str,
+      name: &str, 
+      pusher_address: Option<&str>,
+      commit_hash: Option<&str>,
+      commit_message: Option<&str>,
+  ) -> std::io::Result<()>
+  
+  fn create_push_log_indexes(connection: &Connection) -> Result<(), rusqlite::Error>
+  ```
+
+  ##### Phase 2: Push Event Detection & Logging
+  **Files to modify:**
+  - `repobox-server/src/routes.rs`
+    - Add logging calls in `receive_pack()` function
+    - Add logging calls in `addressless_receive_pack()` function
+  - `repobox-server/src/git.rs`  
+    - Add helper function `extract_latest_commit_info()` to get commit details
+    - Update existing extraction functions to return commit message
+
+  **Integration points:**
+  1. **After successful push**: Log when `git receive-pack` completes successfully
+  2. **Extract commit details**: Get hash & message from HEAD after push
+  3. **Extract pusher**: Use existing `extract_pusher_from_head()` function
+  4. **Handle both routes**: Regular `/{address}/{repo}` and addressless `/{repo}`
+
+  #### Detailed Implementation Guide
+
+  ##### Step 1: Database Functions (`repobox-server/src/db.rs`)
+  
+  **Add push_log table creation to `init()`:**
+  ```rust
+  pub(crate) fn init(db_path: &Path) -> std::io::Result<()> {
+      let connection = Connection::open(db_path).map_err(to_io_error)?;
+      
+      // Existing repos table
+      connection.execute(/* existing repos table SQL */, []).map_err(to_io_error)?;
+      
+      // Add push_log table
+      connection.execute(
+          "CREATE TABLE IF NOT EXISTS push_log (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              address TEXT NOT NULL,
+              name TEXT NOT NULL,
+              pusher_address TEXT,
+              commit_hash TEXT,
+              commit_message TEXT,
+              pushed_at TEXT NOT NULL
+          )",
+          [],
+      ).map_err(to_io_error)?;
+      
+      // Create indexes for performance  
+      create_push_log_indexes(&connection).map_err(to_io_error)?;
+      Ok(())
+  }
+  
+  fn create_push_log_indexes(connection: &Connection) -> Result<(), rusqlite::Error> {
+      connection.execute(
+          "CREATE INDEX IF NOT EXISTS idx_push_log_timestamp ON push_log(pushed_at DESC)",
+          [],
+      )?;
+      connection.execute(
+          "CREATE INDEX IF NOT EXISTS idx_push_log_repo ON push_log(address, name)",
+          [],
+      )?;
+      Ok(())
+  }
+  ```
+
+  **Add push logging function:**
+  ```rust
+  pub(crate) fn insert_push_log(
+      db_path: &Path,
+      address: &str,
+      name: &str,
+      pusher_address: Option<&str>,
+      commit_hash: Option<&str>,
+      commit_message: Option<&str>,
+  ) -> std::io::Result<()> {
+      let connection = Connection::open(db_path).map_err(to_io_error)?;
+      connection
+          .execute(
+              "INSERT INTO push_log(address, name, pusher_address, commit_hash, commit_message, pushed_at)
+               VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
+              params![
+                  address,
+                  name,
+                  pusher_address,
+                  commit_hash,
+                  commit_message,
+                  now_string()
+              ],
+          )
+          .map_err(to_io_error)?;
+      Ok(())
+  }
+  ```
+
+  ##### Step 2: Commit Info Extraction (`repobox-server/src/git.rs`)
+
+  **Add commit info extraction helper:**
+  ```rust
+  #[derive(Debug, Clone)]
+  pub(crate) struct CommitInfo {
+      pub hash: String,
+      pub message: String,
+      pub pusher_address: Option<String>,
+  }
+  
+  /// Extract commit hash, message, and signer from HEAD after a push
+  pub(crate) fn extract_latest_commit_info(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Option<CommitInfo>> {
+      let repo_dir = repo_dir(data_dir, repo);
+      let repo_dir_str = repo_dir.to_string_lossy().to_string();
+
+      // Get HEAD commit hash
+      let output = Command::new("git")
+          .args(["--git-dir", &repo_dir_str, "rev-parse", "HEAD"])
+          .output()?;
+
+      if !output.status.success() {
+          return Ok(None);
+      }
+
+      let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+      // Get commit message (first line only for activity feed)
+      let output = Command::new("git")
+          .args(["--git-dir", &repo_dir_str, "log", "--format=%s", "-1", "HEAD"])
+          .output()?;
+
+      let message = if output.status.success() {
+          String::from_utf8_lossy(&output.stdout).trim().to_string()
+      } else {
+          String::new()
+      };
+
+      // Get pusher (signer) address
+      let pusher_address = extract_pusher_from_head(data_dir, repo)?;
+
+      Ok(Some(CommitInfo {
+          hash,
+          message,
+          pusher_address,
+      }))
+  }
+  ```
+
+  ##### Step 3: Push Logging Integration (`repobox-server/src/routes.rs`)
+
+  **Modify `receive_pack()` function:**
+  ```rust
+  async fn receive_pack(
+      State(state): State<Arc<AppState>>,
+      Path((address, repo)): Path<(String, String)>,
+      headers: HeaderMap,
+      body: Bytes,
+  ) -> Response {
+      let repo = match repo_path(address, repo) {
+          Ok(repo) => repo,
+          Err(status) => return status.into_response(),
+      };
+
+      if let Err(error) = ensure_repo_initialized(&state, &repo) {
+          return internal_error(error);
+      }
+
+      let response = backend_post(
+          &state,
+          &repo,
+          "/git-receive-pack",
+          header_value(&headers, "content-type"),
+          body,
+      );
+
+      // EXISTING ownership check code...
+
+      // NEW: Log the push event after successful processing
+      if response.status() == StatusCode::OK {
+          if let Ok(Some(commit_info)) = git::extract_latest_commit_info(&state.data_dir, &repo) {
+              let _ = db::insert_push_log(
+                  &state.db_path,
+                  &repo.address,
+                  &repo.name,
+                  commit_info.pusher_address.as_deref(),
+                  Some(&commit_info.hash),
+                  Some(&commit_info.message),
+              );
+              
+              tracing::info!(
+                  repo = %format!("{}/{}", repo.address, repo.name),
+                  pusher = ?commit_info.pusher_address,
+                  commit = %commit_info.hash[..8],
+                  "push logged to activity feed"
+              );
+          }
+      }
+
+      response
+  }
+  ```
+
+  **Similar modifications for `addressless_receive_pack()`:**
+  - Add the same logging logic after successful push processing
+  - Handle the case where the repo gets moved from staging to final location
+
+  #### Error Handling & Edge Cases
+
+  **Database Errors:**
+  - Push logging failures should NOT block the push operation
+  - Log database errors but continue normal git operation
+  - Use `let _ =` to explicitly ignore logging errors
+
+  **Commit Extraction Failures:**
+  - Handle repos with no commits (should not happen after successful push)
+  - Handle unsigned commits (pusher_address = NULL)
+  - Handle empty/malformed commit messages
+
+  **Concurrent Pushes:**
+  - SQLite handles concurrent inserts with AUTOINCREMENT primary key
+  - No additional locking needed
+
+  **Performance Considerations:**
+  - Database inserts are fast (<1ms typically)
+  - Indexes ensure efficient querying
+  - Commit info extraction reuses existing git commands
+
+  #### Testing Strategy
+
+  **Unit Tests (`repobox-server/src/db.rs`):**
+  ```rust
+  #[cfg(test)]
+  mod tests {
+      use super::*;
+      use tempdir::TempDir;
+
+      #[test]
+      fn test_insert_and_query_push_log() {
+          let temp_dir = TempDir::new("test_db").unwrap();
+          let db_path = temp_dir.path().join("test.db");
+          
+          init(&db_path).unwrap();
+          
+          insert_push_log(
+              &db_path,
+              "0x1234",
+              "test-repo",
+              Some("0x5678"),
+              Some("abcd1234"),
+              Some("feat: initial commit"),
+          ).unwrap();
+          
+          // Verify via sqlite3 command or rusqlite query
+      }
+  }
+  ```
+
+  **Integration Tests:**
+  - Test full push → log → API query flow
+  - Test both regular and addressless push routes  
+  - Test with signed and unsigned commits
+  - Test database index performance with large datasets
+
+  #### API Enhancements (Future)
+
+  **Current API is sufficient but could be enhanced:**
+  - Add filtering by repository: `GET /api/explorer/activity?repo=owner/name`
+  - Add filtering by pusher: `GET /api/explorer/activity?pusher=0x1234`
+  - Add pagination: `GET /api/explorer/activity?offset=20&limit=10`
+  - Add date ranges: `GET /api/explorer/activity?since=2026-01-01`
+
+  #### Acceptance Criteria (Definition of Done)
+
+  **Database Layer:**
+  - ✅ `push_log` table exists with proper schema
+  - ✅ Database indexes created for performance (timestamp, repo)  
+  - ✅ `insert_push_log()` function implemented and tested
+  - ✅ Database errors don't block git operations
+
+  **Server Integration:**
+  - ✅ Push events logged after successful `receive_pack` operations
+  - ✅ Both regular and addressless push routes log activity
+  - ✅ Commit hash, message, and pusher extracted correctly
+  - ✅ Unsigned commits handled gracefully (pusher_address = NULL)
+  - ✅ Logging failures don't break git operations
+
+  **API & UI:**
+  - ✅ Activity API returns push_log data correctly (already works)
+  - ✅ Explorer page shows "Recent Activity" instead of "No recent activity"  
+  - ✅ Activity items link to repository pages correctly
+  - ✅ Timestamps display in "X minutes ago" format
+
+  **Performance:**
+  - ✅ Push operations complete in same time as before (<500ms typically)
+  - ✅ Activity API queries complete in <100ms with indexes
+  - ✅ No memory leaks or resource issues under load
+
+  **Testing:**
+  - ✅ Unit tests for database functions
+  - ✅ Integration tests for full push → activity flow  
+  - ✅ Manual testing with multiple repos and users
+  - ✅ Load testing with concurrent pushes
+
+  #### Implementation Checklist
+
+  **Phase 1: Database Functions**
+  - [ ] Update `repobox-server/src/db.rs` with push_log functions
+  - [ ] Add indexes creation to `init()` function  
+  - [ ] Write unit tests for database operations
+  - [ ] Test database performance with sample data
+
+  **Phase 2: Git Integration** 
+  - [ ] Add `extract_latest_commit_info()` to `git.rs`
+  - [ ] Update `receive_pack()` in `routes.rs` to log pushes
+  - [ ] Update `addressless_receive_pack()` to log pushes  
+  - [ ] Handle staging-to-final repo moves correctly
+
+  **Phase 3: Testing & Validation**
+  - [ ] Write integration tests for push logging
+  - [ ] Manual testing with repobox CLI
+  - [ ] Verify activity feed displays correctly
+  - [ ] Performance testing under load
+
+  **Phase 4: Documentation & Deployment**
+  - [ ] Update server documentation
+  - [ ] Deploy to git.repo.box with database migration
+  - [ ] Monitor logs for any issues
+  - [ ] Verify production activity feed works
+
+  #### Dependencies & Considerations
+
+  **No Breaking Changes:**
+  - Database schema is additive (new table + indexes)
+  - Server API remains unchanged
+  - Git protocol compatibility maintained
+
+  **Deployment Notes:**
+  - Database migration automatic (CREATE TABLE IF NOT EXISTS)
+  - No downtime required for deployment
+  - Activity feed will populate from new pushes only (no historical data)
+
+  **Future Enhancements:**
+  - Could backfill historical activity from git log analysis
+  - Could add webhook notifications for activity events
+  - Could add activity filtering and search
+  - Could add RSS feed for public repositories
+
+  **Specced by**: pm-agent (0x9aBA6b1a5175CA8fd97D6c83c2Dd66dA6f47234b) | 2026-03-21
 
 ### Full E2E demo script
 - **Priority**: P0
