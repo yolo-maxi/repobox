@@ -589,12 +589,24 @@ fn parse_subject(s: &str) -> Result<Subject, ConfigError> {
 
 // Helper function for ENS name detection (copied from config.rs)
 fn is_ens_name(s: &str) -> bool {
-    s.contains('.') && (
-        s.ends_with(".eth") || s.ends_with(".box") || 
-        s.ends_with(".com") || s.ends_with(".xyz") || 
-        s.ends_with(".org") || s.ends_with(".io") || 
-        s.ends_with(".dev") || s.ends_with(".app")
-    )
+    if s.is_empty() || s.starts_with('.') || s.ends_with('.') {
+        return false;
+    }
+    
+    let dot_pos = s.find('.');
+    if dot_pos.is_none() {
+        return false;
+    }
+    
+    let dot_index = dot_pos.unwrap();
+    if dot_index == 0 {
+        return false; // Starts with dot
+    }
+    
+    s.ends_with(".eth") || s.ends_with(".box") || 
+    s.ends_with(".com") || s.ends_with(".xyz") || 
+    s.ends_with(".org") || s.ends_with(".io") || 
+    s.ends_with(".dev") || s.ends_with(".app")
 }
 
 /// Parse a verb string, handling "not" prefix.
@@ -1656,6 +1668,99 @@ permissions:
                 assert_eq!(id.address, "alice.eth");
             }
             _ => panic!("Expected Identity subject"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subject_ens_debug() {
+        // Test the exact case from the bug report
+        let result = parse_subject("vitalik.eth");
+        assert!(result.is_ok(), "Failed to parse vitalik.eth: {:?}", result.err());
+        
+        let subject = result.unwrap();
+        match subject {
+            Subject::Identity(id) => {
+                assert_eq!(id.kind, IdentityKind::Ens);
+                assert_eq!(id.address, "vitalik.eth");
+            }
+            Subject::Group(name) => panic!("❌ BUG: vitalik.eth incorrectly parsed as Group: {}", name),
+            Subject::All => panic!("❌ BUG: vitalik.eth incorrectly parsed as All"),
+        }
+        
+        // Test is_ens_name directly
+        assert!(is_ens_name("vitalik.eth"), "is_ens_name should return true for vitalik.eth");
+        
+        // Test other ENS cases that might be problematic
+        assert!(matches!(parse_subject("alice.eth").unwrap(), Subject::Identity(_)));
+        assert!(matches!(parse_subject("ens:alice.eth").unwrap(), Subject::Identity(_)));
+        assert!(matches!(parse_subject("test.box").unwrap(), Subject::Identity(_)));
+        
+        // Test non-ENS names should still be groups
+        assert!(matches!(parse_subject("notanens").unwrap(), Subject::Group(_)));
+        assert!(matches!(parse_subject("founders").unwrap(), Subject::Group(_)));
+    }
+    
+    #[test]
+    fn test_is_ens_name_comprehensive() {
+        // Test various ENS name formats
+        assert!(is_ens_name("vitalik.eth"), "vitalik.eth should be valid");
+        assert!(is_ens_name("alice.eth"), "alice.eth should be valid");
+        assert!(is_ens_name("test.box"), "test.box should be valid");
+        assert!(is_ens_name("example.com"), "example.com should be valid");
+        assert!(is_ens_name("subdomain.example.eth"), "subdomain.example.eth should be valid");
+        
+        // Test invalid cases
+        assert!(!is_ens_name("localhost"), "localhost should be invalid (no dot)");
+        assert!(!is_ens_name("invalid"), "invalid should be invalid (no dot)");
+        assert!(!is_ens_name("test.invalid"), "test.invalid should be invalid (bad TLD)");
+        assert!(!is_ens_name(".eth"), ".eth should be invalid (empty name)");
+        assert!(!is_ens_name("test."), "test. should be invalid (empty TLD)");
+        
+        // Edge cases
+        assert!(!is_ens_name(""), "empty string should be invalid");
+        assert!(!is_ens_name("."), "single dot should be invalid");
+        assert!(!is_ens_name(".."), "double dot should be invalid");
+    }
+    
+    #[test]
+    fn test_ens_with_groups_present() {
+        // Test the scenario where groups exist and ENS names are used in rules
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+    - vitalik.eth
+
+permissions:
+  default: deny
+  rules:
+    - "vitalik.eth push >main"
+    - "founders edit *"
+"#;
+        let result = parse(yaml);
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        
+        let config = result.unwrap();
+        assert_eq!(config.permissions.rules.len(), 2);
+        
+        // First rule: vitalik.eth should be parsed as Identity, not Group
+        let rule1 = &config.permissions.rules[0];
+        match &rule1.subject {
+            Subject::Identity(id) => {
+                assert_eq!(id.kind, IdentityKind::Ens);
+                assert_eq!(id.address, "vitalik.eth");
+            }
+            Subject::Group(name) => panic!("❌ BUG: vitalik.eth in rule incorrectly parsed as Group: {}", name),
+            _ => panic!("Expected Identity subject"),
+        }
+        
+        // Second rule: founders should be parsed as Group
+        let rule2 = &config.permissions.rules[1];
+        match &rule2.subject {
+            Subject::Group(name) => {
+                assert_eq!(name, "founders");
+            }
+            _ => panic!("Expected Group subject"),
         }
     }
 }

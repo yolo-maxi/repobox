@@ -1,0 +1,7 @@
+groups:
+  testgroup:
+    - evm:0x1234567890123456789012345678901234567890
+
+permissions:
+  rules:
+    - ".eth push >main"

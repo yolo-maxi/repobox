@@ -1,0 +1,3 @@
+permissions:
+  rules:
+    - ".eth push >main"
