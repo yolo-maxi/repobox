@@ -4,8 +4,6 @@ import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
   REPOBOX_SYSTEM_PROMPT,
-  VENICE_ENDPOINT,
-  VENICE_MODEL,
   EXPLAIN_EXAMPLES,
 } from "@/lib/repobox-prompt";
 
@@ -108,25 +106,18 @@ export function PlaygroundClient() {
         : `Explain this .repobox/config.yml in plain English. What can each group do? What are they denied?\n\n${input}`;
 
     try {
-      const res = await fetch(VENICE_ENDPOINT, {
+      const res = await fetch("/api/playground/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_VENICE_API_KEY}`,
         },
         body: JSON.stringify({
-          model: VENICE_MODEL,
-          stream: true,
           messages: [
             { role: "system", content: REPOBOX_SYSTEM_PROMPT },
             { role: "user", content: userMessage },
           ],
           temperature: 0.3,
           max_tokens: 2000,
-          venice_parameters: {
-            include_venice_system_prompt: false,
-            disable_thinking: true,
-          },
         }),
         signal: controller.signal,
       });
