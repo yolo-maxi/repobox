@@ -8,6 +8,7 @@ use repobox::config::{Identity, Verb};
 use repobox::engine;
 use repobox::identity;
 use repobox::parser;
+use repobox::resolver::RemoteResolver;
 use repobox::shim::{self, ShimAction};
 
 const CONFIG_TEMPLATE: &str = r#"# repo.box configuration
@@ -617,7 +618,7 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
             }
             _ => {
                 // Try ENS resolution
-                match Identity::parse_with_ens(id_str) {
+                match Identity::parse(id_str) {
                     Ok(id) => id,
                     Err(e) => {
                         eprintln!("error: invalid identity: {id_str}");
@@ -633,6 +634,11 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
     let target = repobox::config::Target::parse(target_str).unwrap();
     let identity_str = identity.to_string();
     let display = aliases::display_identity(home, &identity_str);
+    
+    // Create a remote resolver for ENS resolution
+    let resolver = std::env::var("ALCHEMY_API_KEY")
+        .ok()
+        .map(|_| RemoteResolver::new("https://repo.box/api"));
 
     // "own" → check all verbs
     if verb_str == "own" {
@@ -641,7 +647,7 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
         let mut denied = Vec::new();
         for vname in &all_verbs {
             let v = Verb::parse(vname).unwrap();
-            let r = engine::check(&config, &identity, v, target.branch.as_deref(), target.path.as_deref());
+            let r = engine::check_with_resolver(&config, &identity, v, target.branch.as_deref(), target.path.as_deref(), resolver.as_ref());
             if r.is_allowed() {
                 println!("  ✅ {vname} {target_str}");
             } else {
@@ -667,12 +673,13 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
         }
     };
 
-    let result = engine::check(
+    let result = engine::check_with_resolver(
         &config,
         &identity,
         verb,
         target.branch.as_deref(),
         target.path.as_deref(),
+        resolver.as_ref(),
     );
 
     if result.is_allowed() {

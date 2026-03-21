@@ -24,11 +24,6 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### ENS names in permissions
-- **Priority**: P1
-- **Tags**: feature, permissions, ens
-Allow ENS names in `.repobox/config.yml` rules, e.g. `vitalik.eth push >main`. Resolution at evaluation time (not parse time) so ownership changes follow the name. Short TTL cache.
-
 ### Playground refresh — visual, accuracy, speed
 - **Priority**: P1
 - **Tags**: playground, ui, ai
@@ -56,10 +51,10 @@ Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented
 
 ## 🔨 In Progress
 
-### Address component with ENS/subdomain resolution + human-readable URLs
+### ENS names in permissions
 - **Priority**: P1
-- **Tags**: feature, explorer, ui, ens
-Reusable `<AddressDisplay>` component. Resolution: ENS → repo.box subdomain → truncated hex. Hover: full address. Click: copy. All addresses clickable. Human-readable URL routing: `/explore/{ens-name}/` and `/explore/{subdomain}/` resolve and show repos. Add `/api/explorer/resolve/{name}` endpoint.
+- **Tags**: feature, permissions, ens
+Allow ENS names in `.repobox/config.yml` rules, e.g. `vitalik.eth push >main`. Resolution at evaluation time (not parse time) so ownership changes follow the name. Short TTL cache.
 
 ## 🚧 Blocked
 
