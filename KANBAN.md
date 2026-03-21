@@ -51,6 +51,11 @@ Allow ENS names in `.repobox/config.yml` rules, e.g. `vitalik.eth push >main`. R
 - **Tags**: playground, ui, ai
 Visual refresh, load system prompt from canonical source so it never drifts (currently missing `own`, `read`, `branch`), switch to faster Venice model, test both English→Config and Config→English modes.
 
+### Virtuals integration — bug report to payment flow
+- **Priority**: P1
+- **Tags**: feature, x402, virtuals, docs
+Ensure the full "virtuals" flow is implemented end-to-end: agent files bug report → creates branch → pushes fix → PR reviewed → merged → x402 payment triggered. Verify each step works with real EVM-signed commits and actual x402 micropayments. Then document it prominently: landing page case study, docs section, llms.txt, playground example. This is a key hackathon demo story — autonomous agent work with crypto-native payments. Make sure it's not just specced but actually functional and well-presented.
+
 ### Accurate llms.txt — critical for agent judges
 - **Priority**: P1
 - **Tags**: docs, agents
