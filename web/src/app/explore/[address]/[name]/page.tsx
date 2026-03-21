@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress, formatBytes, getFileIcon, copyToClipboard } from '@/lib/utils';
+import { resolveNameToAddress } from '@/lib/addressResolver';
 import { repoUrls, generateBreadcrumbs } from '@/lib/repoUrls';
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
 import BranchSelector from '@/components/BranchSelector';
@@ -68,6 +69,7 @@ type TabType = 'readme' | 'files' | 'commits' | 'contributors' | 'config';
 
 export default function RepoPage() {
   const params = useParams();
+  const router = useRouter();
   const [repo, setRepo] = useState<RepoDetails | null>(null);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [currentPath, setCurrentPath] = useState('');
@@ -81,22 +83,59 @@ export default function RepoPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>('HEAD');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
-  const address = Array.isArray(params.address) ? params.address[0] : params.address;
+  const addressOrName = Array.isArray(params.address) ? params.address[0] : params.address;
   const name = Array.isArray(params.name) ? params.name[0] : params.name;
 
+  // Resolve name to address if needed
   useEffect(() => {
-    if (!address || !name) return;
+    const resolveAddress = async () => {
+      if (!addressOrName) return;
+      
+      // If it's already an address, use it directly
+      if (/^0x[a-fA-F0-9]{40}$/i.test(addressOrName)) {
+        setResolvedAddress(addressOrName);
+        setResolving(false);
+        return;
+      }
+      
+      // Try to resolve name
+      try {
+        const resolved = await resolveNameToAddress(addressOrName);
+        if (resolved) {
+          setResolvedAddress(resolved);
+          // Update URL to canonical address form
+          router.replace(`/explore/${resolved}/${name}`);
+        } else {
+          // Name not found
+          setNotFound(true);
+        }
+      } catch (error) {
+        console.error('Resolution failed:', error);
+        setNotFound(true);
+      } finally {
+        setResolving(false);
+      }
+    };
+    
+    resolveAddress();
+  }, [addressOrName, name, router]);
+
+  useEffect(() => {
+    if (!resolvedAddress || !name) return;
     const fetchRepo = async () => {
       try {
         const branchParam = selectedBranch !== 'HEAD' ? `?branch=${selectedBranch}` : '';
         const configBranchParam = selectedBranch !== 'HEAD' ? `?branch=${selectedBranch}` : '';
         
         const [repoRes, commitsRes, branchesRes, contributorsRes] = await Promise.all([
-          fetch(`/api/explorer/repos/${address}/${name}${branchParam}`),
-          fetch(`/api/explorer/repos/${address}/${name}/commits?limit=30${selectedBranch !== 'HEAD' ? `&branch=${selectedBranch}` : ''}`),
-          fetch(`/api/explorer/repos/${address}/${name}/branches`),
-          fetch(`/api/explorer/repos/${address}/${name}/contributors`)
+          fetch(`/api/explorer/repos/${resolvedAddress}/${name}${branchParam}`),
+          fetch(`/api/explorer/repos/${resolvedAddress}/${name}/commits?limit=30${selectedBranch !== 'HEAD' ? `&branch=${selectedBranch}` : ''}`),
+          fetch(`/api/explorer/repos/${resolvedAddress}/${name}/branches`),
+          fetch(`/api/explorer/repos/${resolvedAddress}/${name}/contributors`)
         ]);
         
         if (repoRes.ok) {
@@ -128,7 +167,7 @@ export default function RepoPage() {
         }
         
         // Try to fetch .repobox/config.yml
-        const configRes = await fetch(`/api/explorer/repos/${address}/${name}/blob/.repobox/config.yml${configBranchParam}`);
+        const configRes = await fetch(`/api/explorer/repos/${resolvedAddress}/${name}/blob/.repobox/config.yml${configBranchParam}`);
         if (configRes.ok) {
           const data = await configRes.json();
           if (data.content) {
@@ -143,18 +182,18 @@ export default function RepoPage() {
       }
     };
     fetchRepo();
-  }, [address, name, selectedBranch]);
+  }, [resolvedAddress, name, selectedBranch]);
 
   const navigateToPath = (path: string) => {
     // Use GitHub-style URLs for directory navigation
-    if (!address || !name) return;
-    window.location.href = repoUrls.tree(address, name, selectedBranch || 'HEAD', path);
+    if (!resolvedAddress || !name) return;
+    window.location.href = repoUrls.tree(resolvedAddress, name, selectedBranch || 'HEAD', path);
   };
 
   const viewFile = (filePath: string) => {
     // Use GitHub-style URLs for file viewing
-    if (!address || !name) return;
-    window.location.href = repoUrls.blob(address, name, selectedBranch || 'HEAD', filePath);
+    if (!resolvedAddress || !name) return;
+    window.location.href = repoUrls.blob(resolvedAddress, name, selectedBranch || 'HEAD', filePath);
   };
 
   const handleBranchChange = async (newBranch: string) => {
@@ -182,7 +221,42 @@ export default function RepoPage() {
     setTimeout(() => setAddrCopied(false), 2000);
   };
 
-  if (!address || !name) return null;
+  if (!addressOrName || !name) return null;
+
+  if (resolving) {
+    return (
+      <div className="explore-layout">
+        <ExploreHeader />
+        <div className="explore-container">
+          <ExploreSidebar />
+          <main className="explore-main">
+            <div className="explore-loading">
+              <div className="explore-loading-spinner"></div>
+              <p>Resolving address...</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div className="explore-layout">
+        <ExploreHeader />
+        <div className="explore-container">
+          <ExploreSidebar />
+          <main className="explore-main">
+            <div className="explore-empty">
+              <h3>Address not found</h3>
+              <p>Could not resolve "{addressOrName}" to an address.</p>
+              <Link href="/explore" className="explore-back-link">← Back to Explorer</Link>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -220,7 +294,7 @@ export default function RepoPage() {
 
   // Generate breadcrumbs for current navigation
   const breadcrumbs = generateBreadcrumbs(
-    address, 
+    resolvedAddress || '', 
     name, 
     selectedBranch, 
     currentPath, 
@@ -365,7 +439,7 @@ export default function RepoPage() {
 
           {/* Repository Stats */}
           <RepoStatsCards 
-            address={address} 
+            address={resolvedAddress || ''} 
             name={name} 
             branch={selectedBranch}
           />
@@ -399,7 +473,7 @@ export default function RepoPage() {
                   <div className="explore-readme-content">
                     <MarkdownRenderer 
                       content={repo.readme_content}
-                      baseUrl={`/api/explorer/repos/${address}/${name}/blob/`}
+                      baseUrl={`/api/explorer/repos/${resolvedAddress}/${name}/blob/`}
                       className="explore-readme-markdown"
                     />
                   </div>
@@ -489,7 +563,7 @@ export default function RepoPage() {
                 <div className="explore-commits-header">
                   <h3>Recent commits on {selectedBranch}</h3>
                   <Link 
-                    href={repoUrls.commits(address, name, selectedBranch)}
+                    href={repoUrls.commits(resolvedAddress || '', name, selectedBranch)}
                     className="explore-action-btn"
                   >
                     View all commits
@@ -502,7 +576,7 @@ export default function RepoPage() {
                     <div key={commit.hash} className="explore-commit-item">
                       <div className="explore-commit-message">
                         <Link 
-                          href={repoUrls.commit(address, name, commit.hash)}
+                          href={repoUrls.commit(resolvedAddress || '', name, commit.hash)}
                           className="explore-commit-message-link"
                         >
                           {commit.message}
@@ -514,7 +588,7 @@ export default function RepoPage() {
                           {formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}
                         </span>
                         <Link 
-                          href={repoUrls.commit(address, name, commit.hash)}
+                          href={repoUrls.commit(resolvedAddress || '', name, commit.hash)}
                           className="explore-commit-hash"
                         >
                           <code>{commit.hash.slice(0, 7)}</code>
@@ -566,7 +640,7 @@ export default function RepoPage() {
 
                     <ContributionChart
                       contributors={contributors}
-                      address={address}
+                      address={resolvedAddress || ''}
                       name={name}
                       branch={selectedBranch}
                     />
