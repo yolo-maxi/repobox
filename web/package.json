@@ -15,8 +15,10 @@
   "license": "ISC",
   "packageManager": "pnpm@10.28.2",
   "dependencies": {
+    "@noble/curves": "^2.0.1",
     "@tailwindcss/typography": "^0.5.19",
     "gray-matter": "^4.0.3",
+    "js-sha3": "^0.9.3",
     "marked": "^17.0.4",
     "next": "^16.2.0",
     "react": "^19.2.4",

@@ -29,6 +29,9 @@ interface Commit {
   email: string;
   timestamp: number;
   message: string;
+  signerAddress?: string;
+  signatureValid?: boolean;
+  ownerAddress?: string;
 }
 
 interface FileContent {
@@ -337,24 +340,45 @@ export default function RepoPage() {
           </div>
         )}
 
-        {/* Commits Tab — show address, not author name */}
+        {/* Commits Tab — show signer address per commit */}
         {activeTab === 'commits' && (
           <div className="explore-commit-list">
             {commits.length === 0 ? (
               <div className="explore-empty"><p>No commits found</p></div>
             ) : (
-              commits.map((commit) => (
-                <div key={commit.hash} className="explore-commit-item">
-                  <div className="explore-commit-message">{commit.message}</div>
-                  <div className="explore-commit-meta">
-                    <code className="explore-commit-author">{formatAddress(repo.owner_address)}</code>
-                    <span className="explore-commit-time">
-                      {formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}
-                    </span>
-                    <code className="explore-commit-hash">{commit.hash.slice(0, 7)}</code>
+              commits.map((commit) => {
+                const isOwnerCommit = commit.signerAddress?.toLowerCase() === commit.ownerAddress?.toLowerCase();
+                const hasValidSignature = commit.signatureValid;
+                
+                return (
+                  <div key={commit.hash} className="explore-commit-item">
+                    <div className="explore-commit-message">{commit.message}</div>
+                    <div className="explore-commit-meta">
+                      {/* Signer Address */}
+                      {hasValidSignature && commit.signerAddress ? (
+                        <div className="explore-commit-signer">
+                          <span className={`explore-commit-signer-badge ${isOwnerCommit ? 'owner' : 'collaborator'}`}>
+                            {isOwnerCommit ? 'Owner' : 'Collaborator'}
+                          </span>
+                          <code className="explore-commit-author">
+                            {formatAddress(commit.signerAddress)}
+                          </code>
+                        </div>
+                      ) : (
+                        <div className="explore-commit-signer">
+                          <span className="explore-commit-signer-badge unsigned">Unsigned</span>
+                          <code className="explore-commit-author">{commit.author}</code>
+                        </div>
+                      )}
+                      
+                      <span className="explore-commit-time">
+                        {formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}
+                      </span>
+                      <code className="explore-commit-hash">{commit.hash.slice(0, 7)}</code>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

@@ -39,11 +39,6 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## 📋 Backlog
 
-### Explorer: show signer address per commit (not just owner)
-- **Priority**: P1
-- **Tags**: explorer
-Each commit should show which EVM address signed it. Different agents = different addresses visible.
-
 ### Enforce .repobox-config opt-in on server
 - **Priority**: P2
 - **Tags**: server
@@ -51,7 +46,10 @@ Server should check if `.repobox/config.yml` exists in the pushed tree. Repos wi
 
 ## 🔨 In Progress
 
-
+### Explorer: show signer address per commit (not just owner)
+- **Priority**: P1
+- **Tags**: explorer
+Each commit should show which EVM address signed it. Different agents = different addresses visible.
 
 ### Add .repobox/config.yml to all studio projects
 - **Priority**: P1

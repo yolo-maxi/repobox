@@ -53,6 +53,10 @@ export function getRepoPath(address: string, name: string): string {
   return path.join(DATA_DIR, address, `${name}.git`);
 }
 
+export function getRepo(address: string, name: string): Repo | undefined {
+  return runQueryOne<Repo>('SELECT * FROM repos WHERE address = ? AND name = ?', [address, name]);
+}
+
 export interface Repo {
   address: string;
   name: string;
