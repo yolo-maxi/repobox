@@ -110,7 +110,7 @@ groups:
 
 ### Group Includes
 
-Groups can include other groups:
+Groups can include other groups. In the simple list form, any entry that doesn't start with `evm:` is treated as a group include:
 
 ```yaml
 groups:
@@ -118,20 +118,21 @@ groups:
     - evm:0xAlice...
   extended:
     - evm:0xBob...
-    includes:
-      - core
+    - core              # includes all members of 'core'
 ```
+
+You can also use `group:` prefix to be explicit: `- group:core`
 
 ### HTTP Resolver (Off-Chain)
 
-Resolves membership dynamically via an HTTP endpoint:
+Resolver groups are defined as a mapping (not a list). Membership is checked dynamically via an HTTP endpoint:
 
 ```yaml
 groups:
   company:
     resolver: http
     url: https://api.example.com/groups/company
-    cache_ttl: 60  # seconds, 0 = no cache
+    cache_ttl: 60  # seconds (default: 300)
 ```
 
 The server calls `GET <url>/members/<address>` and expects `{ "member": true }` or `{ "member": false }`.
@@ -146,24 +147,13 @@ groups:
     resolver: onchain
     chain: 8453              # Base mainnet
     contract: "0xDDD..."
-    function: isMember       # function(address) → bool
+    function: isMember       # function(address) → bool (default: isMember)
     cache_ttl: 300           # seconds
 ```
 
 The repo.box server proxies the call: `GET /resolve?chain=8453&contract=0x...&function=isMember&address=0x...`
 
-### Mixed Groups
-
-Groups can combine static members with a resolver:
-
-```yaml
-groups:
-  team:
-    - evm:0xAlice...         # always a member
-    resolver: http           # also check dynamically
-    url: https://api.example.com/team
-    cache_ttl: 120
-```
+**Note**: Resolver groups are resolver-only — they cannot also have static members or includes. If you need both static members and dynamic resolution, use two separate groups and reference both in your rules.
 
 ---
 
@@ -193,17 +183,17 @@ agents not push >main
 | `read` | Files | Clone / fetch (server) | Can read / clone the repo |
 | `push` | Branches | `git push` | Can push to the branch |
 | `merge` | Branches | `git merge` | Can merge into the branch |
-| `create` | Branches | `git branch`, `git checkout -b` | Can create the branch |
+| `create` | Branches + Files | `git branch`, `git checkout -b`, `git commit` (new file) | Can create the branch; also the verb for adding new files |
 | `delete` | Branches | `git branch -d` | Can delete the branch |
 | `force-push` | Branches | `git push --force` | Can force-push to the branch |
-| `write` | Files | `git commit` | Can create new files (not modify existing) |
+| `write` | Files | `git commit` | General file write (currently not auto-classified; use `create` for new files) |
 | `append` | Files | `git commit` | Can add lines to files (no deletions) |
 | `edit` | Files | `git commit` | Can modify or delete content (superset of `write` and `append`) |
 
-**Verb hierarchy**: `edit` > `append` > `write`. If you have `edit`, you implicitly have `append` and `write`.
+**Verb hierarchy**: `edit` is the general file-modification verb. `create`, `write`, and `append` are specific sub-verbs. If you grant `edit`, it implicitly covers all sub-verbs. **But not the reverse** — granting `append` does NOT give `create`, `write`, or `edit` permission. The sub-verbs are independent of each other. Also: if `edit` is explicitly denied, it blocks all sub-verbs regardless of their individual permissions.
 
 **Verb classification** (at commit time, client-side shim):
-- New file (staged as `A`) → `write`
+- New file (staged as `A`) → `create`
 - Modified file, only additions in diff, zero deletions → `append`  
 - Modified file with any deletions → `edit`
 
@@ -242,9 +232,10 @@ groups:
     - evm:0xAgent2000000000000000000000000000000004
 
   community:
-    includes:
-      - founders
-      - agents
+    - founders                         # include the founders group
+    - agents                           # include the agents group
+
+  community-external:
     resolver: http
     url: https://api.example.com/community
     cache_ttl: 120
@@ -263,7 +254,8 @@ permissions:
     - "* read ./**"                    # anyone can clone
 
     # Branch permissions
-    - "community push >main"           # community can push to main
+    - "community push >main"           # static community can push to main
+    - "community-external push >main"  # dynamically resolved members too
     - "agents push >agent/**"          # agents can push to agent/ branches
     - "* create >feature/**"           # anyone can create feature branches
     - "founders merge >main"           # only founders merge to main

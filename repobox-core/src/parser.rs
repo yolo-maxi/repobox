@@ -488,8 +488,8 @@ fn parse_rule_value(
 /// Write-oriented verbs expanded by `own`. Read is handled separately
 /// because it's always repo-level (>*) regardless of the own target.
 const OWN_WRITE_VERBS: &[Verb] = &[
-    Verb::Push, Verb::Merge, Verb::Create, Verb::Delete, Verb::ForcePush,
-    Verb::Edit, Verb::Write, Verb::Append,
+    Verb::Push, Verb::Merge, Verb::Branch, Verb::Delete, Verb::ForcePush,
+    Verb::Edit, Verb::Write, Verb::Append, Verb::Create,
 ];
 
 /// The repo-level read target, always >*
@@ -1038,7 +1038,7 @@ permissions:
     - "agents":
         push:
           - ">feature/**"
-        create:
+        branch:
           - ">feature/**"
 "#;
         let config = parse(yaml).unwrap();
@@ -1046,7 +1046,7 @@ permissions:
         assert_eq!(config.permissions.rules.len(), 3);
         assert_eq!(config.permissions.rules[0].verb, Verb::Edit);
         assert_eq!(config.permissions.rules[1].verb, Verb::Push);
-        assert_eq!(config.permissions.rules[2].verb, Verb::Create);
+        assert_eq!(config.permissions.rules[2].verb, Verb::Branch);
     }
 
     // ========== Format B: subject-grouped rules ==========
@@ -1136,7 +1136,7 @@ permissions:
     agents:
       push:
         - ">feature/**"
-      create:
+      branch:
         - ">feature/**"
 "#;
         let config = parse(yaml).unwrap();
@@ -1146,7 +1146,7 @@ permissions:
         // agents: 2 rules from verb-mapping format
         assert!(matches!(&config.permissions.rules[2].subject, Subject::Group(g) if g == "agents"));
         assert_eq!(config.permissions.rules[2].verb, Verb::Push);
-        assert_eq!(config.permissions.rules[3].verb, Verb::Create);
+        assert_eq!(config.permissions.rules[3].verb, Verb::Branch);
     }
 
     // ========== Wildcard subject * ==========
@@ -1243,8 +1243,8 @@ permissions:
     - founders own >main
 "#;
         let config = parse(yaml).unwrap();
-        // own expands to 8 verbs
-        assert_eq!(config.permissions.rules.len(), 9);
+        // own expands to 9 verbs (including new branch and create verbs)
+        assert_eq!(config.permissions.rules.len(), 10);
 
         let founder = Identity::parse("evm:0xAAA0000000000000000000000000000000000001").unwrap();
         use crate::engine;
@@ -1253,12 +1253,13 @@ permissions:
         assert!(engine::check(&config, &founder, Verb::Read, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Push, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Merge, Some("main"), None).is_allowed());
-        assert!(engine::check(&config, &founder, Verb::Create, Some("main"), None).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Branch, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Delete, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::ForcePush, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Edit, Some("main"), Some("any.txt")).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Write, Some("main"), Some("any.txt")).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Append, Some("main"), Some("any.txt")).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Create, Some("main"), Some("any.txt")).is_allowed());
     }
 
     #[test]
@@ -1274,7 +1275,7 @@ permissions:
       - own >main
 "#;
         let config = parse(yaml).unwrap();
-        assert_eq!(config.permissions.rules.len(), 9);
+        assert_eq!(config.permissions.rules.len(), 10);
     }
 
     #[test]
@@ -1292,8 +1293,42 @@ permissions:
         - ">dev"
 "#;
         let config = parse(yaml).unwrap();
-        // 8 verbs × 2 targets = 16 rules
-        assert_eq!(config.permissions.rules.len(), 18);
+        // 9 verbs × 2 targets = 18 rules, plus 2 read rules = 20 rules
+        assert_eq!(config.permissions.rules.len(), 20);
+    }
+
+    #[test]
+    fn test_create_parses_as_file_verb() {
+        let verb = Verb::parse("create").unwrap();
+        assert_eq!(verb, Verb::Create);
+        assert!(verb.is_file_verb());
+        assert!(!verb.is_branch_verb());
+    }
+
+    #[test]  
+    fn test_branch_parses_as_branch_verb() {
+        let verb = Verb::parse("branch").unwrap();
+        assert_eq!(verb, Verb::Branch);
+        assert!(verb.is_branch_verb());
+        assert!(!verb.is_file_verb());
+    }
+
+    #[test]
+    fn test_own_expands_to_include_both_create_and_branch() {
+        let yaml = r#"
+groups:
+  owners: [evm:0xAAA0000000000000000000000000000000000001]
+permissions:
+  rules:
+    - owners own >main
+"#;
+        let config = parse(yaml).unwrap();
+        // Should have 10 rules total (read + 9 write verbs including both branch and create)
+        assert_eq!(config.permissions.rules.len(), 10);
+        
+        let verbs: Vec<_> = config.permissions.rules.iter().map(|r| r.verb).collect();
+        assert!(verbs.contains(&Verb::Branch));
+        assert!(verbs.contains(&Verb::Create));
     }
 
     #[test]
@@ -1463,6 +1498,6 @@ permissions:
         let config = parse(yaml).unwrap();
         assert!(config.groups["founders"].resolver.is_none());
         assert!(config.groups["dao"].resolver.is_some());
-        assert_eq!(config.permissions.rules.len(), 10); // 9 from own + 1
+        assert_eq!(config.permissions.rules.len(), 11); // 10 from own + 1
     }
 }

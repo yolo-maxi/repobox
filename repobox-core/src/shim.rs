@@ -158,13 +158,13 @@ fn check_commit(
     }
 
     // Check file permissions for each staged file.
-    // Classify the change type (write/append/edit) and check permissions.
+    // Classify the change type (create/write/append/edit) and check permissions.
     //
     // Hierarchy: `edit` is the general file-modification verb.
-    // `write` and `append` are specific sub-verbs.
+    // `create`, `write` and `append` are specific sub-verbs.
     //
     // Logic:
-    // 1. Check the specific verb (write/append). If explicitly allowed → OK.
+    // 1. Check the specific verb (create/write/append). If explicitly allowed → OK.
     // 2. Check `edit` (general). If explicitly allowed → OK (edit covers all).
     // 3. If `edit` is explicitly denied → BLOCKED (deny on edit blocks all sub-verbs).
     // 4. Otherwise → use the specific verb's result.
@@ -183,7 +183,7 @@ fn check_commit(
             continue;
         }
 
-        // For write/append: check both the specific verb and `edit`
+        // For create/write/append: check both the specific verb and `edit`
         let specific = engine::check_with_resolver(config, identity, verb, current_branch, Some(file), resolver);
         let general = engine::check_with_resolver(config, identity, Verb::Edit, current_branch, Some(file), resolver);
 
@@ -201,6 +201,7 @@ fn check_commit(
 
         // Neither allowed
         let verb_name = match verb {
+            Verb::Create => "create",
             Verb::Write => "write",
             Verb::Append => "append to",
             _ => "edit",
@@ -302,12 +303,12 @@ fn check_checkout(
         None => return ShimAction::Delegate,
     };
 
-    let result = engine::check_with_resolver(config, identity, Verb::Create, Some(&branch_name), None, resolver);
+    let result = engine::check_with_resolver(config, identity, Verb::Branch, Some(&branch_name), None, resolver);
     if result.is_allowed() {
         ShimAction::Delegate
     } else {
         ShimAction::Block(format!(
-            "permission denied: {} cannot create branch {branch_name}",
+            "permission denied: {} cannot branch {branch_name}",
             identity
         ))
     }
@@ -339,12 +340,12 @@ fn check_branch(
     let branch_name = args.iter().skip(1).find(|a| !a.starts_with('-'));
     if let Some(branch) = branch_name {
         if branch != "branch" {
-            let result = engine::check_with_resolver(config, identity, Verb::Create, Some(branch), None, resolver);
+            let result = engine::check_with_resolver(config, identity, Verb::Branch, Some(branch), None, resolver);
             if result.is_allowed() {
                 ShimAction::Delegate
             } else {
                 ShimAction::Block(format!(
-                    "permission denied: {} cannot create branch {branch}",
+                    "permission denied: {} cannot branch {branch}",
                     identity
                 ))
             }
@@ -392,7 +393,7 @@ pub fn classify_staged_file(file: &str, repo_root: &Path) -> Verb {
     if let Ok(out) = status_output {
         let added_files = String::from_utf8_lossy(&out.stdout);
         if added_files.lines().any(|l| l == file) {
-            return Verb::Write;
+            return Verb::Create;
         }
     }
 
@@ -832,7 +833,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "agents create >feature/*"
+    - "agents branch >feature/*"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -853,7 +854,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "agents create >feature/*"
+    - "agents branch >feature/*"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -876,7 +877,7 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "agents create >feature/*"
+    - "agents branch >feature/*"
 "#;
         let (_tmp, repo) = setup_repo_with_config(config);
 
@@ -1046,8 +1047,8 @@ permissions:
             Some(&agent),
             Some("main"),
         );
-        assert!(matches!(action, ShimAction::Block(ref msg) if msg.contains("cannot write") || msg.contains("cannot edit")),
-            "Agent should be blocked from writing files on main, got: {:?}", action);
+        assert!(matches!(action, ShimAction::Block(ref msg) if msg.contains("cannot create") || msg.contains("cannot write") || msg.contains("cannot edit")),
+            "Agent should be blocked from creating/writing/editing files on main, got: {:?}", action);
     }
 
     /// Agent CAN edit files on feature branches when they have edit * >feature/**
@@ -1181,6 +1182,111 @@ permissions:
 
     /// Test verb classification: new file = write, append-only = append, modification = edit
     #[test]
+    fn test_file_creation_requires_create_permission() {
+        let config = r#"
+groups:
+  developers: [evm:0xAAA0000000000000000000000000000000000001]
+permissions:
+  default: deny
+  rules:
+    - developers create src/**     # Can create files in src/
+    - developers not branch >*     # Cannot create branches
+"#;
+        let (_tmp, repo) = setup_repo_with_config(config);
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
+
+        let dev = id("evm:0xAAA0000000000000000000000000000000000001");
+
+        // Test file creation - should be allowed
+        std::fs::create_dir_all(repo.join("src")).unwrap();
+        std::fs::write(repo.join("src").join("new.rs"), "fn main() {}").unwrap();
+        Command::new("git").args(["add", "src/new.rs"]).current_dir(&repo).output().unwrap();
+        
+        let action = process_command(
+            &args("commit -m new"),
+            Some(&repo),
+            Some(&dev),
+            Some("main"),
+        );
+        assert!(matches!(action, ShimAction::Delegate));
+    }
+
+    #[test]
+    fn test_branch_creation_uses_branch_verb() {
+        let config = r#"
+groups:
+  developers: [evm:0xAAA0000000000000000000000000000000000001]
+permissions:
+  default: deny
+  rules:
+    - developers branch >feature/**  # Can create feature branches
+    - developers create src/**       # Can create files
+"#;
+        let (_tmp, repo) = setup_repo_with_config(config);
+
+        let dev = id("evm:0xAAA0000000000000000000000000000000000001");
+        
+        // Test branch creation - should be allowed
+        let action = process_command(
+            &args("checkout -b feature/new-feature"),
+            Some(&repo),
+            Some(&dev),
+            Some("main"),
+        );
+        assert!(matches!(action, ShimAction::Delegate));
+
+        // Test branch creation for non-feature branch - should be denied
+        let action = process_command(
+            &args("checkout -b release/v1.0"),
+            Some(&repo),
+            Some(&dev),
+            Some("main"),
+        );
+        assert!(matches!(action, ShimAction::Block(_)));
+    }
+
+    #[test]
+    fn test_create_file_vs_branch_permissions() {
+        let config = r#"
+groups:
+  developers: [evm:0xAAA0000000000000000000000000000000000001]
+permissions:
+  default: deny
+  rules:
+    - developers create src/**     # Can create files in src/
+    - developers not branch >*     # Cannot create branches
+"#;
+        let (_tmp, repo) = setup_repo_with_config(config);
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
+
+        let dev = id("evm:0xAAA0000000000000000000000000000000000001");
+        
+        // Can create files
+        std::fs::create_dir_all(repo.join("src")).unwrap();
+        std::fs::write(repo.join("src").join("new.rs"), "fn main() {}").unwrap();
+        Command::new("git").args(["add", "src/new.rs"]).current_dir(&repo).output().unwrap();
+        
+        let action = process_command(
+            &args("commit -m new"),
+            Some(&repo),
+            Some(&dev),
+            Some("main"),
+        );
+        assert!(matches!(action, ShimAction::Delegate));
+
+        // Cannot create branches  
+        let action = process_command(
+            &args("checkout -b feature/new"),
+            Some(&repo),
+            Some(&dev),
+            Some("main"),
+        );
+        assert!(matches!(action, ShimAction::Block(_)));
+    }
+
+    #[test]
     fn test_verb_classification_write_append_edit() {
         let config = r#"
 groups:
@@ -1197,7 +1303,7 @@ permissions:
         // Test 1: New file → Write
         std::fs::write(repo.join("new.txt"), "hello\n").unwrap();
         Command::new("git").args(["add", "new.txt"]).current_dir(&repo).output().unwrap();
-        assert_eq!(classify_staged_file("new.txt", &repo), Verb::Write, "New file should be Write");
+        assert_eq!(classify_staged_file("new.txt", &repo), Verb::Create, "New file should be Create");
 
         // Commit it so we can test modifications
         Command::new("git").args(["commit", "-m", "add"]).current_dir(&repo).output().unwrap();
