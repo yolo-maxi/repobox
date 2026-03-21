@@ -205,21 +205,9 @@ repo.box includes a built-in linter with 8 checks that auto-runs when `.repobox/
 
 Lint warnings are printed to stderr but don't block commits — parse errors do.
 
-## On-Chain Resolver Proxy
+## On-Chain Resolver
 
-For on-chain group resolution, the server at `git.repo.box` already runs a resolver proxy that handles RPC calls — no setup needed for hosted repos.
-
-For self-hosted instances:
-
-```bash
-# Start the resolver server with your own Alchemy key
-ALCHEMY_API_KEY=your-key repobox-server --bind 0.0.0.0:3456
-
-# Point the CLI at it
-export REPOBOX_SERVER=https://your-server.com/api
-```
-
-The server proxies `eth_call` requests to Alchemy, supporting 40+ EVM chains.
+On-chain group membership (e.g. token-gated access, DAO roles) is resolved automatically via `git.repo.box` — no API keys or setup needed. Supports 40+ EVM chains.
 
 ## Environment Variables
 
