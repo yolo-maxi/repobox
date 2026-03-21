@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 type Test = { text: string; status: 'pending' | 'passing' | 'failing' }
 type Component = { name: string; tests: Test[] }
@@ -94,8 +95,13 @@ export default function Dashboard() {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.h1}>🪸 repo.box</h1>
-      <p style={styles.subtitle}>Build Dashboard — Synthesis Hackathon (deadline: Mar 23)</p>
+      <div style={styles.header}>
+        <div>
+          <h1 style={styles.h1}>🪸 repo.box</h1>
+          <p style={styles.subtitle}>Build Dashboard — Synthesis Hackathon (deadline: Mar 23)</p>
+        </div>
+        <ThemeToggle />
+      </div>
 
       <div style={styles.tabs}>
         {['overview', 'tests', 'stories', 'specs', 'skill'].map(t => (
@@ -107,17 +113,17 @@ export default function Dashboard() {
 
       {/* STATS */}
       <div style={styles.stats}>
-        <div style={styles.stat}><div style={{ ...styles.statValue, color: '#60a5fa' }}>{totalTests}</div><div style={styles.statLabel}>Total</div></div>
-        <div style={styles.stat}><div style={{ ...styles.statValue, color: '#4ade80' }}>{passingTests}</div><div style={styles.statLabel}>Passing</div></div>
-        <div style={styles.stat}><div style={{ ...styles.statValue, color: '#f87171' }}>{failingTests}</div><div style={styles.statLabel}>Failing</div></div>
-        <div style={styles.stat}><div style={{ ...styles.statValue, color: '#facc15' }}>{totalTests - passingTests - failingTests}</div><div style={styles.statLabel}>Pending</div></div>
+        <div style={styles.stat}><div style={{ ...styles.statValue, color: 'var(--info-text)' }}>{totalTests}</div><div style={styles.statLabel}>Total</div></div>
+        <div style={styles.stat}><div style={{ ...styles.statValue, color: 'var(--success-text)' }}>{passingTests}</div><div style={styles.statLabel}>Passing</div></div>
+        <div style={styles.stat}><div style={{ ...styles.statValue, color: 'var(--error-text)' }}>{failingTests}</div><div style={styles.statLabel}>Failing</div></div>
+        <div style={styles.stat}><div style={{ ...styles.statValue, color: 'var(--warning-text)' }}>{totalTests - passingTests - failingTests}</div><div style={styles.statLabel}>Pending</div></div>
       </div>
 
       {/* OVERVIEW */}
       {tab === 'overview' && (
         <div>
           <div style={styles.pitch}>
-            <strong style={{ color: '#fff' }}>repo.box</strong> makes git repositories safe for AI agents. 
+            <strong style={{ color: 'var(--text-primary)' }}>repo.box</strong> makes git repositories safe for AI agents. 
             It shims the <code style={styles.code}>git</code> command so agents use normal git workflows — but every commit, merge, and push is silently checked against a <code style={styles.code}>.repobox.yml</code> file before it lands. 
             Each agent gets its own EVM keypair as identity. Each commit is signed. Permissions live in the repo, not on a server. Five agents, five keys, one repo, zero risk.
           </div>
@@ -129,7 +135,7 @@ export default function Dashboard() {
             { date: 'Mar 22-23', title: 'Demo & Ship', desc: 'Landing page. Demo video. README. Hackathon submission.' },
           ].map((item, i) => (
             <div key={i} style={styles.timelineItem}>
-              <div style={{ ...styles.timelineDot, background: i === 0 ? '#4ade80' : i === 1 ? '#facc15' : '#333' }} />
+              <div style={{ ...styles.timelineDot, background: i === 0 ? 'var(--success-text)' : i === 1 ? 'var(--warning-text)' : 'var(--border-secondary)' }} />
               <div style={styles.timelineDate}>{item.date}</div>
               <div style={styles.timelineTitle}>{item.title}</div>
               <div style={styles.timelineDesc}>{item.desc}</div>
@@ -150,12 +156,12 @@ export default function Dashboard() {
                 <div style={styles.componentHeader} onClick={() => toggleOpen(ci)}>
                   <span style={styles.componentName}>{comp.name}</span>
                   <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {failed > 0 && <span style={{ ...styles.badge, background: '#3b1111', color: '#f87171', borderColor: '#7f1d1d' }}>{failed} ✗</span>}
+                    {failed > 0 && <span style={{ ...styles.badge, background: 'var(--error-bg)', color: 'var(--error-text)', borderColor: 'var(--error-border)' }}>{failed} ✗</span>}
                     <span style={{
                       ...styles.badge,
-                      ...(passed === comp.tests.length && comp.tests.length > 0 ? { background: '#052e16', color: '#4ade80', borderColor: '#166534' } : {})
+                      ...(passed === comp.tests.length && comp.tests.length > 0 ? { background: 'var(--success-bg)', color: 'var(--success-text)', borderColor: 'var(--success-border)' } : {})
                     }}>{passed}/{comp.tests.length}</span>
-                    <span style={{ color: '#555', transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'none' }}>›</span>
+                    <span style={{ color: 'var(--border-tertiary)', transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'none' }}>›</span>
                   </span>
                 </div>
                 {isOpen && (
@@ -166,16 +172,16 @@ export default function Dashboard() {
                           onClick={() => toggleStatus(ci, ti)}
                           style={{
                             ...styles.statusBtn,
-                            background: test.status === 'passing' ? '#052e16' : test.status === 'failing' ? '#3b1111' : '#1a1a1a',
-                            color: test.status === 'passing' ? '#4ade80' : test.status === 'failing' ? '#f87171' : '#666',
-                            borderColor: test.status === 'passing' ? '#166534' : test.status === 'failing' ? '#7f1d1d' : '#333',
+                            background: test.status === 'passing' ? 'var(--success-bg)' : test.status === 'failing' ? 'var(--error-bg)' : 'var(--bg-tertiary)',
+                            color: test.status === 'passing' ? 'var(--success-text)' : test.status === 'failing' ? 'var(--error-text)' : 'var(--text-muted)',
+                            borderColor: test.status === 'passing' ? 'var(--success-border)' : test.status === 'failing' ? 'var(--error-border)' : 'var(--border-secondary)',
                           }}
                         >
                           {test.status === 'passing' ? '✓' : test.status === 'failing' ? '✗' : '○'}
                         </button>
                         <span style={{
                           flex: 1, fontSize: '0.85rem', lineHeight: 1.4,
-                          color: test.status === 'passing' ? '#666' : '#e0e0e0',
+                          color: test.status === 'passing' ? 'var(--text-muted)' : 'var(--text-primary)',
                           textDecoration: test.status === 'passing' ? 'line-through' : 'none',
                         }}
                           contentEditable
@@ -228,10 +234,10 @@ export default function Dashboard() {
                   <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span style={{
                       ...styles.badge,
-                      ...(story.status === 'verified' ? { background: '#052e16', color: '#4ade80', borderColor: '#166534' } :
-                         story.status === 'tested' ? { background: '#1a1a2e', color: '#60a5fa', borderColor: '#1e3a5f' } : {})
+                      ...(story.status === 'verified' ? { background: 'var(--success-bg)', color: 'var(--success-text)', borderColor: 'var(--success-border)' } :
+                         story.status === 'tested' ? { background: 'var(--info-bg)', color: 'var(--info-text)', borderColor: 'var(--info-border)' } : {})
                     }}>{story.status}</span>
-                    <span style={{ color: '#555', transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'none' }}>›</span>
+                    <span style={{ color: 'var(--border-tertiary)', transition: 'transform 0.2s', transform: isOpen ? 'rotate(90deg)' : 'none' }}>›</span>
                   </span>
                 </div>
                 {isOpen && (
@@ -242,7 +248,7 @@ export default function Dashboard() {
                           onChange={e => setStoryDraft({ ...storyDraft, name: e.target.value })} />
                         {storyDraft.steps.map((step, i) => (
                           <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-                            <span style={{ color: '#555', fontSize: '0.8rem', minWidth: 20 }}>{i + 1}.</span>
+                            <span style={{ color: 'var(--border-tertiary)', fontSize: '0.8rem', minWidth: 20 }}>{i + 1}.</span>
                             <input style={{ ...styles.input, flex: 1 }} value={step}
                               onChange={e => { const s = [...storyDraft.steps]; s[i] = e.target.value; setStoryDraft({ ...storyDraft, steps: s }) }} />
                             <button onClick={() => { const s = [...storyDraft.steps]; s.splice(i, 1); setStoryDraft({ ...storyDraft, steps: s }) }}
@@ -271,11 +277,11 @@ export default function Dashboard() {
                       <>
                         {story.steps.map((step, i) => (
                           <div key={i} style={{ padding: '4px 0', fontSize: '0.85rem', display: 'flex', gap: 8 }}>
-                            <span style={{ color: '#555', minWidth: 20 }}>{i + 1}.</span>
-                            <span style={{ color: '#ccc' }}>{step}</span>
+                            <span style={{ color: 'var(--border-tertiary)', minWidth: 20 }}>{i + 1}.</span>
+                            <span style={{ color: 'var(--text-secondary)' }}>{step}</span>
                           </div>
                         ))}
-                        {story.notes && <div style={{ marginTop: 8, padding: 8, background: '#1a1a1a', borderRadius: 6, fontSize: '0.8rem', color: '#f59e0b' }}>💡 {story.notes}</div>}
+                        {story.notes && <div style={{ marginTop: 8, padding: 8, background: 'var(--bg-tertiary)', borderRadius: 6, fontSize: '0.8rem', color: 'var(--warning-text)' }}>💡 {story.notes}</div>}
                         <button onClick={() => { setEditingStory(si); setStoryDraft({ ...story }) }} style={{ ...styles.editBtn, marginTop: 8 }}>Edit</button>
                       </>
                     )}
@@ -351,23 +357,23 @@ export default function Dashboard() {
                   code: ({ children, className, ...props }: any) => {
                     const isBlock = className?.startsWith('language-')
                     return isBlock ? (
-                      <pre style={{ background: '#1a1a2e', padding: 16, borderRadius: 8, overflowX: 'auto', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                        <code style={{ color: '#e0e0e0' }} {...props}>{children}</code>
+                      <pre style={{ background: 'var(--info-bg)', padding: 16, borderRadius: 8, overflowX: 'auto', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                        <code style={{ color: 'var(--text-primary)' }} {...props}>{children}</code>
                       </pre>
                     ) : (
-                      <code style={{ background: '#1a1a2e', padding: '2px 6px', borderRadius: 4, fontSize: '0.85em', color: '#7eb6ff' }} {...props}>{children}</code>
+                      <code style={{ background: 'var(--info-bg)', padding: '2px 6px', borderRadius: 4, fontSize: '0.85em', color: 'var(--text-accent)' }} {...props}>{children}</code>
                     )
                   },
-                  h1: ({ children }) => <h1 style={{ fontSize: '1.4rem', borderBottom: '1px solid #333', paddingBottom: 8, marginTop: 24 }}>{children}</h1>,
-                  h2: ({ children }) => <h2 style={{ fontSize: '1.15rem', borderBottom: '1px solid #222', paddingBottom: 6, marginTop: 20, color: '#7eb6ff' }}>{children}</h2>,
-                  h3: ({ children }) => <h3 style={{ fontSize: '1rem', marginTop: 16, color: '#a0a0a0' }}>{children}</h3>,
+                  h1: ({ children }) => <h1 style={{ fontSize: '1.4rem', borderBottom: '1px solid var(--border-secondary)', paddingBottom: 8, marginTop: 24 }}>{children}</h1>,
+                  h2: ({ children }) => <h2 style={{ fontSize: '1.15rem', borderBottom: '1px solid var(--border-primary)', paddingBottom: 6, marginTop: 20, color: 'var(--text-accent)' }}>{children}</h2>,
+                  h3: ({ children }) => <h3 style={{ fontSize: '1rem', marginTop: 16, color: 'var(--text-secondary)' }}>{children}</h3>,
                   table: ({ children }) => <table style={{ borderCollapse: 'collapse', width: '100%', margin: '12px 0' }}>{children}</table>,
-                  th: ({ children }) => <th style={{ border: '1px solid #333', padding: '8px 12px', background: '#1a1a2e', textAlign: 'left', fontSize: '0.85rem' }}>{children}</th>,
-                  td: ({ children }) => <td style={{ border: '1px solid #333', padding: '8px 12px', fontSize: '0.85rem' }}>{children}</td>,
-                  blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid #7eb6ff', margin: '12px 0', padding: '8px 16px', color: '#a0a0a0' }}>{children}</blockquote>,
+                  th: ({ children }) => <th style={{ border: '1px solid var(--border-secondary)', padding: '8px 12px', background: 'var(--info-bg)', textAlign: 'left', fontSize: '0.85rem' }}>{children}</th>,
+                  td: ({ children }) => <td style={{ border: '1px solid var(--border-secondary)', padding: '8px 12px', fontSize: '0.85rem' }}>{children}</td>,
+                  blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid var(--text-accent)', margin: '12px 0', padding: '8px 16px', color: 'var(--text-secondary)' }}>{children}</blockquote>,
                   ul: ({ children }) => <ul style={{ paddingLeft: 24 }}>{children}</ul>,
                   li: ({ children }) => <li style={{ marginBottom: 4 }}>{children}</li>,
-                  a: ({ children, href }) => <a href={href} style={{ color: '#7eb6ff' }} target="_blank" rel="noopener noreferrer">{children}</a>,
+                  a: ({ children, href }) => <a href={href} style={{ color: 'var(--text-accent)' }} target="_blank" rel="noopener noreferrer">{children}</a>,
                 }}
               >{skillContent}</ReactMarkdown>
             </div>
@@ -380,38 +386,39 @@ export default function Dashboard() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: { fontFamily: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif', maxWidth: 800, margin: '0 auto', padding: 16, paddingBottom: 100 },
-  h1: { fontSize: '1.5rem', marginBottom: 4 },
-  subtitle: { color: '#888', fontSize: '0.85rem', marginBottom: 24 },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
+  h1: { fontSize: '1.5rem', marginBottom: 4, margin: 0 },
+  subtitle: { color: 'var(--text-tertiary)', fontSize: '0.85rem', marginTop: 4, margin: 0 },
   tabs: { display: 'flex', gap: 4, marginBottom: 20 },
-  tab: { padding: '8px 16px', background: '#1a1a1a', border: '1px solid #333', borderRadius: 8, color: '#aaa', fontSize: '0.85rem', cursor: 'pointer' },
-  tabActive: { background: '#2a2a2a', color: '#fff', borderColor: '#555' },
+  tab: { padding: '8px 16px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-secondary)', borderRadius: 8, color: 'var(--text-secondary)', fontSize: '0.85rem', cursor: 'pointer' },
+  tabActive: { background: 'var(--hover-bg)', color: 'var(--text-primary)', borderColor: 'var(--border-tertiary)' },
   stats: { display: 'flex', gap: 12, marginBottom: 20, overflowX: 'auto' as const },
-  stat: { background: '#1a1a1a', border: '1px solid #222', borderRadius: 12, padding: '12px 16px', minWidth: 80, flexShrink: 0 },
+  stat: { background: 'var(--bg-tertiary)', border: '1px solid var(--border-primary)', borderRadius: 12, padding: '12px 16px', minWidth: 80, flexShrink: 0 },
   statValue: { fontSize: '1.5rem', fontWeight: 700 },
-  statLabel: { fontSize: '0.7rem', color: '#888', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
-  pitch: { background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)', border: '1px solid #2a2a4e', borderRadius: 12, padding: 20, marginBottom: 20, fontSize: '0.9rem', lineHeight: 1.6 },
-  code: { background: '#1a1a1a', padding: '1px 5px', borderRadius: 4, fontSize: '0.8rem', color: '#c084fc' },
-  sectionTitle: { marginBottom: 12, fontSize: '0.9rem', color: '#888' },
+  statLabel: { fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  pitch: { background: 'linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%)', border: '1px solid var(--gradient-border)', borderRadius: 12, padding: 20, marginBottom: 20, fontSize: '0.9rem', lineHeight: 1.6 },
+  code: { background: 'var(--code-bg)', padding: '1px 5px', borderRadius: 4, fontSize: '0.8rem', color: 'var(--code-text)' },
+  sectionTitle: { marginBottom: 12, fontSize: '0.9rem', color: 'var(--text-tertiary)' },
   timelineItem: { position: 'relative' as const, paddingLeft: 24, marginBottom: 20 },
-  timelineDot: { position: 'absolute' as const, left: 0, top: 6, width: 12, height: 12, borderRadius: '50%', border: '2px solid #555' },
-  timelineDate: { fontSize: '0.7rem', color: '#666', marginBottom: 2 },
+  timelineDot: { position: 'absolute' as const, left: 0, top: 6, width: 12, height: 12, borderRadius: '50%', border: '2px solid var(--border-tertiary)' },
+  timelineDate: { fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 2 },
   timelineTitle: { fontSize: '0.9rem', fontWeight: 600 },
-  timelineDesc: { fontSize: '0.8rem', color: '#999', marginTop: 4 },
-  component: { background: '#111', border: '1px solid #222', borderRadius: 12, marginBottom: 12, overflow: 'hidden' },
+  timelineDesc: { fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 },
+  component: { background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: 12, marginBottom: 12, overflow: 'hidden' },
   componentHeader: { padding: '14px 16px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   componentName: { fontWeight: 600, fontSize: '0.95rem' },
-  badge: { fontSize: '0.7rem', padding: '2px 8px', borderRadius: 10, background: '#1a1a1a', color: '#888', border: '1px solid #333' },
+  badge: { fontSize: '0.7rem', padding: '2px 8px', borderRadius: 10, background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)', border: '1px solid var(--border-secondary)' },
   componentBody: { padding: '0 16px 14px' },
-  test: { padding: '8px 0', borderBottom: '1px solid #1a1a1a', display: 'flex', gap: 10, alignItems: 'flex-start' },
-  statusBtn: { width: 28, height: 28, border: '1px solid #333', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  removeBtn: { background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px', flexShrink: 0 },
-  input: { flex: 1, background: '#1a1a1a', border: '1px solid #333', borderRadius: 6, color: '#e0e0e0', padding: '6px 10px', fontSize: '0.85rem', outline: 'none' },
-  addBtn: { padding: '6px 14px', background: '#052e16', color: '#4ade80', border: '1px solid #166534', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' },
-  cancelBtn: { padding: '6px 10px', background: '#1a1a1a', color: '#888', border: '1px solid #333', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' },
-  addTestBtn: { background: 'none', border: '1px dashed #333', borderRadius: 6, color: '#666', padding: '8px 14px', cursor: 'pointer', fontSize: '0.8rem', marginTop: 8, width: '100%' },
-  addComponentBtn: { background: 'none', border: '1px dashed #333', borderRadius: 8, color: '#666', padding: '12px', cursor: 'pointer', fontSize: '0.85rem', width: '100%' },
-  specCard: { background: '#111', border: '1px solid #222', borderRadius: 12, padding: 16, marginBottom: 12 },
-  editBtn: { padding: '4px 12px', background: '#1a1a1a', color: '#aaa', border: '1px solid #333', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' },
-  specEditor: { width: '100%', minHeight: 400, background: '#0a0a0a', border: '1px solid #333', borderRadius: 8, color: '#e0e0e0', padding: 12, fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical' as const, outline: 'none' },
-  specContent: { whiteSpace: 'pre-wrap' as const, fontSize: '0.8rem', color: '#bbb', lineHeight: 1.6, margin: 0, fontFamily: 'monospace', maxHeight: 300, overflow: 'auto' },
+  test: { padding: '8px 0', borderBottom: '1px solid var(--bg-tertiary)', display: 'flex', gap: 10, alignItems: 'flex-start' },
+  statusBtn: { width: 28, height: 28, border: '1px solid var(--border-secondary)', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  removeBtn: { background: 'none', border: 'none', color: 'var(--border-tertiary)', cursor: 'pointer', fontSize: '1.1rem', padding: '0 4px', flexShrink: 0 },
+  input: { flex: 1, background: 'var(--input-bg)', border: '1px solid var(--border-secondary)', borderRadius: 6, color: 'var(--text-primary)', padding: '6px 10px', fontSize: '0.85rem', outline: 'none' },
+  addBtn: { padding: '6px 14px', background: 'var(--success-bg)', color: 'var(--success-text)', border: '1px solid var(--success-border)', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' },
+  cancelBtn: { padding: '6px 10px', background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)', border: '1px solid var(--border-secondary)', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' },
+  addTestBtn: { background: 'none', border: '1px dashed var(--border-secondary)', borderRadius: 6, color: 'var(--text-muted)', padding: '8px 14px', cursor: 'pointer', fontSize: '0.8rem', marginTop: 8, width: '100%' },
+  addComponentBtn: { background: 'none', border: '1px dashed var(--border-secondary)', borderRadius: 8, color: 'var(--text-muted)', padding: '12px', cursor: 'pointer', fontSize: '0.85rem', width: '100%' },
+  specCard: { background: 'var(--bg-secondary)', border: '1px solid var(--border-primary)', borderRadius: 12, padding: 16, marginBottom: 12 },
+  editBtn: { padding: '4px 12px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border-secondary)', borderRadius: 6, cursor: 'pointer', fontSize: '0.8rem' },
+  specEditor: { width: '100%', minHeight: 400, background: 'var(--bg-primary)', border: '1px solid var(--border-secondary)', borderRadius: 8, color: 'var(--text-primary)', padding: 12, fontFamily: 'monospace', fontSize: '0.8rem', resize: 'vertical' as const, outline: 'none' },
+  specContent: { whiteSpace: 'pre-wrap' as const, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0, fontFamily: 'monospace', maxHeight: 300, overflow: 'auto' },
 }

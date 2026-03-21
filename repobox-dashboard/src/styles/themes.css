@@ -1,0 +1,99 @@
+/* CSS Variables for Dark and Light Theme Support */
+
+:root {
+  /* Primary theme colors */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --bg-tertiary: #1a1a1a;
+  --bg-quaternary: #1a1a2e;
+  
+  /* Text colors */
+  --text-primary: #e0e0e0;
+  --text-secondary: #aaa;
+  --text-tertiary: #888;
+  --text-muted: #666;
+  --text-accent: #7eb6ff;
+  
+  /* Border colors */
+  --border-primary: #222;
+  --border-secondary: #333;
+  --border-tertiary: #555;
+  
+  /* Status colors */
+  --success-bg: #052e16;
+  --success-text: #4ade80;
+  --success-border: #166534;
+  
+  --error-bg: #3b1111;
+  --error-text: #f87171;
+  --error-border: #7f1d1d;
+  
+  --warning-text: #f59e0b;
+  --info-bg: #1a1a2e;
+  --info-text: #60a5fa;
+  --info-border: #1e3a5f;
+  
+  /* Interactive elements */
+  --hover-bg: #2a2a2a;
+  --active-bg: #374151;
+  --input-bg: #1a1a1a;
+  --button-primary-bg: #052e16;
+  
+  /* Gradient colors */
+  --gradient-start: #1a1a2e;
+  --gradient-end: #16213e;
+  --gradient-border: #2a2a4e;
+  
+  /* Code highlighting */
+  --code-bg: #1a1a1a;
+  --code-text: #c084fc;
+}
+
+[data-theme="light"] {
+  /* Primary theme colors */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --bg-tertiary: #f3f4f6;
+  --bg-quaternary: #e5e7eb;
+  
+  /* Text colors */
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-tertiary: #6b7280;
+  --text-muted: #9ca3af;
+  --text-accent: #2563eb;
+  
+  /* Border colors */
+  --border-primary: #e5e7eb;
+  --border-secondary: #d1d5db;
+  --border-tertiary: #9ca3af;
+  
+  /* Status colors */
+  --success-bg: #f0fdf4;
+  --success-text: #15803d;
+  --success-border: #22c55e;
+  
+  --error-bg: #fef2f2;
+  --error-text: #dc2626;
+  --error-border: #ef4444;
+  
+  --warning-text: #d97706;
+  --info-bg: #f0f9ff;
+  --info-text: #1d4ed8;
+  --info-border: #3b82f6;
+  
+  /* Interactive elements */
+  --hover-bg: #f3f4f6;
+  --active-bg: #e5e7eb;
+  --input-bg: #ffffff;
+  --button-primary-bg: #f0fdf4;
+  
+  /* Gradient colors */
+  --gradient-start: #f0f9ff;
+  --gradient-end: #dbeafe;
+  --gradient-border: #60a5fa;
+  
+  /* Code highlighting */
+  --code-bg: #f3f4f6;
+  --code-text: #7c3aed;
+}

@@ -209,6 +209,18 @@ Lint warnings are printed to stderr but don't block commits — parse errors do.
 
 On-chain group membership (e.g. token-gated access, DAO roles) is resolved automatically via `git.repo.box` — no API keys or setup needed. Supports 40+ EVM chains.
 
+For self-hosted instances:
+
+```bash
+# Start the resolver server with your own Alchemy key
+ALCHEMY_API_KEY=your-key repobox-server --bind 0.0.0.0:3456
+
+# Point the CLI at it
+export REPOBOX_SERVER=https://your-server.com/api
+```
+
+The server proxies `eth_call` requests to Alchemy, supporting 40+ EVM chains.
+
 ## Environment Variables
 
 | Variable | Description |
