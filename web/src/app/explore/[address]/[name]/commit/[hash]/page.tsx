@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { CommitDetail } from '@/lib/git';
 import { formatTimeAgo, formatAddress, copyToClipboard } from '@/lib/utils';
+import FileChangeList from '@/components/FileChangeList';
+import KeyboardShortcuts from '@/components/KeyboardShortcuts';
 
 export default function CommitDetailPage() {
   const params = useParams();
@@ -13,6 +15,7 @@ export default function CommitDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [hashCopied, setHashCopied] = useState(false);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
   const address = Array.isArray(params.address) ? params.address[0] : params.address;
   const name = Array.isArray(params.name) ? params.name[0] : params.name;
@@ -49,6 +52,52 @@ export default function CommitDetailPage() {
     
     fetchCommitDetail();
   }, [address, name, hash]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!commit) return;
+      
+      // Ignore if user is typing in an input field
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      switch (event.key.toLowerCase()) {
+        case 'p':
+          // Previous commit
+          if (commit.parentHash) {
+            window.location.href = `/explore/${address}/${name}/commit/${commit.parentHash}`;
+          }
+          break;
+        case 'n':
+          // Next commit
+          if (commit.childHash) {
+            window.location.href = `/explore/${address}/${name}/commit/${commit.childHash}`;
+          }
+          break;
+        case 'b':
+          // Back to repository
+          window.location.href = `/explore/${address}/${name}`;
+          break;
+        case 'c':
+          // Copy commit hash
+          handleCopyHash(commit.hash);
+          break;
+        case 'escape':
+          // Back to repository
+          window.location.href = `/explore/${address}/${name}`;
+          break;
+        case '?':
+          // Toggle keyboard shortcuts help
+          setShowKeyboardHelp(!showKeyboardHelp);
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [commit, address, name]);
 
   const toggleFileExpansion = (filePath: string) => {
     const newExpanded = new Set(expandedFiles);
@@ -168,86 +217,11 @@ export default function CommitDetailPage() {
       {/* File Changes */}
       <div className="file-changes">
         <h3 className="file-changes-title">Changed Files</h3>
-        
-        {commit.fileChanges.length === 0 ? (
-          <div className="explore-empty">
-            <p>No file changes in this commit</p>
-          </div>
-        ) : (
-          <div className="file-change-list">
-            {commit.fileChanges.map((change, index) => (
-              <div key={index} className="file-change-item">
-                <div 
-                  className="file-change-header"
-                  onClick={() => toggleFileExpansion(change.path)}
-                >
-                  <div className="file-change-info">
-                    <span className={`file-change-status file-change-status-${change.status}`}>
-                      {change.status}
-                    </span>
-                    <span className="file-change-path">{change.path}</span>
-                    {change.oldPath && (
-                      <span className="file-change-old-path">← {change.oldPath}</span>
-                    )}
-                  </div>
-                  
-                  <div className="file-change-stats">
-                    {change.additions > 0 && (
-                      <span className="file-stat file-stat-additions">+{change.additions}</span>
-                    )}
-                    {change.deletions > 0 && (
-                      <span className="file-stat file-stat-deletions">-{change.deletions}</span>
-                    )}
-                    <span className="file-expand-icon">
-                      {expandedFiles.has(change.path) ? '▼' : '▶'}
-                    </span>
-                  </div>
-                </div>
-                
-                {expandedFiles.has(change.path) && (
-                  <div className="diff-viewer">
-                    {change.hunks.length === 0 ? (
-                      <div className="diff-empty">
-                        <p>Binary file or no diff available</p>
-                      </div>
-                    ) : (
-                      <div className="diff-content">
-                        {change.hunks.map((hunk, hunkIndex) => (
-                          <div key={hunkIndex} className="diff-hunk">
-                            <div className="diff-hunk-header">
-                              @@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@
-                            </div>
-                            <div className="diff-lines">
-                              {hunk.lines.map((line, lineIndex) => (
-                                <div key={lineIndex} className={`diff-line diff-line-${line.type}`}>
-                                  <div className="diff-line-numbers">
-                                    <span className="diff-line-old">
-                                      {line.oldLineNumber || ''}
-                                    </span>
-                                    <span className="diff-line-new">
-                                      {line.newLineNumber || ''}
-                                    </span>
-                                  </div>
-                                  <div className="diff-line-content">
-                                    <span className="diff-line-indicator">
-                                      {line.type === 'addition' ? '+' : 
-                                       line.type === 'deletion' ? '-' : ' '}
-                                    </span>
-                                    <span className="diff-line-text">{line.content}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        <FileChangeList 
+          changes={commit.fileChanges}
+          expandedFiles={expandedFiles}
+          onToggleExpand={toggleFileExpansion}
+        />
       </div>
 
       {/* Navigation */}
@@ -270,6 +244,12 @@ export default function CommitDetailPage() {
           </Link>
         )}
       </div>
+
+      {/* Keyboard Shortcuts Help */}
+      <KeyboardShortcuts 
+        hasParent={!!commit.parentHash}
+        hasChild={!!commit.childHash}
+      />
     </div>
   );
 }

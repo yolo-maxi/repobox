@@ -922,6 +922,25 @@ div[style*="scroll-snap-type"]::-webkit-scrollbar {
   align-items: center;
 }
 
+.diff-line-text-content {
+  white-space: pre;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Override syntax highlighter styles for diff context */
+.diff-viewer .token.operator,
+.diff-viewer .token.punctuation {
+  background: none !important;
+}
+
+.diff-viewer .token.string {
+  background: none !important;
+}
+
+.diff-viewer .token.keyword {
+  background: none !important;
+}
+
 .diff-line-addition {
   background: rgba(74, 222, 128, 0.1);
 }
@@ -990,6 +1009,127 @@ div[style*="scroll-snap-type"]::-webkit-scrollbar {
   margin-left: auto;
 }
 
+/* Keyboard Shortcuts */
+
+.keyboard-shortcuts-toggle {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  color: var(--bp-text);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 100;
+}
+
+.keyboard-shortcuts-toggle:hover {
+  background: rgba(79, 195, 247, 0.1);
+  border-color: var(--bp-accent);
+  color: var(--bp-accent);
+}
+
+.keyboard-shortcuts-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 22, 40, 0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.keyboard-shortcuts-panel {
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  border-radius: 12px;
+  padding: 24px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.keyboard-shortcuts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--bp-border);
+}
+
+.keyboard-shortcuts-header h3 {
+  color: var(--bp-heading);
+  font-size: 16px;
+  margin: 0;
+}
+
+.keyboard-shortcuts-close {
+  background: none;
+  border: none;
+  color: var(--bp-dim);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.keyboard-shortcuts-close:hover {
+  color: var(--bp-text);
+}
+
+.keyboard-shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.keyboard-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.keyboard-shortcut.disabled {
+  opacity: 0.5;
+}
+
+.keyboard-shortcut-key {
+  background: var(--bp-bg);
+  border: 1px solid var(--bp-border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--bp-text);
+  min-width: 32px;
+  text-align: center;
+}
+
+.keyboard-shortcut-description {
+  color: var(--bp-text);
+  font-size: 12px;
+}
+
+.keyboard-shortcut.disabled .keyboard-shortcut-key,
+.keyboard-shortcut.disabled .keyboard-shortcut-description {
+  color: var(--bp-dim);
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .commit-header {
@@ -1046,5 +1186,10 @@ div[style*="scroll-snap-type"]::-webkit-scrollbar {
   .commit-navigation {
     flex-direction: column;
     gap: 12px;
+  }
+
+  .keyboard-shortcuts-panel {
+    margin: 20px;
+    width: auto;
   }
 }

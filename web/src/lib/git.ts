@@ -280,11 +280,25 @@ function getChildCommit(repoPath: string, hash: string): string | null {
 
 function getCommitFileChanges(repoPath: string, hash: string): FileChange[] {
   try {
-    // Get list of changed files with status
+    // Get list of changed files with status and numstat
     const filesOutput = gitCommand(repoPath, `diff-tree --name-status ${hash}^..${hash}`);
     if (!filesOutput) return [];
     
     const fileEntries = filesOutput.split('\n').filter(Boolean);
+    
+    // Get numstat for file statistics (faster than parsing diff)
+    const numstatOutput = gitCommand(repoPath, `diff-tree --numstat ${hash}^..${hash}`);
+    const numstatLines = numstatOutput.split('\n').filter(Boolean);
+    
+    const fileStats = new Map();
+    numstatLines.forEach(line => {
+      const [additions, deletions, fileName] = line.split('\t');
+      fileStats.set(fileName, {
+        additions: additions === '-' ? 0 : parseInt(additions) || 0,
+        deletions: deletions === '-' ? 0 : parseInt(deletions) || 0,
+        isBinary: additions === '-' && deletions === '-'
+      });
+    });
     
     return fileEntries.map(entry => {
       const parts = entry.split('\t');
@@ -293,26 +307,28 @@ function getCommitFileChanges(repoPath: string, hash: string): FileChange[] {
       const oldPath = parts.length > 2 ? parts[1] : undefined;
       const actualPath = parts.length > 2 ? parts[2] : path;
       
-      // Get diff for this specific file
-      let diffOutput = '';
-      try {
-        diffOutput = gitCommand(
-          repoPath, 
-          `diff --unified=3 ${hash}^..${hash} -- "${actualPath}"`
-        );
-      } catch {
-        // File might be binary or deleted
-      }
+      const stats = fileStats.get(actualPath) || { additions: 0, deletions: 0, isBinary: false };
       
-      const hunks = parseDiffOutput(diffOutput);
-      const fileStats = calculateFileStats(hunks);
+      // Only get diff for non-binary files if they're small enough
+      let hunks: DiffHunk[] = [];
+      if (!stats.isBinary && (stats.additions + stats.deletions) < 1000) {
+        try {
+          const diffOutput = gitCommand(
+            repoPath, 
+            `diff --unified=3 ${hash}^..${hash} -- "${actualPath}"`
+          );
+          hunks = parseDiffOutput(diffOutput);
+        } catch {
+          // File might be deleted, binary, or permission issue
+        }
+      }
       
       return {
         path: actualPath,
         status: mapGitStatus(status),
         oldPath: status.startsWith('R') ? oldPath : undefined,
-        additions: fileStats.additions,
-        deletions: fileStats.deletions,
+        additions: stats.additions,
+        deletions: stats.deletions,
         hunks
       };
     });
@@ -328,8 +344,25 @@ function parseDiffOutput(diffOutput: string): DiffHunk[] {
   const lines = diffOutput.split('\n');
   const hunks: DiffHunk[] = [];
   let currentHunk: Partial<DiffHunk> | null = null;
+  let inHunk = false;
   
   for (const line of lines) {
+    // Skip diff headers
+    if (line.startsWith('diff --git') || 
+        line.startsWith('index ') || 
+        line.startsWith('+++') || 
+        line.startsWith('---') ||
+        line.startsWith('new file mode') ||
+        line.startsWith('deleted file mode')) {
+      continue;
+    }
+    
+    // Check for binary file indicator
+    if (line.includes('Binary files') && line.includes('differ')) {
+      // Binary file - return empty hunks array
+      return [];
+    }
+    
     // Parse hunk header: @@ -oldStart,oldCount +newStart,newCount @@
     const hunkMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
     if (hunkMatch) {
@@ -344,11 +377,12 @@ function parseDiffOutput(diffOutput: string): DiffHunk[] {
         newCount: parseInt(hunkMatch[4] || '1'),
         lines: []
       };
+      inHunk = true;
       continue;
     }
     
-    // Parse diff lines
-    if (currentHunk && (line.startsWith(' ') || line.startsWith('+') || line.startsWith('-'))) {
+    // Parse diff lines only when inside a hunk
+    if (inHunk && currentHunk && (line.startsWith(' ') || line.startsWith('+') || line.startsWith('-'))) {
       const type = line[0] === '+' ? 'addition' : 
                    line[0] === '-' ? 'deletion' : 'context';
       
@@ -361,6 +395,12 @@ function parseDiffOutput(diffOutput: string): DiffHunk[] {
         oldLineNumber: lineNumbers.oldLineNumber,
         newLineNumber: lineNumbers.newLineNumber
       });
+    } else if (inHunk && line === '') {
+      // Empty line might still be within hunk
+      continue;
+    } else if (inHunk && !line.startsWith(' ') && !line.startsWith('+') && !line.startsWith('-')) {
+      // End of current hunk
+      inHunk = false;
     }
   }
   
