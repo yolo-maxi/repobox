@@ -25,6 +25,11 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
+### Verb refactor: create → new files, branch → new branches
+- **Priority**: P1
+- **Tags**: feature, permissions, breaking
+Currently `create` means "create new branch". Change semantics: (1) `create` = create new files (useful for append-only patterns — agents can add files but not modify existing ones), (2) `branch` = new verb for creating branches. Update everywhere: parser, engine, shim, specs, docs, config examples, landing page playground prompt, tests, SKILL.md. The `own` verb expansion needs updating too (should include both `create` and `branch`). This is a breaking change to config format — existing configs using `create` for branches will need migration.
+
 ### Analyse and handle force push
 - **Priority**: P1
 - **Tags**: feature, security, server
