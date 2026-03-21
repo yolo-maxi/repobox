@@ -1,0 +1,56 @@
+{
+  "teamUUID": "5894f10572974a189062dbdade994acb",
+  "name": "repo.box",
+  "description": "Git permission layer that makes repositories safe for AI agents.\n\nrepo.box is a git shim — agents use normal git commands, but every push, merge, and commit is checked against a declarative permission config (.repobox/config.yml) before it reaches the repo. Identities are EVM wallets authenticated via ERC-8128 signed HTTP requests. No API keys, no JWTs — every commit is cryptographically attributable to a specific agent or human.\n\nPermissions are files, not platform features. This is the core design principle: an agent can read, understand, and reason about a YAML config file in the repo. It can't navigate GitHub's settings UI. By making permissions config-as-code — auditable in git history, diffable in PRs, enforceable by the git server — repo.box is agent-first by design.\n\nYou can't create a GitHub account for each sub-agent in a pipeline. But you can give each agent its own EVM wallet and scope exactly what it's allowed to do: the PM agent edits docs and kanban, devs push to feature branches, the reviewer can approve but not merge, and the Mergeooor merges to main only after approval. Groups, path-level permissions, and approval workflows — all in one YAML file.\n\nBuilt and dogfooded by a four-agent pipeline (PM → Dev → Reviewer → Mergeooor), where the repo enforces its own permission model on the agents building it.\n\nFully integrated with git — any signed push goes straight to git.repo.box without previously registering an account. You get an identity-addressed repo, immediately. Every address is an account, so anything EVM is instantly integrated. We have a website for humans too (repo.box), which has a soothing animation of ASCII jellyfish with a deep meaning behind them, to inspire our human herders.\n\nx402 paid read access: private repos where agents pay USDC on Base to clone. The permission engine handles identity, x402 handles payment, and the agent gets permanent read access — all over standard git HTTP.\n\nAgent profiles at repo.box/{address} — backed by git repos, pre-filled with ERC-8004 on-chain metadata, and editable by the owner via ERC-8128 authenticated pushes. Your profile is a repo. You edit it by pushing to it.",
+  "problemStatement": "AI agents are writing production code, but git hosting wasn't built for them. GitHub's permission model assumes human users in organizations — roles like \"Write\" and \"Maintain\" are per-repo, not per-path. You can't say \"this agent can edit /src but not /contracts\" or \"this agent can push to feature branches but never merge to main.\"\n\nWorse: you can't give each agent its own identity. Creating a GitHub account per sub-agent in a CI pipeline isn't practical, and shared tokens mean you can't tell which agent made which commit. When something breaks, there's no audit trail.\n\nThe deeper problem is that permissions live in platform UIs, not in the repo. An agent can't read GitHub's settings page. It can't reason about who has access to what. Permissions should be files — diffable, auditable, and legible to the agents they govern.\n\nBy coupling EVM identities with git, repo.box makes any EVM infrastructure instantly composable with your codebase. Our x402 integration demonstrates this: paid read access required zero new auth systems because every EVM address is already an account. The same pattern works for on-chain access control, DAO governance over repos, or agent-to-agent code commerce.\n\nrepo.box makes permissions agent-first: a YAML config in the repo, EVM wallet identities, and a git server that enforces every rule at push time. Agents get scoped access with cryptographic attribution. Humans get an audit trail they can trust.",
+  "repoURL": "https://github.com/yolo-maxi/repobox",
+  "trackUUIDs": [
+    "01bd7148fc204cdebaa483c214db6e38",
+    "fdb76d08812b43f6a5f454744b66f590",
+    "6f0e3d7dcadf4ef080d3f424963caff5",
+    "10bd47fac07e4f85bda33ba482695b24",
+    "3bf41be958da497bbb69f1a150c76af9"
+  ],
+  "submissionMetadata": {
+    "agentFramework": "other",
+    "agentFrameworkOther": "Custom Rust permission engine with ERC-8128 HTTP auth + Next.js dashboard",
+    "agentHarness": "openclaw",
+    "model": "claude-opus-4-6",
+    "skills": [
+      "web-search",
+      "coding-agent",
+      "github",
+      "superfluid"
+    ],
+    "tools": [
+      "Rust/Cargo",
+      "viem",
+      "ERC-8128 (@slicekit/erc8128)",
+      "Next.js",
+      "Caddy",
+      "PM2",
+      "Claude Code",
+      "git"
+    ],
+    "helpfulResources": [
+      "https://erc8128.org",
+      "https://viem.sh/docs",
+      "https://docs.rs/axum/latest/axum/",
+      "https://synthesis.md/submission/skill.md"
+    ],
+    "helpfulSkills": [
+      {
+        "name": "coding-agent",
+        "reason": "Spawned parallel Claude Code sub-agents for independent features (x402, profiles, landing page). Wave-based orchestration pattern let us ship 4 workstreams simultaneously."
+      },
+      {
+        "name": "github",
+        "reason": "Managed repo visibility, PRs, and branch workflow for the four-agent pipeline directly from the agent harness."
+      }
+    ],
+    "intention": "continuing",
+    "intentionNotes": "repo.box is core infrastructure for our multi-agent development workflow. We use it daily to coordinate AI agents across projects. Post-hackathon: Superfluid streaming payments for time-limited access, hosted git.repo.box as a public service, CLI distribution."
+  },
+  "deployedURL": "https://repo.box",
+  "conversationLog": "PLACEHOLDER — will be filled with actual Telegram conversation logs"
+}

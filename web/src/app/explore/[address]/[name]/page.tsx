@@ -351,7 +351,12 @@ export default function RepoPage() {
                     <span className="explore-commit-time">
                       {formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}
                     </span>
-                    <code className="explore-commit-hash">{commit.hash.slice(0, 7)}</code>
+                    <Link 
+                      href={`/explore/${address}/${name}/commit/${commit.hash}`}
+                      className="explore-commit-hash"
+                    >
+                      <code>{commit.hash.slice(0, 7)}</code>
+                    </Link>
                   </div>
                 </div>
               ))
