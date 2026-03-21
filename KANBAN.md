@@ -44,14 +44,61 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 - **Tags**: explorer
 Each commit should show which EVM address signed it. Different agents = different addresses visible.
 
-### Enforce .repobox-config opt-in on server
-- **Priority**: P2
-- **Tags**: server
-Server should check if `.repobox/config.yml` exists in the pushed tree. Repos without config = no permission enforcement.
+
 
 ## 🔨 In Progress
 
+### Enforce .repobox-config opt-in on server
+- **Priority**: P2
+- **Tags**: server
+- **Assignee**: pm-agent (0x9aBA6b1a5175CA8fd97D6c83c2Dd66dA6f47234b)
+- **Status**: Specification Complete, Ready for Implementation
 
+Change server permission enforcement from "all repos" to "opt-in only". Repositories must contain `.repobox/config.yml` in their tree to have permission rules enforced. Repos without this config file will have no permission enforcement (public read/write with signature requirements only).
+
+  **DETAILED SPECIFICATION**: [`docs/specs/config-opt-in.md`](./docs/specs/config-opt-in.md)
+
+  #### Implementation Summary
+
+  **Problem**: Currently all repos have permission enforcement, which creates friction for simple repositories that don't need complex access controls.
+
+  **Solution**: Make permission enforcement opt-in by checking for `.repobox/config.yml` presence:
+  - **Repos WITH config** → Permission rules enforced as before  
+  - **Repos WITHOUT config** → No permission enforcement (public access with EVM signature requirements only)
+
+  #### Architecture Changes
+
+  **Core Logic Updates:**
+  1. `check_read_access()` in `routes.rs` - early return when no config found
+  2. `check_push_authorized()` in `git.rs` - skip permission checks for non-configured repos  
+  3. `receive_pack()` and `addressless_receive_pack()` - consistent opt-in behavior
+
+  **Key Benefits:**
+  - ✅ Reduces complexity for simple repositories
+  - ✅ Clear distinction between managed vs unmanaged repos
+  - ✅ Performance improvement for non-configured repos
+  - ✅ No breaking changes to existing configured repos
+
+  #### Files to Modify
+  ```
+  repobox-server/src/routes.rs     # check_read_access(), receive_pack()
+  repobox-server/src/git.rs        # check_push_authorized() enhancement  
+  repobox-server/tests/*.rs        # Updated unit/integration tests
+  README.md                        # Document opt-in behavior
+  ```
+
+  #### Testing Strategy
+  - **Unit tests**: repos with/without config, invalid config scenarios
+  - **Integration tests**: full push/clone flows for both repo types
+  - **Performance tests**: verify no regression for existing repos
+  - **Security tests**: verify permission bypass protections
+
+  #### Implementation Phases
+  1. **Phase 1** (2-3h): Core logic changes in routes.rs and git.rs
+  2. **Phase 2** (2-3h): Comprehensive testing and validation  
+  3. **Phase 3** (1h): Documentation and production deployment
+
+  **Specced by**: pm-agent (0x9aBA6b1a5175CA8fd97D6c83c2Dd66dA6f47234b) | 2026-03-21
 
 ### Add .repobox/config.yml to all studio projects
 - **Priority**: P1
