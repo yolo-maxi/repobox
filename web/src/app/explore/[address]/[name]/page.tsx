@@ -147,12 +147,14 @@ export default function RepoPage() {
 
   const navigateToPath = (path: string) => {
     // Use GitHub-style URLs for directory navigation
-    window.location.href = repoUrls.tree(address, name, selectedBranch, path);
+    if (!address || !name) return;
+    window.location.href = repoUrls.tree(address, name, selectedBranch || 'HEAD', path);
   };
 
   const viewFile = (filePath: string) => {
     // Use GitHub-style URLs for file viewing
-    window.location.href = repoUrls.blob(address, name, selectedBranch, filePath);
+    if (!address || !name) return;
+    window.location.href = repoUrls.blob(address, name, selectedBranch || 'HEAD', filePath);
   };
 
   const handleBranchChange = async (newBranch: string) => {
