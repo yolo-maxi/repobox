@@ -62,11 +62,6 @@ Replace "No recent activity", "No repositories found", etc with illustrated empt
 
 ## 🔨 In Progress
 
-### Search across all repos
-- **Priority**: P1
-- **Tags**: explorer, ui
-Global search bar on explore home that searches repo names, owner addresses, and commit messages. Client-side filtering is already there for repos — extend to server-side full-text search with a dedicated API endpoint.
-
 ## 🚧 Blocked
 
 ### Gmail token expired — can't send emails
@@ -78,6 +73,10 @@ Global search bar on explore home that searches repo names, owner addresses, and
 ### Full E2E demo script
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
 Complete hackathon demo: `repobox init` → `keys generate` → signed commit → push → clone → verify. Scripts: demo-e2e.sh (724 lines, quick/full modes), demo-reset.sh, docs/DEMO.md. Multi-agent simulation, visual progress indicators, error handling with cleanup. See detailed spec in In Progress section.
+
+### Search across all repos
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+Search API with SQL LIKE queries across repos and commit messages, debounced UI with grouped results.
 
 ### Branch selector in repo detail
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
