@@ -154,20 +154,34 @@ async fn receive_pack(
     let existing_owner = db::get_repo(&state.db_path, &repo.address, &repo.name);
 
     if let Ok(Some(record)) = &existing_owner {
-        // Existing repo — check if the pusher is authorized.
-        // Extract the signer of the HEAD commit (the latest pushed commit).
-        if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo) {
-            if !matches!(
-                git::check_push_authorized(&state.data_dir, &repo, &pusher, &record.owner_address),
-                Ok(true)
-            ) {
-                // Unauthorized — revert would be ideal but for now just log.
-                // TODO: pre-receive hook integration for proper rejection.
-                tracing::warn!(
+        // Check if repository has opted into permission enforcement
+        let repo_dir = git::repo_dir(&state.data_dir, &repo);
+        if read_config_from_repo(&repo_dir).is_some() {
+            // Has config = permission enforcement enabled
+            // Existing repo — check if the pusher is authorized.
+            // Extract the signer of the HEAD commit (the latest pushed commit).
+            if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo) {
+                if !matches!(
+                    git::check_push_authorized(&state.data_dir, &repo, &pusher, &record.owner_address),
+                    Ok(true)
+                ) {
+                    // Unauthorized — revert would be ideal but for now just log.
+                    // TODO: pre-receive hook integration for proper rejection.
+                    tracing::warn!(
+                        repo = %format!("{}/{}", repo.address, repo.name),
+                        pusher = %pusher,
+                        owner = %record.owner_address,
+                        "push denied: pusher not authorized (config-enabled repo)"
+                    );
+                }
+            }
+        } else {
+            // No config = no permission enforcement
+            if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo) {
+                tracing::debug!(
                     repo = %format!("{}/{}", repo.address, repo.name),
                     pusher = %pusher,
-                    owner = %record.owner_address,
-                    "push denied: pusher not authorized"
+                    "push allowed: no .repobox/config.yml (permission enforcement disabled)"
                 );
             }
         }
@@ -279,7 +293,11 @@ fn check_read_access(
     // Try to read config from the repo (via git show HEAD:.repobox/config.yml)
     let config_content = match read_config_from_repo(&repo_dir) {
         Some(content) => content,
-        None => return Ok(()), // No config = public (default: allow)
+        None => {
+            tracing::debug!(repo = %format!("{}/{}", repo.address, repo.name), 
+                           "no .repobox/config.yml found - skipping permission enforcement");
+            return Ok(()); // No config = no permission enforcement (public access)
+        }
     };
 
     let config = match repobox::parser::parse(&config_content) {
@@ -357,7 +375,7 @@ fn check_read_access(
 
 /// Read .repobox/config.yml from a bare git repo.
 /// Uses the first available branch (not HEAD, which may point to a non-existent branch).
-fn read_config_from_repo(repo_dir: &std::path::Path) -> Option<String> {
+pub(crate) fn read_config_from_repo(repo_dir: &std::path::Path) -> Option<String> {
     tracing::debug!(repo_dir = ?repo_dir, "reading config from repo");
     
     // First try HEAD
@@ -540,8 +558,41 @@ async fn addressless_receive_pack(
             body,
         );
 
-        // Log the push event for existing repos accessed via addressless route
+        // Check ownership and authorization for addressless pushes to existing repos
         if response.status() == StatusCode::OK {
+            let existing_owner = db::get_repo(&state.db_path, &repo_path.address, &repo_path.name);
+            
+            if let Ok(Some(record)) = &existing_owner {
+                // Check if repository has opted into permission enforcement
+                let repo_dir = git::repo_dir(&state.data_dir, &repo_path);
+                if read_config_from_repo(&repo_dir).is_some() {
+                    // Has config = permission enforcement enabled
+                    if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo_path) {
+                        if !matches!(
+                            git::check_push_authorized(&state.data_dir, &repo_path, &pusher, &record.owner_address),
+                            Ok(true)
+                        ) {
+                            tracing::warn!(
+                                repo = %format!("{}/{}", repo_path.address, repo_path.name),
+                                pusher = %pusher,
+                                owner = %record.owner_address,
+                                "addressless push denied: pusher not authorized (config-enabled repo)"
+                            );
+                        }
+                    }
+                } else {
+                    // No config = no permission enforcement
+                    if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo_path) {
+                        tracing::debug!(
+                            repo = %format!("{}/{}", repo_path.address, repo_path.name),
+                            pusher = %pusher,
+                            "addressless push allowed: no .repobox/config.yml (permission enforcement disabled)"
+                        );
+                    }
+                }
+            }
+            
+            // Log the push event for existing repos accessed via addressless route
             if let Ok(Some(commit_info)) = git::extract_latest_commit_info(&state.data_dir, &repo_path) {
                 let _ = db::insert_push_log(
                     &state.db_path,

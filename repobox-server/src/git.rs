@@ -153,47 +153,49 @@ pub(crate) fn read_head(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Str
 }
 
 /// Check if a pusher is authorized to push to a repo.
-/// If a `.repobox-config` exists in the repo, parse and evaluate it.
-/// If no config exists, only the owner (from SQLite) can push.
+/// If a `.repobox/config.yml` exists in the repo, parse and evaluate it.
+/// If no config exists, allow push (opt-in enforcement).
 /// Returns Ok(true) if authorized, Ok(false) if denied.
 pub(crate) fn check_push_authorized(
     data_dir: &Path,
     repo: &RepoPath,
     pusher_address: &str,
-    owner_address: &str,
+    _owner_address: &str,
 ) -> std::io::Result<bool> {
     let repo_dir = repo_dir(data_dir, repo);
-    let repo_dir_str = repo_dir.to_string_lossy().to_string();
 
-    // Try to read .repobox-config from HEAD
-    let output = Command::new("git")
-        .args(["--git-dir", &repo_dir_str, "show", "HEAD:.repobox-config"])
-        .output()?;
-
-    if output.status.success() {
-        // Config exists — parse and evaluate using the permission engine
-        let config_text = String::from_utf8_lossy(&output.stdout);
-        match repobox::parser::parse(&config_text) {
-            Ok(config) => {
-                let identity = repobox::config::Identity::parse(&format!("evm:{pusher_address}"))
-                    .map_err(|e| std::io::Error::other(e.to_string()))?;
-                let result = repobox::engine::check(
-                    &config,
-                    &identity,
-                    repobox::config::Verb::Push,
-                    None, // branch — checked per-ref in pre-receive, here we do a general push check
-                    None, // path
-                );
-                Ok(result.is_allowed())
-            }
-            Err(_) => {
-                // Invalid config — fall back to owner-only
-                Ok(pusher_address.eq_ignore_ascii_case(owner_address))
-            }
+    // Check if repo has opted into permission enforcement via read_config_from_repo
+    let config_content = match crate::routes::read_config_from_repo(&repo_dir) {
+        Some(content) => content,
+        None => {
+            // No config = no permission rules = allow push (opt-in enforcement)
+            tracing::debug!(
+                repo = %format!("{}/{}", repo.address, repo.name),
+                "no .repobox/config.yml found - allowing push without permission checks"
+            );
+            return Ok(true);
         }
-    } else {
-        // No config — implicit rule: only owner can push
-        Ok(pusher_address.eq_ignore_ascii_case(owner_address))
+    };
+
+    // Config exists — parse and evaluate using the permission engine
+    match repobox::parser::parse(&config_content) {
+        Ok(config) => {
+            let identity = repobox::config::Identity::parse(&format!("evm:{pusher_address}"))
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            let result = repobox::engine::check(
+                &config,
+                &identity,
+                repobox::config::Verb::Push,
+                None, // branch — checked per-ref in pre-receive, here we do a general push check
+                None, // path
+            );
+            Ok(result.is_allowed())
+        }
+        Err(e) => {
+            // Invalid config = don't block (opt-in principle)
+            tracing::warn!(config_error = %e, "invalid config - allowing push");
+            Ok(true)
+        }
     }
 }
 
