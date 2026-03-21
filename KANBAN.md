@@ -674,6 +674,10 @@ Script that runs the complete flow: `repobox init` → `keys generate` → signe
 
 ## ✅ Done
 
+### Explorer: signer address per commit
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+ECDSA signature extraction from REPOBOX SIGNATURE blocks, address recovery via @noble/curves, owner vs collaborator badges in commit list UI.
+
 ### Install script + release pipeline
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
 install.sh rewrite with platform detection, SHA256 checksums, sudo fallback, version pinning. Plus tools/release.sh (cross-compile) and tools/deploy-release.sh.
