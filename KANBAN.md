@@ -25,16 +25,6 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### Contributor graph / identity cards
-- **Priority**: P2
-- **Tags**: explorer, ui
-Show all unique EVM signers for a repo as identity cards: address (with alias if known), commit count, first/last commit date, and a mini contribution heatmap. Link each card to the address page.
-
-### Dark/light theme toggle
-- **Priority**: P2
-- **Tags**: explorer, ui
-Add theme toggle to explorer header. Persist preference in localStorage. Current explorer is dark — add a clean light theme option. Use CSS variables for all colors so theming is trivial.
-
 ### Clone URL copy widget + credential helper instructions
 - **Priority**: P2
 - **Tags**: explorer, ui
@@ -46,6 +36,11 @@ On repo detail page, prominent clone URL box with one-click copy (HTTPS + SSH va
 Replace "No recent activity", "No repositories found", etc with illustrated empty states. Use simple SVG illustrations + helpful text ("Push your first repo to see it here"). Makes the explorer feel alive even when empty.
 
 ## 🔨 In Progress
+
+### Dark/light theme toggle
+- **Priority**: P2
+- **Tags**: explorer, ui
+Add theme toggle to explorer header. Persist preference in localStorage. Current explorer is dark — add a clean light theme option. Use CSS variables for all colors so theming is trivial.
 
 ### Activity feed on explorer home
 - **Priority**: P1
@@ -59,6 +54,10 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 - **Tags**: infra
 
 ## ✅ Done
+
+### Contributor graph / identity cards
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+Contributors tab with identity cards showing EVM address, push count, last active date. Owner badges for repo owners. Responsive grid layout (3/2/1 columns) with hover effects. Links to contributor explorer pages. API endpoint at /api/explorer/repos/[address]/[name]/contributors.
 
 ### Repo stats cards (lines of code, languages, contributors)
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
