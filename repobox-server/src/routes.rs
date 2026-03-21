@@ -13,6 +13,15 @@ use crate::git::{self, BackendRequest, RepoPath};
 use crate::resolve;
 use crate::AppState;
 
+/// x402 payment configuration for paid repository access.
+/// Now stored in separate .repobox/x402.yml file.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct X402Config {
+    pub read_price: String,
+    pub recipient: String,
+    pub network: String,
+}
+
 pub(crate) fn router() -> Router<Arc<AppState>> {
     Router::new()
         // Address-less routes (for auto-routing based on EVM signer)
@@ -26,8 +35,7 @@ pub(crate) fn router() -> Router<Arc<AppState>> {
         .route("/{address}/{repo}/git-receive-pack", post(receive_pack))
         .route("/{address}/{repo}/HEAD", get(head))
         .route("/{address}/{repo}/x402/grant-access", post(grant_access))
-        // x402 members endpoint for HTTP resolver
-        .route("/x402/{address}/{repo}/members/{member}", get(check_x402_member))
+        .route("/{address}/{repo}/x402/members/{member_address}", get(x402_check_member))
         // Name resolution route
         .route("/{name}/resolve", get(resolve_name))
 }
@@ -337,13 +345,6 @@ async fn resolve_name_to_address(state: &AppState, name: &str) -> Result<String,
         return Ok(name.to_string());
     }
 
-    // Try on-chain NFT name lookup (with cache-on-hit)
-    if let Ok(Some(address)) = resolve::resolve_nft_name(name).await {
-        // Cache for future fast lookups
-        let _ = db::cache_nft_alias(&state.db_path, name, &address);
-        return Ok(address);
-    }
-
     // Then try ENS resolution
     match resolve::resolve_ens_name(name).await {
         Ok(address) => Ok(address),
@@ -456,7 +457,7 @@ fn check_read_access(
         tracing::warn!(identity = %identity, result = ?result, "read access denied");
 
         // Check if x402 payment is configured
-        if let Some(x402_config) = &config.x402 {
+        if let Some(x402_config) = read_x402_config_from_repo(&repo_dir) {
             // Return 402 Payment Required with x402 payment headers
             let payment_json = serde_json::json!({
                 "scheme": "exact",
@@ -532,6 +533,59 @@ pub(crate) fn read_config_from_repo(repo_dir: &std::path::Path) -> Option<String
     } else {
         tracing::warn!("fallback config read failed");
         None
+    }
+}
+
+/// Read .repobox/x402.yml from a bare git repo.
+pub(crate) fn read_x402_config_from_repo(repo_dir: &std::path::Path) -> Option<X402Config> {
+    tracing::debug!(repo_dir = ?repo_dir, "reading x402 config from repo");
+    
+    // First try HEAD
+    let output = std::process::Command::new("git")
+        .args(["show", "HEAD:.repobox/x402.yml"])
+        .current_dir(repo_dir)
+        .output()
+        .ok()?;
+
+    let config_content = if output.status.success() {
+        String::from_utf8_lossy(&output.stdout).to_string()
+    } else {
+        // HEAD failed — try first available branch
+        let refs_output = std::process::Command::new("git")
+            .args(["for-each-ref", "--format=%(refname:short)", "refs/heads"])
+            .current_dir(repo_dir)
+            .output()
+            .ok()?;
+
+        let first_branch = String::from_utf8_lossy(&refs_output.stdout)
+            .lines()
+            .next()?
+            .to_string();
+
+        let output = std::process::Command::new("git")
+            .args(["show", &format!("{}:.repobox/x402.yml", first_branch)])
+            .current_dir(repo_dir)
+            .output()
+            .ok()?;
+
+        if output.status.success() {
+            String::from_utf8_lossy(&output.stdout).to_string()
+        } else {
+            tracing::debug!("no x402.yml found in repo");
+            return None;
+        }
+    };
+
+    // Parse the YAML
+    match serde_yaml::from_str::<X402Config>(&config_content) {
+        Ok(config) => {
+            tracing::debug!(config = ?config, "parsed x402 config from repo");
+            Some(config)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to parse x402 config");
+            None
+        }
     }
 }
 
@@ -863,22 +917,9 @@ async fn grant_access(
         Err(status) => return status.into_response(),
     };
 
-    // Read config to verify x402 is enabled
+    // Check if x402 is enabled for this repo
     let repo_dir = git::repo_dir(&state.data_dir, &repo);
-    let config_content = match read_config_from_repo(&repo_dir) {
-        Some(content) => content,
-        None => return (StatusCode::NOT_FOUND, "no config found for this repo").into_response(),
-    };
-    
-    let config = match repobox::parser::parse(&config_content) {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!(error = %e, "failed to parse repo config");
-            return (StatusCode::INTERNAL_SERVER_ERROR, "invalid repo config").into_response();
-        }
-    };
-    
-    let _x402_config = match &config.x402 {
+    let _x402_config = match read_x402_config_from_repo(&repo_dir) {
         Some(cfg) => cfg,
         None => return (StatusCode::NOT_FOUND, "x402 not enabled for this repo").into_response(),
     };
@@ -917,7 +958,7 @@ fn parse_usdc_amount(price_str: &str) -> Option<String> {
     Some(raw_amount.to_string())
 }
 
-/// Store a paid member address in the server-side x402 members store
+/// Store a paid member address in the server-side x402 members store.
 fn store_x402_member(members_file: &str, address: &str) -> Result<(), std::io::Error> {
     use std::collections::HashSet;
     
@@ -934,10 +975,10 @@ fn store_x402_member(members_file: &str, address: &str) -> Result<(), std::io::E
         HashSet::new()
     };
     
-    // Add new member (HashSet handles duplicates automatically)
+    // Add new member
     members.insert(address.to_lowercase());
     
-    // Write back to file
+    // Write back
     let json = serde_json::to_string_pretty(&members)?;
     std::fs::write(members_file, json)?;
     
@@ -945,8 +986,8 @@ fn store_x402_member(members_file: &str, address: &str) -> Result<(), std::io::E
     Ok(())
 }
 
-/// Check if an address is a paid member (for HTTP resolver endpoint)
-async fn check_x402_member(
+/// Check if an address is a paid member (HTTP endpoint for resolver).
+async fn x402_check_member(
     State(state): State<Arc<AppState>>,
     Path((owner_address, repo_name, member_address)): Path<(String, String, String)>,
 ) -> Response {
@@ -979,8 +1020,6 @@ async fn check_x402_member(
     axum::Json(MemberResponse { member: is_member }).into_response()
 }
 
-
-
 async fn resolve_name(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
@@ -997,10 +1036,6 @@ async fn resolve_name(
     } else if let Ok(Some(addr)) = db::resolve_alias(&state.db_path, &name) {
         // Alias resolution
         (addr, "alias".to_string())
-    } else if let Ok(Some(addr)) = resolve::resolve_nft_name(&name).await {
-        // NFT name resolution
-        let _ = db::cache_nft_alias(&state.db_path, &name, &addr);
-        (addr, "nft".to_string())
     } else {
         // Try ENS resolution
         match resolve::resolve_ens_name(&name).await {

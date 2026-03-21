@@ -271,11 +271,8 @@ permissions:
     - "* append ./guestbook.jsonl"
     - "* push >main"
 
-# Optional: x402 paid access
-x402:
-  read_price: "1.00"                    # USDC
-  recipient: "0xRecipient..."
-  network: base
+# Note: x402 config is now in separate .repobox/x402.yml file
+# See x402 section below for details
 ```
 
 ---
@@ -306,13 +303,35 @@ Browse all repos at https://repo.box/explore. See recent activity, repo contents
 
 ### x402 Paid Access
 
-Repos can require USDC payment for read access using the x402 protocol:
+Repos can require USDC payment for read access using the x402 protocol. This requires two files:
 
+**1. `.repobox/x402.yml` - Payment configuration:**
 ```yaml
-x402:
-  read_price: "1.00"
-  recipient: "0xYourAddress..."
-  network: base
+read_price: "1.00"
+recipient: "0xYourAddress..."
+network: base
 ```
 
-Clone attempts return `402 Payment Required` with payment headers. Compatible x402 clients pay automatically.
+**2. `.repobox/config.yml` - HTTP resolver group:**
+```yaml
+groups:
+  paid-readers:
+    resolver:
+      http:
+        url: "https://git.repo.box/{ownerAddress}/{repoName}/x402/members"
+        cache_ttl: 300
+
+permissions:
+  default: deny
+  rules:
+    - paid-readers read >*
+```
+
+**How it works:**
+1. User tries to clone → access denied (default: deny)
+2. Server checks `.repobox/x402.yml` → returns `402 Payment Required` with payment headers
+3. Compatible x402 client pays automatically
+4. Payment triggers grant-access endpoint → stores payer address in server-side members file
+5. Next clone attempt → HTTP resolver checks membership → access granted
+
+The HTTP resolver at `/{ownerAddress}/{repoName}/x402/members/{memberAddress}` returns `{"member": true/false}` based on the server-side members store.
