@@ -1,0 +1,137 @@
+# repo.box Configuration Template
+# Copy this file to your repository as .repobox/config.yml and customize
+# See https://repo.box/docs/config for full documentation
+
+# Groups define collections of EVM addresses for permission management
+groups:
+  # Repository maintainers with full access
+  maintainers:
+    # Add your EVM address(es) here:
+    # - evm:0x1234567890abcdef1234567890abcdef12345678
+  
+  # Core developers with broad permissions
+  developers:
+    # - evm:0xabcdef1234567890abcdef1234567890abcdef12
+  
+  # External contributors with limited access
+  contributors:
+    # - evm:0xfedcba0987654321fedcba0987654321fedcba09
+  
+  # Automated bots and CI systems
+  bots:
+    # - evm:0x9876543210fedcba9876543210fedcba98765432
+
+# Permission rules control who can do what
+permissions:
+  # Default policy for unmatched actions
+  default: deny
+  
+  # Rules are evaluated in order - first match wins
+  rules:
+    # Maintainers have full control
+    - maintainers all
+    
+    # Developers can work on code but not change config
+    - developers push
+    - developers edit * not:.repobox/config.yml
+    - developers create
+    
+    # Contributors can only work on feature branches and docs
+    - contributors push >feature/**,>docs/**
+    - contributors edit * >src/**,>docs/**
+    - contributors create >feature/**
+    
+    # Bots can only push to specific bot branches
+    - bots push >ci/**,>automated/**
+    - bots edit * >ci/**,>automated/**
+    
+    # Everyone can read public repositories (clone, fetch)
+    # (uncomment if you want public read access)
+    # - any read
+
+# Example permission patterns:
+#
+# File path restrictions:
+#   - group edit * >src/**           # Only files in src/ directory
+#   - group edit * not:security/**   # Exclude security directory  
+#   - group edit *.md,*.txt          # Only markdown and text files
+#
+# Branch restrictions:  
+#   - group push >feature/**         # Only feature branches
+#   - group push not:main,release/** # Exclude main and release branches
+#   - group create >hotfix/**        # Only hotfix branches
+#
+# Time-based access:
+#   - group push after:2024-01-01    # Access starts from date
+#   - group edit before:2024-12-31   # Access expires on date
+#   - group all after:2024-06-01 before:2024-08-31  # Summer access
+#
+# Conditional access:
+#   - group push if:emergency-mode   # Only during emergency
+#   - group edit if:code-review-passed # After review approval
+#
+# Multiple conditions:
+#   - contributors push >feature/** after:2024-01-01 if:onboarding-complete
+#   - bots edit *.yml >ci/** not:production/** if:ci-enabled
+
+# Common use cases:
+#
+# 1. Solo Developer:
+# groups:
+#   owner:
+#     - evm:0xYourAddress
+# permissions:
+#   default: deny
+#   rules:
+#     - owner all
+#
+# 2. Open Source Project:
+# groups:
+#   maintainers:
+#     - evm:0xMaintainer1
+#     - evm:0xMaintainer2
+#   contributors: []  # Anyone can become a contributor
+# permissions:
+#   default: read     # Public read access
+#   rules:
+#     - maintainers all
+#     - any push >feature/**
+#     - any edit * >feature/**
+#
+# 3. Enterprise Team:
+# groups:
+#   senior-devs:
+#     - evm:0xSeniorDev1
+#     - evm:0xSeniorDev2
+#   junior-devs:
+#     - evm:0xJuniorDev1
+#     - evm:0xJuniorDev2
+#   qa-team:
+#     - evm:0xQATester1
+# permissions:
+#   default: deny
+#   rules:
+#     - senior-devs all not:.repobox/config.yml
+#     - junior-devs push >feature/**,>bugfix/**
+#     - junior-devs edit * >src/**,>docs/** not:src/security/**
+#     - qa-team edit * >tests/**,>docs/testing/**
+#
+# 4. AI Agent Collaboration:
+# groups:
+#   humans:
+#     - evm:0xHuman1
+#     - evm:0xHuman2
+#   ai-agents:
+#     - evm:0xCodeAgent
+#     - evm:0xTestAgent
+#   ci-bots:
+#     - evm:0xGitHubActions
+# permissions:
+#   default: deny
+#   rules:
+#     - humans all
+#     - ai-agents push >ai/**,>feature/**
+#     - ai-agents edit * >src/**,>docs/** not:security/**,package.json
+#     - ai-agents not edit .repobox/config.yml
+#     - ci-bots push >ci/**
+#     - ci-bots edit * >ci/**,.github/**

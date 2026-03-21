@@ -19,6 +19,7 @@ REPOBOX_BINARY="/home/xiko/repobox/target/release/repobox"
 GIT_SERVER="git.repo.box"
 EXPLORER_BASE="https://repo.box/explore"
 QUICK_MODE=false
+NO_CLEANUP=false
 
 # Colors for output
 RED='\033[0;31m'
@@ -34,10 +35,15 @@ for arg in "$@"; do
       QUICK_MODE=true
       shift
       ;;
+    --no-cleanup)
+      NO_CLEANUP=true
+      shift
+      ;;
     --help|-h)
-      echo "Usage: $0 [--quick]"
-      echo "  --quick   Skip agent simulation, focus on core flow (30s)"
-      echo "  --help    Show this help message"
+      echo "Usage: $0 [--quick] [--no-cleanup]"
+      echo "  --quick      Skip agent simulation, focus on core flow (30s)"
+      echo "  --no-cleanup Keep temporary files for debugging"
+      echo "  --help       Show this help message"
       exit 0
       ;;
     *)
@@ -101,6 +107,15 @@ validate_environment() {
   # Test git server connectivity via explorer (more reliable than git server directly)
   if ! curl -sf "$EXPLORER_BASE" -w "%{http_code}" -o /dev/null | grep -q "200"; then
     warning "Explorer not reachable at $EXPLORER_BASE - continuing anyway"
+  fi
+  
+  # Test actual git server connectivity (check if git-receive-pack is available)
+  log "Testing git server connectivity..."
+  if curl -sf "http://${GIT_SERVER}:3490/test-repo.git/info/refs?service=git-receive-pack" -o /dev/null 2>/dev/null; then
+    success "Git server responding to git protocol requests"
+  else
+    warning "Git server may not be responding to git protocol - continuing anyway"
+    log "This might cause push/clone failures later"
   fi
   
   success "Environment validated"
@@ -343,10 +358,15 @@ generate_demo_identities() {
   WHOAMI_OUTPUT=$(repobox whoami 2>&1)
   log "Current identity: $WHOAMI_OUTPUT"
   
-  # Update config with actual generated addresses
-  sed -i "s|# - evm:0x...|    - $FOUNDER_ADDRESS|" .repobox/config.yml
+  # Update config with actual generated addresses - fix the founder section first
+  sed -i "/founders:/,/agents:/ s|# - evm:0x...|    - $FOUNDER_ADDRESS|" .repobox/config.yml
   if [[ "$QUICK_MODE" == "false" && -n "$AGENT_ADDRESS" ]]; then
     sed -i "/agents:/,/bots:/ s|# - evm:0x...|    - $AGENT_ADDRESS|" .repobox/config.yml
+  fi
+  
+  # In quick mode, remove the agent address placeholder from agents group
+  if [[ "$QUICK_MODE" == "true" ]]; then
+    sed -i "/agents:/,/bots:/ s|    # - evm:0x...|    # (no agents in quick mode)|" .repobox/config.yml
   fi
   
   success "Demo identities configured"
@@ -525,7 +545,13 @@ verify_clone() {
   local max_retries=3
   
   while [[ $retry_count -lt $max_retries ]]; do
-    if git clone "https://${GIT_SERVER}/${REPO_NAME}.git" cloned-repo 2>/dev/null; then
+    # Extract the address from FOUNDER_ADDRESS (remove evm: prefix)
+    local owner_addr=$(echo "$FOUNDER_ADDRESS" | sed 's/evm://')
+    local clone_url="https://${GIT_SERVER}/${owner_addr}/${REPO_NAME}.git"
+    
+    log "Attempting clone from: $clone_url"
+    if git clone "$clone_url" cloned-repo 2>/dev/null; then
+      success "Clone successful from $clone_url"
       break
     else
       retry_count=$((retry_count + 1))
@@ -535,7 +561,7 @@ verify_clone() {
       else
         warning "Clone failed after $max_retries attempts - repository may not be ready yet"
         log "This can happen if the server is still processing the push"
-        log "Try manually: git clone https://${GIT_SERVER}/${REPO_NAME}.git"
+        log "Try manually: git clone $clone_url"
         return
       fi
     fi
@@ -575,15 +601,15 @@ verify_clone() {
 generate_explorer_urls() {
   progress "🌐" "Generating explorer URLs"
   
-  # Extract actual repository owner address if possible
-  local owner_addr="$REPO_OWNER"
-  if [[ "$owner_addr" == "unknown" ]]; then
-    # Try to get it from the founder address
-    owner_addr=$(echo "$FOUNDER_ADDRESS" | sed 's/evm://')
-  fi
+  # Extract actual repository owner address from founder address
+  local owner_addr=$(echo "$FOUNDER_ADDRESS" | sed 's/evm://')
   
-  # Generate URLs
+  # Generate URLs  
   REPO_URL="$EXPLORER_BASE/$owner_addr/$REPO_NAME"
+  CLONE_URL="https://${GIT_SERVER}/${owner_addr}/${REPO_NAME}.git"
+  
+  log "Repository will be available at: $REPO_URL"
+  log "Clone URL: $CLONE_URL"
   
   success "Explorer URLs generated"
 }
@@ -612,8 +638,8 @@ show_final_summary() {
   echo "   ✅ Clone-back integrity check"
   echo ""
   echo "🔗 Links:"
-  echo "   📱 Repository: https://${GIT_SERVER}/${REPO_NAME}.git"
-  echo "   🌐 Explorer: $REPO_URL"
+  echo "   📱 Repository: $CLONE_URL"
+  echo "   🌐 Explorer: $REPO_URL" 
   echo "   📂 Local files: $TEMP_DIR/$REPO_NAME"
   echo ""
   echo "🔑 Identities Generated:"
@@ -633,7 +659,7 @@ show_final_summary() {
   echo ""
   echo "🎯 Next Steps:"
   echo "   • Visit the explorer URL to see commit signatures"
-  echo "   • Try cloning: git clone https://${GIT_SERVER}/${REPO_NAME}.git"
+  echo "   • Try cloning: git clone $CLONE_URL"
   echo "   • Experiment with permission denials"
   echo "   • Add more agents to the configuration"
   echo ""
@@ -645,9 +671,12 @@ show_final_summary() {
 
 cleanup() {
   if [[ -n "${TEMP_DIR:-}" && -d "$TEMP_DIR" ]]; then
-    log "Cleaning up temporary directory: $TEMP_DIR"
-    # Uncomment to auto-cleanup (keep for now to allow inspection)
-    # rm -rf "$TEMP_DIR"
+    if [[ "$NO_CLEANUP" == "true" ]]; then
+      log "Keeping temporary directory for debugging: $TEMP_DIR"
+    else
+      log "Cleaning up temporary directory: $TEMP_DIR"
+      rm -rf "$TEMP_DIR"
+    fi
   fi
 }
 
