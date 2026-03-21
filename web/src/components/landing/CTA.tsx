@@ -80,9 +80,9 @@ export function LandingCTA() {
           >
             Join the Wall
           </a>
-          <span style={{ fontSize: 13, color: "var(--bp-dim)", fontFamily: "var(--font-mono), monospace" }}>
+          <a href="/explore" style={{ fontSize: 13, color: "var(--bp-accent)", fontFamily: "var(--font-mono), monospace", textDecoration: "none" }}>
             the first repo where anyone can push to main →
-          </span>
+          </a>
         </div>
 
         {/* Curl command — secondary */}
