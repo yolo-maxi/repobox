@@ -25,6 +25,11 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
+### Playground refresh — visual, accuracy, speed
+- **Priority**: P1
+- **Tags**: playground, ui, ai
+Overhaul the `/playground` page: (1) **Visual refresh** — match the new explorer dark theme, sidebar layout if appropriate, clean up any dated styling. (2) **Stale knowledge** — the system prompt in `/src/lib/repobox-prompt.ts` is outdated, doesn't know about `own`, `read`, `branch` (new verb), bare-word group refs, `.repobox/config.yml` path. Ideally the prompt should load dynamically from a canonical source (e.g. `web/public/skill.md` or a shared spec file at build time) so it never drifts. (3) **Faster model** — currently uses Venice API (Qwen 235B) which is slow. Switch to fastest available Venice model that's still good at YAML generation. Check Venice docs for model list. (4) **Test both modes** — English→Config and Config→English should both work correctly with current syntax.
+
 ### ENS names in permissions
 - **Priority**: P1
 - **Tags**: feature, permissions, ens
