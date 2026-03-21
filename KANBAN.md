@@ -42,6 +42,11 @@ Replace "No recent activity", "No repositories found", etc with illustrated empt
 
 ## 🔨 In Progress
 
+### Repo detail pages: sidebar layout matching explore page
+- **Priority**: P1
+- **Tags**: explorer, ui
+Repo detail pages (`/explore/[address]/[name]`) and owner pages (`/explore/[address]`) are still full-width — inconsistent with the new explore home sidebar layout. Apply the same pattern: left sidebar (repo metadata, clone URL, owner info, quick stats) + narrower main content column (file tree, README, commits, config tabs). Match the 260px sidebar + max-width 1200px grid from explore home.
+
 ### Address component with ENS/subdomain resolution + human-readable URLs
 - **Priority**: P1
 - **Tags**: feature, explorer, ui, ens
