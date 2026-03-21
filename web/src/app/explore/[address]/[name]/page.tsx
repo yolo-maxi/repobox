@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress, formatBytes, getFileIcon, copyToClipboard } from '@/lib/utils';
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
+import { FileViewer } from '@/components/explorer/FileViewer';
 
 interface RepoDetails {
   address: string;
@@ -276,13 +277,11 @@ export default function RepoPage() {
             )}
 
             {fileContent ? (
-              <div className="explore-file-viewer">
-                <div className="explore-file-header">
-                  <span className="explore-file-icon">{getFileIcon(fileContent.path, false)}</span>
-                  <span className="explore-file-name">{fileContent.path.split('/').pop()}</span>
-                </div>
-                <pre className="explore-file-content"><code>{fileContent.content}</code></pre>
-              </div>
+              <FileViewer
+                filePath={fileContent.path}
+                fileContent={fileContent.content}
+                onClose={() => setFileContent(null)}
+              />
             ) : (
               <div className="explore-file-list">
                 {currentFiles.length === 0 ? (
