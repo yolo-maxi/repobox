@@ -30,11 +30,6 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## 📋 Backlog
 
-### Mobile-responsive explorer
-- **Priority**: P1
-- **Tags**: explorer, ui
-Explorer pages need responsive layouts for mobile. File tree should collapse to a breadcrumb navigator, commit list should stack vertically, stats should wrap to 2x2 grid. Test on 375px and 768px viewports.
-
 ### Repo stats cards (lines of code, languages, contributors)
 - **Priority**: P2
 - **Tags**: explorer, ui
@@ -69,6 +64,10 @@ Replace "No recent activity", "No repositories found", etc with illustrated empt
 - **Tags**: infra
 
 ## ✅ Done
+
+### Mobile-responsive explorer
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+Comprehensive mobile-responsive implementation for explorer pages. Stats grid: 3-column → 2×2 layout on mobile (repositories spans full width). File tree: Collapse to breadcrumb navigation with truncation on small screens. Commit list: Vertical stacking instead of horizontal layout. Repository header: Stacked layout with optimized clone URL display. Branch selector: Modal behavior on mobile with backdrop. Touch targets: 44px minimum height for all interactive elements. Navigation tabs: Horizontal scrolling support. Responsive breakpoints: 375px mobile, 768px tablet, 768px+ desktop. All explorer components use consistent CSS classes with backward compatibility maintained.
 
 ### Full E2E demo script
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
