@@ -7,7 +7,6 @@
 - **Tags**: feature, ux
 Clone via `git.repo.box/vitalik.eth/myrepo.git` — resolve ENS to address server-side.
 
-
 ### Webhook notifications on push
 - **Priority**: P3
 - **Tags**: feature, server
@@ -25,71 +24,44 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### Playground refresh — visual, accuracy, speed
-- **Priority**: P1
-- **Tags**: playground, ui, ai
-Overhaul the `/playground` page: (1) **Visual refresh** — match the new explorer dark theme, sidebar layout if appropriate, clean up any dated styling. (2) **Stale knowledge** — the system prompt in `/src/lib/repobox-prompt.ts` is outdated, doesn't know about `own`, `read`, `branch` (new verb), bare-word group refs, `.repobox/config.yml` path. Ideally the prompt should load dynamically from a canonical source (e.g. `web/public/skill.md` or a shared spec file at build time) so it never drifts. (3) **Faster model** — currently uses Venice API (Qwen 235B) which is slow. Switch to fastest available Venice model that's still good at YAML generation. Check Venice docs for model list. (4) **Test both modes** — English→Config and Config→English should both work correctly with current syntax.
-
-### ENS names in permissions
-- **Priority**: P1
-- **Tags**: feature, permissions, ens
-Allow ENS names directly in `.repobox/config.yml` rules and group members, e.g. `vitalik.eth push >main`. Resolution happens via the existing resolver proxy on `git.repo.box` (add ENS→address resolution to repobox-server's `/api/resolve` endpoint). Key property: if the ENS name changes ownership, the permission follows the name — not the old address. This means permissions are checked at evaluation time, not at config parse time. Cache with short TTL (~60s) to balance freshness vs performance.
-
-### Docs pass — update to reflect latest state
-- **Priority**: P3
-- **Tags**: docs
-Go through all docs pages (`/docs`, `web/content/docs/`, README, SKILL.md, `web/public/skill.md`) and update to reflect current state: new verbs (`branch`, `read`, `own` expansion), bare-word group refs, `.repobox/config.yml` path, credential helper flow, resolver proxy, force push policy, etc. Only run this when no other P0/P1/P2 tasks remain in backlog.
-
-### Empty state illustrations
-- **Priority**: P2
-- **Tags**: explorer, ui
-Replace "No recent activity", "No repositories found", etc with illustrated empty states. Use simple SVG illustrations + helpful text ("Push your first repo to see it here"). Makes the explorer feel alive even when empty.
-
-### Docs — comprehensive, honest, up-to-date
-- **Priority**: P3
-- **Tags**: docs
-Go through all docs (`/docs`, `web/content/docs/`, README, SKILL.md, `web/public/skill.md`). Cover everything: new verbs (`branch`, `read`, `own` expansion), bare-word group refs, `.repobox/config.yml`, credential helper, resolver proxy, force push policy, x402 payments, ENS resolution. Be honest — features not yet implemented (workflows, hooks, CI/CD triggers) must be marked "Coming Soon" or "On the Roadmap". Don't pretend things work that don't. Only run when no P0/P1/P2 tasks remain.
-
-## 🔨 In Progress
-
-### Analyse and handle force push
-- **Priority**: P1
-- **Tags**: feature, security, server
-Force push (`git push --force`) rewrites history — deletes commits, overwrites signed work, breaks audit trails. This is especially dangerous in a signed-commit model where every commit has EVM provenance. Analyse: (1) Can repobox-server detect force pushes in the pre-receive hook? (2) Should we disallow them entirely by default? (3) If allowed, should it require a specific permission verb (e.g. `force-push`) separate from `push`? (4) What about `--force-with-lease` (safer variant)? Fran's instinct: disallow altogether. Research git's `receive.denyNonFastForwards` and how GitHub/GitLab handle this. Write up findings and recommendation before implementing.
-
 ### Fix repo detail page (explorer) — comprehensive overhaul
 - **Priority**: P0
 - **Tags**: explorer, ui, bugs
-Major overhaul of `/explore/[address]/[name]` page. Issues to fix:
-1. **Sidebar layout**: Must match explore home — 260px left sidebar (repo metadata, clone URL, owner info, stats) + constrained main content column. No full-width.
-2. **Broken tabs**: All tabs except README are broken/ugly. Fix: Files, Commits, Config, Contributors tabs — ensure data renders correctly with proper styling.
-3. **Remove SSH clone URL**: SSH is not implemented. Only show HTTPS clone URL with EVM-authed credential helper instructions.
-4. **Fix contributor count inconsistency**: Explore list shows different contributor count than repo detail. Both should use the same `getContributorCount()` logic (unique committer emails from `git log --format=%ae`).
-5. **Contribution chart**: Add a visual chart showing contributions over time or per-contributor bar chart on the Contributors tab.
-6. **Fix language bar "Other" duplication**: The horizontal stacked bar shows "Other" twice. Fix: properly categorize file extensions, don't count binary/data/blob files (images, .wasm, .bin, lockfiles, .git objects). Only count source code extensions. Deduplicate the "Other" bucket.
-7. **GitHub-style URL schema**: URLs for browsing branches/folders/files should match GitHub's pattern:
-   - `/explore/{addr}/{name}/tree/{branch}/{path}` for directories
-   - `/explore/{addr}/{name}/blob/{branch}/{path}` for files
-   - `/explore/{addr}/{name}/commits/{branch}` for commit history
-   - `/explore/{addr}/{name}/commit/{hash}` for single commit (already exists)
-   Update all internal links, breadcrumbs, and router to use this schema.
+Major overhaul of `/explore/[address]/[name]` page:
+1. **Sidebar layout**: Match explore home — left sidebar + constrained main column. No full-width.
+2. **Broken tabs**: Fix Files, Commits, Config, Contributors tabs — data seems correct but UI is broken/bad.
+3. **Remove SSH clone URL**: SSH not implemented. Only HTTPS with EVM-authed credential helper.
+4. **Fix contributor count inconsistency**: Explore list shows different count than repo detail.
+5. **Contribution chart**: Visual chart on Contributors tab.
+6. **Fix language bar "Other" duplication**: Shows "Other" twice. Exclude binary/data/blob files.
+7. **GitHub-style URL schema**: `/tree/{branch}/{path}`, `/blob/{branch}/{path}`, `/commits/{branch}`.
 
 ### Address component with ENS/subdomain resolution + human-readable URLs
 - **Priority**: P1
 - **Tags**: feature, explorer, ui, ens
-Build a reusable `<AddressDisplay>` component for the explorer. Resolution priority: (1) ENS name (e.g. `vitalik.eth`), (2) repo.box subdomain/alias (e.g. `ocean`), (3) truncated hex as fallback. On hover: show full address tooltip. On click: copy full address to clipboard. When space permits, show both: `ocean (0xDbbA…2048)`. All addresses everywhere in the explorer should be clickable links to `/explore/{address}`. Human-readable URL routing: `/explore/{ens-name}/` resolves ENS → address → show that owner's repos (if exists, else 404). `/explore/{subdomain}/` resolves repo.box alias → address → show repos. Server-side: add `/api/explorer/resolve/{name}` endpoint that tries ENS first, then subdomain lookup. The explore routes need a catch-all that checks if the param is a valid hex address, ENS name, or subdomain and redirects accordingly.
+Reusable `<AddressDisplay>` component. Resolution: ENS → repo.box subdomain → truncated hex. Hover: full address. Click: copy. All addresses clickable. Human-readable URL routing: `/explore/{ens-name}/` and `/explore/{subdomain}/` resolve and show repos. Add `/api/explorer/resolve/{name}` endpoint.
 
+### ENS names in permissions
+- **Priority**: P1
+- **Tags**: feature, permissions, ens
+Allow ENS names in `.repobox/config.yml` rules, e.g. `vitalik.eth push >main`. Resolution at evaluation time (not parse time) so ownership changes follow the name. Short TTL cache.
 
+### Playground refresh — visual, accuracy, speed
+- **Priority**: P1
+- **Tags**: playground, ui, ai
+Visual refresh, load system prompt from canonical source so it never drifts (currently missing `own`, `read`, `branch`), switch to faster Venice model, test both English→Config and Config→English modes.
 
-### Dark/light theme toggle
+### Empty state illustrations
 - **Priority**: P2
 - **Tags**: explorer, ui
-Add theme toggle to explorer header. Persist preference in localStorage. Current explorer is dark — add a clean light theme option. Use CSS variables for all colors so theming is trivial.
+Replace "No recent activity" etc with SVG illustrations + helpful text.
 
-### Activity feed on explorer home
-- **Priority**: P1
-- **Tags**: feature, explorer
-The "Recent Activity" column shows "No recent activity" — wire up the push log.
+### Docs — comprehensive, honest, up-to-date
+- **Priority**: P3
+- **Tags**: docs
+Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented features as "Coming Soon" / "Roadmap". Only run when no P0/P1/P2 tasks remain.
+
+## 🔨 In Progress
 
 ## 🚧 Blocked
 
@@ -99,73 +71,101 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## ✅ Done
 
-### Clone URL copy widget + credential helper instructions
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-On repo detail page, prominent clone URL box with one-click copy (HTTPS + SSH variants). Below it, expandable section showing how to set up the repobox credential helper for authenticated clones. Include `curl | sh` install snippet. Features: dual protocol support, visual feedback, mobile-responsive design, four-step setup guide.
-
-### Contributor graph / identity cards
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-Contributors tab with identity cards showing EVM address, push count, last active date. Owner badges for repo owners. Responsive grid layout (3/2/1 columns) with hover effects. Links to contributor explorer pages. API endpoint at /api/explorer/repos/[address]/[name]/contributors.
-
-### Repo stats cards (lines of code, languages, contributors)
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-Language breakdown bar (like GitHub), total lines of code, number of unique signers (contributors), and repo age via git log + file extension analysis server-side. Displayed as colored stat cards on repo detail page.
-
-### Mobile-responsive explorer
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-Comprehensive mobile-responsive implementation for explorer pages. Stats grid: 3-column → 2×2 layout on mobile (repositories spans full width). File tree: Collapse to breadcrumb navigation with truncation on small screens. Commit list: Vertical stacking instead of horizontal layout. Repository header: Stacked layout with optimized clone URL display. Branch selector: Modal behavior on mobile with backdrop. Touch targets: 44px minimum height for all interactive elements. Navigation tabs: Horizontal scrolling support. Responsive breakpoints: 375px mobile, 768px tablet, 768px+ desktop. All explorer components use consistent CSS classes with backward compatibility maintained.
-
-### Full E2E demo script
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-Complete hackathon demo: `repobox init` → `keys generate` → signed commit → push → clone → verify. Scripts: demo-e2e.sh (724 lines, quick/full modes), demo-reset.sh, docs/DEMO.md. Multi-agent simulation, visual progress indicators, error handling with cleanup. See detailed spec in In Progress section.
+### Force push handling
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Force push detection via pre-receive hook. Denied by default (`receive.denyNonFastForwards`). New `force-push` permission verb required to allow it. `--force-with-lease` also blocked without explicit permission. Comprehensive tests.
 
 ### Verb refactor: create → new files, branch → new branches
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-Separated file creation (`create`) from branch creation (`branch`) with semantic validation. Updated parser, engine, documentation, and comprehensive test coverage. All 184 tests pass with proper rejection of invalid `create` with branch targets and helpful error messages. Breaking change to config format with clear migration path.
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Separated `create` (new files) from `branch` (new branches). Updated parser, engine, docs. All 184 tests pass. Breaking change with migration path.
 
-### Search across all repos
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-Search API with SQL LIKE queries across repos and commit messages, debounced UI with grouped results.
-
-### Branch selector in repo detail
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-Branch dropdown with search, all APIs accept ?branch= param, sanitized branch names (security fix after first review rejection). 2 iterations.
-
-### File viewer with syntax highlighting
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-FileViewer component with syntax highlighting, line numbers, copy/download, language detection (25+ languages), binary/large file handling.
-
-### README rendering polish
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-GitHub-style markdown with syntax highlighting, copy buttons, table styling, heading anchors, image zoom, external link indicators.
-
-### Commit detail page with diff viewer
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-Clickable commit hashes → detail page with unified diff, syntax highlighting, keyboard navigation, 20+ language support. +3069 lines.
-
-### Config opt-in enforcement
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-Permission enforcement now opt-in only. Repos without .repobox/config.yml skip permission checks, just require EVM signatures.
-
-### Explorer: signer address per commit
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-ECDSA signature extraction from REPOBOX SIGNATURE blocks, address recovery via @noble/curves, owner vs collaborator badges in commit list UI.
-
-### Install script + release pipeline
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-install.sh rewrite with platform detection, SHA256 checksums, sudo fallback, version pinning. Plus tools/release.sh (cross-compile) and tools/deploy-release.sh.
+### Dark/light theme toggle
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Theme toggle in explorer header, CSS variables, localStorage persistence.
 
 ### Activity feed from push events
-- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
-Server-side push logging in db.rs/git.rs/routes.rs (+172 lines). Both push routes covered, non-blocking error handling. Reviewed and approved.
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Server-side push logging + explorer API + UI. Auto-refresh every 30s.
+
+### Explorer sidebar layout
+- **Completed**: 2026-03-21 | **Agent**: Ocean
+Sidebar with stats, sort, activity feed. Constrained main content column. GitHub-style flat repo rows with hover states.
+
+### Contributor count pill on repo rows
+- **Completed**: 2026-03-21 | **Agent**: Ocean
+`getContributorCount()` API, compact emoji+number pills on explore page.
+
+### Security: dashboard token moved to env var
+- **Completed**: 2026-03-21 | **Agent**: Ocean
+Removed hardcoded auth token from source (was exposed in public repo). Rotated token, moved to DASHBOARD_TOKEN env var.
+
+### Production mode for web app
+- **Completed**: 2026-03-21 | **Agent**: Ocean
+Switched from `pnpm run dev` to `pnpm start`. Removed Vercel/Next.js dev toolbar.
+
+### Dual-push to GitHub + git.repo.box
+- **Completed**: 2026-03-21 | **Agent**: Ocean
+Origin remote now pushes to both remotes. Explorer stays current with pipeline work.
+
+### Clone URL copy widget
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+One-click copy, credential helper instructions, responsive design.
+
+### Contributor identity cards
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Contributors tab with EVM address cards, push count, owner badges, responsive grid.
+
+### Repo stats cards (languages, LOC, contributors)
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Language breakdown bar, lines of code, contributor count, repo age.
+
+### Mobile-responsive explorer
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Responsive breakpoints at 375px/768px. Touch targets, horizontal scroll tabs, stacked layouts.
+
+### Full E2E demo script
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+demo-e2e.sh (724 lines), quick/full modes, multi-agent simulation, demo-reset.sh, docs/DEMO.md.
+
+### Search across all repos
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Server-side search API + debounced UI with grouped results.
+
+### Branch selector in repo detail
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Dropdown with search, all APIs accept ?branch= param. Input sanitization (security fix).
+
+### File viewer with syntax highlighting
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+25+ languages, line numbers, copy/download, binary/large file handling.
+
+### README rendering polish
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+GitHub-style markdown, syntax highlighting, copy buttons, table styling, heading anchors.
+
+### Commit detail page with diff viewer
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Unified diff, syntax highlighting, keyboard navigation, 20+ languages.
+
+### Config opt-in enforcement
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+Repos without .repobox/config.yml skip permission checks. EVM signatures still required.
+
+### Signer address per commit
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+ECDSA signature extraction, address recovery, owner vs collaborator badges.
+
+### Install script + release pipeline
+- **Completed**: 2026-03-21 | **Agent**: claude-agent
+install.sh with platform detection, SHA256 checksums, version pinning. release.sh + deploy-release.sh.
 
 ### Rust server compilation + deployment
 - **Completed**: 2026-03-20
-Axum 0.8 fixes, deployed at git.repo.box:3490. PM2: repobox-git.
+Axum 0.8, deployed at git.repo.box:3490.
 
 ### EVM signature verification (ecrecover)
 - **Completed**: 2026-03-20
-65-byte recoverable signatures, real verify() via ecrecover, recover_address().
+65-byte recoverable signatures, real verify() via ecrecover.
 
 ### Address-less push with auto-routing
 - **Completed**: 2026-03-20
@@ -173,40 +173,40 @@ Push to `git.repo.box/myrepo.git`, server derives owner from signed root commit.
 
 ### Unsigned push rejection
 - **Completed**: 2026-03-20
-Server deletes bare repos post-push if no valid EVM signature found.
+Server deletes bare repos if no valid EVM signature.
 
 ### Explorer UI (explore pages)
 - **Completed**: 2026-03-20
-Stats, repos list, repo detail with file tree, commits, README (rendered markdown), Config tab.
+Stats, repos list, repo detail with file tree, commits, README, Config tab.
 
 ### git commit -S support (gpg.program)
 - **Completed**: 2026-03-20
-CLI acts as gpg.program. REPOBOX SIGNATURE armor format. init sets gpg.program + commit.gpgsign.
+REPOBOX SIGNATURE armor format. init sets gpg.program + commit.gpgsign.
 
 ### Self-hosting (dogfooding)
 - **Completed**: 2026-03-20
-repo.box hosts itself at git.repo.box. Owner: 0xDbbA...2048.
+repo.box hosts itself at git.repo.box.
 
 ### Permission config (.repobox/config.yml)
 - **Completed**: 2026-03-20
-3 groups (founders, agents, reviewers), default deny, 7 rules. Live on explorer Config tab.
+Groups, rules, default deny. Live on explorer Config tab.
 
 ### Sub-agent workflow with EVM identities
 - **Completed**: 2026-03-20
-Spawned claude-agent on feature/mobile-landing, signed with 0xAAc0...4a00, merged by founder.
+claude-agent on feature branches, signed commits, founder merges.
 
 ### Mobile-responsive landing page
-- **Completed**: 2026-03-20 | **Agent**: claude-agent (0xAAc0...4a00)
-Conditional canvas rendering (CSS gradient on mobile), responsive typography with clamp(), media queries.
+- **Completed**: 2026-03-20 | **Agent**: claude-agent
+Responsive typography, CSS gradients, media queries.
 
 ### Unified Next.js web app
 - **Completed**: 2026-03-20
-Consolidated landing, dashboard, blog, API, explorer, docs into one app at web/.
+Landing, dashboard, blog, API, explorer, docs in one app.
 
 ### Remote group resolvers
 - **Completed**: 2026-03-20
-HTTP + on-chain resolvers with caching. Server proxy for eth_call to Alchemy.
+HTTP + on-chain resolvers with caching. Alchemy proxy.
 
-### 150 Rust tests passing
+### 150+ Rust tests passing
 - **Completed**: 2026-03-20
-135 core + 15 server (7 unit + 8 integration).
+135 core + 15 server tests. Now 184+ with verb refactor and force push.
