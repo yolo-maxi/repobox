@@ -8,6 +8,8 @@ import {
   VENICE_MODEL,
   EXPLAIN_EXAMPLES,
 } from "@/lib/repobox-prompt";
+import { YamlHighlighter, ExplanationHighlighter } from "./SyntaxHighlighter";
+import { TestRunner } from "./TestRunner";
 
 type Mode = "generate" | "explain";
 
@@ -32,53 +34,7 @@ const GENERATE_EXAMPLES = [
 
 const EXPLAIN_LABELS = ["minimal", "file-locked", "multi-agent"];
 
-function highlightYaml(text: string): string {
-  text = text.replace(/^```ya?ml\n?/gm, "").replace(/^```\n?/gm, "");
-
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/(#.*$)/gm, '<span style="color:#3a5a72;">$1</span>')
-    .replace(
-      /^(\s*)([\w-]+)(:)/gm,
-      '$1<span style="color:#4fc3f7;">$2</span><span style="color:#5a7a94;">$3</span>'
-    )
-    .replace(
-      /(&quot;[^&]*&quot;|'[^']*')/g,
-      '<span style="color:#81d4fa;">$1</span>'
-    )
-    .replace(/^(\s*)(- )/gm, '$1<span style="color:#5a7a94;">- </span>')
-    .replace(
-      /(evm:0x[\w.]+)/g,
-      '<span style="color:#b8d4e3;opacity:0.7;">$1</span>'
-    )
-    .replace(
-      /(\.\/[\w.*\/-]+)/g,
-      '<span style="color:#81d4fa;">$1</span>'
-    );
-}
-
-function highlightExplanation(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(
-      /\*\*([^*]+)\*\*/g,
-      '<span style="color:#e8f4fd;font-weight:600;">$1</span>'
-    )
-    .replace(
-      /`([^`]+)`/g,
-      '<span style="color:#4fc3f7;background:rgba(79,195,247,0.08);padding:0 4px;border-radius:2px;">$1</span>'
-    )
-    .replace(
-      /^(\s*[-•])/gm,
-      '<span style="color:#4fc3f7;">$1</span>'
-    )
-    .replace(/✅/g, '<span style="color:#4caf50;">✅</span>')
-    .replace(/❌/g, '<span style="color:#f44336;">❌</span>');
-}
+// Note: Syntax highlighting functions moved to SyntaxHighlighter.tsx for better organization
 
 export function PlaygroundClient() {
   const [mode, setMode] = useState<Mode>("generate");
@@ -87,8 +43,58 @@ export function PlaygroundClient() {
   const [output, setOutput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusText, setStatusText] = useState("");
+  const [showTests, setShowTests] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
+
+  const runGeneration = useCallback(async (inputText: string, targetMode: Mode): Promise<string> => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const userMessage =
+      targetMode === "generate"
+        ? `Generate a .repobox/config.yml for this scenario:\n\n${inputText}\n\nOutput ONLY the YAML. No explanation, no code fences.`
+        : `Explain this .repobox/config.yml in plain English. What can each group do? What are they denied?\n\n${inputText}`;
+
+    try {
+      const res = await fetch(VENICE_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_VENICE_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: VENICE_MODEL,
+          stream: false, // Non-streaming for test runs
+          messages: [
+            { role: "system", content: REPOBOX_SYSTEM_PROMPT },
+            { role: "user", content: userMessage },
+          ],
+          temperature: 0.1,
+          max_tokens: 1500,
+          ...(VENICE_MODEL.includes('claude') ? {
+            anthropic_parameters: {
+              include_anthropic_system_prompt: false,
+            }
+          } : {
+            venice_parameters: {
+              include_venice_system_prompt: false,
+              disable_thinking: true,
+            }
+          }),
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || "";
+    } finally {
+      abortRef.current = null;
+    }
+  }, []);
 
   const run = useCallback(async () => {
     const input = mode === "generate" ? generateInput.trim() : explainInput.trim();
@@ -121,12 +127,19 @@ export function PlaygroundClient() {
             { role: "system", content: REPOBOX_SYSTEM_PROMPT },
             { role: "user", content: userMessage },
           ],
-          temperature: 0.3,
-          max_tokens: 2000,
-          venice_parameters: {
-            include_venice_system_prompt: false,
-            disable_thinking: true,
-          },
+          temperature: 0.1, // Reduced for more consistent structured output
+          max_tokens: 1500,  // Reduced for faster responses
+          // Model-specific optimizations
+          ...(VENICE_MODEL.includes('claude') ? {
+            anthropic_parameters: {
+              include_anthropic_system_prompt: false,
+            }
+          } : {
+            venice_parameters: {
+              include_venice_system_prompt: false,
+              disable_thinking: true,
+            }
+          }),
         }),
         signal: controller.signal,
       });
@@ -191,12 +204,6 @@ export function PlaygroundClient() {
     },
     [run]
   );
-
-  const highlightedOutput = output
-    ? mode === "generate"
-      ? highlightYaml(output)
-      : highlightExplanation(output)
-    : "";
 
   return (
     <div
@@ -268,6 +275,12 @@ export function PlaygroundClient() {
           onClick={() => setMode("explain")}
         >
           Config → English
+        </button>
+        <button
+          className="playground-test-btn"
+          onClick={() => setShowTests(!showTests)}
+        >
+          {showTests ? "Hide Tests" : "Show Tests"}
         </button>
       </div>
 
@@ -386,12 +399,22 @@ export function PlaygroundClient() {
       <div
         ref={outputRef}
         className={`playground-output ${isStreaming ? "streaming" : ""}`}
-        dangerouslySetInnerHTML={
-          highlightedOutput
-            ? { __html: highlightedOutput }
-            : { __html: '<span style="color:#2a4a62;">Output will appear here...</span>' }
-        }
-      />
+      >
+        {output ? (
+          mode === "generate" ? (
+            <YamlHighlighter content={output} />
+          ) : (
+            <ExplanationHighlighter content={output} />
+          )
+        ) : (
+          <span style={{ color: "#2a4a62" }}>Output will appear here...</span>
+        )}
+      </div>
+
+      {/* Test Runner */}
+      {showTests && (
+        <TestRunner onRunTest={runGeneration} />
+      )}
     </div>
   );
 }
