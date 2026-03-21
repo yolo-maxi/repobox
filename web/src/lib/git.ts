@@ -1,7 +1,7 @@
 import { execSync } from 'child_process';
 import { getRepoPath } from './database';
 
-function sanitizeBranchName(branch: string): string {
+export function sanitizeBranchName(branch: string): string {
   // Only allow valid git branch characters
   if (!/^[a-zA-Z0-9/_.-]+$/.test(branch)) {
     throw new Error('Invalid branch name');

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { formatTimeAgo, formatAddress, formatBytes, getFileIcon, copyToClipboard } from '@/lib/utils';
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
 import BranchSelector from '@/components/BranchSelector';
+import RepoStatsCards from '@/components/RepoStatsCards';
 
 interface RepoDetails {
   address: string;
@@ -259,6 +260,13 @@ export default function RepoPage() {
           </div>
         </div>
       </header>
+
+      {/* Repository Stats */}
+      <RepoStatsCards 
+        address={address} 
+        name={name} 
+        branch={selectedBranch}
+      />
 
       {/* Tabs — README first */}
       <nav className="explore-tabs">
