@@ -335,13 +335,18 @@ async fn resolve_name_to_address(state: &AppState, name: &str) -> Result<String,
         return Ok(name.to_string());
     }
 
-    // Then try ENS resolution
-    match resolve::resolve_ens_name(name).await {
-        Ok(address) => Ok(address),
-        Err(e) => {
-            tracing::debug!("Failed to resolve name '{}': {}", name, e);
-            Err(StatusCode::BAD_REQUEST)
+    // Then try ENS resolution if we have an API key
+    if let Some(api_key) = &state.alchemy_key {
+        match resolve::resolve_ens_name(name, api_key).await {
+            Ok(address) => Ok(address),
+            Err(e) => {
+                tracing::debug!("Failed to resolve name '{}': {}", name, e);
+                Err(StatusCode::BAD_REQUEST)
+            }
         }
+    } else {
+        tracing::debug!("No Alchemy API key configured, cannot resolve ENS name: {}", name);
+        Err(StatusCode::BAD_REQUEST)
     }
 }
 
@@ -1096,15 +1101,22 @@ async fn resolve_name(
         // Alias resolution
         (addr, "alias".to_string())
     } else {
-        // Try ENS resolution
-        match resolve::resolve_ens_name(&name).await {
-            Ok(addr) => (addr, "ens".to_string()),
-            Err(e) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    format!("Failed to resolve name '{}': {}", name, e)
-                ).into_response();
+        // Try ENS resolution if we have an API key
+        if let Some(api_key) = &state.alchemy_key {
+            match resolve::resolve_ens_name(&name, api_key).await {
+                Ok(addr) => (addr, "ens".to_string()),
+                Err(e) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        format!("Failed to resolve name '{}': {}", name, e)
+                    ).into_response();
+                }
             }
+        } else {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "No Alchemy API key configured for ENS resolution".to_string()
+            ).into_response();
         }
     };
 

@@ -104,7 +104,43 @@ const LANGUAGE_COLORS: { [key: string]: string } = {
   'Vue': '#4FC08D'
 };
 
-function detectLanguageFromPath(filePath: string): string {
+// Binary file extensions to exclude
+const BINARY_EXTENSIONS = new Set([
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'svg',
+  'mp3', 'mp4', 'avi', 'mov', 'wav', 'flv', 'wmv',
+  'zip', 'tar', 'gz', '7z', 'rar', 'bz2',
+  'exe', 'dll', 'so', 'dylib', 'app',
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+  'woff', 'woff2', 'ttf', 'eot',
+  'bin', 'dat', 'db', 'sqlite', 'sqlite3'
+]);
+
+function shouldIncludeFile(filePath: string): boolean {
+  const fileName = filePath.split('/').pop() || '';
+  const extension = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() : '';
+  
+  // Exclude binary files
+  if (extension && BINARY_EXTENSIONS.has(extension)) {
+    return false;
+  }
+  
+  // Exclude certain directories/paths
+  if (filePath.includes('node_modules/') || 
+      filePath.includes('/.git/') ||
+      filePath.includes('/target/') ||
+      filePath.includes('/dist/') ||
+      filePath.includes('/build/')) {
+    return false;
+  }
+  
+  return true;
+}
+
+function detectLanguageFromPath(filePath: string): string | null {
+  if (!shouldIncludeFile(filePath)) {
+    return null; // File should be excluded entirely
+  }
+  
   const fileName = filePath.split('/').pop() || '';
   
   // Special files
@@ -159,14 +195,17 @@ async function analyzeRepository(address: string, name: string, branch: string):
       
       for (const filePath of batch) {
         try {
+          // Detect language and skip if excluded
+          const language = detectLanguageFromPath(filePath);
+          if (language === null) continue; // File excluded
+          
           // Count lines in this file
           const fileContent = gitCommand(repoPath, `show ${ref}:${filePath}`);
-          const lineCount = fileContent ? fileContent.split('\n').length : 0;
+          if (!fileContent) continue; // Skip empty or binary files
           
-          // Skip binary files (git show will fail or return binary data)
+          const lineCount = fileContent.split('\n').length;
           if (lineCount === 0) continue;
           
-          const language = detectLanguageFromPath(filePath);
           const extension = filePath.includes('.') ? '.' + filePath.split('.').pop() : '';
           
           if (!languageStats.has(language)) {
@@ -189,7 +228,7 @@ async function analyzeRepository(address: string, name: string, branch: string):
     }
     
     // Convert to API format and calculate percentages
-    const languageBreakdown: LanguageStats[] = Array.from(languageStats.entries())
+    let languageBreakdown: LanguageStats[] = Array.from(languageStats.entries())
       .map(([name, stats]) => ({
         name,
         lines: stats.lines,
@@ -199,6 +238,31 @@ async function analyzeRepository(address: string, name: string, branch: string):
         extensions: Array.from(stats.extensions)
       }))
       .sort((a, b) => b.lines - a.lines); // Sort by lines descending
+    
+    // Aggregate all "Other" categories into a single entry
+    const otherEntries = languageBreakdown.filter(lang => 
+      lang.name === 'Other' || lang.name === 'Configuration'
+    );
+    
+    if (otherEntries.length > 1) {
+      const aggregatedOther: LanguageStats = {
+        name: 'Other',
+        lines: otherEntries.reduce((sum, entry) => sum + entry.lines, 0),
+        files: otherEntries.reduce((sum, entry) => sum + entry.files, 0),
+        percentage: 0, // Will be recalculated
+        color: '#cccccc',
+        extensions: [...new Set(otherEntries.flatMap(entry => entry.extensions))]
+      };
+      
+      // Recalculate percentage
+      aggregatedOther.percentage = totalLines > 0 ? (aggregatedOther.lines / totalLines) * 100 : 0;
+      
+      // Remove individual Other entries and add the aggregated one
+      languageBreakdown = languageBreakdown
+        .filter(lang => lang.name !== 'Other' && lang.name !== 'Configuration')
+        .concat(aggregatedOther)
+        .sort((a, b) => b.lines - a.lines);
+    }
     
     // Count unique signers from push_log table
     const signers = runQuery<{ pusher_address: string }>(

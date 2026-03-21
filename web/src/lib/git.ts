@@ -117,11 +117,17 @@ export function getCommitCount(address: string, name: string, branch: string = '
 }
 
 export function getContributorCount(address: string, name: string): number {
-  const repoPath = getRepoPath(address, name);
+  // Use database query to count unique pusher addresses for consistency
+  // This matches the logic in /api/explorer/repos/[address]/[name]/contributors
   try {
-    const output = gitCommand(repoPath, 'log --format=%ae HEAD');
-    const unique = new Set(output.split('\n').filter(Boolean));
-    return unique.size;
+    const { runQuery } = require('./database');
+    const result = runQuery(
+      `SELECT COUNT(DISTINCT pusher_address) as count 
+       FROM push_log 
+       WHERE address = ? AND name = ? AND pusher_address IS NOT NULL`,
+      [address, name]
+    );
+    return result[0]?.count || 0;
   } catch {
     return 0;
   }

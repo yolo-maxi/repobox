@@ -55,43 +55,49 @@ pub struct Identity {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IdentityKind {
     Evm,
+    Ens,  // New variant for ENS names
 }
 
 impl Identity {
-    /// Parse an identity string like "evm:0xAAA...123".
+    /// Parse an identity string like "evm:0xAAA...123" or "ens:vitalik.eth" or "vitalik.eth".
     pub fn parse(s: &str) -> Result<Self, ConfigError> {
         if let Some(addr) = s.strip_prefix("evm:") {
-            if !addr.starts_with("0x") {
+            if !addr.starts_with("0x") || addr.len() != 42 {
                 return Err(ConfigError::InvalidIdentity(s.to_string()));
             }
             Ok(Identity {
                 kind: IdentityKind::Evm,
                 address: addr.to_string(),
             })
+        } else if let Some(name) = s.strip_prefix("ens:") {
+            validate_ens_name(name)?;
+            Ok(Identity {
+                kind: IdentityKind::Ens,
+                address: name.to_string(),
+            })
+        } else if is_ens_name(s) {
+            // Implicit ENS detection
+            validate_ens_name(s)?;
+            Ok(Identity {
+                kind: IdentityKind::Ens,
+                address: s.to_string(),
+            })
+        } else if s.starts_with("0x") && s.len() == 42 {
+            // Legacy EVM format without prefix
+            Ok(Identity {
+                kind: IdentityKind::Evm,
+                address: s.to_string(),
+            })
         } else {
             Err(ConfigError::InvalidIdentity(s.to_string()))
         }
     }
 
-    /// Parse an identity string, trying ENS resolution if it's not already an EVM address.
-    /// For ENS names like "vitalik.eth", resolves to the corresponding address.
-    pub fn parse_with_ens(s: &str) -> Result<Self, ConfigError> {
-        // First try regular parsing
-        if let Ok(identity) = Self::parse(s) {
-            return Ok(identity);
-        }
-
-        // If that fails and it looks like an ENS name, try resolving it
-        if is_ens_name(s) {
-            match resolve_ens_name_sync(s) {
-                Ok(address) => Ok(Identity {
-                    kind: IdentityKind::Evm,
-                    address,
-                }),
-                Err(e) => Err(ConfigError::InvalidIdentity(format!("{} (ENS resolution failed: {})", s, e))),
-            }
-        } else {
-            Err(ConfigError::InvalidIdentity(s.to_string()))
+    /// Get the canonical string representation
+    pub fn canonical(&self) -> String {
+        match self.kind {
+            IdentityKind::Evm => format!("evm:{}", self.address),
+            IdentityKind::Ens => format!("ens:{}", self.address),
         }
     }
 }
@@ -100,6 +106,7 @@ impl std::fmt::Display for Identity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
             IdentityKind::Evm => write!(f, "evm:{}", self.address),
+            IdentityKind::Ens => write!(f, "ens:{}", self.address),
         }
     }
 }
@@ -339,6 +346,53 @@ fn glob_match_parts(pattern: &[&str], value: &[&str]) -> bool {
 }
 
 /// Config parsing/validation errors.
+/// Check if a string looks like an ENS name
+fn is_ens_name(s: &str) -> bool {
+    s.contains('.') && (
+        s.ends_with(".eth") || s.ends_with(".box") || 
+        s.ends_with(".com") || s.ends_with(".xyz") || 
+        s.ends_with(".org") || s.ends_with(".io") || 
+        s.ends_with(".dev") || s.ends_with(".app")
+    )
+}
+
+/// Validate ENS name format according to DNS rules
+fn validate_ens_name(name: &str) -> Result<(), ConfigError> {
+    if !is_ens_name(name) {
+        return Err(ConfigError::InvalidIdentity(
+            format!("invalid ENS name format: {}", name)
+        ));
+    }
+    
+    if name.len() > 253 {
+        return Err(ConfigError::InvalidIdentity(
+            "ENS name too long (max 253 chars)".to_string()
+        ));
+    }
+    
+    for label in name.split('.') {
+        if label.is_empty() || label.len() > 63 {
+            return Err(ConfigError::InvalidIdentity(
+                "invalid ENS label length".to_string()
+            ));
+        }
+        
+        if label.starts_with('-') || label.ends_with('-') {
+            return Err(ConfigError::InvalidIdentity(
+                "ENS labels cannot start/end with hyphen".to_string()
+            ));
+        }
+        
+        if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err(ConfigError::InvalidIdentity(
+                "invalid characters in ENS name".to_string()
+            ));
+        }
+    }
+    
+    Ok(())
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("YAML parse error: {0}")]
@@ -364,119 +418,4 @@ pub enum ConfigError {
 
     #[error("parse error at line {line}: {message}")]
     ParseError { line: usize, message: String },
-}
-
-/// Check if a string looks like an ENS name
-fn is_ens_name(s: &str) -> bool {
-    s.contains('.') && (
-        s.ends_with(".eth") || 
-        s.ends_with(".box") ||
-        s.ends_with(".com") || 
-        s.ends_with(".xyz") ||
-        s.ends_with(".org") || 
-        s.ends_with(".io") ||
-        s.ends_with(".dev") || 
-        s.ends_with(".app")
-    )
-}
-
-/// Synchronous ENS name resolution using ureq
-fn resolve_ens_name_sync(name: &str) -> Result<String, String> {
-    use sha3::Digest;
-    
-    // Check if it's already an address (0x followed by 40 hex chars)
-    if name.starts_with("0x") && name.len() == 42 && name[2..].chars().all(|c| c.is_ascii_hexdigit()) {
-        return Ok(name.to_lowercase());
-    }
-
-    // Get API key from environment
-    let api_key = std::env::var("ALCHEMY_API_KEY")
-        .map_err(|_| "ALCHEMY_API_KEY environment variable not set - needed for ENS resolution".to_string())?;
-
-    let rpc_url = format!("https://eth-mainnet.g.alchemy.com/v2/{}", api_key);
-
-    // Use ENS Public Resolver directly for addr() calls
-    let public_resolver = "0x231b0Ee14048e9dCcD1d247744d114a4EB5E8E63"; // ENS Public Resolver
-    
-    let name_hash = namehash_ens(name);
-    let addr_selector = &sha3::Keccak256::digest(b"addr(bytes32)")[..4];
-    
-    // Call addr(bytes32) on the resolver
-    let calldata = format!("0x{}{:0>64}", hex::encode(addr_selector), hex::encode(name_hash));
-
-    // Build eth_call JSON-RPC request
-    let rpc_body = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "eth_call",
-        "params": [{
-            "to": public_resolver,
-            "data": calldata,
-        }, "latest"]
-    });
-
-    let agent = ureq::AgentBuilder::new()
-        .timeout(std::time::Duration::from_secs(10))
-        .build();
-
-    let rpc_body_str = serde_json::to_string(&rpc_body)
-        .map_err(|e| format!("Failed to serialize request: {}", e))?;
-
-    let response_body = agent
-        .post(&rpc_url)
-        .set("Content-Type", "application/json")
-        .send_string(&rpc_body_str)
-        .map_err(|e| format!("RPC request failed: {}", e))?
-        .into_string()
-        .map_err(|e| format!("RPC response read error: {}", e))?;
-
-    let rpc_json: serde_json::Value = serde_json::from_str(&response_body)
-        .map_err(|e| format!("RPC response parse error: {}", e))?;
-
-    // Check for RPC error
-    if let Some(error) = rpc_json.get("error") {
-        return Err(format!("RPC error: {}", error));
-    }
-
-    // Parse result as an address (32 bytes, address is in the last 20 bytes)
-    let result_hex = rpc_json
-        .get("result")
-        .and_then(|v: &serde_json::Value| v.as_str())
-        .ok_or_else(|| "No result in RPC response".to_string())?;
-
-    if result_hex.len() < 66 { // 0x + 64 hex chars (32 bytes)
-        return Err("Invalid response length".to_string());
-    }
-
-    // Extract address from last 20 bytes of the 32-byte response
-    let addr_hex = &result_hex[result_hex.len() - 40..];
-    
-    // Check if all bytes are zero (no address set)
-    if addr_hex.chars().all(|c| c == '0') {
-        return Err(format!("ENS name '{}' does not resolve to an address", name));
-    }
-
-    Ok(format!("0x{}", addr_hex.to_lowercase()))
-}
-
-/// Calculate ENS namehash for a domain name
-fn namehash_ens(name: &str) -> [u8; 32] {
-    use sha3::Digest;
-    
-    let mut node = [0u8; 32];
-
-    if name.is_empty() {
-        return node;
-    }
-
-    let labels: Vec<&str> = name.split('.').collect();
-    for label in labels.iter().rev() {
-        let label_hash = sha3::Keccak256::digest(label.as_bytes());
-        let mut hasher = sha3::Keccak256::new();
-        hasher.update(node);
-        hasher.update(label_hash);
-        node = hasher.finalize().into();
-    }
-
-    node
 }

@@ -2236,6 +2236,36 @@ html {
   font-weight: 500;
 }
 
+.explore-repo-tab.disabled {
+  color: var(--explore-text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.explore-repo-tab-icon {
+  margin-right: 6px;
+}
+
+.explore-repo-tab-label {
+  margin-right: 4px;
+}
+
+.explore-repo-tab-count {
+  background: var(--explore-border);
+  color: var(--explore-text-secondary);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 4px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.explore-repo-tab.active .explore-repo-tab-count {
+  background: var(--explore-accent-fg);
+  color: white;
+}
+
 .explore-repo-tab-content {
   background: var(--explore-surface);
   border: 1px solid var(--explore-border);
@@ -2937,5 +2967,640 @@ html {
 @media (max-width: 768px) {
   .explore-contributors-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Explore Sidebar Styles */
+.explore-sidebar {
+  font-size: 14px;
+}
+
+.explore-sidebar-section {
+  padding: 16px;
+  background: var(--explore-surface);
+  border: 1px solid var(--explore-border);
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.explore-sidebar-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--explore-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.explore-sidebar-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.explore-sidebar-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.explore-sidebar-stat-label {
+  color: var(--explore-text-secondary);
+}
+
+.explore-sidebar-stat-value {
+  font-weight: 600;
+  color: var(--explore-text);
+}
+
+.explore-sidebar-sort {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.explore-sidebar-sort-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  background: transparent;
+  color: var(--explore-text);
+  font-weight: 400;
+  transition: all 0.15s;
+}
+
+.explore-sidebar-sort-btn:hover {
+  background: var(--explore-surface-hover);
+}
+
+.explore-sidebar-sort-btn.active {
+  background: var(--explore-link);
+  color: white;
+  font-weight: 500;
+}
+
+.explore-sidebar-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.explore-sidebar-activity-item {
+  font-size: 13px;
+}
+
+.explore-sidebar-activity-link {
+  color: var(--explore-link);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.explore-sidebar-activity-link:hover {
+  text-decoration: underline;
+}
+
+.explore-sidebar-activity-message {
+  color: var(--explore-text-secondary);
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.explore-sidebar-activity-time {
+  color: var(--explore-text-muted);
+  font-size: 11px;
+}
+
+.explore-sidebar-empty {
+  color: var(--explore-text-muted);
+  font-size: 13px;
+}
+
+/* Explore Layout System */
+.explore-layout {
+  min-height: 100vh;
+  background: var(--explore-bg);
+}
+
+.explore-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+}
+
+.explore-main {
+  min-width: 0; /* Prevent overflow */
+}
+
+/* Responsive adjustments for new layout */
+@media (max-width: 1024px) {
+  .explore-container {
+    grid-template-columns: 240px 1fr;
+    gap: 16px;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .explore-container {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .explore-sidebar {
+    order: 2; /* Move sidebar below main content on mobile */
+  }
+  
+  .explore-main {
+    order: 1;
+  }
+  
+  /* Better mobile breadcrumbs */
+  .explore-breadcrumb-nav {
+    overflow-x: auto;
+    padding: 8px 16px;
+  }
+  
+  .explore-main-header-content {
+    min-width: max-content;
+    white-space: nowrap;
+  }
+  
+  /* Mobile commit details */
+  .explore-commit-details {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  /* Mobile file actions */
+  .explore-repo-detail-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .explore-repo-detail-actions .explore-action-btn {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* Contribution Chart Styles */
+.contribution-chart {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--explore-surface);
+  border: 1px solid var(--explore-border);
+  border-radius: 6px;
+}
+
+.contribution-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.contribution-chart-header h4 {
+  margin: 0;
+  color: var(--explore-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.contribution-chart-range-controls {
+  display: flex;
+  gap: 4px;
+  background: var(--explore-bg);
+  border: 1px solid var(--explore-border);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.contribution-chart-range-btn {
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--explore-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.contribution-chart-range-btn:hover {
+  background: var(--explore-surface-hover);
+  color: var(--explore-text);
+}
+
+.contribution-chart-range-btn.active {
+  background: var(--explore-link);
+  color: white;
+}
+
+.contribution-chart-loading,
+.contribution-chart-error,
+.contribution-chart-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--explore-text-secondary);
+  font-size: 14px;
+}
+
+.contribution-chart-error {
+  color: var(--explore-danger);
+}
+
+.contribution-chart-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contribution-chart-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.contribution-chart-contributor {
+  flex: 0 0 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.contribution-chart-contributor code {
+  font-size: 12px;
+  color: var(--explore-text);
+}
+
+.contribution-chart-total {
+  font-size: 10px;
+  color: var(--explore-text-secondary);
+}
+
+.contribution-chart-days {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+
+.contribution-chart-day {
+  width: 10px;
+  height: 10px;
+  border-radius: 1px;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.contribution-chart-day:hover {
+  transform: scale(1.2);
+  outline: 1px solid var(--explore-text-secondary);
+}
+
+.contribution-chart-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--explore-text-secondary);
+}
+
+.contribution-chart-legend-colors {
+  display: flex;
+  gap: 2px;
+}
+
+.contribution-chart-legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 1px;
+}
+
+/* Responsive adjustments for contribution chart */
+@media (max-width: 768px) {
+  .contribution-chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .contribution-chart-contributor {
+    flex: 0 0 100px;
+  }
+  
+  .contribution-chart-day {
+    width: 8px;
+    height: 8px;
+  }
+}
+
+/* Loading and Error States */
+.explore-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  color: var(--explore-text-secondary);
+  min-height: 200px;
+}
+
+.explore-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--explore-border);
+  border-top: 2px solid var(--explore-link);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.explore-back-link {
+  color: var(--explore-link);
+  text-decoration: none;
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.explore-back-link:hover {
+  text-decoration: underline;
+}
+
+/* Enhanced File Viewer Styles */
+.explore-file-viewer {
+  background: var(--explore-surface);
+  border: 1px solid var(--explore-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.explore-file-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--explore-bg);
+  border-bottom: 1px solid var(--explore-border);
+}
+
+.explore-file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.explore-file-name {
+  font-weight: 600;
+  color: var(--explore-text);
+}
+
+.explore-file-size {
+  color: var(--explore-text-secondary);
+  font-size: 12px;
+}
+
+.explore-file-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.explore-file-action-btn,
+.explore-action-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--explore-border);
+  background: var(--explore-surface);
+  color: var(--explore-text-secondary);
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.explore-file-action-btn:hover,
+.explore-action-btn:hover {
+  background: var(--explore-surface-hover);
+  color: var(--explore-text);
+  border-color: var(--explore-border);
+}
+
+.explore-file-content-container {
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.explore-file-source {
+  padding: 0;
+}
+
+.explore-file-content {
+  margin: 0;
+  padding: 16px;
+  background: var(--explore-bg);
+  color: var(--explore-text);
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: auto;
+}
+
+.explore-file-binary {
+  padding: 48px;
+  text-align: center;
+  color: var(--explore-text-secondary);
+}
+
+.explore-file-binary-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.explore-file-binary h3 {
+  color: var(--explore-text);
+  margin-bottom: 8px;
+}
+
+.explore-file-markdown {
+  padding: 24px;
+  background: var(--explore-bg);
+}
+
+/* Action Buttons */
+.explore-repo-detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Load More Button */
+.explore-load-more {
+  padding: 20px;
+  text-align: center;
+  border-top: 1px solid var(--explore-border);
+}
+
+.explore-load-more-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--explore-border);
+  background: var(--explore-surface);
+  color: var(--explore-text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.explore-load-more-btn:hover:not(:disabled) {
+  background: var(--explore-surface-hover);
+  color: var(--explore-text);
+}
+
+.explore-load-more-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Commit Message Links */
+.explore-commit-message-link {
+  color: var(--explore-text);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.explore-commit-message-link:hover {
+  color: var(--explore-link);
+  text-decoration: underline;
+}
+
+.explore-commit-hash {
+  color: var(--explore-text-secondary);
+  text-decoration: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--explore-bg);
+  transition: all 0.15s;
+}
+
+.explore-commit-hash:hover {
+  background: var(--explore-surface-hover);
+  color: var(--explore-text);
+}
+
+/* Commits Header */
+.explore-commits-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--explore-border);
+  margin-bottom: 16px;
+}
+
+.explore-commits-header h3 {
+  margin: 0;
+  color: var(--explore-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Commit Page Styles */
+.explore-commit-details {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--explore-text-secondary);
+  font-size: 14px;
+}
+
+.explore-commit-info {
+  padding: 24px;
+  background: var(--explore-surface);
+  border: 1px solid var(--explore-border);
+  border-radius: 8px;
+}
+
+.explore-commit-hash-section {
+  margin-bottom: 24px;
+}
+
+.explore-commit-hash-section h3 {
+  color: var(--explore-text);
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.explore-commit-full-hash {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  background: var(--explore-bg);
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--explore-border);
+  color: var(--explore-text-secondary);
+  font-size: 13px;
+  display: block;
+  width: fit-content;
+}
+
+.explore-commit-placeholder {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--explore-text-secondary);
+}
+
+.explore-commit-placeholder h3 {
+  color: var(--explore-text);
+  margin-bottom: 16px;
+}
+
+.explore-commit-placeholder ul {
+  text-align: left;
+  margin: 16px auto;
+  max-width: 400px;
+  color: var(--explore-text-secondary);
+}
+
+.explore-commit-placeholder li {
+  margin-bottom: 4px;
+}
+
+/* Responsive adjustments for new pages */
+@media (max-width: 768px) {
+  .explore-file-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .explore-file-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .explore-repo-detail-actions {
+    margin-top: 12px;
+  }
+  
+  .explore-file-content {
+    font-size: 12px;
+    padding: 12px;
   }
 }

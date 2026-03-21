@@ -4,10 +4,14 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress, formatBytes, getFileIcon, copyToClipboard } from '@/lib/utils';
+import { repoUrls, generateBreadcrumbs } from '@/lib/repoUrls';
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
 import BranchSelector from '@/components/BranchSelector';
 import RepoStatsCards from '@/components/RepoStatsCards';
 import CloneUrlWidget from '@/components/CloneUrlWidget';
+import ExploreHeader from '@/components/explore/ExploreHeader';
+import ExploreSidebar from '@/components/explore/ExploreSidebar';
+import ContributionChart from '@/components/explore/ContributionChart';
 
 interface RepoDetails {
   address: string;
@@ -60,6 +64,8 @@ interface Contributor {
   isOwner: boolean;
 }
 
+type TabType = 'readme' | 'files' | 'commits' | 'contributors' | 'config';
+
 export default function RepoPage() {
   const params = useParams();
   const [repo, setRepo] = useState<RepoDetails | null>(null);
@@ -69,7 +75,7 @@ export default function RepoPage() {
   const [currentFiles, setCurrentFiles] = useState<RepoDetails['file_tree']>([]);
   const [repoConfig, setRepoConfig] = useState<RepoConfig>({ exists: false, content: '' });
   const [contributors, setContributors] = useState<Contributor[]>([]);
-  const [activeTab, setActiveTab] = useState<'readme' | 'files' | 'commits' | 'contributors' | 'config'>('readme');
+  const [activeTab, setActiveTab] = useState<TabType>('readme');
   const [loading, setLoading] = useState(true);
   const [addrCopied, setAddrCopied] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string>('HEAD');
@@ -139,27 +145,16 @@ export default function RepoPage() {
     fetchRepo();
   }, [address, name, selectedBranch]);
 
-  const navigateToPath = async (path: string) => {
+  const navigateToPath = (path: string) => {
+    // Use GitHub-style URLs for directory navigation
     if (!address || !name) return;
-    const branchParam = selectedBranch !== repo?.default_branch ? `?branch=${selectedBranch}` : '';
-    const res = await fetch(`/api/explorer/repos/${address}/${name}/tree/${path}${branchParam}`);
-    if (res.ok) {
-      const data = await res.json();
-      setCurrentPath(path);
-      setCurrentFiles(data.files || []);
-      setFileContent(null);
-    }
+    window.location.href = repoUrls.tree(address, name, selectedBranch || 'HEAD', path);
   };
 
-  const viewFile = async (filePath: string) => {
+  const viewFile = (filePath: string) => {
+    // Use GitHub-style URLs for file viewing
     if (!address || !name) return;
-    const branchParam = selectedBranch !== repo?.default_branch ? `?branch=${selectedBranch}` : '';
-    const res = await fetch(`/api/explorer/repos/${address}/${name}/blob/${filePath}${branchParam}`);
-    if (res.ok) {
-      const data = await res.json();
-      setFileContent(data);
-      setActiveTab('files');
-    }
+    window.location.href = repoUrls.blob(address, name, selectedBranch || 'HEAD', filePath);
   };
 
   const handleBranchChange = async (newBranch: string) => {
@@ -169,8 +164,6 @@ export default function RepoPage() {
     // Reset current path and file content when switching branches
     setCurrentPath('');
     setFileContent(null);
-    
-    // Data will be refetched via useEffect dependency on selectedBranch
   };
 
   const goBack = () => {
@@ -193,10 +186,16 @@ export default function RepoPage() {
 
   if (loading) {
     return (
-      <div className="explore-page">
-        <div className="explore-loading">
-          <div className="explore-loading-spinner"></div>
-          <p>Loading repository...</p>
+      <div className="explore-layout">
+        <ExploreHeader />
+        <div className="explore-container">
+          <ExploreSidebar />
+          <main className="explore-main">
+            <div className="explore-loading">
+              <div className="explore-loading-spinner"></div>
+              <p>Loading repository...</p>
+            </div>
+          </main>
         </div>
       </div>
     );
@@ -204,322 +203,408 @@ export default function RepoPage() {
 
   if (!repo) {
     return (
-      <div className="explore-page">
-        <div className="explore-empty">
-          <h3>Repository not found</h3>
-          <Link href="/explore" className="explore-back-link">← Back to Explorer</Link>
+      <div className="explore-layout">
+        <ExploreHeader />
+        <div className="explore-container">
+          <ExploreSidebar />
+          <main className="explore-main">
+            <div className="explore-empty">
+              <h3>Repository not found</h3>
+              <Link href="/explore" className="explore-back-link">← Back to Explorer</Link>
+            </div>
+          </main>
         </div>
       </div>
     );
   }
 
-  const pathParts = currentPath ? currentPath.split('/') : [];
+  // Generate breadcrumbs for current navigation
+  const breadcrumbs = generateBreadcrumbs(
+    address, 
+    name, 
+    selectedBranch, 
+    currentPath, 
+    !!fileContent
+  );
+
+  const tabConfigs = [
+    { 
+      id: 'readme' as TabType, 
+      label: 'README', 
+      icon: '📖',
+      disabled: !repo.readme_content
+    },
+    { 
+      id: 'files' as TabType, 
+      label: 'Files', 
+      icon: '📁',
+      count: currentFiles.length
+    },
+    { 
+      id: 'commits' as TabType, 
+      label: 'Commits', 
+      icon: '📋',
+      count: repo.commit_count
+    },
+    { 
+      id: 'contributors' as TabType, 
+      label: 'Contributors', 
+      icon: '👥',
+      count: contributors.length
+    },
+    { 
+      id: 'config' as TabType, 
+      label: 'Config', 
+      icon: '⚙️'
+    }
+  ];
 
   return (
-    <div className="explore-page">
-      {/* Header */}
-      <header className="explore-main-header">
+    <div className="explore-layout">
+      <ExploreHeader />
+      
+      <div className="explore-breadcrumb-nav">
         <div className="explore-main-header-content">
-          <div className="explore-nav">
-            <Link href="/" className="explore-logo">
-              repo<span className="explore-logo-dot">.</span>box
-            </Link>
-            <nav className="explore-nav-links">
-              <Link href="/" className="explore-nav-link">Home</Link>
-              <Link href="/explore" className="explore-nav-link">Explore</Link>
-              <Link href="/docs" className="explore-nav-link">Docs</Link>
+          <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
+          <span className="explore-breadcrumb-separator">/</span>
+          <Link href={`/explore/${repo.owner_address}`} className="explore-breadcrumb-link">
+            {formatAddress(repo.owner_address)}
+          </Link>
+          <span className="explore-breadcrumb-separator">/</span>
+          <span className="explore-breadcrumb-current">{repo.name}</span>
+          {breadcrumbs.length > 1 && (
+            <>
+              {breadcrumbs.slice(1).map((crumb, index) => (
+                <span key={index}>
+                  <span className="explore-breadcrumb-separator">/</span>
+                  <Link href={crumb.href} className="explore-breadcrumb-link">
+                    {crumb.label}
+                  </Link>
+                </span>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="explore-container">
+        <ExploreSidebar />
+        
+        <main className="explore-main">
+          {/* Repository Header */}
+          <div className="explore-repo-detail-header">
+            <div className="explore-repo-detail-info">
+              <div className="explore-repo-detail-title-row">
+                <svg className="explore-repo-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                </svg>
+                <h1 className="explore-repo-detail-title">{repo.name}</h1>
+              </div>
+              
+              <div className="explore-repo-detail-owner">
+                <Link href={`/explore/${repo.owner_address}`} className="explore-repo-detail-owner-link">
+                  <code>{formatAddress(repo.owner_address)}</code>
+                </Link>
+                <button 
+                  onClick={handleCopyAddr} 
+                  className="explore-repo-detail-copy-btn"
+                  title="Copy address"
+                >
+                  {addrCopied ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20,6 9,17 4,12"></polyline>
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="explore-repo-detail-stats">
+              <div className="explore-repo-detail-stat">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+                <span className="explore-repo-detail-stat-value">{repo.commit_count.toLocaleString()}</span>
+                <span className="explore-repo-detail-stat-label">commits</span>
+              </div>
+              <div className="explore-repo-detail-stat">
+                {branches.length > 0 ? (
+                  <BranchSelector
+                    branches={branches}
+                    currentBranch={selectedBranch}
+                    defaultBranch={repo.default_branch}
+                    onChange={handleBranchChange}
+                    disabled={branchLoading}
+                  />
+                ) : (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="6" y1="3" x2="6" y2="15"></line>
+                      <circle cx="18" cy="6" r="3"></circle>
+                      <circle cx="6" cy="18" r="3"></circle>
+                      <path d="M18 9a9 9 0 0 1-9 9"></path>
+                    </svg>
+                    <span className="explore-repo-detail-stat-value">{repo.default_branch}</span>
+                    <span className="explore-repo-detail-stat-label">branch</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Clone URL Widget */}
+          <CloneUrlWidget 
+            ownerAddress={repo.owner_address}
+            repoName={repo.name}
+          />
+
+          {/* Repository Stats */}
+          <RepoStatsCards 
+            address={address} 
+            name={name} 
+            branch={selectedBranch}
+          />
+
+          {/* Enhanced Tabs */}
+          <div className="explore-repo-tabs-container">
+            <nav className="explore-repo-tabs">
+              {tabConfigs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  disabled={tab.disabled}
+                  className={`explore-repo-tab ${activeTab === tab.id ? 'active' : ''} ${tab.disabled ? 'disabled' : ''}`}
+                >
+                  <span className="explore-repo-tab-icon">{tab.icon}</span>
+                  <span className="explore-repo-tab-label">{tab.label}</span>
+                  {tab.count !== undefined && (
+                    <span className="explore-repo-tab-count">{tab.count}</span>
+                  )}
+                </button>
+              ))}
             </nav>
           </div>
-          <div className="explore-breadcrumb-nav">
-            <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
-            <span className="explore-breadcrumb-separator">/</span>
-            <Link href={`/explore/${repo.owner_address}`} className="explore-breadcrumb-link">
-              {formatAddress(repo.owner_address)}
-            </Link>
-            <span className="explore-breadcrumb-separator">/</span>
-            <span className="explore-breadcrumb-current">{repo.name}</span>
-          </div>
-        </div>
-      </header>
 
-      <div className="explore-main-content">
-        {/* Repository Header */}
-        <div className="explore-repo-detail-header">
-          <div className="explore-repo-detail-info">
-            <div className="explore-repo-detail-title-row">
-              <svg className="explore-repo-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
-              </svg>
-              <h1 className="explore-repo-detail-title">{repo.name}</h1>
-            </div>
-            
-            <div className="explore-repo-detail-owner">
-              <Link href={`/explore/${repo.owner_address}`} className="explore-repo-detail-owner-link">
-                <code>{formatAddress(repo.owner_address)}</code>
-              </Link>
-              <button 
-                onClick={handleCopyAddr} 
-                className="explore-repo-detail-copy-btn"
-                title="Copy address"
-              >
-                {addrCopied ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="20,6 9,17 4,12"></polyline>
-                  </svg>
+          {/* Tab Content */}
+          <div className="explore-repo-tab-content">
+            {/* README Tab */}
+            {activeTab === 'readme' && (
+              <div className="explore-readme">
+                {repo.readme_content ? (
+                  <div className="explore-readme-content">
+                    <MarkdownRenderer 
+                      content={repo.readme_content}
+                      baseUrl={`/api/explorer/repos/${address}/${name}/blob/`}
+                      className="explore-readme-markdown"
+                    />
+                  </div>
                 ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
+                  <div className="explore-empty">
+                    <p>No README found</p>
+                    <p>Add a README.md file to help others understand your project.</p>
+                  </div>
                 )}
-              </button>
-            </div>
-          </div>
-
-          <div className="explore-repo-detail-stats">
-            <div className="explore-repo-detail-stat">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20 6L9 17l-5-5"></path>
-              </svg>
-              <span className="explore-repo-detail-stat-value">{repo.commit_count.toLocaleString()}</span>
-              <span className="explore-repo-detail-stat-label">commits</span>
-            </div>
-            <div className="explore-repo-detail-stat">
-              {branches.length > 0 ? (
-                <BranchSelector
-                  branches={branches}
-                  currentBranch={selectedBranch}
-                  defaultBranch={repo.default_branch}
-                  onChange={handleBranchChange}
-                  disabled={branchLoading}
-                />
-              ) : (
-                <>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="6" y1="3" x2="6" y2="15"></line>
-                    <circle cx="18" cy="6" r="3"></circle>
-                    <circle cx="6" cy="18" r="3"></circle>
-                    <path d="M18 9a9 9 0 0 1-9 9"></path>
-                  </svg>
-                  <span className="explore-repo-detail-stat-value">{repo.default_branch}</span>
-                  <span className="explore-repo-detail-stat-label">branch</span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Clone URL Widget */}
-        <CloneUrlWidget 
-          ownerAddress={repo.owner_address}
-          repoName={repo.name}
-        />
-
-        {/* Repository Stats */}
-        <RepoStatsCards 
-          address={address} 
-          name={name} 
-          branch={selectedBranch}
-        />
-
-        {/* Tabs */}
-        <div className="explore-repo-tabs-container">
-          <nav className="explore-repo-tabs">
-            {['readme', 'files', 'commits', 'contributors', 'config'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab as typeof activeTab)}
-                className={`explore-repo-tab ${activeTab === tab ? 'active' : ''}`}
-              >
-                <span>{tab === 'readme' ? 'README' : 
-                       tab === 'files' ? 'Files' : 
-                       tab === 'commits' ? 'Commits' :
-                       tab === 'contributors' ? 'Contributors' :
-                       'Config'}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Tab Content */}
-        <div className="explore-repo-tab-content">
-
-        {/* README Tab (default) */}
-        {activeTab === 'readme' && (
-          <div className="explore-readme">
-            {repo.readme_content ? (
-              <div className="explore-readme-content">
-                <MarkdownRenderer 
-                  content={repo.readme_content}
-                  baseUrl={`/api/explorer/repos/${address}/${name}/blob/`}
-                  className="explore-readme-markdown"
-                />
-              </div>
-            ) : (
-              <div className="explore-empty">
-                <p>No README found</p>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Files Tab */}
-        {activeTab === 'files' && (
-          <div>
-            {(currentPath || fileContent) && (
-              <div className="explore-breadcrumb">
-                <button onClick={goBack} className="explore-breadcrumb-back">←</button>
-                <button
-                  onClick={() => { setCurrentPath(''); setCurrentFiles(repo.file_tree || []); setFileContent(null); }}
-                  className="explore-breadcrumb-item"
-                >
-                  {repo.name}
-                </button>
-                {pathParts.map((seg, i) => (
-                  <span key={i} className="explore-breadcrumb-separator">
-                    <span>/</span>
+            {/* Files Tab */}
+            {activeTab === 'files' && (
+              <div>
+                {(currentPath || fileContent) && (
+                  <div className="explore-breadcrumb">
+                    <button onClick={goBack} className="explore-breadcrumb-back">←</button>
                     <button
-                      onClick={() => { navigateToPath(pathParts.slice(0, i + 1).join('/')); setFileContent(null); }}
+                      onClick={() => { setCurrentPath(''); setCurrentFiles(repo.file_tree || []); setFileContent(null); }}
                       className="explore-breadcrumb-item"
                     >
-                      {seg}
+                      {repo.name}
                     </button>
-                  </span>
-                ))}
-                {fileContent && (
-                  <span className="explore-breadcrumb-separator">
-                    <span>/</span>
-                    <span className="explore-breadcrumb-file">{fileContent.path.split('/').pop()}</span>
-                  </span>
+                    {breadcrumbs.slice(1).map((crumb, i) => (
+                      <span key={i} className="explore-breadcrumb-separator">
+                        <span>/</span>
+                        <button
+                          onClick={() => { 
+                            const pathParts = currentPath.split('/');
+                            const targetPath = pathParts.slice(0, i + 1).join('/');
+                            navigateToPath(targetPath); 
+                            setFileContent(null); 
+                          }}
+                          className="explore-breadcrumb-item"
+                        >
+                          {crumb.label}
+                        </button>
+                      </span>
+                    ))}
+                    {fileContent && (
+                      <span className="explore-breadcrumb-separator">
+                        <span>/</span>
+                        <span className="explore-breadcrumb-file">{fileContent.path.split('/').pop()}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {fileContent ? (
+                  <div className="explore-file-viewer">
+                    <div className="explore-file-header">
+                      <span className="explore-file-icon">{getFileIcon(fileContent.path, false)}</span>
+                      <span className="explore-file-name">{fileContent.path.split('/').pop()}</span>
+                    </div>
+                    <pre className="explore-file-content"><code>{fileContent.content}</code></pre>
+                  </div>
+                ) : (
+                  <div className="explore-file-list">
+                    {currentFiles.length === 0 ? (
+                      <div className="explore-empty"><p>Empty directory</p></div>
+                    ) : (
+                      currentFiles.map((file, i) => (
+                        <button
+                          key={i}
+                          onClick={() => file.type === 'tree' ? navigateToPath(file.path) : viewFile(file.path)}
+                          className="explore-file-item"
+                        >
+                          <div className="explore-file-info">
+                            <span className="explore-file-icon">{getFileIcon(file.name, file.type === 'tree')}</span>
+                            <span className="explore-file-name">{file.name}</span>
+                          </div>
+                          {file.size !== undefined && (
+                            <span className="explore-file-size">{formatBytes(file.size)}</span>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
             )}
 
-            {fileContent ? (
-              <div className="explore-file-viewer">
-                <div className="explore-file-header">
-                  <span className="explore-file-icon">{getFileIcon(fileContent.path, false)}</span>
-                  <span className="explore-file-name">{fileContent.path.split('/').pop()}</span>
+            {/* Commits Tab */}
+            {activeTab === 'commits' && (
+              <div className="explore-commit-list">
+                <div className="explore-commits-header">
+                  <h3>Recent commits on {selectedBranch}</h3>
+                  <Link 
+                    href={repoUrls.commits(address, name, selectedBranch)}
+                    className="explore-action-btn"
+                  >
+                    View all commits
+                  </Link>
                 </div>
-                <pre className="explore-file-content"><code>{fileContent.content}</code></pre>
-              </div>
-            ) : (
-              <div className="explore-file-list">
-                {currentFiles.length === 0 ? (
-                  <div className="explore-empty"><p>Empty directory</p></div>
+                {commits.length === 0 ? (
+                  <div className="explore-empty"><p>No commits found</p></div>
                 ) : (
-                  currentFiles.map((file, i) => (
-                    <button
-                      key={i}
-                      onClick={() => file.type === 'tree' ? navigateToPath(file.path) : viewFile(file.path)}
-                      className="explore-file-item"
-                    >
-                      <div className="explore-file-info">
-                        <span className="explore-file-icon">{getFileIcon(file.name, file.type === 'tree')}</span>
-                        <span className="explore-file-name">{file.name}</span>
+                  commits.slice(0, 10).map((commit) => (
+                    <div key={commit.hash} className="explore-commit-item">
+                      <div className="explore-commit-message">
+                        <Link 
+                          href={repoUrls.commit(address, name, commit.hash)}
+                          className="explore-commit-message-link"
+                        >
+                          {commit.message}
+                        </Link>
                       </div>
-                      {file.size !== undefined && (
-                        <span className="explore-file-size">{formatBytes(file.size)}</span>
-                      )}
-                    </button>
+                      <div className="explore-commit-meta">
+                        <code className="explore-commit-author">{formatAddress(repo.owner_address)}</code>
+                        <span className="explore-commit-time">
+                          {formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}
+                        </span>
+                        <Link 
+                          href={repoUrls.commit(address, name, commit.hash)}
+                          className="explore-commit-hash"
+                        >
+                          <code>{commit.hash.slice(0, 7)}</code>
+                        </Link>
+                      </div>
+                    </div>
                   ))
                 )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Commits Tab — show address, not author name */}
-        {activeTab === 'commits' && (
-          <div className="explore-commit-list">
-            {commits.length === 0 ? (
-              <div className="explore-empty"><p>No commits found</p></div>
-            ) : (
-              commits.map((commit) => (
-                <div key={commit.hash} className="explore-commit-item">
-                  <div className="explore-commit-message">{commit.message}</div>
-                  <div className="explore-commit-meta">
-                    <code className="explore-commit-author">{formatAddress(repo.owner_address)}</code>
-                    <span className="explore-commit-time">
-                      {formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}
-                    </span>
-                    <code className="explore-commit-hash">{commit.hash.slice(0, 7)}</code>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* Contributors Tab */}
-        {activeTab === 'contributors' && (
-          <div className="explore-contributors">
-            {contributors.length === 0 ? (
-              <div className="explore-empty"><p>No contributors found</p></div>
-            ) : (
-              <div className="explore-contributors-grid">
-                {contributors.map((contributor) => (
-                  <Link
-                    key={contributor.address}
-                    href={`/explore/${contributor.address}`}
-                    className="explore-contributor-card"
-                  >
-                    <div className="explore-contributor-header">
-                      <code className="explore-contributor-address">
-                        {formatAddress(contributor.address)}
-                      </code>
-                      {contributor.isOwner && (
-                        <span className="explore-contributor-owner-badge">owner</span>
-                      )}
-                    </div>
-                    <div className="explore-contributor-stats">
-                      <div className="explore-contributor-stat">
-                        <span className="explore-contributor-stat-value">{contributor.pushCount}</span>
-                        <span className="explore-contributor-stat-label">pushes</span>
-                      </div>
-                      <div className="explore-contributor-stat">
-                        <span className="explore-contributor-stat-value">
-                          {formatTimeAgo(contributor.lastPush)}
-                        </span>
-                        <span className="explore-contributor-stat-label">last active</span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-          {/* Config Tab — show .repobox/config.yml + owner identity */}
-          {activeTab === 'config' && (
-            <div className="explore-config">
-              <div className="explore-config-section">
-                <h3 className="explore-config-heading">Owner Identity</h3>
-                <div className="explore-config-identity">
-                  <code>{repo.owner_address}</code>
-                  <span className="explore-config-badge">owner</span>
-                </div>
-              </div>
-
-              <div className="explore-config-section">
-                <h3 className="explore-config-heading">Permission Ruleset</h3>
-                {repoConfig.exists ? (
-                  <pre className="explore-code-block">
-                    <code>{repoConfig.content}</code>
-                  </pre>
+            {/* Contributors Tab with Chart */}
+            {activeTab === 'contributors' && (
+              <div className="explore-contributors">
+                {contributors.length === 0 ? (
+                  <div className="explore-empty"><p>No contributors found</p></div>
                 ) : (
-                  <div className="explore-config-empty">
-                    <p>No <code>.repobox/config.yml</code> found in this repository.</p>
-                    <p className="explore-config-hint">
-                      Run <code>git repobox init</code> to create a permission config.
-                    </p>
-                  </div>
+                  <>
+                    <div className="explore-contributors-grid">
+                      {contributors.map((contributor) => (
+                        <Link
+                          key={contributor.address}
+                          href={`/explore/${contributor.address}`}
+                          className="explore-contributor-card"
+                        >
+                          <div className="explore-contributor-header">
+                            <code className="explore-contributor-address">
+                              {formatAddress(contributor.address)}
+                            </code>
+                            {contributor.isOwner && (
+                              <span className="explore-contributor-owner-badge">owner</span>
+                            )}
+                          </div>
+                          <div className="explore-contributor-stats">
+                            <div className="explore-contributor-stat">
+                              <span className="explore-contributor-stat-value">{contributor.pushCount}</span>
+                              <span className="explore-contributor-stat-label">pushes</span>
+                            </div>
+                            <div className="explore-contributor-stat">
+                              <span className="explore-contributor-stat-value">
+                                {formatTimeAgo(contributor.lastPush)}
+                              </span>
+                              <span className="explore-contributor-stat-label">last active</span>
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+
+                    <ContributionChart
+                      contributors={contributors}
+                      address={address}
+                      name={name}
+                      branch={selectedBranch}
+                    />
+                  </>
                 )}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+
+            {/* Config Tab */}
+            {activeTab === 'config' && (
+              <div className="explore-config">
+                <div className="explore-config-section">
+                  <h3 className="explore-config-heading">Owner Identity</h3>
+                  <div className="explore-config-identity">
+                    <code>{repo.owner_address}</code>
+                    <span className="explore-config-badge">owner</span>
+                  </div>
+                </div>
+
+                <div className="explore-config-section">
+                  <h3 className="explore-config-heading">Permission Ruleset</h3>
+                  {repoConfig.exists ? (
+                    <pre className="explore-code-block">
+                      <code>{repoConfig.content}</code>
+                    </pre>
+                  ) : (
+                    <div className="explore-config-empty">
+                      <p>No <code>.repobox/config.yml</code> found in this repository.</p>
+                      <p className="explore-config-hint">
+                        Run <code>git repobox init</code> to create a permission config.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );
