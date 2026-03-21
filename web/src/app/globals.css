@@ -3276,3 +3276,201 @@ html {
     height: 8px;
   }
 }
+
+/* Enhanced File Viewer Styles */
+.explore-file-viewer {
+  background: var(--explore-surface);
+  border: 1px solid var(--explore-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.explore-file-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--explore-bg);
+  border-bottom: 1px solid var(--explore-border);
+}
+
+.explore-file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.explore-file-name {
+  font-weight: 600;
+  color: var(--explore-text);
+}
+
+.explore-file-size {
+  color: var(--explore-text-secondary);
+  font-size: 12px;
+}
+
+.explore-file-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.explore-file-action-btn,
+.explore-action-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--explore-border);
+  background: var(--explore-surface);
+  color: var(--explore-text-secondary);
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.explore-file-action-btn:hover,
+.explore-action-btn:hover {
+  background: var(--explore-surface-hover);
+  color: var(--explore-text);
+  border-color: var(--explore-border);
+}
+
+.explore-file-content-container {
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.explore-file-source {
+  padding: 0;
+}
+
+.explore-file-content {
+  margin: 0;
+  padding: 16px;
+  background: var(--explore-bg);
+  color: var(--explore-text);
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: auto;
+}
+
+.explore-file-binary {
+  padding: 48px;
+  text-align: center;
+  color: var(--explore-text-secondary);
+}
+
+.explore-file-binary-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.explore-file-binary h3 {
+  color: var(--explore-text);
+  margin-bottom: 8px;
+}
+
+.explore-file-markdown {
+  padding: 24px;
+  background: var(--explore-bg);
+}
+
+/* Action Buttons */
+.explore-repo-detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Load More Button */
+.explore-load-more {
+  padding: 20px;
+  text-align: center;
+  border-top: 1px solid var(--explore-border);
+}
+
+.explore-load-more-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--explore-border);
+  background: var(--explore-surface);
+  color: var(--explore-text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.explore-load-more-btn:hover:not(:disabled) {
+  background: var(--explore-surface-hover);
+  color: var(--explore-text);
+}
+
+.explore-load-more-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Commit Message Links */
+.explore-commit-message-link {
+  color: var(--explore-text);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.explore-commit-message-link:hover {
+  color: var(--explore-link);
+  text-decoration: underline;
+}
+
+.explore-commit-hash {
+  color: var(--explore-text-secondary);
+  text-decoration: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--explore-bg);
+  transition: all 0.15s;
+}
+
+.explore-commit-hash:hover {
+  background: var(--explore-surface-hover);
+  color: var(--explore-text);
+}
+
+/* Commits Header */
+.explore-commits-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--explore-border);
+  margin-bottom: 16px;
+}
+
+.explore-commits-header h3 {
+  margin: 0;
+  color: var(--explore-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Responsive adjustments for new pages */
+@media (max-width: 768px) {
+  .explore-file-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .explore-file-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .explore-repo-detail-actions {
+    margin-top: 12px;
+  }
+  
+  .explore-file-content {
+    font-size: 12px;
+    padding: 12px;
+  }
+}

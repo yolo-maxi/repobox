@@ -145,27 +145,14 @@ export default function RepoPage() {
     fetchRepo();
   }, [address, name, selectedBranch]);
 
-  const navigateToPath = async (path: string) => {
-    if (!address || !name) return;
-    const branchParam = selectedBranch !== repo?.default_branch ? `?branch=${selectedBranch}` : '';
-    const res = await fetch(`/api/explorer/repos/${address}/${name}/tree/${path}${branchParam}`);
-    if (res.ok) {
-      const data = await res.json();
-      setCurrentPath(path);
-      setCurrentFiles(data.files || []);
-      setFileContent(null);
-    }
+  const navigateToPath = (path: string) => {
+    // Use GitHub-style URLs for directory navigation
+    window.location.href = repoUrls.tree(address, name, selectedBranch, path);
   };
 
-  const viewFile = async (filePath: string) => {
-    if (!address || !name) return;
-    const branchParam = selectedBranch !== repo?.default_branch ? `?branch=${selectedBranch}` : '';
-    const res = await fetch(`/api/explorer/repos/${address}/${name}/blob/${filePath}${branchParam}`);
-    if (res.ok) {
-      const data = await res.json();
-      setFileContent(data);
-      setActiveTab('files');
-    }
+  const viewFile = (filePath: string) => {
+    // Use GitHub-style URLs for file viewing
+    window.location.href = repoUrls.blob(address, name, selectedBranch, filePath);
   };
 
   const handleBranchChange = async (newBranch: string) => {
@@ -497,18 +484,39 @@ export default function RepoPage() {
             {/* Commits Tab */}
             {activeTab === 'commits' && (
               <div className="explore-commit-list">
+                <div className="explore-commits-header">
+                  <h3>Recent commits on {selectedBranch}</h3>
+                  <Link 
+                    href={repoUrls.commits(address, name, selectedBranch)}
+                    className="explore-action-btn"
+                  >
+                    View all commits
+                  </Link>
+                </div>
                 {commits.length === 0 ? (
                   <div className="explore-empty"><p>No commits found</p></div>
                 ) : (
-                  commits.map((commit) => (
+                  commits.slice(0, 10).map((commit) => (
                     <div key={commit.hash} className="explore-commit-item">
-                      <div className="explore-commit-message">{commit.message}</div>
+                      <div className="explore-commit-message">
+                        <Link 
+                          href={repoUrls.commit(address, name, commit.hash)}
+                          className="explore-commit-message-link"
+                        >
+                          {commit.message}
+                        </Link>
+                      </div>
                       <div className="explore-commit-meta">
                         <code className="explore-commit-author">{formatAddress(repo.owner_address)}</code>
                         <span className="explore-commit-time">
                           {formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}
                         </span>
-                        <code className="explore-commit-hash">{commit.hash.slice(0, 7)}</code>
+                        <Link 
+                          href={repoUrls.commit(address, name, commit.hash)}
+                          className="explore-commit-hash"
+                        >
+                          <code>{commit.hash.slice(0, 7)}</code>
+                        </Link>
                       </div>
                     </div>
                   ))
