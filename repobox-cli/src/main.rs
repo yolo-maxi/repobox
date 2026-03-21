@@ -592,31 +592,47 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
         }
     };
 
-    // Resolve alias to address — accept bare alias names, %alias, or raw evm:0x...
-    let resolved = if id_str.starts_with("evm:") {
-        id_str.to_string()
+    // Try alias resolution first, then Identity::parse_with_ens for ENS names, then fail
+    let identity = if id_str.starts_with("evm:") {
+        // Raw EVM address
+        match Identity::parse(id_str) {
+            Ok(id) => id,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return ExitCode::FAILURE;
+            }
+        }
     } else {
+        // Try alias first
         let name = id_str.strip_prefix('%').unwrap_or(id_str);
         match aliases::resolve_alias(home, name) {
-            Ok(Some(addr)) => addr,
+            Ok(Some(addr)) => {
+                match Identity::parse(&addr) {
+                    Ok(id) => id,
+                    Err(e) => {
+                        eprintln!("error: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
             _ => {
-                eprintln!("error: invalid identity: {id_str}");
-                eprintln!("       use an alias name or evm:0x... address");
-                return ExitCode::FAILURE;
+                // Try ENS resolution
+                match Identity::parse_with_ens(id_str) {
+                    Ok(id) => id,
+                    Err(e) => {
+                        eprintln!("error: invalid identity: {id_str}");
+                        eprintln!("       {}", e);
+                        eprintln!("       use an alias name, ENS name, or evm:0x... address");
+                        return ExitCode::FAILURE;
+                    }
+                }
             }
         }
     };
 
-    let identity = match Identity::parse(&resolved) {
-        Ok(id) => id,
-        Err(e) => {
-            eprintln!("error: {e}");
-            return ExitCode::FAILURE;
-        }
-    };
-
     let target = repobox::config::Target::parse(target_str).unwrap();
-    let display = aliases::display_identity(home, &resolved);
+    let identity_str = identity.to_string();
+    let display = aliases::display_identity(home, &identity_str);
 
     // "own" → check all verbs
     if verb_str == "own" {
