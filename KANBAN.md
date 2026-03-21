@@ -12,10 +12,6 @@ Clone via `git.repo.box/vitalik.eth/myrepo.git` — resolve ENS to address serve
 - **Tags**: feature, explorer
 Branch selector dropdown in repo detail page. Currently only shows `main`.
 
-### Diff viewer in explorer
-- **Priority**: P3
-- **Tags**: feature, explorer
-Click a commit → see the diff. Colored additions/deletions.
 
 ### Webhook notifications on push
 - **Priority**: P3
@@ -714,6 +710,10 @@ Script that runs the complete flow: `repobox init` → `keys generate` → signe
 - **Tags**: infra
 
 ## ✅ Done
+
+### Commit detail page with diff viewer
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+Clickable commit hashes → detail page with unified diff, syntax highlighting, keyboard navigation, 20+ language support. +3069 lines.
 
 ### Config opt-in enforcement
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
