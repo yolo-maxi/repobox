@@ -9,10 +9,8 @@ interface CloneUrlWidgetProps {
 }
 
 // Helper functions
-function generateCloneUrls(ownerAddress: string, repoName: string) {
-  const httpsUrl = `https://git.repo.box/${ownerAddress}/${repoName}.git`;
-  const sshUrl = `git@git.repo.box:${ownerAddress}/${repoName}.git`;
-  return [httpsUrl, sshUrl];
+function generateCloneUrl(ownerAddress: string, repoName: string) {
+  return `https://git.repo.box/${ownerAddress}/${repoName}.git`;
 }
 
 async function copyToClipboard(text: string): Promise<void> {
@@ -34,14 +32,14 @@ export default function CloneUrlWidget({
   repoName, 
   className 
 }: CloneUrlWidgetProps) {
-  const [httpsUrl, sshUrl] = generateCloneUrls(ownerAddress, repoName);
+  const httpsUrl = generateCloneUrl(ownerAddress, repoName);
   const [expandedHelp, setExpandedHelp] = useState(false);
-  const [copiedItem, setCopiedItem] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const handleCopy = async (text: string, itemId: string) => {
-    await copyToClipboard(text);
-    setCopiedItem(itemId);
-    setTimeout(() => setCopiedItem(null), 2000);
+  const handleCopy = async () => {
+    await copyToClipboard(httpsUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -58,7 +56,7 @@ export default function CloneUrlWidget({
 
       {/* HTTPS URL */}
       <div className="clone-url-group">
-        <div className="clone-url-label">HTTPS</div>
+        <div className="clone-url-label">HTTPS (EVM-authenticated)</div>
         <div className="clone-url-input-container">
           <input 
             type="text" 
@@ -67,11 +65,11 @@ export default function CloneUrlWidget({
             className="clone-url-input"
           />
           <button 
-            onClick={() => handleCopy(httpsUrl, 'https')}
-            className={`clone-url-copy-btn ${copiedItem === 'https' ? 'copied' : ''}`}
+            onClick={handleCopy}
+            className={`clone-url-copy-btn ${copied ? 'copied' : ''}`}
             title="Copy HTTPS clone URL"
           >
-            {copiedItem === 'https' ? (
+            {copied ? (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="20,6 9,17 4,12"></polyline>
               </svg>
@@ -85,34 +83,7 @@ export default function CloneUrlWidget({
         </div>
       </div>
 
-      {/* SSH URL */}
-      <div className="clone-url-group">
-        <div className="clone-url-label">SSH</div>
-        <div className="clone-url-input-container">
-          <input 
-            type="text" 
-            value={sshUrl}
-            readOnly
-            className="clone-url-input"
-          />
-          <button 
-            onClick={() => handleCopy(sshUrl, 'ssh')}
-            className={`clone-url-copy-btn ${copiedItem === 'ssh' ? 'copied' : ''}`}
-            title="Copy SSH clone URL"
-          >
-            {copiedItem === 'ssh' ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="20,6 9,17 4,12"></polyline>
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            )}
-          </button>
-        </div>
-      </div>
+
 
       {/* Expandable Help Section */}
       <button 
@@ -144,10 +115,10 @@ export default function CloneUrlWidget({
               curl -sSf https://repo.box/install.sh | sh
               <button 
                 className="clone-help-code-copy"
-                onClick={() => handleCopy('curl -sSf https://repo.box/install.sh | sh', 'install')}
+                onClick={() => copyToClipboard('curl -sSf https://repo.box/install.sh | sh')}
                 title="Copy install command"
               >
-                {copiedItem === 'install' ? '✓' : 'Copy'}
+                Copy
               </button>
             </div>
           </div>
@@ -167,10 +138,10 @@ export default function CloneUrlWidget({
               $ git config --global credential.helper \{'\n    '}"!repobox credential-helper"
               <button 
                 className="clone-help-code-copy"
-                onClick={() => handleCopy('git config --global credential.helper "!repobox credential-helper"', 'git-config')}
+                onClick={() => copyToClipboard('git config --global credential.helper "!repobox credential-helper"')}
                 title="Copy git config command"
               >
-                {copiedItem === 'git-config' ? '✓' : 'Copy'}
+                Copy
               </button>
             </div>
           </div>
