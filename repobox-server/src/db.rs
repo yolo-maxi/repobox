@@ -177,39 +177,13 @@ fn to_io_error(error: rusqlite::Error) -> std::io::Error {
 
 /// Generate and assign a random alias for an address
 pub(crate) fn assign_random_alias(db_path: &Path, address: &str) -> std::io::Result<String> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let adjectives = [
-        "happy", "lucky", "swift", "clever", "bright", "calm", "bold", "wise", "kind", "cool",
-        "quick", "smart", "brave", "sweet", "fresh", "clean", "sharp", "smooth", "strong", "pure",
-        "clear", "deep", "warm", "soft", "light", "dark", "rich", "full", "fine", "good",
-        "great", "high", "long", "new", "old", "right", "big", "small", "large", "short",
-        "young", "early", "late", "fast", "slow", "hot", "cold", "dry", "wet", "easy"
-    ];
-
-    let animals = [
-        "cat", "dog", "fox", "owl", "bee", "ant", "bat", "cow", "pig", "rat",
-        "elk", "emu", "cod", "eel", "fly", "gnu", "hen", "jay", "koi", "lamb",
-        "lynx", "newt", "ox", "pug", "ram", "seal", "swan", "toad", "wasp", "yak",
-        "bear", "deer", "duck", "fish", "goat", "hawk", "ibex", "joey", "kiwi", "lion",
-        "mole", "pony", "quail", "robin", "shark", "tiger", "whale", "zebra", "eagle", "horse"
-    ];
-
-    // Use the address as a seed for randomness to make aliases deterministic
-    let mut hasher = DefaultHasher::new();
-    address.hash(&mut hasher);
-    let seed = hasher.finish();
-
-    let adj_idx = (seed % adjectives.len() as u64) as usize;
-    let animal_idx = ((seed >> 8) % animals.len() as u64) as usize;
-
-    let mut alias = format!("{}-{}", adjectives[adj_idx], animals[animal_idx]);
+    // Use the new word lists to generate a deterministic alias
+    let mut alias = crate::words::generate_alias_from_address(address);
 
     // If alias already exists, append a number
     let mut counter = 1;
     while resolve_alias(db_path, &alias)?.is_some() {
-        alias = format!("{}-{}-{}", adjectives[adj_idx], animals[animal_idx], counter);
+        alias = format!("{}-{}", crate::words::generate_alias_from_address(address), counter);
         counter += 1;
     }
 
@@ -249,6 +223,11 @@ pub(crate) fn get_alias_for_address(db_path: &Path, address: &str) -> std::io::R
         )
         .optional()
         .map_err(to_io_error)
+}
+
+/// Validate if an alias has the correct format
+pub(crate) fn is_valid_alias_format(alias: &str) -> bool {
+    crate::words::is_valid_alias(alias)
 }
 
 #[cfg(test)]

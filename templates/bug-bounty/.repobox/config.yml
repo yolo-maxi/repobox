@@ -1,0 +1,6 @@
+# Bug bounty repo — anyone can append reports
+permissions:
+  default: deny
+  rules:
+    - '* append ./**/*.jsonl'
+    - '* read >*'

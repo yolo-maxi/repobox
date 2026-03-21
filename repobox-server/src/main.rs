@@ -3,6 +3,7 @@ mod db;
 mod git;
 mod resolve;
 mod routes;
+mod words;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
