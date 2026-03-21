@@ -29,9 +29,12 @@ contract RepoBoxNames is ERC721, Ownable {
     error NameTaken();
     error NotTokenOwner();
 
-    constructor(address _owner) ERC721("repo.box Names", "REPOBOX") Ownable(_owner) {}
+    constructor(address _owner, address _mintContract) ERC721("repo.box Names", "REPOBOX") Ownable(_owner) {
+        mintContract = _mintContract;
+        emit MintContractUpdated(_mintContract);
+    }
 
-    /// @notice Set the approved mint contract (owner only)
+    /// @notice Update the mint contract (owner only, for future upgrades)
     function setMintContract(address _mintContract) external onlyOwner {
         mintContract = _mintContract;
         emit MintContractUpdated(_mintContract);
