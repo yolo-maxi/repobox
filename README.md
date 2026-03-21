@@ -207,10 +207,12 @@ Lint warnings are printed to stderr but don't block commits — parse errors do.
 
 ## On-Chain Resolver Proxy
 
-For on-chain group resolution, the CLI calls a resolver proxy server that handles RPC calls:
+For on-chain group resolution, the server at `git.repo.box` already runs a resolver proxy that handles RPC calls — no setup needed for hosted repos.
+
+For self-hosted instances:
 
 ```bash
-# Start the resolver server
+# Start the resolver server with your own Alchemy key
 ALCHEMY_API_KEY=your-key repobox-server --bind 0.0.0.0:3456
 
 # Point the CLI at it
