@@ -1,8 +1,0 @@
-groups:
-  agents:
-    - evm:0xBBB0000000000000000000000000000000000002
-
-permissions:
-  default: deny
-  rules:
-    - agents create >feature/**
