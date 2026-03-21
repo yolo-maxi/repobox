@@ -5,20 +5,21 @@ import { useEffect, useRef } from "react";
 const CONFIG_YAML = `# .repobox/config.yml
 groups:
   founders:
-    - evm:0xAAA...001   # Alice
+    - ens:0xfran.eth
   agents:
-    - evm:0xBBB...001   # Codex
+    - evm:0xDbbA...2048
+    - evm:0xAAc0...4a00
+    - evm:0x8224...fA09
+  community:
+    - token:erc721:0x891e...fAe8   # repobox.eth NFT holders
 
 permissions:
-  default: allow
+  default: deny
   rules:
-    - founders push >*
-    - founders merge >*
-    - agents not push >main
-    - agents not merge >main
+    - founders own >main
     - agents push >feature/**
-    - agents create >feature/**
-    - founders edit ./.repobox/config.yml`;
+    - community read >*
+    - agents not edit .repobox/config.yml`;
 
 export function ConfigExample() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -85,7 +86,7 @@ export function ConfigExample() {
             marginTop: 16,
           }}
         >
-          Drop this in your repo. Agents get feature branches, founders keep full control.
+          Real config. ENS names resolve on-chain. NFT holders get read access. Default deny.
         </p>
       </div>
     </section>

@@ -81,7 +81,7 @@ export function LandingHero() {
           fontWeight: 600,
         }}
       >
-        Your agents can code. They shouldn't be able to ship.
+        AI agents shouldn&apos;t share your credentials.
       </p>
       <p
         style={{
@@ -92,8 +92,7 @@ export function LandingHero() {
           marginBottom: 40,
         }}
       >
-        EVM keys, a git shim, and a <code style={{ color: "var(--bp-accent)", background: "rgba(79,195,247,0.08)", padding: "1px 6px", borderRadius: 3 }}>.repobox/config.yml</code> file
-        that stands between your agents and your codebase. Per-agent permissions enforced before anything touches your repo.
+        Each agent gets its own wallet. Each wallet gets its own rules. All enforced in git.
       </p>
 
       {/* Terminal Demo */}
@@ -151,20 +150,21 @@ export function LandingHero() {
         </span>
       </div>
       <Link
-        href="/playground"
+        href="/explore"
         style={{
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
           marginTop: 16,
           fontFamily: "var(--font-mono), monospace",
-          fontSize: 13,
+          fontSize: 14,
           color: "var(--bp-accent)",
           textDecoration: "none",
+          fontWeight: 600,
           transition: "opacity 0.2s",
         }}
       >
-        <span style={{ fontSize: 15 }}>▶</span> Try in Playground
+        Join the Wall →
       </Link>
 
       <div
