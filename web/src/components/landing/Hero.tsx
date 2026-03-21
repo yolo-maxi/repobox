@@ -106,7 +106,7 @@ export function LandingHero() {
           transition: "opacity 0.2s",
         }}
       >
-        Join the Wall →
+        Try the Wall — the first repo where anyone can push to main →
       </Link>
 
       <div
