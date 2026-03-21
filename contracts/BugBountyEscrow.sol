@@ -43,8 +43,8 @@ contract BugBountyEscrow {
     // Errors
     error UnauthorizedCaller();
     error InvalidJobState();
-    error JobExpired();
-    error JobNotExpired();
+    error JobIsExpired();
+    error JobNotYetExpired();
     error InsufficientFunds();
     error TransferFailed();
     error InvalidParameters();
@@ -70,12 +70,12 @@ contract BugBountyEscrow {
     }
 
     modifier notExpired(uint256 jobId) {
-        if (block.timestamp >= jobs[jobId].expiredAt) revert JobExpired();
+        if (block.timestamp >= jobs[jobId].expiredAt) revert JobIsExpired();
         _;
     }
 
     modifier isExpired(uint256 jobId) {
-        if (block.timestamp < jobs[jobId].expiredAt) revert JobNotExpired();
+        if (block.timestamp < jobs[jobId].expiredAt) revert JobNotYetExpired();
         _;
     }
 
@@ -227,29 +227,40 @@ contract BugBountyEscrow {
         _callHook(jobId, this.complete.selector, abi.encode(reason));
     }
 
-    /// @notice Reject a submission (ERC-8183 compliant)
+    /// @notice Reject a job (ERC-8183 compliant)
+    /// @dev Can reject from Funded (before submission) or Submitted (after submission)
     /// @param jobId Job identifier
     /// @param reason Reason for rejection
     function reject(uint256 jobId, bytes32 reason)
         external
         onlyEvaluator(jobId)
-        inStatus(jobId, Status.Submitted)
     {
-        jobs[jobId].status = Status.Rejected;
+        Job storage job = jobs[jobId];
+        if (job.status != Status.Funded && job.status != Status.Submitted) {
+            revert InvalidJobState();
+        }
+
+        job.status = Status.Rejected;
+
+        // Refund client
+        if (!token.transfer(job.client, job.budget)) {
+            revert TransferFailed();
+        }
 
         emit JobRejected(jobId, reason);
+        emit Refunded(jobId, job.client, job.budget);
         _callHook(jobId, this.reject.selector, abi.encode(reason));
     }
 
     /// @notice Claim refund for expired job (ERC-8183 compliant)
+    /// @dev Anyone can trigger refund after expiry for Funded or Submitted jobs
     /// @param jobId Job identifier
     function claimRefund(uint256 jobId)
         external
-        onlyClient(jobId)
         isExpired(jobId)
     {
         Job storage job = jobs[jobId];
-        if (job.status != Status.Funded && job.status != Status.Rejected) {
+        if (job.status != Status.Funded && job.status != Status.Submitted) {
             revert InvalidJobState();
         }
 
@@ -263,6 +274,19 @@ contract BugBountyEscrow {
         emit JobExpired(jobId);
         emit Refunded(jobId, job.client, job.budget);
         _callHook(jobId, this.claimRefund.selector, "");
+    }
+
+    /// @notice Cancel a job before funding (client only, Open → Rejected)
+    /// @param jobId Job identifier
+    function cancel(uint256 jobId)
+        external
+        onlyClient(jobId)
+        inStatus(jobId, Status.Open)
+    {
+        jobs[jobId].status = Status.Rejected;
+
+        emit JobRejected(jobId, bytes32("cancelled_by_client"));
+        _callHook(jobId, this.cancel.selector, "");
     }
 
     /// @notice Get job details
