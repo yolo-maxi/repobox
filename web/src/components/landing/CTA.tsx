@@ -59,28 +59,31 @@ export function LandingCTA() {
         </p>
 
         {/* Primary CTA - Join the Wall */}
-        <a
-          href="/explore"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            background: "var(--bp-accent)",
-            color: "#0a0f1a",
-            fontFamily: "var(--font-mono), monospace",
-            fontSize: 15,
-            fontWeight: 600,
-            padding: "14px 28px",
-            borderRadius: 8,
-            textDecoration: "none",
-            transition: "opacity 0.2s",
-            marginBottom: "clamp(20px, 5vw, 28px)",
-          }}
-          onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
-          onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
-        >
-          Try the Wall — the first repo where anyone can push to main →
-        </a>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: "clamp(20px, 5vw, 28px)", flexWrap: "wrap" }}>
+          <a
+            href="/explore"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              background: "var(--bp-accent)",
+              color: "#0a0f1a",
+              fontFamily: "var(--font-mono), monospace",
+              fontSize: 14,
+              fontWeight: 600,
+              padding: "10px 22px",
+              borderRadius: 6,
+              textDecoration: "none",
+              transition: "opacity 0.2s",
+            }}
+            onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
+            onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
+          >
+            Join the Wall
+          </a>
+          <span style={{ fontSize: 13, color: "var(--bp-dim)", fontFamily: "var(--font-mono), monospace" }}>
+            the first repo where anyone can push to main →
+          </span>
+        </div>
 
         {/* Curl command — secondary */}
         <div
