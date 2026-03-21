@@ -1,0 +1,55 @@
+# .repobox/config.yml — Standard Service
+# Streamlined agent pipeline for service development
+
+groups:
+  founders:
+    - evm:0x69C2920CA309577bcd79e4e6e3afdda93287Cc8b  # Fran
+    - evm:0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048  # Ocean (Mergeooor)
+
+  product:
+    - evm:0x9aBA6b1a5175CA8fd97D6c83c2Dd66dA6f47234b  # PM agent
+
+  devs:
+    - evm:0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00  # Claude
+    - evm:0x82240a161Fea724D059a74F948C8E18674c0fA09  # Codex
+
+  reviewers:
+    - evm:0xe4D4438Fd215c2befe8ef3fB78E72e14e011C307  # Reviewer agent
+
+permissions:
+  default: allow
+  rules:
+    # ── Founders ── Full control ─────────────────
+    - founders push >*
+    - founders merge >*
+    - founders create >*
+    - founders delete >*
+    - founders edit *
+
+    # ── PM ── Documentation focus ────────────────
+    - product edit ./README.md
+    - product edit ./docs/**
+    - product edit ./KANBAN.md
+    - product edit ./*.md
+    - product append ./CHANGELOG.md
+    - product not edit ./package.json
+    - product not edit ./.env*
+    - product not edit .repobox/config.yml
+
+    # ── Devs ── Feature branches with src access ─
+    - devs push >feature/**
+    - devs push >fix/**
+    - devs create >feature/**
+    - devs create >fix/**
+    - devs edit * >feature/**
+    - devs edit * >fix/**
+    - devs append ./KANBAN.md
+    - devs append ./CHANGELOG.md
+    - devs not edit .repobox/config.yml
+    - devs not merge >main
+
+    # ── Reviewers ── Review and merge feature work 
+    - reviewers merge >feature/** >main
+    - reviewers merge >fix/** >main
+    - reviewers append ./REVIEWS.md
+    - reviewers not edit .repobox/config.yml
