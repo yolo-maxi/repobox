@@ -52,6 +52,13 @@ interface Branch {
   };
 }
 
+interface Contributor {
+  address: string;
+  pushCount: number;
+  lastPush: string;
+  isOwner: boolean;
+}
+
 export default function RepoPage() {
   const params = useParams();
   const [repo, setRepo] = useState<RepoDetails | null>(null);
@@ -60,7 +67,8 @@ export default function RepoPage() {
   const [fileContent, setFileContent] = useState<FileContent | null>(null);
   const [currentFiles, setCurrentFiles] = useState<RepoDetails['file_tree']>([]);
   const [repoConfig, setRepoConfig] = useState<RepoConfig>({ exists: false, content: '' });
-  const [activeTab, setActiveTab] = useState<'readme' | 'files' | 'commits' | 'config'>('readme');
+  const [contributors, setContributors] = useState<Contributor[]>([]);
+  const [activeTab, setActiveTab] = useState<'readme' | 'files' | 'commits' | 'contributors' | 'config'>('readme');
   const [loading, setLoading] = useState(true);
   const [cloneCopied, setCloneCopied] = useState(false);
   const [addrCopied, setAddrCopied] = useState(false);
@@ -80,10 +88,11 @@ export default function RepoPage() {
         const branchParam = selectedBranch !== 'HEAD' ? `?branch=${selectedBranch}` : '';
         const configBranchParam = selectedBranch !== 'HEAD' ? `?branch=${selectedBranch}` : '';
         
-        const [repoRes, commitsRes, branchesRes] = await Promise.all([
+        const [repoRes, commitsRes, branchesRes, contributorsRes] = await Promise.all([
           fetch(`/api/explorer/repos/${address}/${name}${branchParam}`),
           fetch(`/api/explorer/repos/${address}/${name}/commits?limit=30${selectedBranch !== 'HEAD' ? `&branch=${selectedBranch}` : ''}`),
-          fetch(`/api/explorer/repos/${address}/${name}/branches`)
+          fetch(`/api/explorer/repos/${address}/${name}/branches`),
+          fetch(`/api/explorer/repos/${address}/${name}/contributors`)
         ]);
         
         if (repoRes.ok) {
@@ -107,6 +116,11 @@ export default function RepoPage() {
           if (selectedBranch === 'HEAD' && branchData.default_branch) {
             setSelectedBranch(branchData.default_branch);
           }
+        }
+        
+        if (contributorsRes.ok) {
+          const contributorsData = await contributorsRes.json();
+          setContributors(contributorsData.contributors || []);
         }
         
         // Try to fetch .repobox/config.yml
@@ -270,7 +284,7 @@ export default function RepoPage() {
 
       {/* Tabs — README first */}
       <nav className="explore-tabs">
-        {['readme', 'files', 'commits', 'config'].map((tab) => (
+        {['readme', 'files', 'commits', 'contributors', 'config'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab as typeof activeTab)}
@@ -279,6 +293,7 @@ export default function RepoPage() {
             {tab === 'readme' ? 'README' : 
              tab === 'files' ? 'Files' : 
              tab === 'commits' ? 'Commits' :
+             tab === 'contributors' ? 'Contributors' :
              'Config'}
           </button>
         ))}
@@ -390,6 +405,46 @@ export default function RepoPage() {
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* Contributors Tab */}
+        {activeTab === 'contributors' && (
+          <div className="explore-contributors">
+            {contributors.length === 0 ? (
+              <div className="explore-empty"><p>No contributors found</p></div>
+            ) : (
+              <div className="explore-contributors-grid">
+                {contributors.map((contributor) => (
+                  <Link
+                    key={contributor.address}
+                    href={`/explore/${contributor.address}`}
+                    className="explore-contributor-card"
+                  >
+                    <div className="explore-contributor-header">
+                      <code className="explore-contributor-address">
+                        {formatAddress(contributor.address)}
+                      </code>
+                      {contributor.isOwner && (
+                        <span className="explore-contributor-owner-badge">owner</span>
+                      )}
+                    </div>
+                    <div className="explore-contributor-stats">
+                      <div className="explore-contributor-stat">
+                        <span className="explore-contributor-stat-value">{contributor.pushCount}</span>
+                        <span className="explore-contributor-stat-label">pushes</span>
+                      </div>
+                      <div className="explore-contributor-stat">
+                        <span className="explore-contributor-stat-value">
+                          {formatTimeAgo(contributor.lastPush)}
+                        </span>
+                        <span className="explore-contributor-stat-label">last active</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             )}
           </div>
         )}
