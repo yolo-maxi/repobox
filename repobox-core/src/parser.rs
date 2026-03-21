@@ -465,6 +465,16 @@ fn parse_rule_value(
                         }
 
                         let (deny, verb) = parse_verb_str(verb_str)?;
+                        
+                        // Semantic validation: reject 'create' with branch targets
+                        if verb == Verb::Create && target.branch.is_some() {
+                            return Err(ConfigError::InvalidRule(format!(
+                                "'create' is for files only - use 'branch' for creating branches. \
+                                Change 'create {}' to 'branch {}'",
+                                target_str, target_str
+                            )));
+                        }
+                        
                         rules.push(Rule {
                             subject: subject.clone(),
                             verb,
@@ -545,6 +555,15 @@ fn parse_flat_rule(s: &str, line: usize) -> Result<Vec<Rule>, ConfigError> {
 
     let (deny2, verb) = parse_verb_str(verb_str)?;
     let deny = deny || deny2;
+
+    // Semantic validation: reject 'create' with branch targets
+    if verb == Verb::Create && target.branch.is_some() {
+        return Err(ConfigError::InvalidRule(format!(
+            "'create' is for files only - use 'branch' for creating branches. \
+            Change 'create {}' to 'branch {}'",
+            target_str, target_str
+        )));
+    }
 
     Ok(vec![Rule {
         subject,
@@ -1298,7 +1317,7 @@ permissions:
     }
 
     #[test]
-    fn test_create_parses_as_file_verb() {
+    fn test_create_parses_as_file_verb_only() {
         let verb = Verb::parse("create").unwrap();
         assert_eq!(verb, Verb::Create);
         assert!(verb.is_file_verb());
@@ -1306,11 +1325,53 @@ permissions:
     }
 
     #[test]  
-    fn test_branch_parses_as_branch_verb() {
+    fn test_branch_parses_as_branch_verb_only() {
         let verb = Verb::parse("branch").unwrap();
         assert_eq!(verb, Verb::Branch);
         assert!(verb.is_branch_verb());
         assert!(!verb.is_file_verb());
+    }
+
+    #[test]
+    fn test_create_with_branch_target_rejected() {
+        let yaml = r#"
+groups:
+  devs: [evm:0xAAA0000000000000000000000000000000000001]
+permissions:
+  rules:
+    - devs create >feature/test
+"#;
+        let result = parse(yaml);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("'create' is for files only"));
+        assert!(err.contains("use 'branch'"));
+    }
+
+    #[test]
+    fn test_create_with_file_target_allowed() {
+        let yaml = r#"
+groups:
+  devs: [evm:0xAAA0000000000000000000000000000000000001]
+permissions:
+  rules:
+    - devs create ./src/**
+"#;
+        let result = parse(yaml);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_branch_with_branch_target_allowed() {
+        let yaml = r#"
+groups:
+  devs: [evm:0xAAA0000000000000000000000000000000000001]
+permissions:
+  rules:
+    - devs branch >feature/**
+"#;
+        let result = parse(yaml);
+        assert!(result.is_ok());
     }
 
     #[test]

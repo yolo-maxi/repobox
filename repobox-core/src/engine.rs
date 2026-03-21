@@ -249,7 +249,7 @@ permissions:
     }
 
     #[test]
-    fn test_agent_create_feature_allowed() {
+    fn test_agent_branch_feature_allowed() {
         let r = check_yaml(
             r#"
 groups:
@@ -257,10 +257,10 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "agents create >feature/*"
+    - "agents branch >feature/*"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
-            Verb::Create,
+            Verb::Branch,
             Some("feature/new"),
             None,
         );
@@ -268,7 +268,7 @@ permissions:
     }
 
     #[test]
-    fn test_agent_create_release_denied() {
+    fn test_agent_branch_release_denied() {
         let r = check_yaml(
             r#"
 groups:
@@ -276,14 +276,14 @@ groups:
     members: [evm:0xBBB0000000000000000000000000000000000002]
 permissions:
   rules:
-    - "agents create >feature/*"
+    - "agents branch >feature/*"
 "#,
             "evm:0xBBB0000000000000000000000000000000000002",
-            Verb::Create,
+            Verb::Branch,
             Some("release/v1"),
             None,
         );
-        // No rule for create >release/* — depends on default
+        // No rule for branch >release/* — depends on default
         assert!(matches!(r, CheckResult::Default { policy: DefaultPolicy::Allow }));
     }
 

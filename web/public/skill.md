@@ -183,7 +183,8 @@ agents not push >main
 | `read` | Files | Clone / fetch (server) | Can read / clone the repo |
 | `push` | Branches | `git push` | Can push to the branch |
 | `merge` | Branches | `git merge` | Can merge into the branch |
-| `create` | Branches + Files | `git branch`, `git checkout -b`, `git commit` (new file) | Can create the branch; also the verb for adding new files |
+| `branch` | Branches | `git branch`, `git checkout -b` | Can create new branches |
+| `create` | Files only | `git commit` (new file) | Can add new files |
 | `delete` | Branches | `git branch -d` | Can delete the branch |
 | `force-push` | Branches | `git push --force` | Can force-push to the branch |
 | `write` | Files | `git commit` | General file write (currently not auto-classified; use `create` for new files) |
@@ -257,7 +258,7 @@ permissions:
     - "community push >main"           # static community can push to main
     - "community-external push >main"  # dynamically resolved members too
     - "agents push >agent/**"          # agents can push to agent/ branches
-    - "* create >feature/**"           # anyone can create feature branches
+    - "* branch >feature/**"           # anyone can create feature branches
     - "founders merge >main"           # only founders merge to main
     - "founders force-push >*"         # only founders can force-push
     - "founders delete >*"             # only founders can delete branches
