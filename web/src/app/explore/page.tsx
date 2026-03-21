@@ -319,39 +319,59 @@ export default function ExplorePage() {
                       key={`${repo.address}/${repo.name}`}
                       href={`/explore/${repo.address}/${repo.name}`}
                       style={{
-                        display: 'block',
-                        padding: '16px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '14px 16px',
                         borderBottom: idx < filteredRepos.length - 1 ? '1px solid #21262d' : 'none',
                         textDecoration: 'none',
                         color: 'inherit',
                         transition: 'background-color 0.15s',
+                        gap: 16,
                       }}
                       onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#161b22')}
                       onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-                        <span style={{ color: '#58a6ff', fontSize: 16, fontWeight: 600 }}>
-                          {repo.name}
-                        </span>
-                        <span style={{
-                          color: '#484f58',
-                          fontSize: 12,
-                          fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                        }}>
-                          {formatAddress(repo.owner_address)}
-                        </span>
+                      {/* Left: name + description */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
+                          <span style={{ color: '#58a6ff', fontSize: 15, fontWeight: 600 }}>
+                            {repo.name}
+                          </span>
+                          <span style={{
+                            color: '#484f58',
+                            fontSize: 12,
+                            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                          }}>
+                            {formatAddress(repo.owner_address)}
+                          </span>
+                        </div>
+                        {repo.description && (
+                          <p style={{ color: '#8b949e', fontSize: 13, margin: 0, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {repo.description.replace(/\n/g, ' ').trim()}
+                          </p>
+                        )}
                       </div>
 
-                      {repo.description && (
-                        <p style={{ color: '#8b949e', fontSize: 14, margin: '0 0 6px', lineHeight: 1.4 }}>
-                          {repo.description.replace(/\n/g, ' ').trim()}
-                        </p>
-                      )}
-
-                      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#484f58' }}>
-                        <span>{pluralize(repo.commit_count, 'commit')}</span>
+                      {/* Right: stats */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0, fontSize: 12, color: '#8b949e' }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '2px 8px',
+                          backgroundColor: repo.commit_count > 10 ? '#1f6feb22' : '#21262d',
+                          borderRadius: 10,
+                          fontSize: 12,
+                          color: repo.commit_count > 10 ? '#58a6ff' : '#8b949e',
+                          fontWeight: 500,
+                        }}>
+                          <span>⬡</span> {pluralize(repo.commit_count, 'commit')}
+                        </div>
                         {repo.last_commit_date && (
-                          <span>Updated {formatTimeAgo(repo.last_commit_date)}</span>
+                          <span style={{ color: '#484f58', whiteSpace: 'nowrap', minWidth: 100, textAlign: 'right' }}>
+                            {formatTimeAgo(repo.last_commit_date)}
+                          </span>
                         )}
                       </div>
                     </Link>
