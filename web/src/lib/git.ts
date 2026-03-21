@@ -1,6 +1,17 @@
 import { execSync } from 'child_process';
 import { getRepoPath } from './database';
 
+function sanitizeBranchName(branch: string): string {
+  // Only allow valid git branch characters
+  if (!/^[a-zA-Z0-9/_.-]+$/.test(branch)) {
+    throw new Error('Invalid branch name');
+  }
+  if (branch.includes('..') || branch.startsWith('-')) {
+    throw new Error('Invalid branch name');
+  }
+  return branch;
+}
+
 export interface GitCommit {
   hash: string;
   author: string;
@@ -92,6 +103,11 @@ export function gitCommand(repoPath: string, command: string): string {
 export function getCommitCount(address: string, name: string, branch: string = 'HEAD'): number {
   const repoPath = getRepoPath(address, name);
   try {
+    // Sanitize branch name to prevent command injection
+    if (branch !== 'HEAD') {
+      branch = sanitizeBranchName(branch);
+    }
+    
     const ref = branch === 'HEAD' ? 'HEAD' : `refs/heads/${branch}`;
     const output = gitCommand(repoPath, `rev-list --count ${ref}`);
     return parseInt(output) || 0;
@@ -127,6 +143,11 @@ export function getDefaultBranch(address: string, name: string): string {
 export function getCommitHistory(address: string, name: string, limit: number = 50, branch: string = 'HEAD'): GitCommit[] {
   const repoPath = getRepoPath(address, name);
   try {
+    // Sanitize branch name to prevent command injection
+    if (branch !== 'HEAD') {
+      branch = sanitizeBranchName(branch);
+    }
+    
     const ref = branch === 'HEAD' ? 'HEAD' : `refs/heads/${branch}`;
     const output = gitCommand(repoPath, `log --format='%H|%an|%ae|%at|%s' -n ${limit} ${ref}`);
     if (!output) return [];
@@ -149,6 +170,11 @@ export function getCommitHistory(address: string, name: string, limit: number = 
 export function getFileTree(address: string, name: string, path: string = '', branch: string = 'HEAD'): GitFileEntry[] {
   const repoPath = getRepoPath(address, name);
   try {
+    // Sanitize branch name to prevent command injection
+    if (branch !== 'HEAD') {
+      branch = sanitizeBranchName(branch);
+    }
+    
     // Validate branch first
     if (branch !== 'HEAD' && !branchExists(address, name, branch)) {
       throw new Error(`Branch '${branch}' does not exist`);
@@ -192,6 +218,11 @@ export function getFileTree(address: string, name: string, path: string = '', br
 export function getFileContent(address: string, name: string, filePath: string, branch: string = 'HEAD'): string | null {
   const repoPath = getRepoPath(address, name);
   try {
+    // Sanitize branch name to prevent command injection
+    if (branch !== 'HEAD') {
+      branch = sanitizeBranchName(branch);
+    }
+    
     const ref = branch === 'HEAD' ? 'HEAD' : `refs/heads/${branch}`;
     return gitCommand(repoPath, `show ${ref}:${filePath}`);
   } catch {
@@ -200,6 +231,11 @@ export function getFileContent(address: string, name: string, filePath: string, 
 }
 
 export function getReadmeContent(address: string, name: string, branch: string = 'HEAD'): string | null {
+  // Sanitize branch name to prevent command injection
+  if (branch !== 'HEAD') {
+    branch = sanitizeBranchName(branch);
+  }
+  
   const readmeFiles = ['README.md', 'readme.md', 'README', 'readme', 'README.txt'];
   
   for (const readmeFile of readmeFiles) {
@@ -213,6 +249,11 @@ export function getReadmeContent(address: string, name: string, branch: string =
 }
 
 export function getReadmeFirstLine(address: string, name: string, branch: string = 'HEAD'): string | null {
+  // Sanitize branch name to prevent command injection
+  if (branch !== 'HEAD') {
+    branch = sanitizeBranchName(branch);
+  }
+  
   const content = getReadmeContent(address, name, branch);
   if (!content) return null;
   
@@ -263,7 +304,10 @@ export function getBranches(address: string, name: string): GitBranch[] {
 export function branchExists(address: string, name: string, branchName: string): boolean {
   const repoPath = getRepoPath(address, name);
   try {
-    gitCommand(repoPath, `rev-parse --verify refs/heads/${branchName}`);
+    // Sanitize branch name to prevent command injection
+    const sanitizedBranchName = sanitizeBranchName(branchName);
+    
+    gitCommand(repoPath, `rev-parse --verify refs/heads/${sanitizedBranchName}`);
     return true;
   } catch {
     return false;
