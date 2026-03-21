@@ -77,12 +77,7 @@ Replace "No recent activity", "No repositories found", etc with illustrated empt
 
 ## 🔨 In Progress
 
-### File viewer with syntax highlighting - SPEC COMPLETE
-- **Priority**: P1
-- **Tags**: explorer, ui  
-- **Spec**: `docs/spec/file-viewer-syntax-highlighting.md`
-- **Agent**: pm-agent (0x9aBA...234b)
-When clicking a file in the tree, show it with proper syntax highlighting (Rust, JS, YAML, etc). Add line numbers, copy button, raw view toggle, and file size/line count in header. Currently shows plain text. Comprehensive implementation spec ready for development.
+
 
 ## 🚧 Blocked
 
@@ -95,6 +90,10 @@ When clicking a file in the tree, show it with proper syntax highlighting (Rust,
 ### Full E2E demo script
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
 Complete hackathon demo: `repobox init` → `keys generate` → signed commit → push → clone → verify. Scripts: demo-e2e.sh (724 lines, quick/full modes), demo-reset.sh, docs/DEMO.md. Multi-agent simulation, visual progress indicators, error handling with cleanup. See detailed spec in In Progress section.
+
+### File viewer with syntax highlighting
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+FileViewer component with syntax highlighting, line numbers, copy/download, language detection (25+ languages), binary/large file handling.
 
 ### README rendering polish
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
