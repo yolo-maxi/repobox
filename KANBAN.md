@@ -39,11 +39,6 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## 📋 Backlog
 
-### Install script improvements
-- **Priority**: P1
-- **Tags**: cli, distribution
-`curl -sSf https://repo.box/install.sh | sh` needs to actually download a pre-built binary (currently just has the script skeleton).
-
 ### Explorer: show signer address per commit (not just owner)
 - **Priority**: P1
 - **Tags**: explorer
@@ -55,6 +50,11 @@ Each commit should show which EVM address signed it. Different agents = differen
 Server should check if `.repobox/config.yml` exists in the pushed tree. Repos without config = no permission enforcement.
 
 ## 🔨 In Progress
+
+### Install script improvements
+- **Priority**: P1
+- **Tags**: cli, distribution
+`curl -sSf https://repo.box/install.sh | sh` needs to actually download a pre-built binary (currently just has the script skeleton).
 
 ### Add .repobox/config.yml to all studio projects
 - **Priority**: P1

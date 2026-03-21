@@ -11,3 +11,7 @@ node_modules/
 .git/
 *.secret
 .env*
+Cargo.toml
+Cargo.lock
+src/
+tests/
