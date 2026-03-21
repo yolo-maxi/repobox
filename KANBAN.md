@@ -47,11 +47,6 @@ Replace "No recent activity", "No repositories found", etc with illustrated empt
 
 ## 🔨 In Progress
 
-### Clone URL copy widget + credential helper instructions
-- **Priority**: P2
-- **Tags**: explorer, ui
-On repo detail page, prominent clone URL box with one-click copy (HTTPS + SSH variants). Below it, expandable section showing how to set up the repobox credential helper for authenticated clones. Include `curl | sh` install snippet.
-
 ### Dark/light theme toggle
 - **Priority**: P2
 - **Tags**: explorer, ui
@@ -69,6 +64,10 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 - **Tags**: infra
 
 ## ✅ Done
+
+### Clone URL copy widget + credential helper instructions
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+On repo detail page, prominent clone URL box with one-click copy (HTTPS + SSH variants). Below it, expandable section showing how to set up the repobox credential helper for authenticated clones. Include `curl | sh` install snippet. Features: dual protocol support, visual feedback, mobile-responsive design, four-step setup guide.
 
 ### Contributor graph / identity cards
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)

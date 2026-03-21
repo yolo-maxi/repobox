@@ -7,6 +7,7 @@ import { formatTimeAgo, formatAddress, formatBytes, getFileIcon, copyToClipboard
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
 import BranchSelector from '@/components/BranchSelector';
 import RepoStatsCards from '@/components/RepoStatsCards';
+import CloneUrlWidget from '@/components/CloneUrlWidget';
 
 interface RepoDetails {
   address: string;
@@ -70,7 +71,6 @@ export default function RepoPage() {
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [activeTab, setActiveTab] = useState<'readme' | 'files' | 'commits' | 'contributors' | 'config'>('readme');
   const [loading, setLoading] = useState(true);
-  const [cloneCopied, setCloneCopied] = useState(false);
   const [addrCopied, setAddrCopied] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string>('HEAD');
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -78,8 +78,6 @@ export default function RepoPage() {
 
   const address = Array.isArray(params.address) ? params.address[0] : params.address;
   const name = Array.isArray(params.name) ? params.name[0] : params.name;
-
-  const cloneUrl = repo ? `https://git.repo.box/${repo.owner_address}/${repo.name}.git` : '';
 
   useEffect(() => {
     if (!address || !name) return;
@@ -184,12 +182,6 @@ export default function RepoPage() {
     }
   };
 
-  const handleCopyClone = async () => {
-    await copyToClipboard(`git clone ${cloneUrl}`);
-    setCloneCopied(true);
-    setTimeout(() => setCloneCopied(false), 2000);
-  };
-
   const handleCopyAddr = async () => {
     if (!repo) return;
     await copyToClipboard(repo.owner_address);
@@ -282,34 +274,6 @@ export default function RepoPage() {
                 )}
               </button>
             </div>
-
-            <div className="explore-repo-detail-clone">
-              <div className="explore-clone-label">HTTPS</div>
-              <div className="explore-clone-input-group">
-                <input 
-                  type="text" 
-                  value={cloneUrl}
-                  readOnly
-                  className="explore-clone-input"
-                />
-                <button 
-                  onClick={handleCopyClone} 
-                  className="explore-clone-copy-btn"
-                  title="Copy clone command"
-                >
-                  {cloneCopied ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="20,6 9,17 4,12"></polyline>
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
           </div>
 
           <div className="explore-repo-detail-stats">
@@ -344,6 +308,12 @@ export default function RepoPage() {
             </div>
           </div>
         </div>
+
+        {/* Clone URL Widget */}
+        <CloneUrlWidget 
+          ownerAddress={repo.owner_address}
+          repoName={repo.name}
+        />
 
         {/* Repository Stats */}
         <RepoStatsCards 
