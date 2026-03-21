@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const TOKEN = '297b3fb36b7411a091742072e72eaa2ace0fb5d7ba3d3e984ec3254a9ad708ef'
+const TOKEN = process.env.DASHBOARD_TOKEN || ''
 const COOKIE_NAME = 'rb-auth'
 
 export function middleware(request: NextRequest) {
   // Only protect dashboard routes
   if (!request.nextUrl.pathname.startsWith('/dashboard')) {
     return NextResponse.next()
+  }
+
+  // No token configured — block everything
+  if (!TOKEN) {
+    return new NextResponse('🔒 Dashboard not configured.', { status: 503 })
   }
 
   // Check for token in query param (magic link)
