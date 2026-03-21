@@ -152,6 +152,68 @@ pub(crate) fn read_head(data_dir: &Path, repo: &RepoPath) -> std::io::Result<Str
     std::fs::read_to_string(repo_dir(data_dir, repo).join("HEAD"))
 }
 
+/// Check if a ref update represents a force push
+pub(crate) fn is_force_push_update(
+    repo_dir: &Path,
+    old_sha: &str,
+    new_sha: &str,
+    ref_name: &str,
+) -> std::io::Result<bool> {
+    const NULL_SHA: &str = "0000000000000000000000000000000000000000";
+    
+    // Skip for new branches and deletions
+    if old_sha == NULL_SHA || new_sha == NULL_SHA {
+        return Ok(false);
+    }
+    
+    // Skip for non-branch refs
+    if !ref_name.starts_with("refs/heads/") {
+        return Ok(false);
+    }
+    
+    // Check if new commit is descendant of old commit
+    let output = Command::new("git")
+        .current_dir(repo_dir)
+        .args(["merge-base", "--is-ancestor", old_sha, new_sha])
+        .output()?;
+        
+    Ok(!output.status.success())
+}
+
+/// Check if a force push is authorized for the given pusher and branch
+pub(crate) fn check_force_push_authorized(
+    data_dir: &Path,
+    repo: &RepoPath,
+    pusher_address: &str,
+    branch_name: &str,
+) -> std::io::Result<bool> {
+    let repo_dir = repo_dir(data_dir, repo);
+
+    // Read .repobox/config.yml and check force-push permission
+    let config_content = match crate::routes::read_config_from_repo(&repo_dir) {
+        Some(content) => content,
+        None => return Ok(true), // No config = allow (opt-in)
+    };
+
+    let config = match repobox::parser::parse(&config_content) {
+        Ok(cfg) => cfg,
+        Err(_) => return Ok(true), // Invalid config = allow (opt-in)
+    };
+
+    let identity = repobox::config::Identity::parse(&format!("evm:{}", pusher_address))
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    
+    let result = repobox::engine::check(
+        &config,
+        &identity,
+        repobox::config::Verb::ForcePush,
+        Some(branch_name),
+        None,
+    );
+    
+    Ok(result.is_allowed())
+}
+
 /// Check if a pusher is authorized to push to a repo.
 /// If a `.repobox/config.yml` exists in the repo, parse and evaluate it.
 /// If no config exists, allow push (opt-in enforcement).
