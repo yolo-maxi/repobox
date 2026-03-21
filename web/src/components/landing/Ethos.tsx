@@ -30,12 +30,10 @@ export function LandingEthos() {
     <section ref={sectionRef} className="reveal" style={{ marginBottom: 60 }}>
       <div
         style={{
-          background: "rgba(6, 14, 26, 0.85)",
-          border: "1px solid var(--bp-border)",
+          background: "transparent",
+          border: "1px solid rgba(79, 195, 247, 0.15)",
           borderRadius: 8,
           padding: "32px 36px",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
         }}
       >
         <h2

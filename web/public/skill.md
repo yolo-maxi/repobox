@@ -270,12 +270,6 @@ permissions:
     # Anyone can append to the guestbook
     - "* append ./guestbook.jsonl"
     - "* push >main"
-
-# Optional: x402 paid access
-x402:
-  read_price: "1.00"                    # USDC
-  recipient: "0xRecipient..."
-  network: base
 ```
 
 ---
@@ -306,13 +300,28 @@ Browse all repos at https://repo.box/explore. See recent activity, repo contents
 
 ### x402 Paid Access
 
-Repos can require USDC payment for read access using the x402 protocol:
+Repos can require USDC payment for read access using the x402 protocol. This uses two files:
 
+**`.repobox/x402.yml`** — payment configuration (separate from config.yml):
 ```yaml
-x402:
-  read_price: "1.00"
-  recipient: "0xYourAddress..."
-  network: base
+read_price: "1.00"
+recipient: "0xYourAddress..."
+network: base
 ```
 
-Clone attempts return `402 Payment Required` with payment headers. Compatible x402 clients pay automatically.
+**`.repobox/config.yml`** — add a paid-readers group with an HTTP resolver:
+```yaml
+groups:
+  paid-readers:
+    resolver: http
+    url: https://x402.repo.box/0xYourAddress.../myRepo
+    cache_ttl: 60
+permissions:
+  default: deny
+  rules:
+    - paid-readers read >*
+```
+
+**Flow**: Clone attempt → read denied → server returns `402 Payment Required` with x402 headers → client pays USDC → server stores payer address → next clone resolves via the `paid-readers` HTTP resolver → access granted.
+
+The paid-readers membership endpoint follows the standard resolver format: `GET /members/{address}` → `{"member": true/false}`.

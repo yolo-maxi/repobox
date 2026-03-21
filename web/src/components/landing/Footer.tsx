@@ -202,7 +202,6 @@ export function LandingFooter() {
         }}
       >
         <span>© 2026 repo.box</span>
-        <span>five agents, five keys, one repo, zero risk</span>
       </div>
     </footer>
   );

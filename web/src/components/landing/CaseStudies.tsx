@@ -80,8 +80,8 @@ export function LandingCaseStudies() {
               style={{
                 flex: "0 0 280px",
                 scrollSnapAlign: "start",
-                background: "var(--bp-surface)",
-                border: "1px solid var(--bp-border)",
+                background: "transparent",
+                border: "1px solid rgba(79, 195, 247, 0.15)",
                 borderRadius: 8,
                 padding: 20,
               }}

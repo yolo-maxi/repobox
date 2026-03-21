@@ -16,22 +16,14 @@ function ProjectCard({ title, tag, description, href }: ProjectCardProps) {
       style={{
         position: "relative",
         overflow: "hidden",
-        background: "var(--bp-surface)",
-        border: "1px solid var(--bp-border)",
+        background: "transparent",
+        border: "1px solid rgba(79, 195, 247, 0.15)",
         borderRadius: 8,
         padding: "clamp(16px, 4vw, 20px)",
         marginBottom: "clamp(16px, 4vw, 20px)",
         transition: "border-color 0.2s",
       }}
     >
-      <svg className="card-border">
-        <rect
-          x="0.5"
-          y="0.5"
-          width="calc(100% - 1px)"
-          height="calc(100% - 1px)"
-        />
-      </svg>
       <div style={{ position: "relative", zIndex: 2 }}>
         <div
           style={{

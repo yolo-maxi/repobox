@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { TerminalDemo } from "./TerminalDemo";
 
 export function LandingHero() {
   const [copied, setCopied] = useState(false);
@@ -48,6 +49,14 @@ export function LandingHero() {
           playground
         </Link>
         <Link
+          href="/explore"
+          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
+          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+        >
+          explorer
+        </Link>
+        <Link
           href="/blog/"
           style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
@@ -66,12 +75,13 @@ export function LandingHero() {
         style={{
           fontSize: 18,
           lineHeight: "28px",
-          color: "var(--bp-dim)",
+          color: "var(--bp-heading)",
           maxWidth: 500,
-          marginBottom: 48,
+          marginBottom: 16,
+          fontWeight: 600,
         }}
       >
-        Git permission layer that makes repositories safe for AI agents.
+        Your agents can code. They shouldn't be able to ship.
       </p>
       <p
         style={{
@@ -79,16 +89,22 @@ export function LandingHero() {
           lineHeight: "24px",
           color: "#8eafc4",
           maxWidth: 560,
+          marginBottom: 40,
         }}
       >
         EVM keys, a git shim, and a <code style={{ color: "var(--bp-accent)", background: "rgba(79,195,247,0.08)", padding: "1px 6px", borderRadius: 3 }}>.repobox/config.yml</code> file
-        that stands between your agents and your codebase. One config file. Per-agent permissions. Enforced before anything touches your repo.
+        that stands between your agents and your codebase. Per-agent permissions enforced before anything touches your repo.
       </p>
+
+      {/* Terminal Demo */}
+      <div style={{ marginBottom: 40 }}>
+        <TerminalDemo />
+      </div>
+
       {/* Inline CTA */}
       <div
         onClick={handleCopy}
         style={{
-          marginTop: 32,
           background: "rgba(0, 0, 0, 0.5)",
           border: "1px solid var(--bp-border)",
           borderRadius: 8,

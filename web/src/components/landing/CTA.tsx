@@ -30,12 +30,9 @@ export function LandingCTA() {
     <section ref={sectionRef} className="reveal" style={{ marginBottom: 60 }}>
       <div
         style={{
-          background: "rgba(6, 14, 26, 0.85)",
-          border: "1px solid var(--bp-border)",
-          borderRadius: 8,
-          padding: "clamp(24px, 6vw, 40px) clamp(20px, 5vw, 36px)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
+          background: "transparent",
+          border: "none",
+          padding: "clamp(24px, 6vw, 40px) 0",
           textAlign: "center",
         }}
       >
@@ -61,11 +58,35 @@ export function LandingCTA() {
           One command. Secure your first repo in under a minute.
         </p>
 
-        {/* Curl command — the main CTA */}
+        {/* Primary CTA - Join the Wall */}
+        <a
+          href="/explore"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            background: "var(--bp-accent)",
+            color: "#0a0f1a",
+            fontFamily: "var(--font-mono), monospace",
+            fontSize: 15,
+            fontWeight: 600,
+            padding: "14px 28px",
+            borderRadius: 8,
+            textDecoration: "none",
+            transition: "opacity 0.2s",
+            marginBottom: "clamp(20px, 5vw, 28px)",
+          }}
+          onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
+          onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
+        >
+          Join the Wall →
+        </a>
+
+        {/* Curl command — secondary */}
         <div
           onClick={handleCopy}
           style={{
-            background: "rgba(0, 0, 0, 0.5)",
+            background: "rgba(0, 0, 0, 0.3)",
             border: "1px solid var(--bp-border)",
             borderRadius: 8,
             padding: "clamp(16px, 4vw, 20px) clamp(16px, 4vw, 24px)",
