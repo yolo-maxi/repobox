@@ -25,6 +25,7 @@ tower-http = { version = "0.6", features = ["cors"] }
 sha3 = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+lazy_static = "1.4"
 
 [dev-dependencies]
 hex = "0.4"

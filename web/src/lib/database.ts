@@ -7,18 +7,7 @@ const DB_PATH = path.join(DATA_DIR, 'repobox.db');
 
 export function runQuery<T = any>(query: string, params: any[] = []): T[] {
   try {
-    // Create push_log table if it doesn't exist (run once)
-    execSync(`sqlite3 "${DB_PATH}" "CREATE TABLE IF NOT EXISTS push_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      address TEXT NOT NULL,
-      name TEXT NOT NULL,
-      pusher_address TEXT,
-      commit_hash TEXT,
-      commit_message TEXT,
-      pushed_at TEXT NOT NULL
-    );"`, { encoding: 'utf8' });
-
-    // Execute the query
+    // Execute the query (table creation is handled by backend)
     let sqliteCommand = query;
     
     // Replace parameter placeholders with actual values (simple implementation)
