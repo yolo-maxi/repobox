@@ -3,11 +3,11 @@
 import { useEffect, useRef } from "react";
 
 const PRINCIPLES = [
-  "Agents use normal git — the shim is invisible",
-  "EVM keypairs + ENS as the identity layer",
-  "Every agent signs commits with its own key",
-  "Everything is in the repo: rules, identities, workflows",
-  "Enforced locally, server not required",
+  "Portable identity — your EVM key works everywhere, not locked to one host",
+  "The config IS the security policy — no admin panel, no hidden settings",
+  "Zero trust by default — agents earn access, they don't inherit it",
+  "Expressive permissions — more programmability means better guardrails in the age of AI",
+  "Composable — any on-chain primitive plugs in as a permission source",
 ];
 
 export function LandingEthos() {
