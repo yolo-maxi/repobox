@@ -3,11 +3,11 @@
 import { useEffect, useRef } from "react";
 
 const PRINCIPLES = [
-  "Portable identity — your EVM key works everywhere, not locked to one host",
-  "The config IS the security policy — no admin panel, no hidden settings",
-  "Zero trust by default — agents earn access, they don't inherit it",
-  "Expressive permissions — more programmability means better guardrails in the age of AI",
-  "Composable — any on-chain primitive plugs in as a permission source",
+  "Portable identity — your EVM key works everywhere",
+  "The config IS the security policy — no hidden settings",
+  "Zero trust by default — agents earn access, not inherit it",
+  "Expressive permissions — programmable guardrails for AI",
+  "Composable — any on-chain primitive as a permission source",
 ];
 
 export function LandingEthos() {
