@@ -5,6 +5,7 @@ use std::collections::HashMap;
 pub struct Config {
     pub groups: HashMap<String, Group>,
     pub permissions: Permissions,
+    pub x402: Option<X402Config>,
 }
 
 /// A named group with members, optional includes, and optional resolver.
@@ -31,6 +32,17 @@ pub enum GroupResolver {
         function: String,
         cache_ttl: u64,
     },
+}
+
+/// x402 payment configuration for paid repository access.
+#[derive(Debug, Clone)]
+pub struct X402Config {
+    /// Price in USDC for permanent read access (e.g. "1.00").
+    pub read_price: String,
+    /// Payment recipient address (e.g. "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048").
+    pub recipient: String,
+    /// Blockchain network for payments (e.g. "base").
+    pub network: String,
 }
 
 /// An EVM identity.

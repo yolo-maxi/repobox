@@ -519,3 +519,134 @@ fn wait_for_port(bind: SocketAddr) {
     }
     panic!("server did not start on {bind}");
 }
+
+#[test]
+fn x402_payment_required_response() {
+    let temp = TempDir::new("repobox-server-x402-test").unwrap();
+    let data_dir = temp.path().join("data");
+    let bind = free_addr();
+    let _server = start_server(bind, &data_dir);
+
+    let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    let owner_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+    let source_repo = init_working_repo(temp.path().join("source"));
+    let repobox_home = setup_repobox_key(temp.path(), private_key, owner_address);
+
+    // Create repo with x402 config
+    let config_content = r#"
+groups:
+  paid-readers: []
+
+permissions:
+  default: deny
+  rules:
+    - paid-readers read >*
+
+x402:
+  read_price: "1.50"
+  recipient: "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048"
+  network: "base"
+"#;
+
+    std::fs::create_dir_all(&source_repo.join(".repobox")).unwrap();
+    write_file(&source_repo.join(".repobox").join("config.yml"), config_content);
+    write_file(&source_repo.join("README.md"), "# paid repo\n");
+
+    git(&source_repo, &["add", "."]);
+    let commit_hash = create_signed_commit(&source_repo, &repobox_home, owner_address, "initial commit with x402");
+    git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
+
+    let namespace = owner_address;
+    let repo_name = "paid-repo";
+    let remote = format!("http://{bind}/{namespace}/{repo_name}.git");
+    git(&source_repo, &["remote", "add", "origin", &remote]);
+    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+
+    // Try to clone without payment - should get 402
+    let clone_dir = temp.path().join("clone");
+    let clone_str = clone_dir.to_string_lossy().to_string();
+    let output = Command::new("git")
+        .current_dir(temp.path())
+        .args(["clone", &remote, &clone_str])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success(), "clone should fail with 402");
+    assert!(!clone_dir.exists(), "clone directory should not exist");
+
+    // Check that git received a 402 response (this will be in stderr)
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("402") || stderr.contains("Payment Required"),
+           "should receive 402 Payment Required, got: {}", stderr);
+}
+
+#[test]
+fn x402_grant_access_endpoint() {
+    let temp = TempDir::new("repobox-server-x402-grant-test").unwrap();
+    let data_dir = temp.path().join("data");
+    let bind = free_addr();
+    let _server = start_server(bind, &data_dir);
+
+    let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    let owner_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+    let payer_address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; // Different address
+
+    let source_repo = init_working_repo(temp.path().join("source"));
+    let repobox_home = setup_repobox_key(temp.path(), private_key, owner_address);
+
+    // Create repo with x402 config
+    let config_content = r#"
+groups:
+  paid-readers: []
+
+permissions:
+  default: deny
+  rules:
+    - paid-readers read >*
+
+x402:
+  read_price: "2.00"
+  recipient: "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048"
+  network: "base"
+"#;
+
+    std::fs::create_dir_all(&source_repo.join(".repobox")).unwrap();
+    write_file(&source_repo.join(".repobox").join("config.yml"), config_content);
+    write_file(&source_repo.join("README.md"), "# paid repo for grant test\n");
+
+    git(&source_repo, &["add", "."]);
+    let commit_hash = create_signed_commit(&source_repo, &repobox_home, owner_address, "initial commit with x402");
+    git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
+
+    let namespace = owner_address;
+    let repo_name = "grant-test-repo";
+    let remote = format!("http://{bind}/{namespace}/{repo_name}.git");
+    git(&source_repo, &["remote", "add", "origin", &remote]);
+    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+
+    // Verify repo was created successfully
+    let bare_repo = data_dir.join(namespace).join(format!("{repo_name}.git"));
+    assert!(bare_repo.exists(), "repo should exist after push");
+
+    // Call grant-access endpoint
+    let grant_url = format!("http://{bind}/{namespace}/{repo_name}.git/x402/grant-access");
+    let client = reqwest::blocking::Client::new();
+    let payload = serde_json::json!({
+        "address": payer_address,
+        "tx_hash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    });
+
+    let response = client.post(&grant_url)
+        .json(&payload)
+        .send()
+        .unwrap();
+
+    let status = response.status();
+    let text = response.text().unwrap();
+    assert_eq!(status, 200, "grant-access should succeed, got {} with body: {}", status, text);
+
+    // TODO: In a full implementation, we would verify that the payer_address
+    // was added to the paid-readers group and can now access the repo
+    // For MVP, we're just testing the endpoint responds correctly
+}
