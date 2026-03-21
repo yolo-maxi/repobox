@@ -79,7 +79,7 @@ export function LandingCTA() {
           onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
           onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
         >
-          Join the Wall →
+          Try the Wall — the first repo where anyone can push to main →
         </a>
 
         {/* Curl command — secondary */}
