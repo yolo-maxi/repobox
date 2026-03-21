@@ -1,0 +1,17 @@
+[profile.default]
+src = "."
+out = "out"
+libs = ["lib"]
+
+# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+
+[profile.default.optimizer]
+enabled = true
+runs = 200
+
+[profile.default.fmt]
+line_length = 100
+tab_width = 4
+
+[rpc_endpoints]
+mainnet = "https://rpc.ankr.com/eth"
