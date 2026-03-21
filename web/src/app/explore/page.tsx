@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
 
+// Helper function to truncate commit messages
+function truncateMessage(message: string, maxLength: number = 120): string {
+  if (message.length <= maxLength) return message;
+  return message.substring(0, maxLength).trim() + '...';
+}
+
 interface Stats {
   totalRepos: number;
   totalOwners: number;
@@ -28,6 +34,8 @@ interface Activity {
   commit_hash?: string;
   commit_message?: string;
   pushed_at: string;
+  owner_address?: string;
+  repo_created_at?: string;
 }
 
 interface SearchRepo {
@@ -89,7 +97,24 @@ export default function ExplorePage() {
         setLoading(false);
       }
     };
+    
     fetchData();
+    
+    // Auto-refresh activity every 30 seconds
+    const interval = setInterval(() => {
+      fetch('/api/explorer/activity?limit=10')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.activity) {
+            setActivity(data.activity);
+          }
+        })
+        .catch(error => {
+          console.error('Error refreshing activity:', error);
+        });
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, [sortBy]);
 
   // Search functionality with debouncing
@@ -321,15 +346,27 @@ export default function ExplorePage() {
                   <div className="explore-activity-list">
                     {activity.map((item) => (
                       <div key={item.id} className="explore-activity-item">
-                        <Link
-                          href={`/explore/${item.address}/${item.name}`}
-                          className="explore-activity-repo"
-                        >
-                          {item.name}
-                        </Link>
+                        <div className="explore-activity-header">
+                          <Link
+                            href={`/explore/${item.address}/${item.name}`}
+                            className="explore-activity-repo"
+                          >
+                            {item.name}
+                          </Link>
+                          {item.commit_hash && (
+                            <Link
+                              href={`/explore/${item.address}/${item.name}/commit/${item.commit_hash}`}
+                              className="explore-activity-commit"
+                            >
+                              {item.commit_hash.substring(0, 8)}
+                            </Link>
+                          )}
+                        </div>
                         
                         {item.commit_message && (
-                          <p className="explore-activity-message">{item.commit_message}</p>
+                          <p className="explore-activity-message">
+                            {truncateMessage(item.commit_message, 120)}
+                          </p>
                         )}
                         
                         <div className="explore-activity-meta">
