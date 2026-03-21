@@ -26,6 +26,8 @@ pub(crate) fn router() -> Router<Arc<AppState>> {
         .route("/{address}/{repo}/git-receive-pack", post(receive_pack))
         .route("/{address}/{repo}/HEAD", get(head))
         .route("/{address}/{repo}/x402/grant-access", post(grant_access))
+        // x402 members endpoint for HTTP resolver
+        .route("/x402/{address}/{repo}/members/{member}", get(check_x402_member))
         // Name resolution route
         .route("/{name}/resolve", get(resolve_name))
 }
@@ -333,6 +335,13 @@ async fn resolve_name_to_address(state: &AppState, name: &str) -> Result<String,
     // This allows compatibility with existing test addresses like "0xdemo"
     if git::validate_address(name).is_ok() {
         return Ok(name.to_string());
+    }
+
+    // Try on-chain NFT name lookup (with cache-on-hit)
+    if let Ok(Some(address)) = resolve::resolve_nft_name(name).await {
+        // Cache for future fast lookups
+        let _ = db::cache_nft_alias(&state.db_path, name, &address);
+        return Ok(address);
     }
 
     // Then try ENS resolution
@@ -858,14 +867,17 @@ async fn grant_access(
     let repo_dir = git::repo_dir(&state.data_dir, &repo);
     let config_content = match read_config_from_repo(&repo_dir) {
         Some(content) => content,
-        None => return (StatusCode::NOT_FOUND, "no x402 config found").into_response(),
+        None => return (StatusCode::NOT_FOUND, "no config found for this repo").into_response(),
     };
-
-    let mut config = match repobox::parser::parse(&config_content) {
+    
+    let config = match repobox::parser::parse(&config_content) {
         Ok(c) => c,
-        Err(_) => return (StatusCode::BAD_REQUEST, "invalid config").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "failed to parse repo config");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "invalid repo config").into_response();
+        }
     };
-
+    
     let _x402_config = match &config.x402 {
         Some(cfg) => cfg,
         None => return (StatusCode::NOT_FOUND, "x402 not enabled for this repo").into_response(),
@@ -881,29 +893,11 @@ async fn grant_access(
         "granting paid read access (payment verification skipped for MVP)"
     );
 
-    // Add the address to the paid-readers group
-    let paid_readers_group = config.groups.entry("paid-readers".to_string()).or_insert_with(|| {
-        repobox::config::Group {
-            name: "paid-readers".to_string(),
-            members: vec![],
-            includes: vec![],
-            resolver: None,
-        }
-    });
-
-    let identity = match repobox::config::Identity::parse(&format!("evm:{}", payload.address)) {
-        Ok(id) => id,
-        Err(_) => return (StatusCode::BAD_REQUEST, "invalid address format").into_response(),
-    };
-
-    if !paid_readers_group.members.contains(&identity) {
-        paid_readers_group.members.push(identity);
-
-        // Write updated config back to the repo
-        if let Err(e) = write_config_to_repo(&repo_dir, &config) {
-            tracing::error!(error = %e, "failed to update config");
-            return (StatusCode::INTERNAL_SERVER_ERROR, "failed to update config").into_response();
-        }
+    // Store the payer address in server-side members store
+    let members_file = format!("{}/x402/{}/{}/members.json", state.data_dir.display(), repo.address, repo.name);
+    if let Err(e) = store_x402_member(&members_file, &payload.address) {
+        tracing::error!(error = %e, "failed to store x402 member");
+        return (StatusCode::INTERNAL_SERVER_ERROR, "failed to store member").into_response();
     }
 
     (StatusCode::OK, "access granted").into_response()
@@ -923,161 +917,69 @@ fn parse_usdc_amount(price_str: &str) -> Option<String> {
     Some(raw_amount.to_string())
 }
 
-/// Write updated config back to the repository.
-/// For MVP, this updates the config in the current HEAD branch.
-fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Config) -> Result<(), std::io::Error> {
-    // For MVP, we'll create a simple YAML representation
-    // In production, you'd want to preserve the original YAML structure/comments
-    let mut yaml_content = String::new();
-
-    // Write groups
-    if !config.groups.is_empty() {
-        yaml_content.push_str("groups:\n");
-        for (name, group) in &config.groups {
-            yaml_content.push_str(&format!("  {}:\n", name));
-            if !group.members.is_empty() {
-                yaml_content.push_str("    members:\n");
-                for member in &group.members {
-                    yaml_content.push_str(&format!("      - {}\n", member));
-                }
-            }
-            if !group.includes.is_empty() {
-                yaml_content.push_str("    includes:\n");
-                for include in &group.includes {
-                    yaml_content.push_str(&format!("      - {}\n", include));
-                }
-            }
-        }
-        yaml_content.push('\n');
+/// Store a paid member address in the server-side x402 members store
+fn store_x402_member(members_file: &str, address: &str) -> Result<(), std::io::Error> {
+    use std::collections::HashSet;
+    
+    // Create parent directories
+    if let Some(parent) = std::path::Path::new(members_file).parent() {
+        std::fs::create_dir_all(parent)?;
     }
-
-    // Write permissions
-    yaml_content.push_str("permissions:\n");
-    let default_str = match config.permissions.default {
-        repobox::config::DefaultPolicy::Allow => "allow",
-        repobox::config::DefaultPolicy::Deny => "deny",
-    };
-    yaml_content.push_str(&format!("  default: {}\n", default_str));
-    yaml_content.push_str("  rules:\n");
-    for rule in &config.permissions.rules {
-        let subject_str = match &rule.subject {
-            repobox::config::Subject::All => "*".to_string(),
-            repobox::config::Subject::Group(name) => name.clone(),
-            repobox::config::Subject::Identity(id) => id.to_string(),
-        };
-        let deny_str = if rule.deny { "not " } else { "" };
-        let target_str = if let Some(branch) = &rule.target.branch {
-            if let Some(path) = &rule.target.path {
-                format!("{} >{}", path, branch)
-            } else {
-                format!(">{}", branch)
-            }
-        } else if let Some(path) = &rule.target.path {
-            path.clone()
-        } else {
-            "*".to_string()
-        };
-        yaml_content.push_str(&format!("    - \"{} {}{} {}\"\n", subject_str, deny_str, rule.verb, target_str));
-    }
-
-    // Write x402 config if present
-    if let Some(x402) = &config.x402 {
-        yaml_content.push_str("\nx402:\n");
-        yaml_content.push_str(&format!("  read_price: \"{}\"\n", x402.read_price));
-        yaml_content.push_str(&format!("  recipient: \"{}\"\n", x402.recipient));
-        yaml_content.push_str(&format!("  network: \"{}\"\n", x402.network));
-    }
-
-    // Write to a temporary file and then commit it
-    let temp_file = std::env::temp_dir().join(format!("config-{}.yml", std::process::id()));
-    std::fs::write(&temp_file, yaml_content)?;
-
-    // Use git to update the config in the repo
-    let output = std::process::Command::new("git")
-        .args(["hash-object", "-w"])
-        .arg(&temp_file)
-        .current_dir(repo_dir)
-        .output()?;
-
-    if !output.status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "failed to hash config object"
-        ));
-    }
-
-    let config_hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-    // Update the index
-    let output = std::process::Command::new("git")
-        .args(["update-index", "--add", "--cacheinfo", "100644", &config_hash, ".repobox/config.yml"])
-        .current_dir(repo_dir)
-        .output()?;
-
-    if !output.status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "failed to update index"
-        ));
-    }
-
-    // Create a new commit
-    let tree_output = std::process::Command::new("git")
-        .args(["write-tree"])
-        .current_dir(repo_dir)
-        .output()?;
-
-    if !tree_output.status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "failed to write tree"
-        ));
-    }
-
-    let tree_hash = String::from_utf8_lossy(&tree_output.stdout).trim().to_string();
-
-    // Get current HEAD
-    let head_output = std::process::Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(repo_dir)
-        .output()?;
-
-    let parent_arg = if head_output.status.success() {
-        let head_hash = String::from_utf8_lossy(&head_output.stdout).trim().to_string();
-        vec!["-p".to_string(), head_hash]
+    
+    // Read existing members or create empty set
+    let mut members: HashSet<String> = if std::path::Path::new(members_file).exists() {
+        let content = std::fs::read_to_string(members_file)?;
+        serde_json::from_str(&content).unwrap_or_default()
     } else {
-        vec![]
+        HashSet::new()
     };
-
-    // Create commit
-    let mut commit_args = vec!["commit-tree".to_string(), tree_hash, "-m".to_string(), "x402: grant paid read access".to_string()];
-    commit_args.extend(parent_arg);
-
-    let commit_output = std::process::Command::new("git")
-        .args(&commit_args)
-        .current_dir(repo_dir)
-        .output()?;
-
-    if !commit_output.status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "failed to create commit"
-        ));
-    }
-
-    let commit_hash = String::from_utf8_lossy(&commit_output.stdout).trim().to_string();
-
-    // Update HEAD
-    std::process::Command::new("git")
-        .args(["update-ref", "HEAD", &commit_hash])
-        .current_dir(repo_dir)
-        .output()?;
-
-    // Clean up temp file
-    let _ = std::fs::remove_file(&temp_file);
-
+    
+    // Add new member (HashSet handles duplicates automatically)
+    members.insert(address.to_lowercase());
+    
+    // Write back to file
+    let json = serde_json::to_string_pretty(&members)?;
+    std::fs::write(members_file, json)?;
+    
+    tracing::info!(members_file = %members_file, address = %address, "stored x402 member");
     Ok(())
 }
+
+/// Check if an address is a paid member (for HTTP resolver endpoint)
+async fn check_x402_member(
+    State(state): State<Arc<AppState>>,
+    Path((owner_address, repo_name, member_address)): Path<(String, String, String)>,
+) -> Response {
+    #[derive(serde::Serialize)]
+    struct MemberResponse {
+        member: bool,
+    }
+    
+    let members_file = format!("{}/x402/{}/{}/members.json", state.data_dir.display(), owner_address, repo_name);
+    
+    let is_member = if std::path::Path::new(&members_file).exists() {
+        match std::fs::read_to_string(&members_file) {
+            Ok(content) => {
+                let members: std::collections::HashSet<String> = serde_json::from_str(&content).unwrap_or_default();
+                members.contains(&member_address.to_lowercase())
+            }
+            Err(_) => false,
+        }
+    } else {
+        false
+    };
+    
+    tracing::debug!(
+        members_file = %members_file,
+        member_address = %member_address,
+        is_member = %is_member,
+        "x402 membership check"
+    );
+    
+    axum::Json(MemberResponse { member: is_member }).into_response()
+}
+
+
 
 async fn resolve_name(
     State(state): State<Arc<AppState>>,
@@ -1095,6 +997,10 @@ async fn resolve_name(
     } else if let Ok(Some(addr)) = db::resolve_alias(&state.db_path, &name) {
         // Alias resolution
         (addr, "alias".to_string())
+    } else if let Ok(Some(addr)) = resolve::resolve_nft_name(&name).await {
+        // NFT name resolution
+        let _ = db::cache_nft_alias(&state.db_path, &name, &addr);
+        (addr, "nft".to_string())
     } else {
         // Try ENS resolution
         match resolve::resolve_ens_name(&name).await {

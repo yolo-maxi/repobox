@@ -26,6 +26,7 @@ lazy_static::lazy_static! {
 
 const ENS_CACHE_DURATION_SECS: u64 = 300; // 5 minutes
 const ENS_UNIVERSAL_RESOLVER: &str = "0xce01f8eee7E479C928F8919abD53E553a36CeF67";
+const REPOBOX_NAMES_CONTRACT: &str = "0x891eaE87e40dF6B26B7ae4877F2bdd781313fAe8";
 
 pub(crate) fn router() -> Router<Arc<AppState>> {
     Router::new().route("/api/resolve", get(resolve_membership))
@@ -267,6 +268,121 @@ async fn resolve_membership(
         error: None,
     })
     .into_response()
+}
+
+/// Resolve an NFT name to an Ethereum address using the RepoBoxNames contract.
+/// Returns Ok(Some(address)) if the name exists and resolves to an address.
+/// Returns Ok(None) if the name doesn't exist (tokenId is 0).
+/// Returns Err(error_msg) if there was an error with the RPC call.
+pub async fn resolve_nft_name(name: &str) -> Result<Option<String>, String> {
+    // Get the API key from environment
+    let api_key = std::env::var("ALCHEMY_API_KEY")
+        .map_err(|_| "ALCHEMY_API_KEY environment variable not set".to_string())?;
+
+    let rpc_url = format!("https://eth-mainnet.g.alchemy.com/v2/{}", api_key);
+    let client = reqwest::Client::new();
+
+    // Compute keccak256 of the name bytes
+    let name_hash = Keccak256::digest(name.as_bytes());
+    let name_hash_hex = hex::encode(name_hash);
+
+    // Call nameToToken(bytes32) - function selector: 0x7e2de9a3
+    let calldata = format!("0x7e2de9a3{:0>64}", name_hash_hex);
+
+    let rpc_body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [{
+            "to": REPOBOX_NAMES_CONTRACT,
+            "data": calldata,
+        }, "latest"]
+    });
+
+    let rpc_response = client
+        .post(&rpc_url)
+        .json(&rpc_body)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| format!("RPC request failed: {}", e))?;
+
+    let rpc_json: serde_json::Value = rpc_response
+        .json()
+        .await
+        .map_err(|e| format!("RPC response parse error: {}", e))?;
+
+    // Check for RPC error
+    if let Some(error) = rpc_json.get("error") {
+        return Err(format!("RPC error: {}", error));
+    }
+
+    let result_hex = rpc_json
+        .get("result")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "No result in RPC response".to_string())?;
+
+    // Parse the tokenId from the result
+    let token_id_hex = result_hex.strip_prefix("0x").unwrap_or(result_hex);
+
+    // Check if tokenId is 0 (name doesn't exist)
+    if token_id_hex.is_empty() || token_id_hex.chars().all(|c| c == '0') {
+        return Ok(None);
+    }
+
+    // Call resolvedAddress(uint256) - function selector: 0xfbd9b9b2
+    let calldata = format!("0xfbd9b9b2{:0>64}", token_id_hex);
+
+    let rpc_body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "eth_call",
+        "params": [{
+            "to": REPOBOX_NAMES_CONTRACT,
+            "data": calldata,
+        }, "latest"]
+    });
+
+    let rpc_response = client
+        .post(&rpc_url)
+        .json(&rpc_body)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| format!("RPC request failed: {}", e))?;
+
+    let rpc_json: serde_json::Value = rpc_response
+        .json()
+        .await
+        .map_err(|e| format!("RPC response parse error: {}", e))?;
+
+    // Check for RPC error
+    if let Some(error) = rpc_json.get("error") {
+        return Err(format!("RPC error: {}", error));
+    }
+
+    let result_hex = rpc_json
+        .get("result")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "No result in RPC response".to_string())?;
+
+    // Parse the address from the result (last 20 bytes of 32-byte word)
+    let address_hex = result_hex.strip_prefix("0x").unwrap_or(result_hex);
+
+    if address_hex.len() < 64 {
+        return Err("Invalid address response length".to_string());
+    }
+
+    // Extract the last 20 bytes (40 hex chars) as the address
+    let address = &address_hex[24..64]; // Skip first 12 bytes (24 hex chars), take last 20 bytes (40 hex chars)
+
+    // Check if address is zero (no address set)
+    if address.chars().all(|c| c == '0') {
+        return Ok(None);
+    }
+
+    // Return checksummed address
+    Ok(Some(format!("0x{}", address)))
 }
 
 /// Resolve an ENS name to an Ethereum address.

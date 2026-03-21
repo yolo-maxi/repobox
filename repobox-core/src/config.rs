@@ -55,21 +55,48 @@ pub struct Identity {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IdentityKind {
     Evm,
+    Ens,  // New variant
 }
 
 impl Identity {
-    /// Parse an identity string like "evm:0xAAA...123".
+    /// Parse an identity string like "evm:0xAAA...123" or "ens:vitalik.eth".
     pub fn parse(s: &str) -> Result<Self, ConfigError> {
         if let Some(addr) = s.strip_prefix("evm:") {
-            if !addr.starts_with("0x") {
+            if !addr.starts_with("0x") || addr.len() != 42 {
                 return Err(ConfigError::InvalidIdentity(s.to_string()));
             }
             Ok(Identity {
                 kind: IdentityKind::Evm,
                 address: addr.to_string(),
             })
+        } else if let Some(name) = s.strip_prefix("ens:") {
+            validate_ens_name(name)?;
+            Ok(Identity {
+                kind: IdentityKind::Ens,
+                address: name.to_string(),
+            })
+        } else if is_ens_name(s) {
+            // Implicit ENS detection
+            Ok(Identity {
+                kind: IdentityKind::Ens,
+                address: s.to_string(),
+            })
+        } else if s.starts_with("0x") && s.len() == 42 {
+            // Legacy EVM format without prefix
+            Ok(Identity {
+                kind: IdentityKind::Evm,
+                address: s.to_string(),
+            })
         } else {
             Err(ConfigError::InvalidIdentity(s.to_string()))
+        }
+    }
+    
+    /// Get the canonical string representation
+    pub fn canonical(&self) -> String {
+        match self.kind {
+            IdentityKind::Evm => format!("evm:{}", self.address),
+            IdentityKind::Ens => format!("ens:{}", self.address),
         }
     }
 }
@@ -78,6 +105,7 @@ impl std::fmt::Display for Identity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
             IdentityKind::Evm => write!(f, "evm:{}", self.address),
+            IdentityKind::Ens => write!(f, "ens:{}", self.address),
         }
     }
 }
@@ -342,4 +370,121 @@ pub enum ConfigError {
 
     #[error("parse error at line {line}: {message}")]
     ParseError { line: usize, message: String },
+}
+
+/// Check if a string looks like an ENS name
+pub fn is_ens_name(s: &str) -> bool {
+    s.contains('.') && (
+        s.ends_with(".eth") || s.ends_with(".box") || 
+        s.ends_with(".com") || s.ends_with(".xyz") || 
+        s.ends_with(".org") || s.ends_with(".io") || 
+        s.ends_with(".dev") || s.ends_with(".app")
+    )
+}
+
+/// Validate an ENS name according to specification rules
+pub fn validate_ens_name(name: &str) -> Result<(), ConfigError> {
+    if !is_ens_name(name) {
+        return Err(ConfigError::InvalidIdentity(
+            format!("invalid ENS name format: {}", name)
+        ));
+    }
+    
+    if name.len() > 253 {
+        return Err(ConfigError::InvalidIdentity(
+            "ENS name too long (max 253 chars)".to_string()
+        ));
+    }
+    
+    for label in name.split('.') {
+        if label.is_empty() || label.len() > 63 {
+            return Err(ConfigError::InvalidIdentity(
+                "invalid ENS label length".to_string()
+            ));
+        }
+        
+        if label.starts_with('-') || label.ends_with('-') {
+            return Err(ConfigError::InvalidIdentity(
+                "ENS labels cannot start/end with hyphen".to_string()
+            ));
+        }
+        
+        if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err(ConfigError::InvalidIdentity(
+                "invalid characters in ENS name".to_string()
+            ));
+        }
+    }
+    
+    Ok(())
+}
+
+#[cfg(test)]
+mod ens_tests {
+    use super::*;
+
+    #[test]
+    fn test_ens_identity_parsing() {
+        let id = Identity::parse("ens:vitalik.eth").unwrap();
+        assert_eq!(id.kind, IdentityKind::Ens);
+        assert_eq!(id.address, "vitalik.eth");
+        
+        let id = Identity::parse("vitalik.eth").unwrap();
+        assert_eq!(id.kind, IdentityKind::Ens);
+        assert_eq!(id.address, "vitalik.eth");
+    }
+    
+    #[test]
+    fn test_ens_identity_display() {
+        let id = Identity { kind: IdentityKind::Ens, address: "vitalik.eth".to_string() };
+        assert_eq!(id.to_string(), "ens:vitalik.eth");
+        assert_eq!(id.canonical(), "ens:vitalik.eth");
+    }
+    
+    #[test]
+    fn test_invalid_ens_names() {
+        assert!(Identity::parse("localhost").is_err());
+        assert!(Identity::parse("invalid.xyz123").is_err());
+        assert!(Identity::parse("-invalid.eth").is_err());
+    }
+    
+    #[test]
+    fn test_mixed_identity_types() {
+        let evm = Identity::parse("evm:0x1234567890123456789012345678901234567890").unwrap();
+        assert_eq!(evm.kind, IdentityKind::Evm);
+        
+        let ens = Identity::parse("alice.eth").unwrap();
+        assert_eq!(ens.kind, IdentityKind::Ens);
+        
+        let legacy = Identity::parse("0x1234567890123456789012345678901234567890").unwrap();
+        assert_eq!(legacy.kind, IdentityKind::Evm);
+    }
+    
+    #[test]
+    fn test_ens_name_validation() {
+        assert!(validate_ens_name("vitalik.eth").is_ok());
+        assert!(validate_ens_name("sub.domain.eth").is_ok());
+        assert!(validate_ens_name("test.box").is_ok());
+        
+        assert!(validate_ens_name("localhost").is_err());
+        assert!(validate_ens_name("test.invalid").is_err());
+        assert!(validate_ens_name("-test.eth").is_err());
+        assert!(validate_ens_name("test-.eth").is_err());
+        assert!(validate_ens_name("test@.eth").is_err());
+    }
+    
+    #[test]
+    fn test_ens_name_length_limits() {
+        // Valid length
+        assert!(validate_ens_name("vitalik.eth").is_ok());
+        
+        // Label too long (over 63 chars)
+        let long_label = "a".repeat(64);
+        let long_name = format!("{}.eth", long_label);
+        assert!(validate_ens_name(&long_name).is_err());
+        
+        // Total name too long (over 253 chars)
+        let very_long_name = format!("{}.eth", "a".repeat(250));
+        assert!(validate_ens_name(&very_long_name).is_err());
+    }
 }

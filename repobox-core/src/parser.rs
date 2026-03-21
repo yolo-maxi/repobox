@@ -49,7 +49,7 @@ impl<'de> Deserialize<'de> for RawGroup {
                     let s = v
                         .as_str()
                         .ok_or_else(|| de::Error::custom("group entries must be strings"))?;
-                    if s.starts_with("evm:") {
+                    if s.starts_with("evm:") || (s.starts_with("0x") && s.len() == 42) || s.starts_with("ens:") || crate::config::is_ens_name(s) {
                         members.push(s.to_string());
                     } else {
                         let name = s.strip_prefix("group:").unwrap_or(s);
@@ -578,7 +578,7 @@ fn parse_flat_rule(s: &str, line: usize) -> Result<Vec<Rule>, ConfigError> {
 fn parse_subject(s: &str) -> Result<Subject, ConfigError> {
     if s == "*" {
         Ok(Subject::All)
-    } else if s.starts_with("evm:") {
+    } else if s.starts_with("evm:") || (s.starts_with("0x") && s.len() == 42) {
         Ok(Subject::Identity(Identity::parse(s)?))
     } else {
         // Bare word = group name. Strip legacy % prefix if present.
@@ -1562,3 +1562,163 @@ permissions:
         assert_eq!(config.permissions.rules.len(), 11); // 10 from own + 1
     }
 }
+
+
+    #[test]
+    fn test_mixed_group_members() {
+        let yaml = r#"
+groups:
+  mixed:
+    - evm:0x1234567890123456789012345678901234567890
+    - 0x0987654321098765432109876543210987654321
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.groups["mixed"].members.len(), 2);
+        
+        let members = &config.groups["mixed"].members;
+        assert_eq!(members[0].kind, IdentityKind::Evm);
+        assert_eq!(members[1].kind, IdentityKind::Evm);
+        assert_eq!(members[1].address, "0x0987654321098765432109876543210987654321");
+    }
+    
+    #[test]
+    fn test_evm_permission_rules() {
+        let yaml = r#"
+groups:
+  maintainers:
+    - evm:0x1234567890123456789012345678901234567890
+permissions:
+  rules:
+    - maintainers push >main
+    - evm:0x0987654321098765432109876543210987654321 edit contracts/**
+"#;
+        let config = parse(yaml).unwrap();
+        
+        // Check group has EVM member
+        assert_eq!(config.groups["maintainers"].members.len(), 1);
+        assert_eq!(config.groups["maintainers"].members[0].kind, IdentityKind::Evm);
+        
+        // Check rule with EVM address
+        assert_eq!(config.permissions.rules.len(), 2);
+        match &config.permissions.rules[1].subject {
+            Subject::Identity(id) => {
+                assert_eq!(id.kind, IdentityKind::Evm);
+                assert_eq!(id.address, "0x0987654321098765432109876543210987654321");
+            }
+            _ => panic!("Expected identity subject"),
+        }
+    }
+    
+    #[test]
+    fn test_evm_subject_parsing() {
+        // Direct EVM identity in rule
+        let yaml = r#"
+groups:
+  founders: [evm:0x1234567890123456789012345678901234567890]
+permissions:
+  rules:
+    - "0x1111111111111111111111111111111111111111 push >main"
+    - "evm:0x2222222222222222222222222222222222222222 edit contracts/**"
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.permissions.rules.len(), 2);
+        
+        // First rule: bare EVM address
+        match &config.permissions.rules[0].subject {
+            Subject::Identity(id) => {
+                assert_eq!(id.kind, IdentityKind::Evm);
+                assert_eq!(id.address, "0x1111111111111111111111111111111111111111");
+            }
+            _ => panic!("Expected identity subject"),
+        }
+        
+        // Second rule: explicit evm: prefix
+        match &config.permissions.rules[1].subject {
+            Subject::Identity(id) => {
+                assert_eq!(id.kind, IdentityKind::Evm);
+                assert_eq!(id.address, "0x2222222222222222222222222222222222222222");
+            }
+            _ => panic!("Expected identity subject"),
+        }
+    }
+
+    #[test]
+    fn test_mixed_group_members_with_ens() {
+        let yaml = r#"
+groups:
+  mixed:
+    - evm:0x1234567890123456789012345678901234567890
+    - ens:vitalik.eth
+    - alice.eth
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.groups["mixed"].members.len(), 3);
+        
+        let members = &config.groups["mixed"].members;
+        assert_eq!(members[0].kind, IdentityKind::Evm);
+        assert_eq!(members[1].kind, IdentityKind::Ens);
+        assert_eq!(members[1].address, "vitalik.eth");
+        assert_eq!(members[2].kind, IdentityKind::Ens);
+        assert_eq!(members[2].address, "alice.eth");
+    }
+    
+    #[test]
+    fn test_ens_permission_rules() {
+        let yaml = r#"
+groups:
+  maintainers:
+    - ens:alice.eth
+permissions:
+  rules:
+    - maintainers push >main
+    - vitalik.eth edit contracts/**
+"#;
+        let config = parse(yaml).unwrap();
+        
+        // Check group has ENS member
+        assert_eq!(config.groups["maintainers"].members.len(), 1);
+        assert_eq!(config.groups["maintainers"].members[0].kind, IdentityKind::Ens);
+        
+        // Check rule with bare ENS name
+        assert_eq!(config.permissions.rules.len(), 2);
+        match &config.permissions.rules[1].subject {
+            Subject::Identity(id) => {
+                assert_eq!(id.kind, IdentityKind::Ens);
+                assert_eq!(id.address, "vitalik.eth");
+            }
+            _ => panic!("Expected identity subject"),
+        }
+    }
+    
+    #[test]
+    fn test_ens_subject_parsing() {
+        // Direct ENS identity in rule
+        let yaml = r#"
+groups:
+  founders: [evm:0x1234567890123456789012345678901234567890]
+permissions:
+  rules:
+    - "vitalik.eth push >main"
+    - "ens:alice.eth edit contracts/**"
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.permissions.rules.len(), 2);
+        
+        // First rule: bare ENS name
+        match &config.permissions.rules[0].subject {
+            Subject::Identity(id) => {
+                assert_eq!(id.kind, IdentityKind::Ens);
+                assert_eq!(id.address, "vitalik.eth");
+            }
+            _ => panic!("Expected identity subject"),
+        }
+        
+        // Second rule: explicit ens: prefix
+        match &config.permissions.rules[1].subject {
+            Subject::Identity(id) => {
+                assert_eq!(id.kind, IdentityKind::Ens);
+                assert_eq!(id.address, "alice.eth");
+            }
+            _ => panic!("Expected identity subject"),
+        }
+    }

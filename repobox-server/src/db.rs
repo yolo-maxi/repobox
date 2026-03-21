@@ -230,6 +230,18 @@ pub(crate) fn is_valid_alias_format(alias: &str) -> bool {
     crate::words::is_valid_alias(alias)
 }
 
+/// Cache an NFT name resolution in the aliases table
+pub(crate) fn cache_nft_alias(db_path: &Path, alias: &str, address: &str) -> std::io::Result<()> {
+    let connection = Connection::open(db_path).map_err(to_io_error)?;
+    connection
+        .execute(
+            "INSERT OR IGNORE INTO aliases(alias, address, created_at) VALUES(?1, ?2, ?3)",
+            params![alias, address, now_string()],
+        )
+        .map_err(to_io_error)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
