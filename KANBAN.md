@@ -46,10 +46,7 @@ Server should check if `.repobox/config.yml` exists in the pushed tree. Repos wi
 
 ## 🔨 In Progress
 
-### Explorer: show signer address per commit (not just owner)
-- **Priority**: P1
-- **Tags**: explorer
-Each commit should show which EVM address signed it. Different agents = different addresses visible.
+
 
 ### Add .repobox/config.yml to all studio projects
 - **Priority**: P1
@@ -671,6 +668,10 @@ Script that runs the complete flow: `repobox init` → `keys generate` → signe
 - **Tags**: infra
 
 ## ✅ Done
+
+### Explorer: signer address per commit
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+ECDSA signature extraction from REPOBOX SIGNATURE blocks, address recovery via @noble/curves, owner vs collaborator badges in commit list UI.
 
 ### Install script + release pipeline
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
