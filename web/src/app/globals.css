@@ -3122,6 +3122,35 @@ html {
   .explore-main {
     order: 1;
   }
+  
+  /* Better mobile breadcrumbs */
+  .explore-breadcrumb-nav {
+    overflow-x: auto;
+    padding: 8px 16px;
+  }
+  
+  .explore-main-header-content {
+    min-width: max-content;
+    white-space: nowrap;
+  }
+  
+  /* Mobile commit details */
+  .explore-commit-details {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  /* Mobile file actions */
+  .explore-repo-detail-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .explore-repo-detail-actions .explore-action-btn {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 /* Contribution Chart Styles */
@@ -3275,6 +3304,45 @@ html {
     width: 8px;
     height: 8px;
   }
+}
+
+/* Loading and Error States */
+.explore-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  color: var(--explore-text-secondary);
+  min-height: 200px;
+}
+
+.explore-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--explore-border);
+  border-top: 2px solid var(--explore-link);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.explore-back-link {
+  color: var(--explore-link);
+  text-decoration: none;
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.explore-back-link:hover {
+  text-decoration: underline;
 }
 
 /* Enhanced File Viewer Styles */
@@ -3450,6 +3518,68 @@ html {
   color: var(--explore-text);
   font-size: 16px;
   font-weight: 600;
+}
+
+/* Commit Page Styles */
+.explore-commit-details {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--explore-text-secondary);
+  font-size: 14px;
+}
+
+.explore-commit-info {
+  padding: 24px;
+  background: var(--explore-surface);
+  border: 1px solid var(--explore-border);
+  border-radius: 8px;
+}
+
+.explore-commit-hash-section {
+  margin-bottom: 24px;
+}
+
+.explore-commit-hash-section h3 {
+  color: var(--explore-text);
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.explore-commit-full-hash {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  background: var(--explore-bg);
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--explore-border);
+  color: var(--explore-text-secondary);
+  font-size: 13px;
+  display: block;
+  width: fit-content;
+}
+
+.explore-commit-placeholder {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--explore-text-secondary);
+}
+
+.explore-commit-placeholder h3 {
+  color: var(--explore-text);
+  margin-bottom: 16px;
+}
+
+.explore-commit-placeholder ul {
+  text-align: left;
+  margin: 16px auto;
+  max-width: 400px;
+  color: var(--explore-text-secondary);
+}
+
+.explore-commit-placeholder li {
+  margin-bottom: 4px;
 }
 
 /* Responsive adjustments for new pages */
