@@ -51,10 +51,6 @@ Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented
 
 ## 🔨 In Progress
 
-### ENS names in permissions
-- **Priority**: P1
-- **Tags**: feature, permissions, ens
-Allow ENS names in `.repobox/config.yml` rules, e.g. `vitalik.eth push >main`. Resolution at evaluation time (not parse time) so ownership changes follow the name. Short TTL cache.
 
 ## 🚧 Blocked
 
@@ -63,6 +59,10 @@ Allow ENS names in `.repobox/config.yml` rules, e.g. `vitalik.eth push >main`. R
 - **Tags**: infra
 
 ## ✅ Done
+
+### ENS names in permissions
+- **Completed**: 2026-03-21 | **Agent**: claude-agent + reviewer-agent
+Allow ENS names in `.repobox/config.yml` rules, e.g. `vitalik.eth push >main`. Resolution at evaluation time (not parse time) so ownership changes follow the name. Short TTL cache. Comprehensive testing and documentation.
 
 ### Force push handling
 - **Completed**: 2026-03-21 | **Agent**: claude-agent
