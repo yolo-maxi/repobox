@@ -3,9 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { formatTimeAgo, formatAddress, formatBytes, getFileIcon, copyToClipboard } from '@/lib/utils';
+import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
 
 interface RepoDetails {
   address: string;
@@ -229,39 +228,12 @@ export default function RepoPage() {
         {activeTab === 'readme' && (
           <div className="explore-readme">
             {repo.readme_content ? (
-              <div className="explore-readme-content prose">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    // Render code blocks with syntax highlighting class
-                    code: ({ className, children, ...props }) => {
-                      const isInline = !className;
-                      if (isInline) {
-                        return <code className="explore-inline-code" {...props}>{children}</code>;
-                      }
-                      return (
-                        <pre className="explore-code-block">
-                          <code className={className} {...props}>{children}</code>
-                        </pre>
-                      );
-                    },
-                    pre: ({ children }) => <>{children}</>,
-                    // Tables
-                    table: ({ children }) => (
-                      <div className="explore-table-wrap">
-                        <table className="explore-table">{children}</table>
-                      </div>
-                    ),
-                    // Links
-                    a: ({ children, href }) => (
-                      <a href={href} target="_blank" rel="noopener noreferrer" className="explore-link">
-                        {children}
-                      </a>
-                    ),
-                  }}
-                >
-                  {repo.readme_content}
-                </ReactMarkdown>
+              <div className="explore-readme-content">
+                <MarkdownRenderer 
+                  content={repo.readme_content}
+                  baseUrl={`/api/explorer/repos/${address}/${name}/blob/`}
+                  className="explore-readme-markdown"
+                />
               </div>
             ) : (
               <div className="explore-empty">
