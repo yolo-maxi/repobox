@@ -1,0 +1,13 @@
+target/
+web/
+repobox-landing/
+repobox-dashboard/
+repobox-blog/
+repobox-core/
+repobox-server/
+tools/
+node_modules/
+.next/
+.git/
+*.secret
+.env*
