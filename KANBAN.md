@@ -25,17 +25,17 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### Clone URL copy widget + credential helper instructions
-- **Priority**: P2
-- **Tags**: explorer, ui
-On repo detail page, prominent clone URL box with one-click copy (HTTPS + SSH variants). Below it, expandable section showing how to set up the repobox credential helper for authenticated clones. Include `curl | sh` install snippet.
-
 ### Empty state illustrations
 - **Priority**: P2
 - **Tags**: explorer, ui
 Replace "No recent activity", "No repositories found", etc with illustrated empty states. Use simple SVG illustrations + helpful text ("Push your first repo to see it here"). Makes the explorer feel alive even when empty.
 
 ## 🔨 In Progress
+
+### Clone URL copy widget + credential helper instructions
+- **Priority**: P2
+- **Tags**: explorer, ui
+On repo detail page, prominent clone URL box with one-click copy (HTTPS + SSH variants). Below it, expandable section showing how to set up the repobox credential helper for authenticated clones. Include `curl | sh` install snippet.
 
 ### Dark/light theme toggle
 - **Priority**: P2

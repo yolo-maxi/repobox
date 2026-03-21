@@ -116,6 +116,17 @@ export function getCommitCount(address: string, name: string, branch: string = '
   }
 }
 
+export function getContributorCount(address: string, name: string): number {
+  const repoPath = getRepoPath(address, name);
+  try {
+    const output = gitCommand(repoPath, 'log --format=%ae HEAD');
+    const unique = new Set(output.split('\n').filter(Boolean));
+    return unique.size;
+  } catch {
+    return 0;
+  }
+}
+
 export function getLastCommitDate(address: string, name: string): string | null {
   const repoPath = getRepoPath(address, name);
   try {

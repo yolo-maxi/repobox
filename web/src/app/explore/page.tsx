@@ -25,6 +25,7 @@ interface Repo {
   owner_address: string;
   created_at: string;
   commit_count: number;
+  contributor_count: number;
   last_commit_date: string | null;
   description: string | null;
 }
@@ -355,6 +356,21 @@ export default function ExplorePage() {
 
                       {/* Right: stats */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0, fontSize: 12, color: '#8b949e' }}>
+                        {repo.contributor_count > 0 && (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '2px 8px',
+                            backgroundColor: '#21262d',
+                            borderRadius: 10,
+                            fontSize: 12,
+                            color: '#8b949e',
+                            fontWeight: 500,
+                          }}>
+                            <span style={{ fontSize: 10 }}>👤</span> {pluralize(repo.contributor_count, 'contributor')}
+                          </div>
+                        )}
                         <div style={{
                           display: 'flex',
                           alignItems: 'center',

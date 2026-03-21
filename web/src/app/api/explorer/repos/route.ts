@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runQuery, type Repo } from '@/lib/database';
-import { getCommitCount, getLastCommitDate, getReadmeFirstLine } from '@/lib/git';
+import { getCommitCount, getContributorCount, getLastCommitDate, getReadmeFirstLine } from '@/lib/git';
 
 interface RepoWithMetadata extends Repo {
   commit_count: number;
+  contributor_count: number;
   last_commit_date: string | null;
   description: string | null;
 }
@@ -23,12 +24,14 @@ export async function GET(request: NextRequest) {
     for (const repo of repos) {
       try {
         const commitCount = getCommitCount(repo.address, repo.name);
+        const contributorCount = getContributorCount(repo.address, repo.name);
         const lastCommitDate = getLastCommitDate(repo.address, repo.name);
         const description = getReadmeFirstLine(repo.address, repo.name);
         
         reposWithMetadata.push({
           ...repo,
           commit_count: commitCount,
+          contributor_count: contributorCount,
           last_commit_date: lastCommitDate,
           description
         });
@@ -38,6 +41,7 @@ export async function GET(request: NextRequest) {
         reposWithMetadata.push({
           ...repo,
           commit_count: 0,
+          contributor_count: 0,
           last_commit_date: null,
           description: null
         });
