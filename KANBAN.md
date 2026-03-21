@@ -35,11 +35,6 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## 📋 Backlog
 
-### Commit detail page with diff viewer
-- **Priority**: P1
-- **Tags**: explorer, ui
-Click any commit hash → dedicated page showing full diff with colored additions/deletions. Show signer address, timestamp, parent hash. Syntax-highlighted code blocks per file changed. Route: `/explore/[address]/[name]/commit/[hash]`.
-
 ### File viewer with syntax highlighting
 - **Priority**: P1
 - **Tags**: explorer, ui
@@ -87,11 +82,6 @@ Replace "No recent activity", "No repositories found", etc with illustrated empt
 
 ## 🔨 In Progress
 
-### Repo README rendering polish
-- **Priority**: P1
-- **Tags**: explorer, ui
-README tab needs proper styling: code blocks with syntax highlighting (use shiki or prism), table rendering, image support, anchor links for headings. Currently uses basic ReactMarkdown — needs a polished GitHub-style look.
-
 ## 🚧 Blocked
 
 ### Gmail token expired — can't send emails
@@ -103,6 +93,10 @@ README tab needs proper styling: code blocks with syntax highlighting (use shiki
 ### Full E2E demo script
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
 Complete hackathon demo: `repobox init` → `keys generate` → signed commit → push → clone → verify. Scripts: demo-e2e.sh (724 lines, quick/full modes), demo-reset.sh, docs/DEMO.md. Multi-agent simulation, visual progress indicators, error handling with cleanup. See detailed spec in In Progress section.
+
+### README rendering polish
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+GitHub-style markdown with syntax highlighting, copy buttons, table styling, heading anchors, image zoom, external link indicators.
 
 ### Commit detail page with diff viewer
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
