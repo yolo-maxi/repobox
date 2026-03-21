@@ -1225,3 +1225,731 @@ html {
   display: flex;
   align-items: center;
 }
+
+/* ── Mobile-Responsive Explorer Styles ── */
+
+/* Explorer Page Layout */
+.explore-page {
+  padding: 20px;
+}
+
+.explore-header {
+  margin-bottom: 32px;
+}
+
+.explore-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.explore-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--bp-heading);
+  white-space: nowrap;
+}
+
+.explore-title-dot {
+  color: var(--bp-accent);
+}
+
+.explore-search {
+  flex: 1;
+  max-width: 400px;
+}
+
+.explore-search-input {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--bp-border);
+  border-radius: 8px;
+  background: var(--bp-surface);
+  color: var(--bp-text);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+
+.explore-search-input:focus {
+  outline: none;
+  border-color: var(--bp-accent);
+}
+
+/* Stats Grid */
+.explore-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.explore-stat-card {
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.explore-stat-card:hover {
+  border-color: rgba(79, 195, 247, 0.4);
+}
+
+.explore-stat-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--bp-heading);
+  margin-bottom: 8px;
+}
+
+.explore-stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--bp-dim);
+}
+
+/* Repository Cards */
+.explore-repo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.explore-repo-card {
+  display: block;
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.explore-repo-card:hover {
+  border-color: var(--bp-accent);
+  transform: translateY(-2px);
+}
+
+.explore-repo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.explore-repo-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--bp-heading);
+  margin: 0;
+}
+
+.explore-repo-owner {
+  font-size: 11px;
+  color: var(--bp-dim);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+}
+
+.explore-repo-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--bp-dim);
+}
+
+/* Activity Feed */
+.explore-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--bp-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.explore-activity-item {
+  background: var(--bp-surface);
+  padding: 16px 20px;
+  transition: background-color 0.2s;
+}
+
+.explore-activity-item:hover {
+  background: rgba(79, 195, 247, 0.05);
+}
+
+.explore-activity-repo {
+  font-weight: 600;
+  color: var(--bp-accent);
+  text-decoration: none;
+  margin-bottom: 4px;
+  display: inline-block;
+}
+
+.explore-activity-message {
+  font-size: 13px;
+  color: var(--bp-text);
+  margin: 4px 0;
+  line-height: 1.4;
+}
+
+.explore-activity-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--bp-dim);
+}
+
+/* Repository Page */
+.explore-repo-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 24px;
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  border-radius: 12px;
+}
+
+.explore-repo-info h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--bp-heading);
+  margin-bottom: 8px;
+}
+
+.explore-repo-owner-link {
+  font-size: 13px;
+  color: var(--bp-dim);
+  text-decoration: none;
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+}
+
+.explore-repo-stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.explore-repo-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--bp-dim);
+}
+
+.explore-repo-stat-value {
+  font-weight: 600;
+  color: var(--bp-text);
+}
+
+.explore-clone-section {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(79, 195, 247, 0.05);
+  border: 1px solid rgba(79, 195, 247, 0.2);
+  border-radius: 8px;
+}
+
+.explore-clone-url {
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--bp-text);
+  background: var(--bp-bg);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin: 8px 0;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* Navigation Tabs */
+.explore-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--bp-border);
+}
+
+.explore-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 12px 20px;
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--bp-dim);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.explore-tab:hover {
+  color: var(--bp-text);
+  border-bottom-color: rgba(79, 195, 247, 0.3);
+}
+
+.explore-tab.active {
+  color: var(--bp-accent);
+  border-bottom-color: var(--bp-accent);
+}
+
+.explore-tab-content {
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  min-height: 400px;
+}
+
+/* File Browser */
+.explore-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--bp-border);
+  font-size: 12px;
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+}
+
+.explore-breadcrumb-item {
+  color: var(--bp-dim);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.explore-breadcrumb-item:hover {
+  color: var(--bp-accent);
+}
+
+.explore-breadcrumb-item.current {
+  color: var(--bp-text);
+  font-weight: 600;
+}
+
+.explore-breadcrumb-separator {
+  color: var(--bp-border);
+}
+
+.explore-file-list {
+  divide: 1px solid var(--bp-border);
+}
+
+.explore-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--bp-border);
+  transition: background-color 0.2s;
+  text-decoration: none;
+  color: inherit;
+  min-height: 56px;
+}
+
+.explore-file-item:hover {
+  background: rgba(79, 195, 247, 0.05);
+}
+
+.explore-file-item:last-child {
+  border-bottom: none;
+}
+
+.explore-file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.explore-file-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.explore-file-name {
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: var(--bp-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explore-file-size {
+  font-size: 11px;
+  color: var(--bp-dim);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  flex-shrink: 0;
+}
+
+/* Commits List */
+.explore-commit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--bp-border);
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+}
+
+.explore-commit-item {
+  background: var(--bp-surface);
+  padding: 20px;
+  transition: background-color 0.2s;
+}
+
+.explore-commit-item:hover {
+  background: rgba(79, 195, 247, 0.05);
+}
+
+.explore-commit-hash {
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--bp-accent);
+  margin-bottom: 6px;
+}
+
+.explore-commit-message {
+  font-size: 14px;
+  color: var(--bp-text);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.explore-commit-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--bp-dim);
+}
+
+.explore-commit-author {
+  color: var(--bp-text);
+}
+
+/* Search Results */
+.explore-search-results {
+  margin-bottom: 40px;
+}
+
+.explore-search-section {
+  margin-bottom: 32px;
+}
+
+.explore-search-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--bp-heading);
+  margin-bottom: 16px;
+}
+
+.explore-section-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--bp-heading);
+  margin-bottom: 24px;
+}
+
+/* Loading and Empty States */
+.explore-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--bp-dim);
+}
+
+.explore-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid transparent;
+  border-top: 2px solid var(--bp-accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.explore-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--bp-dim);
+}
+
+.explore-empty h3 {
+  color: var(--bp-text);
+  margin-bottom: 8px;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  /* Explorer Page Header */
+  .explore-page {
+    padding: 16px;
+  }
+
+  .explore-header-content {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .explore-title {
+    font-size: 1.5rem;
+    text-align: center;
+  }
+
+  .explore-search {
+    max-width: none;
+  }
+
+  .explore-search-input {
+    font-size: 16px; /* Prevent zoom on iOS */
+    padding: 12px 16px;
+  }
+
+  /* Stats Grid - 2x2 layout on mobile */
+  .explore-stats {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: auto auto;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .explore-stats .explore-stat-card:first-child {
+    grid-column: 1 / -1; /* repositories spans full width */
+  }
+
+  .explore-stat-card {
+    padding: 20px;
+  }
+
+  .explore-stat-number {
+    font-size: 1.6rem;
+  }
+
+  /* Repository Cards */
+  .explore-repo-list {
+    gap: 12px;
+  }
+
+  .explore-repo-card {
+    padding: 16px;
+  }
+
+  .explore-repo-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .explore-repo-name {
+    font-size: 1rem;
+  }
+
+  .explore-repo-owner {
+    font-size: 10px;
+  }
+
+  .explore-repo-meta {
+    gap: 12px;
+  }
+
+  /* Repository Page Header */
+  .explore-repo-header {
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .explore-repo-stats {
+    align-self: stretch;
+    justify-content: space-between;
+  }
+
+  .explore-clone-url {
+    font-size: 10px;
+    word-break: break-all;
+  }
+
+  /* Navigation Tabs - Horizontal scroll */
+  .explore-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  .explore-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .explore-tab {
+    flex-shrink: 0;
+    min-width: 80px;
+    padding: 10px 16px;
+    font-size: 11px;
+  }
+
+  /* File Browser */
+  .explore-breadcrumb {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 12px 16px;
+    font-size: 11px;
+  }
+
+  .explore-breadcrumb-item {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .explore-file-item {
+    padding: 12px 16px;
+    min-height: 44px;
+  }
+
+  .explore-file-info {
+    gap: 8px;
+  }
+
+  .explore-file-name {
+    font-size: 12px;
+  }
+
+  .explore-file-size {
+    font-size: 10px;
+  }
+
+  /* Commits List - Vertical stacking */
+  .explore-commit-item {
+    padding: 16px;
+  }
+
+  .explore-commit-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .explore-commit-hash {
+    order: -1; /* Move hash to top */
+    font-size: 10px;
+  }
+
+  .explore-commit-author {
+    font-size: 10px;
+  }
+
+  .explore-commit-message {
+    font-size: 13px;
+  }
+
+  /* Activity Feed */
+  .explore-activity-item {
+    padding: 12px 16px;
+  }
+
+  .explore-activity-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  /* Search Results */
+  .explore-search-section h3 {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .explore-section-title {
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+  }
+
+  /* Touch targets - ensure minimum 44px */
+  .explore-tab,
+  .explore-file-item,
+  .explore-repo-card,
+  .branch-selector-trigger {
+    min-height: 44px;
+  }
+
+  /* Touch feedback */
+  .explore-file-item:active,
+  .explore-repo-card:active,
+  .explore-tab:active {
+    background: rgba(79, 195, 247, 0.1);
+    transform: scale(0.98);
+  }
+}
+
+/* Very small screens - compress breadcrumbs further */
+@media (max-width: 480px) {
+  .explore-breadcrumb-separator:not(:last-of-type) {
+    display: none;
+  }
+
+  .explore-breadcrumb-item:not(:first-child):not(:last-child) {
+    display: none;
+  }
+
+  .explore-breadcrumb::before {
+    content: "...";
+    color: var(--bp-dim);
+    margin: 0 4px;
+  }
+}
+
+/* Branch Selector Mobile Behavior */
+@media (max-width: 768px) {
+  .branch-dropdown {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90vw;
+    max-width: 320px;
+    max-height: 60vh;
+    z-index: 1001;
+  }
+
+  /* Add backdrop */
+  .branch-dropdown::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .branch-filter-input {
+    font-size: 16px; /* Prevent iOS zoom */
+  }
+}

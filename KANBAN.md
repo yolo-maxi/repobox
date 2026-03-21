@@ -30,11 +30,6 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## 📋 Backlog
 
-### Mobile-responsive explorer
-- **Priority**: P1
-- **Tags**: explorer, ui
-Explorer pages need responsive layouts for mobile. File tree should collapse to a breadcrumb navigator, commit list should stack vertically, stats should wrap to 2x2 grid. Test on 375px and 768px viewports.
-
 ### Repo stats cards (lines of code, languages, contributors)
 - **Priority**: P2
 - **Tags**: explorer, ui
@@ -61,6 +56,11 @@ On repo detail page, prominent clone URL box with one-click copy (HTTPS + SSH va
 Replace "No recent activity", "No repositories found", etc with illustrated empty states. Use simple SVG illustrations + helpful text ("Push your first repo to see it here"). Makes the explorer feel alive even when empty.
 
 ## 🔨 In Progress
+
+### Mobile-responsive explorer
+- **Priority**: P1
+- **Tags**: explorer, ui
+Explorer pages need responsive layouts for mobile. File tree should collapse to a breadcrumb navigator, commit list should stack vertically, stats should wrap to 2x2 grid. Test on 375px and 768px viewports.
 
 ## 🚧 Blocked
 
