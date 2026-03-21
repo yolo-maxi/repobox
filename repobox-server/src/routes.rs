@@ -393,7 +393,19 @@ fn check_read_access(
         };
     }
 
-    // Read rules exist — need to authenticate and check
+    // Check if any read rule grants access to everyone (* / Subject::All)
+    // If so, allow without authentication (public read)
+    let has_public_read = config.permissions.rules.iter().any(|r| {
+        r.verb == repobox::config::Verb::Read
+            && matches!(r.subject, repobox::config::Subject::All)
+            && !r.deny
+    });
+    if has_public_read {
+        tracing::debug!(repo = %format!("{}/{}", repo.address, repo.name), "public read rule found — allowing anonymous access");
+        return Ok(());
+    }
+
+    // Read rules exist but none are public — need to authenticate and check
     let repo_path_str = format!("{}/{}", repo.address, repo.name);
     let identity = match crate::auth::extract_identity(headers, &repo_path_str) {
         Ok(Some(id)) => id,
