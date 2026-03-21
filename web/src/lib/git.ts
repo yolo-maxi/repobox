@@ -1,12 +1,33 @@
 import { execSync } from 'child_process';
 import { getRepoPath } from './database';
 
+function sanitizeBranchName(branch: string): string {
+  // Only allow valid git branch characters
+  if (!/^[a-zA-Z0-9/_.-]+$/.test(branch)) {
+    throw new Error('Invalid branch name');
+  }
+  if (branch.includes('..') || branch.startsWith('-')) {
+    throw new Error('Invalid branch name');
+  }
+  return branch;
+}
+
 export interface GitCommit {
   hash: string;
   author: string;
   email: string;
   timestamp: number;
   message: string;
+}
+
+export interface GitBranch {
+  name: string;
+  is_default: boolean;
+  last_commit: {
+    hash: string;
+    timestamp: number;
+    message: string;
+  };
 }
 
 export interface GitFileEntry {
@@ -79,10 +100,16 @@ export function gitCommand(repoPath: string, command: string): string {
   }
 }
 
-export function getCommitCount(address: string, name: string): number {
+export function getCommitCount(address: string, name: string, branch: string = 'HEAD'): number {
   const repoPath = getRepoPath(address, name);
   try {
-    const output = gitCommand(repoPath, 'rev-list --count HEAD');
+    // Sanitize branch name to prevent command injection
+    if (branch !== 'HEAD') {
+      branch = sanitizeBranchName(branch);
+    }
+    
+    const ref = branch === 'HEAD' ? 'HEAD' : `refs/heads/${branch}`;
+    const output = gitCommand(repoPath, `rev-list --count ${ref}`);
     return parseInt(output) || 0;
   } catch {
     return 0;
@@ -113,10 +140,16 @@ export function getDefaultBranch(address: string, name: string): string {
   }
 }
 
-export function getCommitHistory(address: string, name: string, limit: number = 50): GitCommit[] {
+export function getCommitHistory(address: string, name: string, limit: number = 50, branch: string = 'HEAD'): GitCommit[] {
   const repoPath = getRepoPath(address, name);
   try {
-    const output = gitCommand(repoPath, `log --format='%H|%an|%ae|%at|%s' -n ${limit}`);
+    // Sanitize branch name to prevent command injection
+    if (branch !== 'HEAD') {
+      branch = sanitizeBranchName(branch);
+    }
+    
+    const ref = branch === 'HEAD' ? 'HEAD' : `refs/heads/${branch}`;
+    const output = gitCommand(repoPath, `log --format='%H|%an|%ae|%at|%s' -n ${limit} ${ref}`);
     if (!output) return [];
     
     return output.split('\n').map(line => {
@@ -134,10 +167,21 @@ export function getCommitHistory(address: string, name: string, limit: number = 
   }
 }
 
-export function getFileTree(address: string, name: string, path: string = ''): GitFileEntry[] {
+export function getFileTree(address: string, name: string, path: string = '', branch: string = 'HEAD'): GitFileEntry[] {
   const repoPath = getRepoPath(address, name);
   try {
-    const treePath = path ? `HEAD:${path}` : 'HEAD';
+    // Sanitize branch name to prevent command injection
+    if (branch !== 'HEAD') {
+      branch = sanitizeBranchName(branch);
+    }
+    
+    // Validate branch first
+    if (branch !== 'HEAD' && !branchExists(address, name, branch)) {
+      throw new Error(`Branch '${branch}' does not exist`);
+    }
+    
+    const ref = branch === 'HEAD' ? 'HEAD' : `refs/heads/${branch}`;
+    const treePath = path ? `${ref}:${path}` : ref;
     const output = gitCommand(repoPath, `ls-tree ${treePath}`);
     if (!output) return [];
     
@@ -171,20 +215,31 @@ export function getFileTree(address: string, name: string, path: string = ''): G
   }
 }
 
-export function getFileContent(address: string, name: string, filePath: string): string | null {
+export function getFileContent(address: string, name: string, filePath: string, branch: string = 'HEAD'): string | null {
   const repoPath = getRepoPath(address, name);
   try {
-    return gitCommand(repoPath, `show HEAD:${filePath}`);
+    // Sanitize branch name to prevent command injection
+    if (branch !== 'HEAD') {
+      branch = sanitizeBranchName(branch);
+    }
+    
+    const ref = branch === 'HEAD' ? 'HEAD' : `refs/heads/${branch}`;
+    return gitCommand(repoPath, `show ${ref}:${filePath}`);
   } catch {
     return null;
   }
 }
 
-export function getReadmeContent(address: string, name: string): string | null {
+export function getReadmeContent(address: string, name: string, branch: string = 'HEAD'): string | null {
+  // Sanitize branch name to prevent command injection
+  if (branch !== 'HEAD') {
+    branch = sanitizeBranchName(branch);
+  }
+  
   const readmeFiles = ['README.md', 'readme.md', 'README', 'readme', 'README.txt'];
   
   for (const readmeFile of readmeFiles) {
-    const content = getFileContent(address, name, readmeFile);
+    const content = getFileContent(address, name, readmeFile, branch);
     if (content) {
       return content;
     }
@@ -193,8 +248,13 @@ export function getReadmeContent(address: string, name: string): string | null {
   return null;
 }
 
-export function getReadmeFirstLine(address: string, name: string): string | null {
-  const content = getReadmeContent(address, name);
+export function getReadmeFirstLine(address: string, name: string, branch: string = 'HEAD'): string | null {
+  // Sanitize branch name to prevent command injection
+  if (branch !== 'HEAD') {
+    branch = sanitizeBranchName(branch);
+  }
+  
+  const content = getReadmeContent(address, name, branch);
   if (!content) return null;
   
   // Get first non-empty line, remove markdown heading markers
@@ -210,6 +270,48 @@ export function getReadmeFirstLine(address: string, name: string): string | null
   }
   
   return null;
+}
+
+// Branch-related functions
+export function getBranches(address: string, name: string): GitBranch[] {
+  const repoPath = getRepoPath(address, name);
+  try {
+    // git for-each-ref --format='%(refname:short)|%(objectname)|%(committerdate:unix)|%(contents:subject)' refs/heads/
+    const output = gitCommand(
+      repoPath, 
+      "for-each-ref --format='%(refname:short)|%(objectname)|%(committerdate:unix)|%(contents:subject)' refs/heads/"
+    );
+    if (!output) return [];
+    
+    return output.split('\n').map(line => {
+      const [name, hash, timestamp, ...messageParts] = line.split('|');
+      const message = messageParts.join('|'); // Handle messages with | character
+      return {
+        name,
+        is_default: false, // Set by getDefaultBranch comparison
+        last_commit: {
+          hash,
+          timestamp: parseInt(timestamp) || 0,
+          message: message || 'No commit message'
+        }
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function branchExists(address: string, name: string, branchName: string): boolean {
+  const repoPath = getRepoPath(address, name);
+  try {
+    // Sanitize branch name to prevent command injection
+    const sanitizedBranchName = sanitizeBranchName(branchName);
+    
+    gitCommand(repoPath, `rev-parse --verify refs/heads/${sanitizedBranchName}`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function getCommitDetail(address: string, name: string, hash: string): CommitDetail | null {

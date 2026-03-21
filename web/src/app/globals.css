@@ -1047,3 +1047,181 @@ html {
   border-radius: 0 0 12px 12px;
   min-height: 400px;
 }
+
+/* ── Branch Selector Styles ── */
+.branch-selector {
+  position: relative;
+  display: inline-block;
+}
+
+.branch-selector-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid var(--bp-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  font-size: 12px;
+  color: var(--bp-text);
+}
+
+.branch-selector-trigger:hover:not(.disabled) {
+  border-color: var(--bp-accent);
+  background: rgba(79, 195, 247, 0.05);
+}
+
+.branch-selector-trigger.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.branch-icon {
+  font-size: 12px;
+}
+
+.branch-name {
+  font-weight: 600;
+  color: var(--bp-heading);
+}
+
+.branch-default-badge {
+  background: var(--bp-accent);
+  color: var(--bp-bg);
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.branch-arrow {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+  opacity: 0.7;
+}
+
+.branch-arrow.open {
+  transform: rotate(180deg);
+}
+
+.branch-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  border-radius: 6px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  margin-top: 4px;
+  max-height: 300px;
+  overflow: hidden;
+  min-width: 200px;
+}
+
+.branch-filter {
+  padding: 12px;
+  border-bottom: 1px solid var(--bp-border);
+}
+
+.branch-filter-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--bp-border);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--bp-bg);
+  color: var(--bp-text);
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+}
+
+.branch-filter-input:focus {
+  outline: none;
+  border-color: var(--bp-accent);
+}
+
+.branch-list {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.branch-item {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid var(--bp-border);
+  color: var(--bp-text);
+}
+
+.branch-item:hover {
+  background: rgba(79, 195, 247, 0.1);
+}
+
+.branch-item.current {
+  background: rgba(79, 195, 247, 0.15);
+  border-color: var(--bp-accent);
+}
+
+.branch-item:last-child {
+  border-bottom: none;
+}
+
+.branch-item-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.branch-item-name {
+  font-weight: 600;
+  font-family: var(--font-mono), "JetBrains Mono", monospace;
+  color: var(--bp-heading);
+}
+
+.check {
+  color: var(--bp-accent);
+  font-weight: bold;
+}
+
+.branch-item-badge {
+  background: rgba(79, 195, 247, 0.2);
+  color: var(--bp-accent);
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.branch-item-meta {
+  font-size: 10px;
+  color: var(--bp-dim);
+}
+
+.branch-last-commit {
+  font-family: system-ui;
+}
+
+.branch-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--bp-dim);
+  font-style: italic;
+}
+
+/* Stat item modifications */
+.explore-stat-branch .explore-stat-value {
+  display: flex;
+  align-items: center;
+}
