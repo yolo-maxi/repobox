@@ -1,0 +1,12 @@
+{
+  "network": "base-mainnet",
+  "chainId": 8453,
+  "contract": "0x57D779c322245E0b4eC33aFAb9B8EFA7e8abB371",
+  "pool": "0xeFFDE09639FA692af78Ce37133324B03aB62f3a9",
+  "token": "0xa69f80524381275a7ffdb3ae01c54150644c8792",
+  "trustedMerger": "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048",
+  "deployer": "0xF053A15C36f1FbCC2A281095e6f1507ea1EFc931",
+  "txHash": "0x1cb85c0ce8ca9a46ec9c90209bea1fa09e49e6c2236680f75fb865443d3027fe",
+  "blockNumber": 43655259,
+  "deployedAt": "2026-03-21T13:30:00Z"
+}
