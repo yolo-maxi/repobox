@@ -51,10 +51,7 @@ Server should check if `.repobox/config.yml` exists in the pushed tree. Repos wi
 
 ## 🔨 In Progress
 
-### Install script improvements
-- **Priority**: P1
-- **Tags**: cli, distribution
-`curl -sSf https://repo.box/install.sh | sh` needs to actually download a pre-built binary (currently just has the script skeleton).
+
 
 ### Add .repobox/config.yml to all studio projects
 - **Priority**: P1
@@ -676,6 +673,10 @@ Script that runs the complete flow: `repobox init` → `keys generate` → signe
 - **Tags**: infra
 
 ## ✅ Done
+
+### Install script + release pipeline
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+install.sh rewrite with platform detection, SHA256 checksums, sudo fallback, version pinning. Plus tools/release.sh (cross-compile) and tools/deploy-release.sh.
 
 ### Activity feed from push events
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
