@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { LandingHero } from "@/components/landing/Hero";
 import { LandingProjects } from "@/components/landing/Projects";
-import { LandingCaseStudies } from "@/components/landing/CaseStudies";
+
 import { LandingEthos } from "@/components/landing/Ethos";
 import { ConfigExample } from "@/components/landing/ConfigExample";
 import { LandingCTA } from "@/components/landing/CTA";
@@ -15,7 +14,7 @@ export default function Home() {
       <RegMarks />
       <div
         style={{
-          maxWidth: 720,
+          maxWidth: 800,
           margin: "0 auto",
           position: "relative",
           zIndex: 2,
@@ -36,7 +35,6 @@ export default function Home() {
           <LandingHero />
           <div style={{ height: "clamp(20px, 5vw, 32px)" }} />
           <LandingProjects />
-          <LandingCaseStudies />
           <ConfigExample />
           <LandingEthos />
           <LandingCTA />
