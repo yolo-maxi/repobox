@@ -30,11 +30,6 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## 📋 Backlog
 
-### Repo stats cards (lines of code, languages, contributors)
-- **Priority**: P2
-- **Tags**: explorer, ui
-Show language breakdown bar (like GitHub), total lines of code, number of unique signers (contributors), and repo age. Use `git log` + file extension analysis server-side. Display as colored bar + stat cards on repo detail page.
-
 ### Contributor graph / identity cards
 - **Priority**: P2
 - **Tags**: explorer, ui
@@ -56,6 +51,11 @@ On repo detail page, prominent clone URL box with one-click copy (HTTPS + SSH va
 Replace "No recent activity", "No repositories found", etc with illustrated empty states. Use simple SVG illustrations + helpful text ("Push your first repo to see it here"). Makes the explorer feel alive even when empty.
 
 ## 🔨 In Progress
+
+### Repo stats cards (lines of code, languages, contributors)
+- **Priority**: P2
+- **Tags**: explorer, ui
+Show language breakdown bar (like GitHub), total lines of code, number of unique signers (contributors), and repo age. Use `git log` + file extension analysis server-side. Display as colored bar + stat cards on repo detail page.
 
 ## 🚧 Blocked
 
