@@ -368,7 +368,7 @@ export default function ExplorePage() {
                             color: '#8b949e',
                             fontWeight: 500,
                           }}>
-                            <span style={{ fontSize: 10 }}>👤</span> {pluralize(repo.contributor_count, 'contributor')}
+                            <span style={{ fontSize: 10 }}>👤</span> {repo.contributor_count}
                           </div>
                         )}
                         <div style={{
@@ -382,7 +382,7 @@ export default function ExplorePage() {
                           color: repo.commit_count > 10 ? '#58a6ff' : '#8b949e',
                           fontWeight: 500,
                         }}>
-                          <span>⬡</span> {pluralize(repo.commit_count, 'commit')}
+                          <span>⬡</span> {repo.commit_count}
                         </div>
                         {repo.last_commit_date && (
                           <span style={{ color: '#484f58', whiteSpace: 'nowrap', minWidth: 100, textAlign: 'right' }}>
