@@ -1,3 +1,0 @@
-permissions:
-  rules:
-    - "vitalik.eth push >main"
