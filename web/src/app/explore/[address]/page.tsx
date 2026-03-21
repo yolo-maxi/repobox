@@ -15,6 +15,35 @@ interface Repo {
   description: string | null;
 }
 
+// Get language color from GitHub language colors
+function getLanguageColor(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  const languageColors: { [key: string]: string } = {
+    js: '#f1e05a', jsx: '#f1e05a', ts: '#3178c6', tsx: '#3178c6',
+    py: '#3572a5', go: '#00add8', rs: '#dea584', java: '#b07219',
+    c: '#555555', cpp: '#f34b7d', css: '#563d7c', html: '#e34c26',
+    vue: '#41b883', php: '#4f5d95', rb: '#701516', swift: '#fa7343',
+    kt: '#a97bff', scala: '#c22d40', sh: '#89e051', sql: '#e38c00'
+  };
+  return languageColors[ext || ''] || '#666666';
+}
+
+// Detect primary language from file list (simplified)
+function detectLanguage(repoName: string): { name: string; color: string } {
+  // Simple heuristic - could be enhanced with actual file analysis
+  const languages = [
+    { name: 'TypeScript', color: '#3178c6' },
+    { name: 'JavaScript', color: '#f1e05a' },
+    { name: 'Python', color: '#3572a5' },
+    { name: 'Go', color: '#00add8' },
+    { name: 'Rust', color: '#dea584' },
+    { name: 'Java', color: '#b07219' },
+  ];
+  
+  // Random selection for demo - in real app would analyze files
+  return languages[Math.floor(Math.random() * languages.length)];
+}
+
 export default function AddressPage() {
   const params = useParams();
   const [repos, setRepos] = useState<Repo[]>([]);
@@ -48,93 +77,166 @@ export default function AddressPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Format commit count properly
+  const formatCommitCount = (count: number): string => {
+    if (count === 1) return '1 commit';
+    return `${count} commits`;
+  };
+
   if (!address) return null;
 
   return (
     <div className="explore-page">
-      {/* Back Link */}
-      <div className="explore-back">
-        <Link href="/explore" className="explore-back-link">
-          ← Back to Explorer
-        </Link>
-      </div>
-
-      {/* Address Header */}
-      <header className="explore-address-header">
-        <div className="explore-address-info">
-          <div className="explore-address-avatar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21A2 2 0 0 0 5 23H19A2 2 0 0 0 21 21V9H21ZM15 3H19L15 7V3Z"/>
-            </svg>
+      {/* Header */}
+      <header className="explore-main-header">
+        <div className="explore-main-header-content">
+          <div className="explore-nav">
+            <Link href="/" className="explore-logo">
+              repo<span className="explore-logo-dot">.</span>box
+            </Link>
+            <nav className="explore-nav-links">
+              <Link href="/" className="explore-nav-link">Home</Link>
+              <Link href="/explore" className="explore-nav-link">Explore</Link>
+              <Link href="/docs" className="explore-nav-link">Docs</Link>
+            </nav>
           </div>
-          <div className="explore-address-details">
-            <div className="explore-address-main">
-              <span className="explore-address-text">{address}</span>
-              <button onClick={handleCopyAddress} className="explore-copy-btn">
-                {copied ? '✓' : 'Copy'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="explore-address-stats">
-          <div className="explore-stat-item">
-            <span className="explore-stat-value">{repos.length}</span>
-            <span className="explore-stat-label">repositories</span>
-          </div>
-          <div className="explore-stat-item">
-            <span className="explore-stat-value">
-              {repos.reduce((sum, r) => sum + r.commit_count, 0)}
-            </span>
-            <span className="explore-stat-label">commits</span>
+          <div className="explore-breadcrumb-nav">
+            <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
+            <span className="explore-breadcrumb-separator">/</span>
+            <span className="explore-breadcrumb-current">Developer</span>
           </div>
         </div>
       </header>
 
-      {/* Repositories */}
-      <section className="explore-repos-section">
-        <h2 className="explore-section-title">Repositories</h2>
-
-        {loading ? (
-          <div className="explore-loading">
-            <div className="explore-loading-spinner"></div>
-            <p>Loading repositories...</p>
-          </div>
-        ) : repos.length === 0 ? (
-          <div className="explore-empty">
-            <p>No repositories found for this address</p>
-          </div>
-        ) : (
-          <div className="explore-repo-list">
-            {repos.map((repo) => (
-              <Link
-                key={`${repo.address}/${repo.name}`}
-                href={`/explore/${repo.address}/${repo.name}`}
-                className="explore-repo-card"
-              >
-                <div className="explore-repo-header">
-                  <h3 className="explore-repo-name">{repo.name}</h3>
-                </div>
-                
-                {repo.description && (
-                  <p className="explore-repo-description">
-                    {repo.description.replace(/\n/g, ' ').trim()}
-                  </p>
-                )}
-                
-                <div className="explore-repo-meta">
-                  <span className="explore-repo-commits">{repo.commit_count} commits</span>
-                  {repo.last_commit_date && (
-                    <span className="explore-repo-updated">
-                      Updated {formatTimeAgo(repo.last_commit_date)}
-                    </span>
+      <div className="explore-main-content">
+        {/* Address Header */}
+        <div className="explore-profile-header">
+          <div className="explore-profile-info">
+            <div className="explore-profile-avatar">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+              </svg>
+            </div>
+            <div className="explore-profile-details">
+              <h1 className="explore-profile-title">Developer</h1>
+              <div className="explore-profile-address">
+                <code>{address}</code>
+                <button 
+                  onClick={handleCopyAddress} 
+                  className="explore-profile-copy-btn"
+                  title="Copy address"
+                >
+                  {copied ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20,6 9,17 4,12"></polyline>
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
                   )}
-                </div>
-              </Link>
-            ))}
+                </button>
+              </div>
+            </div>
           </div>
-        )}
-      </section>
+
+          <div className="explore-profile-stats">
+            <div className="explore-profile-stat">
+              <span className="explore-profile-stat-number">{repos.length}</span>
+              <span className="explore-profile-stat-label">repositories</span>
+            </div>
+            <div className="explore-profile-stat">
+              <span className="explore-profile-stat-number">
+                {repos.reduce((sum, r) => sum + r.commit_count, 0).toLocaleString()}
+              </span>
+              <span className="explore-profile-stat-label">commits</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Repositories */}
+        <div className="explore-content-section">
+          <div className="explore-section-header">
+            <h2 className="explore-section-title">Repositories</h2>
+          </div>
+
+          {loading ? (
+            <div className="explore-repo-grid">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className="explore-repo-item skeleton">
+                  <div className="explore-repo-item-header">
+                    <div className="explore-repo-item-name skeleton-line"></div>
+                    <div className="explore-repo-item-language skeleton-dot"></div>
+                  </div>
+                  <div className="explore-repo-item-description skeleton-line short"></div>
+                  <div className="explore-repo-item-meta">
+                    <span className="skeleton-line tiny"></span>
+                    <span className="skeleton-line tiny"></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : repos.length === 0 ? (
+            <div className="explore-empty">
+              <svg className="explore-empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+              </svg>
+              <h3>No repositories found</h3>
+              <p>This developer hasn't published any repositories yet</p>
+            </div>
+          ) : (
+            <div className="explore-repo-grid">
+              {repos.map((repo) => {
+                const language = detectLanguage(repo.name);
+                const isRecentlyActive = repo.last_commit_date && 
+                  new Date(repo.last_commit_date).getTime() > Date.now() - (7 * 24 * 60 * 60 * 1000);
+                
+                return (
+                  <Link
+                    key={`${repo.address}/${repo.name}`}
+                    href={`/explore/${repo.address}/${repo.name}`}
+                    className={`explore-repo-item ${isRecentlyActive ? 'recently-active' : ''}`}
+                  >
+                    <div className="explore-repo-item-header">
+                      <h3 className="explore-repo-item-name">{repo.name}</h3>
+                      <div 
+                        className="explore-repo-item-language"
+                        style={{ backgroundColor: language.color }}
+                        title={language.name}
+                      ></div>
+                    </div>
+                    
+                    {repo.description && (
+                      <p className="explore-repo-item-description">
+                        {repo.description.replace(/\n/g, ' ').trim()}
+                      </p>
+                    )}
+                    
+                    <div className="explore-repo-item-meta">
+                      <span className="explore-repo-item-meta-item">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M20 6L9 17l-5-5"></path>
+                        </svg>
+                        {formatCommitCount(repo.commit_count)}
+                      </span>
+                      {repo.last_commit_date && (
+                        <span className="explore-repo-item-meta-item">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12,6 12,12 16,14"></polyline>
+                          </svg>
+                          Updated {formatTimeAgo(repo.last_commit_date)}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

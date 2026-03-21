@@ -225,82 +225,154 @@ export default function RepoPage() {
 
   return (
     <div className="explore-page">
-      {/* Back Link */}
-      <div className="explore-back">
-        <Link href="/explore" className="explore-back-link">← Back to Explorer</Link>
-      </div>
-
-      {/* Repository Header */}
-      <header className="explore-repo-header">
-        <div className="explore-repo-info">
-          <h1 className="explore-repo-title">{repo.name}</h1>
-          <div className="explore-repo-owner-info">
-            <button 
-              onClick={handleCopyAddr} 
-              className="explore-repo-owner"
-              title="Click to copy address"
-            >
-              <code>{repo.owner_address}</code>
-              <span className="explore-copy-hint">{addrCopied ? '✓ copied' : 'copy'}</span>
-            </button>
+      {/* Header */}
+      <header className="explore-main-header">
+        <div className="explore-main-header-content">
+          <div className="explore-nav">
+            <Link href="/" className="explore-logo">
+              repo<span className="explore-logo-dot">.</span>box
+            </Link>
+            <nav className="explore-nav-links">
+              <Link href="/" className="explore-nav-link">Home</Link>
+              <Link href="/explore" className="explore-nav-link">Explore</Link>
+              <Link href="/docs" className="explore-nav-link">Docs</Link>
+            </nav>
           </div>
-          {/* Clone URL — full address, clickable to copy */}
-          <button onClick={handleCopyClone} className="explore-clone-url" title="Click to copy clone command">
-            <code style={{ fontSize: '12px', wordBreak: 'break-all' }}>
-              git clone {cloneUrl}
-            </code>
-            <span className="explore-copy-hint">{cloneCopied ? '✓ copied' : 'click to copy'}</span>
-          </button>
-        </div>
-
-        <div className="explore-repo-stats">
-          <div className="explore-stat-item">
-            <span className="explore-stat-value">{repo.commit_count}</span>
-            <span className="explore-stat-label">COMMITS</span>
-          </div>
-          <div className="explore-stat-item explore-stat-branch">
-            {branches.length > 0 ? (
-              <BranchSelector
-                branches={branches}
-                currentBranch={selectedBranch}
-                defaultBranch={repo.default_branch}
-                onChange={handleBranchChange}
-                disabled={branchLoading}
-              />
-            ) : (
-              <span className="explore-stat-value">{repo.default_branch}</span>
-            )}
-            <span className="explore-stat-label">BRANCH</span>
+          <div className="explore-breadcrumb-nav">
+            <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
+            <span className="explore-breadcrumb-separator">/</span>
+            <Link href={`/explore/${repo.owner_address}`} className="explore-breadcrumb-link">
+              {formatAddress(repo.owner_address)}
+            </Link>
+            <span className="explore-breadcrumb-separator">/</span>
+            <span className="explore-breadcrumb-current">{repo.name}</span>
           </div>
         </div>
       </header>
 
-      {/* Repository Stats */}
-      <RepoStatsCards 
-        address={address} 
-        name={name} 
-        branch={selectedBranch}
-      />
+      <div className="explore-main-content">
+        {/* Repository Header */}
+        <div className="explore-repo-detail-header">
+          <div className="explore-repo-detail-info">
+            <div className="explore-repo-detail-title-row">
+              <svg className="explore-repo-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+              </svg>
+              <h1 className="explore-repo-detail-title">{repo.name}</h1>
+            </div>
+            
+            <div className="explore-repo-detail-owner">
+              <Link href={`/explore/${repo.owner_address}`} className="explore-repo-detail-owner-link">
+                <code>{formatAddress(repo.owner_address)}</code>
+              </Link>
+              <button 
+                onClick={handleCopyAddr} 
+                className="explore-repo-detail-copy-btn"
+                title="Copy address"
+              >
+                {addrCopied ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="20,6 9,17 4,12"></polyline>
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                )}
+              </button>
+            </div>
 
-      {/* Tabs — README first */}
-      <nav className="explore-tabs">
-        {['readme', 'files', 'commits', 'contributors', 'config'].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab as typeof activeTab)}
-            className={`explore-tab ${activeTab === tab ? 'active' : ''}`}
-          >
-            {tab === 'readme' ? 'README' : 
-             tab === 'files' ? 'Files' : 
-             tab === 'commits' ? 'Commits' :
-             tab === 'contributors' ? 'Contributors' :
-             'Config'}
-          </button>
-        ))}
-      </nav>
+            <div className="explore-repo-detail-clone">
+              <div className="explore-clone-label">HTTPS</div>
+              <div className="explore-clone-input-group">
+                <input 
+                  type="text" 
+                  value={cloneUrl}
+                  readOnly
+                  className="explore-clone-input"
+                />
+                <button 
+                  onClick={handleCopyClone} 
+                  className="explore-clone-copy-btn"
+                  title="Copy clone command"
+                >
+                  {cloneCopied ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20,6 9,17 4,12"></polyline>
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
 
-      {/* Tab Content */}
-      <section className="explore-tab-content">
+          <div className="explore-repo-detail-stats">
+            <div className="explore-repo-detail-stat">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 6L9 17l-5-5"></path>
+              </svg>
+              <span className="explore-repo-detail-stat-value">{repo.commit_count.toLocaleString()}</span>
+              <span className="explore-repo-detail-stat-label">commits</span>
+            </div>
+            <div className="explore-repo-detail-stat">
+              {branches.length > 0 ? (
+                <BranchSelector
+                  branches={branches}
+                  currentBranch={selectedBranch}
+                  defaultBranch={repo.default_branch}
+                  onChange={handleBranchChange}
+                  disabled={branchLoading}
+                />
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="6" y1="3" x2="6" y2="15"></line>
+                    <circle cx="18" cy="6" r="3"></circle>
+                    <circle cx="6" cy="18" r="3"></circle>
+                    <path d="M18 9a9 9 0 0 1-9 9"></path>
+                  </svg>
+                  <span className="explore-repo-detail-stat-value">{repo.default_branch}</span>
+                  <span className="explore-repo-detail-stat-label">branch</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Repository Stats */}
+        <RepoStatsCards 
+          address={address} 
+          name={name} 
+          branch={selectedBranch}
+        />
+
+        {/* Tabs */}
+        <div className="explore-repo-tabs-container">
+          <nav className="explore-repo-tabs">
+            {['readme', 'files', 'commits', 'contributors', 'config'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab as typeof activeTab)}
+                className={`explore-repo-tab ${activeTab === tab ? 'active' : ''}`}
+              >
+                <span>{tab === 'readme' ? 'README' : 
+                       tab === 'files' ? 'Files' : 
+                       tab === 'commits' ? 'Commits' :
+                       tab === 'contributors' ? 'Contributors' :
+                       'Config'}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <div className="explore-repo-tab-content">
 
         {/* README Tab (default) */}
         {activeTab === 'readme' && (
@@ -449,35 +521,36 @@ export default function RepoPage() {
           </div>
         )}
 
-        {/* Config Tab — show .repobox/config.yml + owner identity */}
-        {activeTab === 'config' && (
-          <div className="explore-config">
-            <div className="explore-config-section">
-              <h3 className="explore-config-heading">Owner Identity</h3>
-              <div className="explore-config-identity">
-                <code>{repo.owner_address}</code>
-                <span className="explore-config-badge">owner</span>
+          {/* Config Tab — show .repobox/config.yml + owner identity */}
+          {activeTab === 'config' && (
+            <div className="explore-config">
+              <div className="explore-config-section">
+                <h3 className="explore-config-heading">Owner Identity</h3>
+                <div className="explore-config-identity">
+                  <code>{repo.owner_address}</code>
+                  <span className="explore-config-badge">owner</span>
+                </div>
+              </div>
+
+              <div className="explore-config-section">
+                <h3 className="explore-config-heading">Permission Ruleset</h3>
+                {repoConfig.exists ? (
+                  <pre className="explore-code-block">
+                    <code>{repoConfig.content}</code>
+                  </pre>
+                ) : (
+                  <div className="explore-config-empty">
+                    <p>No <code>.repobox/config.yml</code> found in this repository.</p>
+                    <p className="explore-config-hint">
+                      Run <code>git repobox init</code> to create a permission config.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
-
-            <div className="explore-config-section">
-              <h3 className="explore-config-heading">Permission Ruleset</h3>
-              {repoConfig.exists ? (
-                <pre className="explore-code-block">
-                  <code>{repoConfig.content}</code>
-                </pre>
-              ) : (
-                <div className="explore-config-empty">
-                  <p>No <code>.repobox/config.yml</code> found in this repository.</p>
-                  <p className="explore-config-hint">
-                    Run <code>git repobox init</code> to create a permission config.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </section>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
