@@ -17,8 +17,7 @@ const AGENT_FEATURES: FeatureItem[] = [
 
 const ONCHAIN_FEATURES: FeatureItem[] = [
   { icon: "🏷️", label: "ENS identity", detail: "Use ENS names instead of raw addresses." },
-  { icon: "🪙", label: "Token-gated access", detail: "Gate repos by NFT or ERC-20 ownership." },
-  { icon: "💸", label: "Streaming payments", detail: "Pay contributors via Superfluid streams." },
+  { icon: "🪙", label: "Token-gated access", detail: "Use any onchain state for repo permissions." },
   { icon: "🐛", label: "Bug bounties", detail: "ERC-8183 escrow for agent bug reports." },
   { icon: "🌐", label: "x402 paid reads", detail: "Monetize repo access via HTTP 402." },
 ];
