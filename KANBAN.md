@@ -7,11 +7,6 @@
 - **Tags**: feature, ux
 Clone via `git.repo.box/vitalik.eth/myrepo.git` — resolve ENS to address server-side.
 
-### Multi-branch support in explorer
-- **Priority**: P2
-- **Tags**: feature, explorer
-Branch selector dropdown in repo detail page. Currently only shows `main`.
-
 
 ### Webhook notifications on push
 - **Priority**: P3
@@ -72,11 +67,6 @@ Replace "No recent activity", "No repositories found", etc with illustrated empt
 
 ## 🔨 In Progress
 
-### Branch selector in repo detail
-- **Priority**: P1
-- **Tags**: explorer, ui
-Dropdown to switch between branches in the repo detail page. Currently hardcoded to main. File tree, commits, and README should all update when switching branches. Show branch count badge.
-
 ## 🚧 Blocked
 
 ### Gmail token expired — can't send emails
@@ -88,6 +78,10 @@ Dropdown to switch between branches in the repo detail page. Currently hardcoded
 ### Full E2E demo script
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
 Complete hackathon demo: `repobox init` → `keys generate` → signed commit → push → clone → verify. Scripts: demo-e2e.sh (724 lines, quick/full modes), demo-reset.sh, docs/DEMO.md. Multi-agent simulation, visual progress indicators, error handling with cleanup. See detailed spec in In Progress section.
+
+### Branch selector in repo detail
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+Branch dropdown with search, all APIs accept ?branch= param, sanitized branch names (security fix after first review rejection). 2 iterations.
 
 ### File viewer with syntax highlighting
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
