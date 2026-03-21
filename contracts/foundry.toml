@@ -1,0 +1,9 @@
+[profile.default]
+src = "."
+out = "out"
+test = "test"
+libs = ["lib"]
+solc = "0.8.19"
+
+[rpc_endpoints]
+base_fork = "https://mainnet.base.org"
