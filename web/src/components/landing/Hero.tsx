@@ -115,7 +115,6 @@ export function LandingHero() {
           the first repo where anyone can push to main →
         </span>
       </div>
-      </Link>
 
       <div
         style={{
