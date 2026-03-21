@@ -14,7 +14,7 @@ export default function Home() {
       <RegMarks />
       <div
         style={{
-          maxWidth: 800,
+          maxWidth: 750,
           margin: "0 auto",
           position: "relative",
           zIndex: 2,
