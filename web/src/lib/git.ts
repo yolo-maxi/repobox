@@ -61,12 +61,19 @@ export function gitCommand(repoPath: string, command: string): string {
   try {
     return execSync(`git --git-dir="${repoPath}" ${command}`, { 
       encoding: 'utf8',
-      timeout: 10000 
+      timeout: 15000,  // Increased timeout for diff operations
+      maxBuffer: 10 * 1024 * 1024,  // 10MB buffer for large diffs
     }).trim();
   } catch (error: any) {
     if (error.status === 128) {
       // Empty repository or no commits
       return '';
+    }
+    if (error.code === 'ETIMEDOUT') {
+      throw new Error('Git operation timed out - commit may be too large');
+    }
+    if (error.code === 'EMSGSIZE') {
+      throw new Error('Commit diff is too large to display');
     }
     throw error;
   }
@@ -209,6 +216,11 @@ export function getCommitDetail(address: string, name: string, hash: string): Co
   const repoPath = getRepoPath(address, name);
   
   try {
+    // Validate hash format first
+    if (!/^[a-f0-9]{7,40}$/i.test(hash)) {
+      throw new Error('Invalid commit hash format');
+    }
+    
     // Normalize hash (handle short hashes)
     const fullHash = gitCommand(repoPath, `rev-parse ${hash}^{commit}`);
     
@@ -226,6 +238,12 @@ export function getCommitDetail(address: string, name: string, hash: string): Co
     const [hashPart, author, email, timestamp, ...messageParts] = parts;
     const message = messageParts.join('|||').trim();
     
+    // Validate timestamp
+    const parsedTimestamp = parseInt(timestamp);
+    if (isNaN(parsedTimestamp) || parsedTimestamp < 0) {
+      throw new Error('Invalid commit timestamp');
+    }
+    
     // Get parent hash
     let parentHash: string | null = null;
     try {
@@ -234,8 +252,14 @@ export function getCommitDetail(address: string, name: string, hash: string): Co
       // Root commit has no parent
     }
     
-    // Get next commit (child)
-    const childHash = getChildCommit(repoPath, fullHash);
+    // Get next commit (child) - with timeout protection
+    let childHash: string | null = null;
+    try {
+      childHash = getChildCommit(repoPath, fullHash);
+    } catch (error) {
+      console.warn('Failed to get child commit:', error);
+      // Not critical, continue without child hash
+    }
     
     // Get file changes with stats
     const fileChanges = getCommitFileChanges(repoPath, fullHash);
@@ -246,10 +270,10 @@ export function getCommitDetail(address: string, name: string, hash: string): Co
     return {
       hash: fullHash,
       shortHash: fullHash.substring(0, 7),
-      author,
-      email,
-      timestamp: parseInt(timestamp),
-      message,
+      author: author || 'Unknown',
+      email: email || '',
+      timestamp: parsedTimestamp,
+      message: message || 'No commit message',
       parentHash,
       childHash,
       fileChanges,
@@ -311,15 +335,34 @@ function getCommitFileChanges(repoPath: string, hash: string): FileChange[] {
       
       // Only get diff for non-binary files if they're small enough
       let hunks: DiffHunk[] = [];
-      if (!stats.isBinary && (stats.additions + stats.deletions) < 1000) {
-        try {
-          const diffOutput = gitCommand(
-            repoPath, 
-            `diff --unified=3 ${hash}^..${hash} -- "${actualPath}"`
-          );
-          hunks = parseDiffOutput(diffOutput);
-        } catch {
-          // File might be deleted, binary, or permission issue
+      const totalChanges = stats.additions + stats.deletions;
+      
+      if (!stats.isBinary && totalChanges > 0) {
+        if (totalChanges > 2000) {
+          // Very large file - don't load diff for performance
+          console.warn(`Skipping diff for large file: ${actualPath} (${totalChanges} changes)`);
+        } else if (totalChanges > 500) {
+          // Large file - load with reduced context
+          try {
+            const diffOutput = gitCommand(
+              repoPath, 
+              `diff --unified=1 ${hash}^..${hash} -- "${actualPath}"`
+            );
+            hunks = parseDiffOutput(diffOutput);
+          } catch (error) {
+            console.warn(`Failed to get diff for ${actualPath}:`, error);
+          }
+        } else {
+          // Normal file - load with full context
+          try {
+            const diffOutput = gitCommand(
+              repoPath, 
+              `diff --unified=3 ${hash}^..${hash} -- "${actualPath}"`
+            );
+            hunks = parseDiffOutput(diffOutput);
+          } catch (error) {
+            console.warn(`Failed to get diff for ${actualPath}:`, error);
+          }
         }
       }
       
@@ -338,7 +381,7 @@ function getCommitFileChanges(repoPath: string, hash: string): FileChange[] {
   }
 }
 
-function parseDiffOutput(diffOutput: string): DiffHunk[] {
+export function parseDiffOutput(diffOutput: string): DiffHunk[] {
   if (!diffOutput) return [];
   
   const lines = diffOutput.split('\n');
@@ -429,7 +472,7 @@ function calculateLineNumbers(lines: DiffLine[], oldStart: number, newStart: num
   return { oldLineNumber, newLineNumber };
 }
 
-function mapGitStatus(status: string): FileChange['status'] {
+export function mapGitStatus(status: string): FileChange['status'] {
   const statusChar = status[0];
   switch (statusChar) {
     case 'A': return 'added';
@@ -440,7 +483,7 @@ function mapGitStatus(status: string): FileChange['status'] {
   }
 }
 
-function calculateFileStats(hunks: DiffHunk[]): { additions: number; deletions: number } {
+export function calculateFileStats(hunks: DiffHunk[]): { additions: number; deletions: number } {
   let additions = 0;
   let deletions = 0;
   
@@ -454,7 +497,7 @@ function calculateFileStats(hunks: DiffHunk[]): { additions: number; deletions: 
   return { additions, deletions };
 }
 
-function calculateDiffStats(fileChanges: FileChange[]): { additions: number; deletions: number; filesChanged: number } {
+export function calculateDiffStats(fileChanges: FileChange[]): { additions: number; deletions: number; filesChanged: number } {
   let additions = 0;
   let deletions = 0;
   

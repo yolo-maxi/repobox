@@ -7,6 +7,7 @@ import { CommitDetail } from '@/lib/git';
 import { formatTimeAgo, formatAddress, copyToClipboard } from '@/lib/utils';
 import FileChangeList from '@/components/FileChangeList';
 import KeyboardShortcuts from '@/components/KeyboardShortcuts';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 export default function CommitDetailPage() {
   const params = useParams();
@@ -155,7 +156,8 @@ export default function CommitDetailPage() {
   }
 
   return (
-    <div className="explore-page">
+    <ErrorBoundary>
+      <div className="explore-page">
       {/* Back Link */}
       <div className="explore-back">
         <Link href={`/explore/${address}/${name}`} className="explore-back-link">
@@ -250,6 +252,7 @@ export default function CommitDetailPage() {
         hasParent={!!commit.parentHash}
         hasChild={!!commit.childHash}
       />
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

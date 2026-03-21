@@ -99,15 +99,34 @@ function SyntaxHighlightedDiffLine({ content, filePath, type }: SyntaxHighlighte
 
 export default function DiffViewer({ hunks, filePath }: DiffViewerProps) {
   if (hunks.length === 0) {
+    // Check if this might be a large file that was skipped
+    const fileName = filePath.split('/').pop() || filePath;
     return (
       <div className="diff-empty">
-        <p>Binary file or no diff available</p>
+        <p>
+          {fileName.includes('.') ? 
+            'Binary file, large file, or no diff available' : 
+            'No diff available for this file'
+          }
+        </p>
+        <p className="diff-empty-hint">
+          File may be binary, too large (&gt;2000 lines), or newly created empty file.
+        </p>
       </div>
     );
   }
 
+  // Calculate total lines for performance warning
+  const totalLines = hunks.reduce((sum, hunk) => sum + hunk.lines.length, 0);
+  
   return (
     <div className="diff-content">
+      {totalLines > 200 && (
+        <div className="diff-performance-warning">
+          <p>⚠ Large diff ({totalLines} lines) - may affect performance</p>
+        </div>
+      )}
+      
       {hunks.map((hunk, hunkIndex) => (
         <div key={hunkIndex} className="diff-hunk">
           <div className="diff-hunk-header">
