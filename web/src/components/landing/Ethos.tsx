@@ -4,10 +4,10 @@ import { useEffect, useRef } from "react";
 
 const PRINCIPLES = [
   "Agents use normal git — the shim is invisible",
-  "EVM keypairs as the identity layer",
+  "EVM keypairs + ENS as the identity layer",
   "Every agent signs commits with its own key",
-  "Everything is a file in the repo — rules, identities, workflows",
-  "Enforced locally, no server required",
+  "Everything is in the repo: rules, identities, workflows",
+  "Enforced locally, server not required",
 ];
 
 export function LandingEthos() {
