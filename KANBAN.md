@@ -45,6 +45,11 @@ Go through all docs pages (`/docs`, `web/content/docs/`, README, SKILL.md, `web/
 - **Tags**: explorer, ui
 Replace "No recent activity", "No repositories found", etc with illustrated empty states. Use simple SVG illustrations + helpful text ("Push your first repo to see it here"). Makes the explorer feel alive even when empty.
 
+### Docs — comprehensive, honest, up-to-date
+- **Priority**: P3
+- **Tags**: docs
+Go through all docs (`/docs`, `web/content/docs/`, README, SKILL.md, `web/public/skill.md`). Cover everything: new verbs (`branch`, `read`, `own` expansion), bare-word group refs, `.repobox/config.yml`, credential helper, resolver proxy, force push policy, x402 payments, ENS resolution. Be honest — features not yet implemented (workflows, hooks, CI/CD triggers) must be marked "Coming Soon" or "On the Roadmap". Don't pretend things work that don't. Only run when no P0/P1/P2 tasks remain.
+
 ## 🔨 In Progress
 
 ### Analyse and handle force push
