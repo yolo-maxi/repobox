@@ -22,21 +22,30 @@ groups:
 permissions:
   default: allow
   rules:
-    # Flat rules:
+    # Branch operations
     #   - founders push >*
     #   - founders merge >*
+    #   - founders force-push >*          # Allow force push everywhere
+    #   - agents push >feature/**
+    #   - agents force-push >feature/**   # Allow force push on feature branches
+    #   - agents not force-push >main     # Explicitly deny force push to main
+    
+    # File operations  
     #   - founders edit ./.repobox/config.yml
     #
     # Subject-grouped rules:
     #   founders:
     #     - push >*
     #     - merge >*
+    #     - force-push >*
     #
     # Verb-mapping rules:
     #   agents:
     #       push:
     #         - ">feature/**"
     #         - ">fix/**"
+    #       force-push:
+    #         - ">feature/**"
     #       create:
     #         - ">feature/**"
     #       append:

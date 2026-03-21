@@ -25,11 +25,6 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### Analyse and handle force push
-- **Priority**: P1
-- **Tags**: feature, security, server
-Force push (`git push --force`) rewrites history — deletes commits, overwrites signed work, breaks audit trails. This is especially dangerous in a signed-commit model where every commit has EVM provenance. Analyse: (1) Can repobox-server detect force pushes in the pre-receive hook? (2) Should we disallow them entirely by default? (3) If allowed, should it require a specific permission verb (e.g. `force-push`) separate from `push`? (4) What about `--force-with-lease` (safer variant)? Fran's instinct: disallow altogether. Research git's `receive.denyNonFastForwards` and how GitHub/GitLab handle this. Write up findings and recommendation before implementing.
-
 ### ENS names in permissions
 - **Priority**: P1
 - **Tags**: feature, permissions, ens
@@ -41,6 +36,11 @@ Allow ENS names directly in `.repobox/config.yml` rules and group members, e.g. 
 Replace "No recent activity", "No repositories found", etc with illustrated empty states. Use simple SVG illustrations + helpful text ("Push your first repo to see it here"). Makes the explorer feel alive even when empty.
 
 ## 🔨 In Progress
+
+### Analyse and handle force push
+- **Priority**: P1
+- **Tags**: feature, security, server
+Force push (`git push --force`) rewrites history — deletes commits, overwrites signed work, breaks audit trails. This is especially dangerous in a signed-commit model where every commit has EVM provenance. Analyse: (1) Can repobox-server detect force pushes in the pre-receive hook? (2) Should we disallow them entirely by default? (3) If allowed, should it require a specific permission verb (e.g. `force-push`) separate from `push`? (4) What about `--force-with-lease` (safer variant)? Fran's instinct: disallow altogether. Research git's `receive.denyNonFastForwards` and how GitHub/GitLab handle this. Write up findings and recommendation before implementing.
 
 ### Repo detail pages: sidebar layout matching explore page
 - **Priority**: P1
