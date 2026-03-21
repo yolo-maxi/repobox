@@ -25,6 +25,11 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
+### ENS names in permissions
+- **Priority**: P1
+- **Tags**: feature, permissions, ens
+Allow ENS names directly in `.repobox/config.yml` rules and group members, e.g. `vitalik.eth push >main`. Resolution happens via the existing resolver proxy on `git.repo.box` (add ENS→address resolution to repobox-server's `/api/resolve` endpoint). Key property: if the ENS name changes ownership, the permission follows the name — not the old address. This means permissions are checked at evaluation time, not at config parse time. Cache with short TTL (~60s) to balance freshness vs performance.
+
 ### Empty state illustrations
 - **Priority**: P2
 - **Tags**: explorer, ui
