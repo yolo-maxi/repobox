@@ -33,17 +33,29 @@ pub(crate) fn router() -> Router<Arc<AppState>> {
 
 #[derive(Debug, Deserialize)]
 struct ResolveQuery {
-    chain: u64,
-    contract: String,
-    function: String,
-    address: String,
+    // For contract membership queries
+    chain: Option<u64>,
+    contract: Option<String>,
+    function: Option<String>,
+    address: Option<String>,
+    // For ENS resolution queries
+    name: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
-struct ResolveResponse {
-    member: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
+#[serde(untagged)]
+enum ResolveResponse {
+    Membership {
+        member: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+    EnsResolution {
+        name: String,
+        address: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
 }
 
 /// Alchemy chain ID → subdomain mapping.
@@ -162,12 +174,30 @@ async fn resolve_membership(
     State(state): State<Arc<AppState>>,
     Query(params): Query<ResolveQuery>,
 ) -> Response {
+    // Check if this is an ENS resolution request
+    if let Some(name) = params.name {
+        return handle_ens_resolution(name, &state).await;
+    }
+    
+    // Otherwise handle contract membership query
+    let (chain, contract, function, address) = match (params.chain, params.contract, params.function, params.address) {
+        (Some(chain), Some(contract), Some(function), Some(address)) => (chain, contract, function, address),
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                axum::Json(ResolveResponse::Membership {
+                    member: false,
+                    error: Some("missing required parameters: need (chain, contract, function, address) or (name)".into()),
+                }),
+            ).into_response();
+        }
+    };
     let api_key = match &state.alchemy_key {
         Some(key) => key,
         None => {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                axum::Json(ResolveResponse {
+                axum::Json(ResolveResponse::Membership {
                     member: false,
                     error: Some("no Alchemy API key configured".into()),
                 }),
@@ -176,21 +206,21 @@ async fn resolve_membership(
         }
     };
 
-    let rpc_url = match alchemy_rpc_url(params.chain, api_key) {
+    let rpc_url = match alchemy_rpc_url(chain, api_key) {
         Some(url) => url,
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                axum::Json(ResolveResponse {
+                axum::Json(ResolveResponse::Membership {
                     member: false,
-                    error: Some(format!("unsupported chain: {}", params.chain)),
+                    error: Some(format!("unsupported chain: {}", chain)),
                 }),
             )
                 .into_response();
         }
     };
 
-    let calldata = encode_call(&params.function, &params.address);
+    let calldata = encode_call(&function, &address);
 
     // Build eth_call JSON-RPC request
     let rpc_body = serde_json::json!({
@@ -198,7 +228,7 @@ async fn resolve_membership(
         "id": 1,
         "method": "eth_call",
         "params": [{
-            "to": params.contract,
+            "to": contract,
             "data": calldata,
         }, "latest"]
     });
@@ -215,7 +245,7 @@ async fn resolve_membership(
         Err(e) => {
             return (
                 StatusCode::BAD_GATEWAY,
-                axum::Json(ResolveResponse {
+                axum::Json(ResolveResponse::Membership {
                     member: false,
                     error: Some(format!("RPC request failed: {e}")),
                 }),
@@ -229,7 +259,7 @@ async fn resolve_membership(
         Err(e) => {
             return (
                 StatusCode::BAD_GATEWAY,
-                axum::Json(ResolveResponse {
+                axum::Json(ResolveResponse::Membership {
                     member: false,
                     error: Some(format!("RPC response parse error: {e}")),
                 }),
@@ -254,7 +284,7 @@ async fn resolve_membership(
     if let Some(error) = rpc_json.get("error") {
         return (
             StatusCode::BAD_GATEWAY,
-            axum::Json(ResolveResponse {
+            axum::Json(ResolveResponse::Membership {
                 member: false,
                 error: Some(format!("RPC error: {}", error)),
             }),
@@ -262,18 +292,52 @@ async fn resolve_membership(
             .into_response();
     }
 
-    axum::Json(ResolveResponse {
+    axum::Json(ResolveResponse::Membership {
         member: is_member,
         error: None,
     })
     .into_response()
 }
 
+/// Handle ENS resolution request via the /api/resolve?name=... endpoint
+async fn handle_ens_resolution(name: String, state: &Arc<AppState>) -> Response {
+    let api_key = match &state.alchemy_key {
+        Some(key) => key,
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                axum::Json(ResolveResponse::EnsResolution {
+                    name,
+                    address: String::new(),
+                    error: Some("no Alchemy API key configured".into()),
+                }),
+            ).into_response();
+        }
+    };
+
+    match resolve_ens_name(&name, api_key).await {
+        Ok(address) => {
+            axum::Json(ResolveResponse::EnsResolution {
+                name,
+                address,
+                error: None,
+            }).into_response()
+        }
+        Err(error) => {
+            (StatusCode::BAD_REQUEST, axum::Json(ResolveResponse::EnsResolution {
+                name,
+                address: String::new(),
+                error: Some(error),
+            })).into_response()
+        }
+    }
+}
+
 /// Resolve an ENS name to an Ethereum address.
 /// If the input looks like an address (0x..., 42 chars), return it as-is.
 /// If it looks like an ENS name, resolve it using the ENS Universal Resolver.
 /// Cache results for 5 minutes.
-pub async fn resolve_ens_name(name: &str) -> Result<String, String> {
+pub async fn resolve_ens_name(name: &str, api_key: &str) -> Result<String, String> {
     // Check if it's already an address (0x followed by 40 hex chars)
     if name.starts_with("0x") && name.len() == 42 && name[2..].chars().all(|c| c.is_ascii_hexdigit()) {
         return Ok(name.to_lowercase());
@@ -300,7 +364,7 @@ pub async fn resolve_ens_name(name: &str) -> Result<String, String> {
     }
 
     // Resolve via ENS Universal Resolver
-    let resolved_address = resolve_ens_on_chain(name).await?;
+    let resolved_address = resolve_ens_on_chain(name, api_key).await?;
 
     // Cache the result
     {
@@ -312,11 +376,7 @@ pub async fn resolve_ens_name(name: &str) -> Result<String, String> {
 }
 
 /// Resolve ENS name using the Universal Resolver contract on Ethereum mainnet
-async fn resolve_ens_on_chain(name: &str) -> Result<String, String> {
-    // Get the API key from environment or return an error
-    let api_key = std::env::var("ALCHEMY_API_KEY")
-        .map_err(|_| "ALCHEMY_API_KEY environment variable not set".to_string())?;
-
+async fn resolve_ens_on_chain(name: &str, api_key: &str) -> Result<String, String> {
     let rpc_url = format!("https://eth-mainnet.g.alchemy.com/v2/{}", api_key);
 
     // Encode the ENS name
@@ -520,7 +580,7 @@ mod tests {
     #[tokio::test]
     async fn test_resolve_ens_name_address_passthrough() {
         // Valid address should pass through
-        let result = resolve_ens_name("0x1234567890123456789012345678901234567890").await;
+        let result = resolve_ens_name("0x1234567890123456789012345678901234567890", "test-key").await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "0x1234567890123456789012345678901234567890");
     }
@@ -528,7 +588,7 @@ mod tests {
     #[tokio::test]
     async fn test_resolve_ens_name_invalid_format() {
         // Invalid format should return error
-        let result = resolve_ens_name("invalid-name").await;
+        let result = resolve_ens_name("invalid-name", "test-key").await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid name format"));
     }

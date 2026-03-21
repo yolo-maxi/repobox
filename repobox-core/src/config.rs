@@ -55,21 +55,49 @@ pub struct Identity {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IdentityKind {
     Evm,
+    Ens,  // New variant for ENS names
 }
 
 impl Identity {
-    /// Parse an identity string like "evm:0xAAA...123".
+    /// Parse an identity string like "evm:0xAAA...123" or "ens:vitalik.eth" or "vitalik.eth".
     pub fn parse(s: &str) -> Result<Self, ConfigError> {
         if let Some(addr) = s.strip_prefix("evm:") {
-            if !addr.starts_with("0x") {
+            if !addr.starts_with("0x") || addr.len() != 42 {
                 return Err(ConfigError::InvalidIdentity(s.to_string()));
             }
             Ok(Identity {
                 kind: IdentityKind::Evm,
                 address: addr.to_string(),
             })
+        } else if let Some(name) = s.strip_prefix("ens:") {
+            validate_ens_name(name)?;
+            Ok(Identity {
+                kind: IdentityKind::Ens,
+                address: name.to_string(),
+            })
+        } else if is_ens_name(s) {
+            // Implicit ENS detection
+            validate_ens_name(s)?;
+            Ok(Identity {
+                kind: IdentityKind::Ens,
+                address: s.to_string(),
+            })
+        } else if s.starts_with("0x") && s.len() == 42 {
+            // Legacy EVM format without prefix
+            Ok(Identity {
+                kind: IdentityKind::Evm,
+                address: s.to_string(),
+            })
         } else {
             Err(ConfigError::InvalidIdentity(s.to_string()))
+        }
+    }
+
+    /// Get the canonical string representation
+    pub fn canonical(&self) -> String {
+        match self.kind {
+            IdentityKind::Evm => format!("evm:{}", self.address),
+            IdentityKind::Ens => format!("ens:{}", self.address),
         }
     }
 }
@@ -78,6 +106,7 @@ impl std::fmt::Display for Identity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
             IdentityKind::Evm => write!(f, "evm:{}", self.address),
+            IdentityKind::Ens => write!(f, "ens:{}", self.address),
         }
     }
 }
@@ -317,6 +346,53 @@ fn glob_match_parts(pattern: &[&str], value: &[&str]) -> bool {
 }
 
 /// Config parsing/validation errors.
+/// Check if a string looks like an ENS name
+fn is_ens_name(s: &str) -> bool {
+    s.contains('.') && (
+        s.ends_with(".eth") || s.ends_with(".box") || 
+        s.ends_with(".com") || s.ends_with(".xyz") || 
+        s.ends_with(".org") || s.ends_with(".io") || 
+        s.ends_with(".dev") || s.ends_with(".app")
+    )
+}
+
+/// Validate ENS name format according to DNS rules
+fn validate_ens_name(name: &str) -> Result<(), ConfigError> {
+    if !is_ens_name(name) {
+        return Err(ConfigError::InvalidIdentity(
+            format!("invalid ENS name format: {}", name)
+        ));
+    }
+    
+    if name.len() > 253 {
+        return Err(ConfigError::InvalidIdentity(
+            "ENS name too long (max 253 chars)".to_string()
+        ));
+    }
+    
+    for label in name.split('.') {
+        if label.is_empty() || label.len() > 63 {
+            return Err(ConfigError::InvalidIdentity(
+                "invalid ENS label length".to_string()
+            ));
+        }
+        
+        if label.starts_with('-') || label.ends_with('-') {
+            return Err(ConfigError::InvalidIdentity(
+                "ENS labels cannot start/end with hyphen".to_string()
+            ));
+        }
+        
+        if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err(ConfigError::InvalidIdentity(
+                "invalid characters in ENS name".to_string()
+            ));
+        }
+    }
+    
+    Ok(())
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("YAML parse error: {0}")]

@@ -95,33 +95,55 @@ fn subject_matches_with_resolver(
     groups: &HashMap<String, Group>,
     resolver: Option<&RemoteResolver>,
 ) -> bool {
-    // First check static membership (fast path)
-    if subject.matches(identity, resolved_static) {
-        return true;
-    }
-
-    // If no remote resolver, static check is final
-    let resolver = match resolver {
-        Some(r) => r,
-        None => return false,
-    };
-
-    // For group subjects, check if the group (or any included group) has a resolver
     match subject {
-        Subject::All => true, // Already handled by static matches
-        Subject::Identity(_) => false, // Already handled by static matches
+        Subject::All => true,
+        Subject::Identity(subject_identity) => {
+            // Handle ENS resolution for identity subjects
+            if let Some(resolver) = resolver {
+                if let Ok(resolved_subject_addr) = resolver.resolve_identity(subject_identity) {
+                    if let Ok(resolved_target_addr) = resolver.resolve_identity(identity) {
+                        return resolved_subject_addr == resolved_target_addr;
+                    }
+                }
+            }
+            // Fall back to static check
+            subject_identity == identity
+        }
         Subject::Group(name) => {
+            // First check static membership (fast path)
+            if subject.matches(identity, resolved_static) {
+                return true;
+            }
+
+            // If no remote resolver, static check is final
+            let resolver = match resolver {
+                Some(r) => r,
+                None => return false,
+            };
+
             // Check this group's resolver
             if let Some(group) = groups.get(name) {
-                if let Some(is_member) = resolver.check_membership(group, identity) {
+                // Need to resolve the identity to canonical address for group membership check
+                let check_identity = if let Ok(resolved_addr) = resolver.resolve_identity(identity) {
+                    // Create canonical EVM identity for group membership check
+                    Identity {
+                        kind: crate::config::IdentityKind::Evm,
+                        address: resolved_addr,
+                    }
+                } else {
+                    identity.clone()
+                };
+
+                if let Some(is_member) = resolver.check_membership(group, &check_identity) {
                     if is_member {
                         return true;
                     }
                 }
+                
                 // Check included groups' resolvers recursively
                 for inc in &group.includes {
                     if let Some(inc_group) = groups.get(inc) {
-                        if let Some(is_member) = resolver.check_membership(inc_group, identity) {
+                        if let Some(is_member) = resolver.check_membership(inc_group, &check_identity) {
                             if is_member {
                                 return true;
                             }

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::config::{Group, GroupResolver, Identity};
+use crate::config::{Group, GroupResolver, Identity, IdentityKind};
 
 /// Cache entry for resolved membership.
 #[derive(Debug, Clone)]
@@ -13,18 +13,39 @@ struct CacheEntry {
     expires_at: Instant,
 }
 
+/// Cache entry for ENS resolution.
+#[derive(Debug, Clone)]
+struct EnsEntry {
+    address: String,
+    expires_at: Instant,
+}
+
 /// Resolver with in-memory TTL cache.
 pub struct RemoteResolver {
     cache: Mutex<HashMap<String, CacheEntry>>,
+    ens_cache: Mutex<HashMap<String, EnsEntry>>,
     /// Base URL for on-chain proxy (e.g. "https://repo.box/api")
     pub onchain_proxy_url: String,
+    /// Default ENS cache TTL in seconds
+    pub ens_cache_ttl: u64,
 }
 
 impl RemoteResolver {
     pub fn new(onchain_proxy_url: &str) -> Self {
         Self {
             cache: Mutex::new(HashMap::new()),
+            ens_cache: Mutex::new(HashMap::new()),
             onchain_proxy_url: onchain_proxy_url.to_string(),
+            ens_cache_ttl: 60, // Default 60 seconds
+        }
+    }
+
+    pub fn with_ens_cache_ttl(onchain_proxy_url: &str, ens_cache_ttl: u64) -> Self {
+        Self {
+            cache: Mutex::new(HashMap::new()),
+            ens_cache: Mutex::new(HashMap::new()),
+            onchain_proxy_url: onchain_proxy_url.to_string(),
+            ens_cache_ttl,
         }
     }
 
@@ -125,6 +146,85 @@ impl RemoteResolver {
     pub fn clear_cache(&self) {
         if let Ok(mut cache) = self.cache.lock() {
             cache.clear();
+        }
+        if let Ok(mut ens_cache) = self.ens_cache.lock() {
+            ens_cache.clear();
+        }
+    }
+
+    /// Resolve an identity to its canonical address form.
+    /// For EVM addresses, returns as-is. For ENS names, resolves via API with caching.
+    pub fn resolve_identity(&self, identity: &Identity) -> Result<String, String> {
+        match identity.kind {
+            IdentityKind::Evm => Ok(identity.address.clone()),
+            IdentityKind::Ens => self.resolve_ens_name(&identity.address),
+        }
+    }
+
+    /// Resolve an ENS name to an address with TTL-based caching.
+    fn resolve_ens_name(&self, name: &str) -> Result<String, String> {
+        let now = Instant::now();
+        
+        // Check cache first
+        if let Ok(cache) = self.ens_cache.lock() {
+            if let Some(entry) = cache.get(name) {
+                if now < entry.expires_at {
+                    return Ok(entry.address.clone());
+                }
+            }
+        }
+        
+        // Make API request
+        let url = format!(
+            "{}/resolve?name={}", 
+            self.onchain_proxy_url.trim_end_matches('/'), 
+            urlencoding::encode(name)
+        );
+        
+        let result = self.fetch_ens_resolution(&url, name, 10)?;
+        
+        // Cache the result
+        if let Ok(mut cache) = self.ens_cache.lock() {
+            cache.insert(name.to_string(), EnsEntry {
+                address: result.clone(),
+                expires_at: now + Duration::from_secs(self.ens_cache_ttl),
+            });
+        }
+        
+        Ok(result)
+    }
+
+    /// Fetch ENS resolution from the API endpoint
+    fn fetch_ens_resolution(&self, url: &str, name: &str, timeout_secs: u64) -> Result<String, String> {
+        let response_text = match ureq::get(url)
+            .timeout(std::time::Duration::from_secs(timeout_secs))
+            .call() {
+            Ok(response) => match response.into_string() {
+                Ok(text) => text,
+                Err(_) => return Err("failed to read response body".to_string()),
+            },
+            Err(ureq::Error::Status(code, _)) => {
+                return Err(format!("HTTP {} error resolving ENS name '{}'", code, name));
+            }
+            Err(_) => {
+                return Err(format!("network error resolving ENS name '{}'", name));
+            }
+        };
+
+        // Parse JSON response
+        match serde_json::from_str::<serde_json::Value>(&response_text) {
+            Ok(json) => {
+                if let Some(error) = json.get("error").and_then(|e| e.as_str()) {
+                    return Err(error.to_string());
+                }
+                
+                if let Some(address) = json.get("address").and_then(|a| a.as_str()) {
+                    Ok(address.to_string())
+                } else {
+                    Err("missing address field in response".to_string())
+                }
+            }
+            Err(_) => Err("invalid JSON response".to_string()),
         }
     }
 }

@@ -49,7 +49,7 @@ impl<'de> Deserialize<'de> for RawGroup {
                     let s = v
                         .as_str()
                         .ok_or_else(|| de::Error::custom("group entries must be strings"))?;
-                    if s.starts_with("evm:") {
+                    if s.starts_with("evm:") || s.starts_with("ens:") || is_ens_name(s) {
                         members.push(s.to_string());
                     } else {
                         let name = s.strip_prefix("group:").unwrap_or(s);
@@ -578,13 +578,23 @@ fn parse_flat_rule(s: &str, line: usize) -> Result<Vec<Rule>, ConfigError> {
 fn parse_subject(s: &str) -> Result<Subject, ConfigError> {
     if s == "*" {
         Ok(Subject::All)
-    } else if s.starts_with("evm:") {
+    } else if s.starts_with("evm:") || s.starts_with("ens:") || is_ens_name(s) {
         Ok(Subject::Identity(Identity::parse(s)?))
     } else {
         // Bare word = group name. Strip legacy % prefix if present.
         let name = s.strip_prefix('%').unwrap_or(s);
         Ok(Subject::Group(name.to_string()))
     }
+}
+
+// Helper function for ENS name detection (copied from config.rs)
+fn is_ens_name(s: &str) -> bool {
+    s.contains('.') && (
+        s.ends_with(".eth") || s.ends_with(".box") || 
+        s.ends_with(".com") || s.ends_with(".xyz") || 
+        s.ends_with(".org") || s.ends_with(".io") || 
+        s.ends_with(".dev") || s.ends_with(".app")
+    )
 }
 
 /// Parse a verb string, handling "not" prefix.
@@ -1560,5 +1570,92 @@ permissions:
         assert!(config.groups["founders"].resolver.is_none());
         assert!(config.groups["dao"].resolver.is_some());
         assert_eq!(config.permissions.rules.len(), 11); // 10 from own + 1
+    }
+
+    #[test]
+    fn test_ens_identity_parsing() {
+        let id = Identity::parse("ens:vitalik.eth").unwrap();
+        assert_eq!(id.kind, IdentityKind::Ens);
+        assert_eq!(id.address, "vitalik.eth");
+        assert_eq!(id.canonical(), "ens:vitalik.eth");
+        
+        // Implicit ENS detection
+        let id = Identity::parse("vitalik.eth").unwrap();
+        assert_eq!(id.kind, IdentityKind::Ens);
+        assert_eq!(id.address, "vitalik.eth");
+    }
+    
+    #[test]
+    fn test_ens_name_validation() {
+        // Valid ENS names
+        assert!(Identity::parse("vitalik.eth").is_ok());
+        assert!(Identity::parse("test.box").is_ok());
+        assert!(Identity::parse("example.com").is_ok());
+        assert!(Identity::parse("my-name.eth").is_ok());
+        
+        // Invalid ENS names
+        assert!(Identity::parse("localhost").is_err()); // no TLD
+        assert!(Identity::parse("invalid.xyz123").is_err()); // bad TLD
+        assert!(Identity::parse("-invalid.eth").is_err()); // leading hyphen
+        assert!(Identity::parse("invalid-.eth").is_err()); // trailing hyphen
+        
+        // Still support legacy EVM format
+        assert!(Identity::parse("0x1234567890123456789012345678901234567890").is_ok());
+        assert!(Identity::parse("evm:0x1234567890123456789012345678901234567890").is_ok());
+    }
+    
+    #[test]
+    fn test_mixed_group_members() {
+        let yaml = r#"
+groups:
+  mixed:
+    - evm:0x1234567890123456789012345678901234567890
+    - ens:vitalik.eth
+    - alice.eth
+permissions:
+  default: allow
+  rules:
+    - mixed push >main
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.groups["mixed"].members.len(), 3);
+        
+        let members = &config.groups["mixed"].members;
+        assert_eq!(members[0].kind, IdentityKind::Evm);
+        assert_eq!(members[1].kind, IdentityKind::Ens);
+        assert_eq!(members[1].address, "vitalik.eth");
+        assert_eq!(members[2].kind, IdentityKind::Ens);
+        assert_eq!(members[2].address, "alice.eth");
+    }
+    
+    #[test] 
+    fn test_ens_in_permission_rules() {
+        let yaml = r#"
+permissions:
+  default: deny
+  rules:
+    - "vitalik.eth push >main"
+    - "ens:alice.eth edit contracts/**"
+"#;
+        let config = parse(yaml).unwrap();
+        assert_eq!(config.permissions.rules.len(), 2);
+        
+        let rule1 = &config.permissions.rules[0];
+        match &rule1.subject {
+            Subject::Identity(id) => {
+                assert_eq!(id.kind, IdentityKind::Ens);
+                assert_eq!(id.address, "vitalik.eth");
+            }
+            _ => panic!("Expected Identity subject"),
+        }
+        
+        let rule2 = &config.permissions.rules[1];
+        match &rule2.subject {
+            Subject::Identity(id) => {
+                assert_eq!(id.kind, IdentityKind::Ens);
+                assert_eq!(id.address, "alice.eth");
+            }
+            _ => panic!("Expected Identity subject"),
+        }
     }
 }
