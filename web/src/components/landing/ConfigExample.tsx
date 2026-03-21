@@ -129,19 +129,35 @@ export function ConfigExample() {
 
   return (
     <section ref={sectionRef} className="reveal" style={{ marginBottom: 60 }}>
-      <h2
-        style={{
-          fontSize: 12,
-          lineHeight: "20px",
-          textTransform: "uppercase",
-          letterSpacing: "0.12em",
-          color: "var(--bp-accent)",
-          fontWeight: 500,
-          marginBottom: 20,
-        }}
-      >
-        Minimal Config
-      </h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 20 }}>
+        <h2
+          style={{
+            fontSize: 12,
+            lineHeight: "20px",
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            color: "var(--bp-accent)",
+            fontWeight: 500,
+            margin: 0,
+          }}
+        >
+          Minimal Config
+        </h2>
+        <Link
+          href="/playground"
+          style={{
+            fontFamily: "var(--font-mono), monospace",
+            fontSize: 12,
+            color: "var(--bp-accent)",
+            textDecoration: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+          }}
+        >
+          <span style={{ fontSize: 13 }}>▶</span> Try in Playground
+        </Link>
+      </div>
       <pre
         style={{
           background: "rgba(0, 0, 0, 0.4)",
@@ -159,36 +175,7 @@ export function ConfigExample() {
           <HighlightedYaml code={CONFIG_YAML} />
         </code>
       </pre>
-      <div style={{ marginTop: 16, display: "flex", gap: 24, flexWrap: "wrap" }}>
-        <Link
-          href="/playground"
-          style={{
-            fontFamily: "var(--font-mono), monospace",
-            fontSize: 13,
-            color: "var(--bp-accent)",
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          <span style={{ fontSize: 15 }}>▶</span> Try in Playground
-        </Link>
-        <Link
-          href="/explore"
-          style={{
-            fontFamily: "var(--font-mono), monospace",
-            fontSize: 13,
-            color: "var(--bp-accent2)",
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          🧱 Join the Wall — get rewards
-        </Link>
-      </div>
+
     </section>
   );
 }
