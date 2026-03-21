@@ -42,10 +42,22 @@ Replace "No recent activity", "No repositories found", etc with illustrated empt
 - **Tags**: feature, security, server
 Force push (`git push --force`) rewrites history — deletes commits, overwrites signed work, breaks audit trails. This is especially dangerous in a signed-commit model where every commit has EVM provenance. Analyse: (1) Can repobox-server detect force pushes in the pre-receive hook? (2) Should we disallow them entirely by default? (3) If allowed, should it require a specific permission verb (e.g. `force-push`) separate from `push`? (4) What about `--force-with-lease` (safer variant)? Fran's instinct: disallow altogether. Research git's `receive.denyNonFastForwards` and how GitHub/GitLab handle this. Write up findings and recommendation before implementing.
 
-### Repo detail pages: sidebar layout matching explore page
-- **Priority**: P1
-- **Tags**: explorer, ui
-Repo detail pages (`/explore/[address]/[name]`) and owner pages (`/explore/[address]`) are still full-width — inconsistent with the new explore home sidebar layout. Apply the same pattern: left sidebar (repo metadata, clone URL, owner info, quick stats) + narrower main content column (file tree, README, commits, config tabs). Match the 260px sidebar + max-width 1200px grid from explore home.
+### Fix repo detail page (explorer) — comprehensive overhaul
+- **Priority**: P0
+- **Tags**: explorer, ui, bugs
+Major overhaul of `/explore/[address]/[name]` page. Issues to fix:
+1. **Sidebar layout**: Must match explore home — 260px left sidebar (repo metadata, clone URL, owner info, stats) + constrained main content column. No full-width.
+2. **Broken tabs**: All tabs except README are broken/ugly. Fix: Files, Commits, Config, Contributors tabs — ensure data renders correctly with proper styling.
+3. **Remove SSH clone URL**: SSH is not implemented. Only show HTTPS clone URL with EVM-authed credential helper instructions.
+4. **Fix contributor count inconsistency**: Explore list shows different contributor count than repo detail. Both should use the same `getContributorCount()` logic (unique committer emails from `git log --format=%ae`).
+5. **Contribution chart**: Add a visual chart showing contributions over time or per-contributor bar chart on the Contributors tab.
+6. **Fix language bar "Other" duplication**: The horizontal stacked bar shows "Other" twice. Fix: properly categorize file extensions, don't count binary/data/blob files (images, .wasm, .bin, lockfiles, .git objects). Only count source code extensions. Deduplicate the "Other" bucket.
+7. **GitHub-style URL schema**: URLs for browsing branches/folders/files should match GitHub's pattern:
+   - `/explore/{addr}/{name}/tree/{branch}/{path}` for directories
+   - `/explore/{addr}/{name}/blob/{branch}/{path}` for files
+   - `/explore/{addr}/{name}/commits/{branch}` for commit history
+   - `/explore/{addr}/{name}/commit/{hash}` for single commit (already exists)
+   Update all internal links, breadcrumbs, and router to use this schema.
 
 ### Address component with ENS/subdomain resolution + human-readable URLs
 - **Priority**: P1
