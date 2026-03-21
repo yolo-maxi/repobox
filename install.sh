@@ -238,7 +238,7 @@ setup_shell_path() {
   if [ "$shell_name" = "fish" ]; then
     path_line="fish_add_path --prepend \$HOME/.repobox/bin"
   else
-    path_line='export PATH="$HOME/.repobox/bin:$PATH"'
+    path_line="export PATH=\"\$HOME/.repobox/bin:\$PATH\""
   fi
   
   # Add to shell RC if not already present

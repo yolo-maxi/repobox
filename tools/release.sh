@@ -12,8 +12,8 @@ echo "   Output directory: ${RELEASE_DIR}"
 rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
 
-# Add cargo bin to PATH
-export PATH="$HOME/.cargo/bin:$PATH"
+# Add cargo bin and snap bin to PATH
+export PATH="$HOME/.cargo/bin:/snap/bin:$PATH"
 
 # Target configurations: target-triple:binary-name
 TARGETS=(
