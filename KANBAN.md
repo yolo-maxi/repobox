@@ -35,11 +35,6 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## 📋 Backlog
 
-### File viewer with syntax highlighting
-- **Priority**: P1
-- **Tags**: explorer, ui
-When clicking a file in the tree, show it with proper syntax highlighting (Rust, JS, YAML, etc). Add line numbers, copy button, raw view toggle, and file size/line count in header. Currently shows plain text.
-
 ### Branch selector in repo detail
 - **Priority**: P1
 - **Tags**: explorer, ui
@@ -81,6 +76,13 @@ On repo detail page, prominent clone URL box with one-click copy (HTTPS + SSH va
 Replace "No recent activity", "No repositories found", etc with illustrated empty states. Use simple SVG illustrations + helpful text ("Push your first repo to see it here"). Makes the explorer feel alive even when empty.
 
 ## 🔨 In Progress
+
+### File viewer with syntax highlighting - SPEC COMPLETE
+- **Priority**: P1
+- **Tags**: explorer, ui  
+- **Spec**: `docs/spec/file-viewer-syntax-highlighting.md`
+- **Agent**: pm-agent (0x9aBA...234b)
+When clicking a file in the tree, show it with proper syntax highlighting (Rust, JS, YAML, etc). Add line numbers, copy button, raw view toggle, and file size/line count in header. Currently shows plain text. Comprehensive implementation spec ready for development.
 
 ## 🚧 Blocked
 
