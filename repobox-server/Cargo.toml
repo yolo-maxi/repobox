@@ -29,6 +29,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 [dev-dependencies]
 hex = "0.4"
 repobox = { package = "repobox-core", path = "../repobox-core" }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "blocking"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 tempdir = "0.3"

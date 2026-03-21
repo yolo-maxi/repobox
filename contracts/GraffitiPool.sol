@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.19;
 
 interface IGDAv1Forwarder {
     function createPool(
@@ -21,15 +21,24 @@ interface IGDAv1Forwarder {
     }
 }
 
+interface IHost {
+    function callAgreement(
+        address agreementClass,
+        bytes calldata callData,
+        bytes calldata userData
+    ) external returns (bytes memory);
+}
+
 /// @title GraffitiPool — repo.box contribution rewards via Superfluid GDA
 /// @notice Push a signed commit to the wall repo, get scored, claim SUP stream
-/// @dev Mergeooor signs attestations scoped to (contributor, commitHash, units, nonce).
-///      Only the contributor can claim. Each attestation is single-use.
 contract GraffitiPool {
     address public immutable trustedMerger;
     address public immutable pool;
     address public immutable token;
+
     IGDAv1Forwarder constant GDA = IGDAv1Forwarder(0x6DA13Bde224A05a288748d857b9e7DDEffd1dE08);
+    IHost constant HOST = IHost(0x4C073B3baB6d8826b8C5b229f3cfdC1eC6E47E74);
+    address constant GDA_V1 = 0xfE6c87BE05feDB2059d2EC41bA0A09826C9FD7aa;
 
     mapping(bytes32 => bool) public claimed;
     uint128 public totalMembers;
@@ -70,7 +79,21 @@ contract GraffitiPool {
         claimed[digest] = true;
         totalMembers++;
 
+        // Give them units in the GDA pool
         GDA.updateMemberUnits(pool, msg.sender, units, "");
+
+        // Auto-connect them so distributions stream in real-time
+        // Uses one of their 4 autoconnect slots per token (non-reverting)
+        HOST.callAgreement(
+            GDA_V1,
+            abi.encodeWithSignature(
+                "tryConnectPoolFor(address,address,bytes)",
+                pool,
+                msg.sender,
+                new bytes(0) // placeholder ctx — Host replaces this
+            ),
+            new bytes(0) // userData
+        );
 
         emit Claimed(msg.sender, commitHash, units);
     }

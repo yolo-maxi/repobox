@@ -11,6 +11,8 @@ struct RawConfig {
     groups: HashMap<String, RawGroup>,
     #[serde(default)]
     permissions: Option<RawPermissions>,
+    #[serde(default)]
+    x402: Option<RawX402Config>,
 }
 
 /// A group can be:
@@ -132,6 +134,13 @@ fn default_rules() -> serde_yaml::Value {
 
 fn default_allow() -> String {
     "allow".to_string()
+}
+
+#[derive(Debug, Deserialize)]
+struct RawX402Config {
+    read_price: String,
+    recipient: String,
+    network: String,
 }
 
 /// Parse a .repobox/config.yml YAML string into a validated Config.
@@ -367,9 +376,17 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
         },
     };
 
+    // Parse x402 config
+    let x402 = raw.x402.map(|raw_x402| X402Config {
+        read_price: raw_x402.read_price,
+        recipient: raw_x402.recipient,
+        network: raw_x402.network,
+    });
+
     Ok(Config {
         groups,
         permissions,
+        x402,
     })
 }
 

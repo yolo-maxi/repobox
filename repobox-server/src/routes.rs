@@ -23,6 +23,7 @@ pub(crate) fn router() -> Router<Arc<AppState>> {
         .route("/{address}/{repo}/git-upload-pack", post(upload_pack))
         .route("/{address}/{repo}/git-receive-pack", post(receive_pack))
         .route("/{address}/{repo}/HEAD", get(head))
+        .route("/{address}/{repo}/x402/grant-access", post(grant_access))
 }
 
 async fn info_refs(
@@ -348,12 +349,12 @@ fn check_read_access(
         config_rules = %config.permissions.rules.len(),
         "checking read permission"
     );
-    
+
     // Debug the parsed rules
     for (i, rule) in config.permissions.rules.iter().enumerate() {
         tracing::debug!(rule_index = i, rule = ?rule, "parsed rule");
     }
-    
+
     // Debug engine call parameters
     tracing::debug!(
         engine_identity = ?identity,
@@ -362,14 +363,41 @@ fn check_read_access(
         engine_file = ?Option::<&str>::None,
         "calling engine::check"
     );
-    
+
     let result = repobox::engine::check(&config, &identity, repobox::config::Verb::Read, None, None);
     if result.is_allowed() {
         tracing::debug!(identity = %identity, "read access granted");
         Ok(())
     } else {
         tracing::warn!(identity = %identity, result = ?result, "read access denied");
-        Err((StatusCode::FORBIDDEN, format!("read access denied for {}", identity)).into_response())
+
+        // Check if x402 payment is configured
+        if let Some(x402_config) = &config.x402 {
+            // Return 402 Payment Required with x402 payment headers
+            let payment_json = serde_json::json!({
+                "scheme": "exact",
+                "network": x402_config.network,
+                "currency": "USDC",
+                "amount": parse_usdc_amount(&x402_config.read_price).unwrap_or_else(|| "1000000".to_string()),
+                "recipient": x402_config.recipient,
+                "memo": format!("read:{}", repo.name)
+            });
+
+            let mut response = (StatusCode::PAYMENT_REQUIRED, "payment required for read access").into_response();
+            response.headers_mut().insert(
+                "X-Payment",
+                HeaderValue::from_str(&payment_json.to_string()).unwrap(),
+            );
+            tracing::info!(
+                identity = %identity,
+                repo = %format!("{}/{}", repo.address, repo.name),
+                price = %x402_config.read_price,
+                "returning 402 payment required"
+            );
+            Err(response)
+        } else {
+            Err((StatusCode::FORBIDDEN, format!("read access denied for {}", identity)).into_response())
+        }
     }
 }
 
@@ -722,4 +750,239 @@ async fn addressless_head(
     } else {
         StatusCode::NOT_FOUND.into_response()
     }
+}
+
+async fn grant_access(
+    State(state): State<Arc<AppState>>,
+    Path((address, repo)): Path<(String, String)>,
+    axum::extract::Json(payload): axum::extract::Json<GrantAccessRequest>,
+) -> Response {
+    let repo = match repo_path(address, repo) {
+        Ok(repo) => repo,
+        Err(status) => return status.into_response(),
+    };
+
+    // Read config to verify x402 is enabled
+    let repo_dir = git::repo_dir(&state.data_dir, &repo);
+    let config_content = match read_config_from_repo(&repo_dir) {
+        Some(content) => content,
+        None => return (StatusCode::NOT_FOUND, "no x402 config found").into_response(),
+    };
+
+    let mut config = match repobox::parser::parse(&config_content) {
+        Ok(c) => c,
+        Err(_) => return (StatusCode::BAD_REQUEST, "invalid config").into_response(),
+    };
+
+    let _x402_config = match &config.x402 {
+        Some(cfg) => cfg,
+        None => return (StatusCode::NOT_FOUND, "x402 not enabled for this repo").into_response(),
+    };
+
+    // TODO: Verify payment on-chain using payload.tx_hash
+    // For MVP, we'll skip verification and just grant access
+
+    tracing::info!(
+        repo = %format!("{}/{}", repo.address, repo.name),
+        payer_address = %payload.address,
+        tx_hash = %payload.tx_hash,
+        "granting paid read access (payment verification skipped for MVP)"
+    );
+
+    // Add the address to the paid-readers group
+    let paid_readers_group = config.groups.entry("paid-readers".to_string()).or_insert_with(|| {
+        repobox::config::Group {
+            name: "paid-readers".to_string(),
+            members: vec![],
+            includes: vec![],
+            resolver: None,
+        }
+    });
+
+    let identity = match repobox::config::Identity::parse(&format!("evm:{}", payload.address)) {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, "invalid address format").into_response(),
+    };
+
+    if !paid_readers_group.members.contains(&identity) {
+        paid_readers_group.members.push(identity);
+
+        // Write updated config back to the repo
+        if let Err(e) = write_config_to_repo(&repo_dir, &config) {
+            tracing::error!(error = %e, "failed to update config");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "failed to update config").into_response();
+        }
+    }
+
+    (StatusCode::OK, "access granted").into_response()
+}
+
+#[derive(serde::Deserialize)]
+struct GrantAccessRequest {
+    address: String,
+    tx_hash: String,
+}
+
+/// Convert USDC amount string (e.g., "1.00") to raw amount (e.g., "1000000").
+/// USDC has 6 decimal places.
+fn parse_usdc_amount(price_str: &str) -> Option<String> {
+    let amount: f64 = price_str.parse().ok()?;
+    let raw_amount = (amount * 1_000_000.0) as u64;
+    Some(raw_amount.to_string())
+}
+
+/// Write updated config back to the repository.
+/// For MVP, this updates the config in the current HEAD branch.
+fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Config) -> Result<(), std::io::Error> {
+    // For MVP, we'll create a simple YAML representation
+    // In production, you'd want to preserve the original YAML structure/comments
+    let mut yaml_content = String::new();
+
+    // Write groups
+    if !config.groups.is_empty() {
+        yaml_content.push_str("groups:\n");
+        for (name, group) in &config.groups {
+            yaml_content.push_str(&format!("  {}:\n", name));
+            if !group.members.is_empty() {
+                yaml_content.push_str("    members:\n");
+                for member in &group.members {
+                    yaml_content.push_str(&format!("      - {}\n", member));
+                }
+            }
+            if !group.includes.is_empty() {
+                yaml_content.push_str("    includes:\n");
+                for include in &group.includes {
+                    yaml_content.push_str(&format!("      - {}\n", include));
+                }
+            }
+        }
+        yaml_content.push('\n');
+    }
+
+    // Write permissions
+    yaml_content.push_str("permissions:\n");
+    let default_str = match config.permissions.default {
+        repobox::config::DefaultPolicy::Allow => "allow",
+        repobox::config::DefaultPolicy::Deny => "deny",
+    };
+    yaml_content.push_str(&format!("  default: {}\n", default_str));
+    yaml_content.push_str("  rules:\n");
+    for rule in &config.permissions.rules {
+        let subject_str = match &rule.subject {
+            repobox::config::Subject::All => "*".to_string(),
+            repobox::config::Subject::Group(name) => name.clone(),
+            repobox::config::Subject::Identity(id) => id.to_string(),
+        };
+        let deny_str = if rule.deny { "not " } else { "" };
+        let target_str = if let Some(branch) = &rule.target.branch {
+            if let Some(path) = &rule.target.path {
+                format!("{} >{}", path, branch)
+            } else {
+                format!(">{}", branch)
+            }
+        } else if let Some(path) = &rule.target.path {
+            path.clone()
+        } else {
+            "*".to_string()
+        };
+        yaml_content.push_str(&format!("    - \"{} {}{} {}\"\n", subject_str, deny_str, rule.verb, target_str));
+    }
+
+    // Write x402 config if present
+    if let Some(x402) = &config.x402 {
+        yaml_content.push_str("\nx402:\n");
+        yaml_content.push_str(&format!("  read_price: \"{}\"\n", x402.read_price));
+        yaml_content.push_str(&format!("  recipient: \"{}\"\n", x402.recipient));
+        yaml_content.push_str(&format!("  network: \"{}\"\n", x402.network));
+    }
+
+    // Write to a temporary file and then commit it
+    let temp_file = std::env::temp_dir().join(format!("config-{}.yml", std::process::id()));
+    std::fs::write(&temp_file, yaml_content)?;
+
+    // Use git to update the config in the repo
+    let output = std::process::Command::new("git")
+        .args(["hash-object", "-w"])
+        .arg(&temp_file)
+        .current_dir(repo_dir)
+        .output()?;
+
+    if !output.status.success() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "failed to hash config object"
+        ));
+    }
+
+    let config_hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    // Update the index
+    let output = std::process::Command::new("git")
+        .args(["update-index", "--add", "--cacheinfo", "100644", &config_hash, ".repobox/config.yml"])
+        .current_dir(repo_dir)
+        .output()?;
+
+    if !output.status.success() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "failed to update index"
+        ));
+    }
+
+    // Create a new commit
+    let tree_output = std::process::Command::new("git")
+        .args(["write-tree"])
+        .current_dir(repo_dir)
+        .output()?;
+
+    if !tree_output.status.success() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "failed to write tree"
+        ));
+    }
+
+    let tree_hash = String::from_utf8_lossy(&tree_output.stdout).trim().to_string();
+
+    // Get current HEAD
+    let head_output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo_dir)
+        .output()?;
+
+    let parent_arg = if head_output.status.success() {
+        let head_hash = String::from_utf8_lossy(&head_output.stdout).trim().to_string();
+        vec!["-p".to_string(), head_hash]
+    } else {
+        vec![]
+    };
+
+    // Create commit
+    let mut commit_args = vec!["commit-tree".to_string(), tree_hash, "-m".to_string(), "x402: grant paid read access".to_string()];
+    commit_args.extend(parent_arg);
+
+    let commit_output = std::process::Command::new("git")
+        .args(&commit_args)
+        .current_dir(repo_dir)
+        .output()?;
+
+    if !commit_output.status.success() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "failed to create commit"
+        ));
+    }
+
+    let commit_hash = String::from_utf8_lossy(&commit_output.stdout).trim().to_string();
+
+    // Update HEAD
+    std::process::Command::new("git")
+        .args(["update-ref", "HEAD", &commit_hash])
+        .current_dir(repo_dir)
+        .output()?;
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&temp_file);
+
+    Ok(())
 }
