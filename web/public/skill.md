@@ -36,11 +36,12 @@ These are two separate commands with very different scopes:
 
 After `repobox init`, commits in that repo are automatically EVM-signed. No other repos are affected. No PATH changes. No global config.
 
-**`repobox setup`** — Installs the global git shim. Does two things:
+**`repobox setup`** — Installs the global git shim. Does three things:
 1. Creates a symlink at `~/.repobox/bin/git` → the repobox binary
 2. Prepends `~/.repobox/bin` to your PATH (via `~/.bashrc` / `~/.zshrc`)
+3. Sets up the credential helper: `git config --global credential.helper "!repobox credential-helper"`
 
-After `repobox setup`, every `git` command goes through repobox first. **For repos without `.repobox/config.yml`, repobox is a complete passthrough** — it delegates to real git with zero overhead. For repos where you've run `repobox init`, permissions are enforced locally before the command executes.
+After `repobox setup`, every `git` command goes through repobox first, and pushes/clones to `git.repo.box` are automatically authenticated using your EVM key (no passwords, no SSH keys). **For repos without `.repobox/config.yml`, repobox is a complete passthrough** — it delegates to real git with zero overhead. For repos where you've run `repobox init`, permissions are enforced locally before the command executes.
 
 With the shim active, repobox subcommands are accessed as git subcommands: `git repobox init`, `git repobox keys generate`, etc.
 
@@ -229,50 +230,50 @@ groups:
     - evm:0xBob00000000000000000000000000000000002
 
   agents:
-    - evm:0xAgent1000000000000000000000000000000003
-    - evm:0xAgent2000000000000000000000000000000004
+    - evm:0xCoder000000000000000000000000000000003
+    - evm:0xTester00000000000000000000000000000004
 
   community:
-    - founders                         # include the founders group
-    - agents                           # include the agents group
-
-  community-external:
-    resolver: http
-    url: https://api.example.com/community
-    cache_ttl: 120
+    - founders                           # include founders group
+    - agents                             # include agents group
 
   token-holders:
     resolver: onchain
     chain: 8453
-    contract: "0xTokenContract..."
+    contract: "0xTokenContract000000000000000000000000005"
     function: balanceOf
     cache_ttl: 300
 
 permissions:
   default: deny
   rules:
-    # Access
-    - "* read ./**"                    # anyone can clone
+    # Anyone can clone
+    - "* read >*"
 
-    # Branch permissions
-    - "community push >main"           # static community can push to main
-    - "community-external push >main"  # dynamically resolved members too
-    - "agents push >agent/**"          # agents can push to agent/ branches
-    - "* branch >feature/**"           # anyone can create feature branches
-    - "founders merge >main"           # only founders merge to main
-    - "founders force-push >*"         # only founders can force-push
-    - "founders delete >*"             # only founders can delete branches
+    # Founders: full control, but no force-push to main
+    - founders not force-push >main
+    - founders own >main
 
-    # File permissions
-    - "* append ./wall.jsonl"          # anyone can append to wall.jsonl
-    - "founders edit ./**"             # founders can edit anything
-    - "agents edit ./src/**"           # agents can edit source code
-    - "agents not edit ./.repobox/**"  # but agents cannot edit config
-    - "token-holders write ./docs/**"  # token holders can add docs
+    # Agents: work on feature branches, edit source + tests
+    - agents push >feature/**
+    - agents create >feature/**
+    - agents delete >feature/**
+    - agents edit ./src/** >feature/**
+    - agents edit ./tests/** >feature/**
+    - agents append ./CHANGELOG.md
+
+    # Token holders: submit proposals on dedicated branches
+    - token-holders push >proposal/**
+    - token-holders create >proposal/**
+    - token-holders edit ./proposals/** >proposal/**
+
+    # Anyone can append to the guestbook
+    - "* append ./guestbook.jsonl"
+    - "* push >main"
 
 # Optional: x402 paid access
 x402:
-  read_price: "1.00"                   # USDC
+  read_price: "1.00"                    # USDC
   recipient: "0xRecipient..."
   network: base
 ```
@@ -297,7 +298,7 @@ git push -u origin main
 
 Your repo is immediately live at `https://git.repo.box/<address>/<repo>.git`. Anyone can clone it (if read permissions allow). The server enforces your `.repobox/config.yml` on every push.
 
-**Important**: If you don't add a `.repobox/config.yml`, the repo has no permission enforcement — anyone who knows the URL can push. Run `repobox init` and configure your permissions before sharing.
+Without a `.repobox/config.yml`, the repo is public (anyone can clone) and only the owner (the address that made the first push) can push. Add a config to define granular permissions for other contributors.
 
 ### Explorer
 
