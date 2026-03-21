@@ -35,6 +35,11 @@ Overhaul the `/playground` page: (1) **Visual refresh** — match the new explor
 - **Tags**: feature, permissions, ens
 Allow ENS names directly in `.repobox/config.yml` rules and group members, e.g. `vitalik.eth push >main`. Resolution happens via the existing resolver proxy on `git.repo.box` (add ENS→address resolution to repobox-server's `/api/resolve` endpoint). Key property: if the ENS name changes ownership, the permission follows the name — not the old address. This means permissions are checked at evaluation time, not at config parse time. Cache with short TTL (~60s) to balance freshness vs performance.
 
+### Docs pass — update to reflect latest state
+- **Priority**: P3
+- **Tags**: docs
+Go through all docs pages (`/docs`, `web/content/docs/`, README, SKILL.md, `web/public/skill.md`) and update to reflect current state: new verbs (`branch`, `read`, `own` expansion), bare-word group refs, `.repobox/config.yml` path, credential helper flow, resolver proxy, force push policy, etc. Only run this when no other P0/P1/P2 tasks remain in backlog.
+
 ### Empty state illustrations
 - **Priority**: P2
 - **Tags**: explorer, ui
