@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveENS } from '@/lib/ens';
+import { resolveAddressDisplay } from '@/lib/addressResolver';
 
 interface RouteContext {
   params: Promise<{ name: string }>;
@@ -19,37 +20,47 @@ export async function GET(
       );
     }
     
-    // Only try to resolve if it looks like an ENS name
-    if (!name.endsWith('.eth')) {
+    let address: string | null = null;
+    let type: string = 'unknown';
+    
+    // 1. Check if it's already an address
+    if (/^0x[a-fA-F0-9]{40}$/i.test(name)) {
+      address = name;
+      type = 'address';
+    }
+    // 2. Try ENS resolution
+    else if (name.endsWith('.eth')) {
+      address = await resolveENS(name);
+      type = 'ens';
+    }
+    // 3. Future: subdomain resolution
+    else {
+      type = 'subdomain';
+      // For now, subdomains are not implemented
       return NextResponse.json(
-        { error: 'Only .eth names are supported' },
-        { status: 400 }
+        { error: 'Subdomain resolution not yet implemented' },
+        { status: 501 }
       );
     }
     
-    try {
-      const address = await resolveENS(name);
-      
-      if (address) {
-        return NextResponse.json({
-          name,
-          address
-        });
-      } else {
-        return NextResponse.json(
-          { error: 'Name not found or not resolved' },
-          { status: 404 }
-        );
-      }
-    } catch (error) {
-      console.error('ENS resolution error:', error);
+    if (!address) {
       return NextResponse.json(
-        { error: 'Failed to resolve name' },
-        { status: 500 }
+        { error: 'Name not found or not resolved' },
+        { status: 404 }
       );
     }
+    
+    // Get display name for the resolved address
+    const displayName = await resolveAddressDisplay(address);
+    
+    return NextResponse.json({
+      name,
+      address,
+      displayName,
+      type
+    });
   } catch (error) {
-    console.error('Error in resolve endpoint:', error);
+    console.error('Resolve endpoint error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

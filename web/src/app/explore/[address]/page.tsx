@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress, copyToClipboard } from '@/lib/utils';
+import AddressDisplay from '@/components/AddressDisplay';
 
 interface Repo {
   address: string;
@@ -48,7 +49,6 @@ export default function AddressPage() {
   const params = useParams();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
 
   const address = Array.isArray(params.address) ? params.address[0] : params.address;
 
@@ -70,12 +70,7 @@ export default function AddressPage() {
     fetchData();
   }, [address]);
 
-  const handleCopyAddress = async () => {
-    if (!address) return;
-    await copyToClipboard(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+
 
   // Format commit count properly
   const formatCommitCount = (count: number): string => {
@@ -120,23 +115,13 @@ export default function AddressPage() {
             <div className="explore-profile-details">
               <h1 className="explore-profile-title">Developer</h1>
               <div className="explore-profile-address">
-                <code>{address}</code>
-                <button 
-                  onClick={handleCopyAddress} 
-                  className="explore-profile-copy-btn"
-                  title="Copy address"
-                >
-                  {copied ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="20,6 9,17 4,12"></polyline>
-                    </svg>
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                  )}
-                </button>
+                <AddressDisplay 
+                  address={address} 
+                  size="lg" 
+                  linkable={false}
+                  showCopy={true}
+                  showTooltip={true}
+                />
               </div>
             </div>
           </div>
