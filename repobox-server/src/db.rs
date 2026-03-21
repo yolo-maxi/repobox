@@ -42,6 +42,18 @@ pub(crate) fn init(db_path: &Path) -> std::io::Result<()> {
         )
         .map_err(to_io_error)?;
 
+    // Create aliases table
+    connection
+        .execute(
+            "CREATE TABLE IF NOT EXISTS aliases (
+                alias TEXT PRIMARY KEY,
+                address TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .map_err(to_io_error)?;
+
     // Create indexes for performance
     create_push_log_indexes(&connection).map_err(to_io_error)?;
     Ok(())
@@ -161,4 +173,137 @@ fn create_push_log_indexes(connection: &Connection) -> Result<(), rusqlite::Erro
 
 fn to_io_error(error: rusqlite::Error) -> std::io::Error {
     std::io::Error::other(error)
+}
+
+/// Generate and assign a random alias for an address
+pub(crate) fn assign_random_alias(db_path: &Path, address: &str) -> std::io::Result<String> {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let adjectives = [
+        "happy", "lucky", "swift", "clever", "bright", "calm", "bold", "wise", "kind", "cool",
+        "quick", "smart", "brave", "sweet", "fresh", "clean", "sharp", "smooth", "strong", "pure",
+        "clear", "deep", "warm", "soft", "light", "dark", "rich", "full", "fine", "good",
+        "great", "high", "long", "new", "old", "right", "big", "small", "large", "short",
+        "young", "early", "late", "fast", "slow", "hot", "cold", "dry", "wet", "easy"
+    ];
+
+    let animals = [
+        "cat", "dog", "fox", "owl", "bee", "ant", "bat", "cow", "pig", "rat",
+        "elk", "emu", "cod", "eel", "fly", "gnu", "hen", "jay", "koi", "lamb",
+        "lynx", "newt", "ox", "pug", "ram", "seal", "swan", "toad", "wasp", "yak",
+        "bear", "deer", "duck", "fish", "goat", "hawk", "ibex", "joey", "kiwi", "lion",
+        "mole", "pony", "quail", "robin", "shark", "tiger", "whale", "zebra", "eagle", "horse"
+    ];
+
+    // Use the address as a seed for randomness to make aliases deterministic
+    let mut hasher = DefaultHasher::new();
+    address.hash(&mut hasher);
+    let seed = hasher.finish();
+
+    let adj_idx = (seed % adjectives.len() as u64) as usize;
+    let animal_idx = ((seed >> 8) % animals.len() as u64) as usize;
+
+    let mut alias = format!("{}-{}", adjectives[adj_idx], animals[animal_idx]);
+
+    // If alias already exists, append a number
+    let mut counter = 1;
+    while resolve_alias(db_path, &alias)?.is_some() {
+        alias = format!("{}-{}-{}", adjectives[adj_idx], animals[animal_idx], counter);
+        counter += 1;
+    }
+
+    // Insert the alias
+    let connection = Connection::open(db_path).map_err(to_io_error)?;
+    connection
+        .execute(
+            "INSERT INTO aliases(alias, address, created_at) VALUES(?1, ?2, ?3)",
+            params![alias, address, now_string()],
+        )
+        .map_err(to_io_error)?;
+
+    Ok(alias)
+}
+
+/// Resolve an alias to an address
+pub(crate) fn resolve_alias(db_path: &Path, alias: &str) -> std::io::Result<Option<String>> {
+    let connection = Connection::open(db_path).map_err(to_io_error)?;
+    connection
+        .query_row(
+            "SELECT address FROM aliases WHERE alias = ?1",
+            params![alias],
+            |row| Ok(row.get::<_, String>(0)?),
+        )
+        .optional()
+        .map_err(to_io_error)
+}
+
+/// Get the alias for an address (if any)
+pub(crate) fn get_alias_for_address(db_path: &Path, address: &str) -> std::io::Result<Option<String>> {
+    let connection = Connection::open(db_path).map_err(to_io_error)?;
+    connection
+        .query_row(
+            "SELECT alias FROM aliases WHERE address = ?1",
+            params![address],
+            |row| Ok(row.get::<_, String>(0)?),
+        )
+        .optional()
+        .map_err(to_io_error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempdir::TempDir;
+
+    #[test]
+    fn test_assign_and_resolve_alias() {
+        let temp_dir = TempDir::new("repobox_test").unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        // Initialize the database
+        init(&db_path).unwrap();
+
+        // Test address
+        let address = "0x1234567890123456789012345678901234567890";
+
+        // Assign an alias
+        let alias = assign_random_alias(&db_path, address).unwrap();
+        assert!(!alias.is_empty());
+        assert!(alias.contains('-')); // Should be adjective-animal format
+
+        // Resolve the alias back to address
+        let resolved = resolve_alias(&db_path, &alias).unwrap();
+        assert_eq!(resolved, Some(address.to_string()));
+
+        // Get alias for address
+        let found_alias = get_alias_for_address(&db_path, address).unwrap();
+        assert_eq!(found_alias, Some(alias));
+
+        // Test non-existent alias
+        let no_alias = resolve_alias(&db_path, "non-existent-alias").unwrap();
+        assert_eq!(no_alias, None);
+    }
+
+    #[test]
+    fn test_deterministic_alias_generation() {
+        let temp_dir = TempDir::new("repobox_test").unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        init(&db_path).unwrap();
+
+        let address = "0x1234567890123456789012345678901234567890";
+
+        // Generate alias twice for the same address
+        let alias1 = assign_random_alias(&db_path, address).unwrap();
+
+        // Clear the database and regenerate
+        std::fs::remove_file(&db_path).unwrap();
+        init(&db_path).unwrap();
+
+        let alias2 = assign_random_alias(&db_path, address).unwrap();
+
+        // Should be the same (deterministic based on address)
+        assert_eq!(alias1, alias2);
+    }
 }

@@ -6,9 +6,11 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
+use serde::Serialize;
 
 use crate::db;
 use crate::git::{self, BackendRequest, RepoPath};
+use crate::resolve;
 use crate::AppState;
 
 pub(crate) fn router() -> Router<Arc<AppState>> {
@@ -24,14 +26,22 @@ pub(crate) fn router() -> Router<Arc<AppState>> {
         .route("/{address}/{repo}/git-receive-pack", post(receive_pack))
         .route("/{address}/{repo}/HEAD", get(head))
         .route("/{address}/{repo}/x402/grant-access", post(grant_access))
+        // Name resolution route
+        .route("/{name}/resolve", get(resolve_name))
 }
 
 async fn info_refs(
     State(state): State<Arc<AppState>>,
-    Path((address, repo)): Path<(String, String)>,
+    Path((name, repo)): Path<(String, String)>,
     Query(query): Query<InfoRefsQuery>,
     headers: HeaderMap,
 ) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
     let repo = match repo_path(address, repo) {
         Ok(repo) => repo,
         Err(status) => return status.into_response(),
@@ -80,10 +90,16 @@ async fn info_refs(
 
 async fn upload_pack(
     State(state): State<Arc<AppState>>,
-    Path((address, repo)): Path<(String, String)>,
+    Path((name, repo)): Path<(String, String)>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
     let repo = match repo_path(address, repo) {
         Ok(repo) => repo,
         Err(status) => return status.into_response(),
@@ -109,10 +125,16 @@ async fn upload_pack(
 
 async fn receive_pack(
     State(state): State<Arc<AppState>>,
-    Path((address, repo)): Path<(String, String)>,
+    Path((name, repo)): Path<(String, String)>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
     let repo = match repo_path(address, repo) {
         Ok(repo) => repo,
         Err(status) => return status.into_response(),
@@ -197,6 +219,18 @@ async fn receive_pack(
         match git::extract_owner_from_first_commit(&state.data_dir, &repo) {
             Ok(Some(signer)) => {
                 let _ = db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
+
+                // Auto-assign alias if this is the first push for this address
+                if db::get_alias_for_address(&state.db_path, &signer).unwrap_or(None).is_none() {
+                    if let Ok(alias) = db::assign_random_alias(&state.db_path, &signer) {
+                        tracing::info!(
+                            address = %signer,
+                            alias = %alias,
+                            "auto-assigned alias for first push"
+                        );
+                    }
+                }
+
                 tracing::info!(
                     repo = %format!("{}/{}", repo.address, repo.name),
                     owner = %signer,
@@ -227,9 +261,15 @@ async fn receive_pack(
 
 async fn head(
     State(state): State<Arc<AppState>>,
-    Path((address, repo)): Path<(String, String)>,
+    Path((name, repo)): Path<(String, String)>,
     headers: HeaderMap,
 ) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
     let repo = match repo_path(address, repo) {
         Ok(repo) => repo,
         Err(status) => return status.into_response(),
@@ -280,6 +320,29 @@ fn repo_path(address: String, repo: String) -> Result<RepoPath, StatusCode> {
     git::validate_address(&address)?;
     let name = git::parse_repo(&repo)?;
     Ok(RepoPath { address, name })
+}
+
+/// Resolve a name (address, ENS name, or alias) to an Ethereum address
+async fn resolve_name_to_address(state: &AppState, name: &str) -> Result<String, StatusCode> {
+    // Try to resolve as an alias first (before git validation)
+    if let Ok(Some(address)) = db::resolve_alias(&state.db_path, name) {
+        return Ok(address);
+    }
+
+    // Check if it's already a valid address format for the existing git validation
+    // This allows compatibility with existing test addresses like "0xdemo"
+    if git::validate_address(name).is_ok() {
+        return Ok(name.to_string());
+    }
+
+    // Then try ENS resolution
+    match resolve::resolve_ens_name(name).await {
+        Ok(address) => Ok(address),
+        Err(e) => {
+            tracing::debug!("Failed to resolve name '{}': {}", name, e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
 }
 
 /// Check if the request has read access to the repo.
@@ -673,7 +736,18 @@ async fn addressless_receive_pack(
                 
                 // Record ownership in database
                 let _ = db::insert_repo_if_missing(&state.db_path, &signer, &repo_name, &signer);
-                
+
+                // Auto-assign alias if this is the first push for this address
+                if db::get_alias_for_address(&state.db_path, &signer).unwrap_or(None).is_none() {
+                    if let Ok(alias) = db::assign_random_alias(&state.db_path, &signer) {
+                        tracing::info!(
+                            address = %signer,
+                            alias = %alias,
+                            "auto-assigned alias for first address-less push"
+                        );
+                    }
+                }
+
                 tracing::info!(
                     repo = %format!("{}/{}", signer, repo_name),
                     owner = %signer,
@@ -754,9 +828,15 @@ async fn addressless_head(
 
 async fn grant_access(
     State(state): State<Arc<AppState>>,
-    Path((address, repo)): Path<(String, String)>,
+    Path((name, repo)): Path<(String, String)>,
     axum::extract::Json(payload): axum::extract::Json<GrantAccessRequest>,
 ) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
     let repo = match repo_path(address, repo) {
         Ok(repo) => repo,
         Err(status) => return status.into_response(),
@@ -985,4 +1065,70 @@ fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Co
     let _ = std::fs::remove_file(&temp_file);
 
     Ok(())
+}
+
+async fn resolve_name(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> Response {
+    #[derive(Serialize)]
+    struct ResolveResponse {
+        address: String,
+        source: String,
+    }
+
+    let (address, source) = if name.starts_with("0x") && name.len() == 42 && name[2..].chars().all(|c| c.is_ascii_hexdigit()) {
+        // Direct address
+        (name.to_lowercase(), "direct".to_string())
+    } else if let Ok(Some(addr)) = db::resolve_alias(&state.db_path, &name) {
+        // Alias resolution
+        (addr, "alias".to_string())
+    } else {
+        // Try ENS resolution
+        match resolve::resolve_ens_name(&name).await {
+            Ok(addr) => (addr, "ens".to_string()),
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    format!("Failed to resolve name '{}': {}", name, e)
+                ).into_response();
+            }
+        }
+    };
+
+    axum::Json(ResolveResponse { address, source }).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use tempdir::TempDir;
+
+    fn create_test_state() -> Arc<AppState> {
+        let temp_dir = TempDir::new("repobox_test").unwrap();
+        let data_dir = temp_dir.into_path();
+        Arc::new(AppState::new(data_dir, None).unwrap())
+    }
+
+    #[tokio::test]
+    async fn test_resolve_name_to_address() {
+        let state = create_test_state();
+
+        // Test with a format that passes git validation (like test addresses in existing tests)
+        let address = "0xdemo";
+        let result = resolve_name_to_address(&state, address).await.unwrap();
+        assert_eq!(result, address);
+
+        // Test alias resolution - use a different address to avoid conflicts
+        let real_address = "0xabcdef1234567890abcdef1234567890abcdef12";
+        let alias = db::assign_random_alias(&state.db_path, real_address).unwrap();
+
+        // Verify the alias was stored correctly
+        let resolved_from_db = db::resolve_alias(&state.db_path, &alias).unwrap();
+        assert_eq!(resolved_from_db, Some(real_address.to_string()));
+
+        let result = resolve_name_to_address(&state, &alias).await.unwrap();
+        assert_eq!(result, real_address);
+    }
 }

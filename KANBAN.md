@@ -23,11 +23,6 @@ Verify all commits in a repo are properly signed. Show signer address per commit
 - **Tags**: feature, server
 Use on-chain resolver to gate read access. Hold X tokens to clone.
 
-### Activity feed on explorer home
-- **Priority**: P1
-- **Tags**: feature, explorer
-The "Recent Activity" column shows "No recent activity" — wire up the push log.
-
 ## 📋 Backlog
 
 ### Contributor graph / identity cards
@@ -52,10 +47,10 @@ Replace "No recent activity", "No repositories found", etc with illustrated empt
 
 ## 🔨 In Progress
 
-### Repo stats cards (lines of code, languages, contributors)
-- **Priority**: P2
-- **Tags**: explorer, ui
-Show language breakdown bar (like GitHub), total lines of code, number of unique signers (contributors), and repo age. Use `git log` + file extension analysis server-side. Display as colored bar + stat cards on repo detail page.
+### Activity feed on explorer home
+- **Priority**: P1
+- **Tags**: feature, explorer
+The "Recent Activity" column shows "No recent activity" — wire up the push log.
 
 ## 🚧 Blocked
 
@@ -64,6 +59,10 @@ Show language breakdown bar (like GitHub), total lines of code, number of unique
 - **Tags**: infra
 
 ## ✅ Done
+
+### Repo stats cards (lines of code, languages, contributors)
+- **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
+Language breakdown bar (like GitHub), total lines of code, number of unique signers (contributors), and repo age via git log + file extension analysis server-side. Displayed as colored stat cards on repo detail page.
 
 ### Mobile-responsive explorer
 - **Completed**: 2026-03-21 | **Agent**: claude-agent (0xAAc0...4a00)
