@@ -51,6 +51,11 @@ Allow ENS names in `.repobox/config.yml` rules, e.g. `vitalik.eth push >main`. R
 - **Tags**: playground, ui, ai
 Visual refresh, load system prompt from canonical source so it never drifts (currently missing `own`, `read`, `branch`), switch to faster Venice model, test both English→Config and Config→English modes.
 
+### Accurate llms.txt — critical for agent judges
+- **Priority**: P1
+- **Tags**: docs, agents
+`repo.box/llms.txt` must be fully accurate and current — hackathon agent-judges will read this to understand what repo.box does. Review and update: correct verbs (including `branch`, `read`, `own`), config path (`.repobox/config.yml`), credential helper flow, force push policy, x402 payments, ENS resolution, on-chain resolvers, explorer features. Remove anything that doesn't work yet or mark it clearly. This is our pitch to the judges in machine-readable form.
+
 ### Empty state illustrations
 - **Priority**: P2
 - **Tags**: explorer, ui
