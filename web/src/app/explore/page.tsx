@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
+import AddressDisplay from '@/components/AddressDisplay';
 
 function truncateMessage(message: string, maxLength: number = 80): string {
   if (message.length <= maxLength) return message;
@@ -339,13 +340,13 @@ export default function ExplorePage() {
                           <span style={{ color: '#58a6ff', fontSize: 15, fontWeight: 600 }}>
                             {repo.name}
                           </span>
-                          <span style={{
-                            color: '#484f58',
-                            fontSize: 12,
-                            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                          }}>
-                            {formatAddress(repo.owner_address)}
-                          </span>
+                          <AddressDisplay 
+                            address={repo.owner_address}
+                            size="sm"
+                            showCopy={false}
+                            linkable={true}
+                            className="explore-repo-owner"
+                          />
                         </div>
                         {repo.description && (
                           <p style={{ color: '#8b949e', fontSize: 13, margin: 0, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

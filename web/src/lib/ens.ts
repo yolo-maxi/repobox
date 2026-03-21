@@ -1,57 +1,96 @@
-// Simple ENS resolution cache
-const cache = new Map<string, { address: string; timestamp: number }>();
+import { ethers } from 'ethers';
+
+// Enhanced ENS cache
+const ensCache = new Map<string, { 
+  address: string | null; 
+  timestamp: number; 
+  name?: string; 
+}>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+// Initialize provider
+let provider: ethers.JsonRpcProvider | null = null;
+
+function getProvider(): ethers.JsonRpcProvider {
+  if (!provider) {
+    provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com');
+  }
+  return provider;
+}
+
 export async function resolveENS(name: string): Promise<string | null> {
-  // Check cache first
-  const cached = cache.get(name);
+  if (!name.endsWith('.eth')) return null;
+  
+  // Check cache
+  const cached = ensCache.get(`forward:${name}`);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     return cached.address;
   }
   
   try {
-    // Use Ethereum mainnet RPC
-    const rpcUrl = 'https://eth.llamarpc.com';
+    const prov = getProvider();
+    const address = await prov.resolveName(name);
     
-    // Simple ENS resolution via RPC
-    // This is a basic implementation - for production you'd want a more robust ENS library
-    const response = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'eth_call',
-        params: [
-          {
-            to: '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e', // ENS Registry
-            data: `0x0178b8bf${name}` // resolver(bytes32)
-          },
-          'latest'
-        ]
-      })
+    // Cache result
+    ensCache.set(`forward:${name}`, {
+      address,
+      timestamp: Date.now()
     });
     
-    const data = await response.json();
+    return address;
+  } catch (error) {
+    console.error('ENS resolution error:', error);
     
-    if (data.result && data.result !== '0x' && data.result !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
-      // This is a simplified ENS resolution
-      // In a real implementation, you'd need to:
-      // 1. Get the resolver address from the registry
-      // 2. Call addr() on the resolver
-      // For now, we'll return a placeholder since the full ENS resolution is complex
-      
-      // Simple approach: check if the name ends with .eth and is valid format
-      if (name.endsWith('.eth') && name.length > 4) {
-        // Cache and return null for now - actual resolution would require more complex logic
-        cache.set(name, { address: '', timestamp: Date.now() });
+    // Cache null result to prevent repeated failed lookups
+    ensCache.set(`forward:${name}`, {
+      address: null,
+      timestamp: Date.now()
+    });
+    
+    return null;
+  }
+}
+
+export async function reverseResolveENS(address: string): Promise<string | null> {
+  if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) return null;
+  
+  // Check cache
+  const cached = ensCache.get(`reverse:${address.toLowerCase()}`);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.name || null;
+  }
+  
+  try {
+    const prov = getProvider();
+    const name = await prov.lookupAddress(address);
+    
+    // Verify reverse resolution (prevent spoofing)
+    if (name) {
+      const verifyAddress = await prov.resolveName(name);
+      if (verifyAddress?.toLowerCase() !== address.toLowerCase()) {
+        console.warn('ENS reverse resolution verification failed');
         return null;
       }
     }
     
-    return null;
+    // Cache result
+    ensCache.set(`reverse:${address.toLowerCase()}`, {
+      address: address.toLowerCase(),
+      name: name || undefined,
+      timestamp: Date.now()
+    });
+    
+    return name;
   } catch (error) {
-    console.error('ENS resolution error:', error);
+    console.error('ENS reverse resolution error:', error);
+    
+    // Cache null result
+    ensCache.set(`reverse:${address.toLowerCase()}`, {
+      address: address.toLowerCase(),
+      name: undefined,
+      timestamp: Date.now()
+    });
+    
     return null;
   }
 }

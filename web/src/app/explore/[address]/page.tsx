@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress, copyToClipboard } from '@/lib/utils';
+import AddressDisplay from '@/components/AddressDisplay';
+import { resolveNameToAddress } from '@/lib/addressResolver';
 
 interface Repo {
   address: string;
@@ -46,17 +48,55 @@ function detectLanguage(repoName: string): { name: string; color: string } {
 
 export default function AddressPage() {
   const params = useParams();
+  const router = useRouter();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
-  const address = Array.isArray(params.address) ? params.address[0] : params.address;
+  const addressOrName = Array.isArray(params.address) ? params.address[0] : params.address;
 
+  // Resolve name to address if needed
   useEffect(() => {
-    if (!address) return;
+    const resolveAddress = async () => {
+      if (!addressOrName) return;
+      
+      // If it's already an address, use it directly
+      if (/^0x[a-fA-F0-9]{40}$/i.test(addressOrName)) {
+        setResolvedAddress(addressOrName);
+        setResolving(false);
+        return;
+      }
+      
+      // Try to resolve name
+      try {
+        const resolved = await resolveNameToAddress(addressOrName);
+        if (resolved) {
+          setResolvedAddress(resolved);
+          // Update URL to canonical address form (optional - keeps human readable URL)
+          // router.replace(`/explore/${resolved}`);
+        } else {
+          // Name not found
+          setNotFound(true);
+        }
+      } catch (error) {
+        console.error('Resolution failed:', error);
+        setNotFound(true);
+      } finally {
+        setResolving(false);
+      }
+    };
+    
+    resolveAddress();
+  }, [addressOrName, router]);
+
+  // Fetch repos data
+  useEffect(() => {
+    if (!resolvedAddress) return;
     const fetchData = async () => {
       try {
-        const res = await fetch(`/api/explorer/repos?owner=${address}`);
+        const res = await fetch(`/api/explorer/repos?owner=${resolvedAddress}`);
         if (res.ok) {
           const data = await res.json();
           setRepos(data.repos || []);
@@ -68,14 +108,9 @@ export default function AddressPage() {
       }
     };
     fetchData();
-  }, [address]);
+  }, [resolvedAddress]);
 
-  const handleCopyAddress = async () => {
-    if (!address) return;
-    await copyToClipboard(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+
 
   // Format commit count properly
   const formatCommitCount = (count: number): string => {
@@ -83,7 +118,74 @@ export default function AddressPage() {
     return `${count} commits`;
   };
 
-  if (!address) return null;
+  if (!addressOrName) return null;
+
+  if (resolving) {
+    return (
+      <div className="explore-page">
+        <header className="explore-main-header">
+          <div className="explore-main-header-content">
+            <div className="explore-nav">
+              <Link href="/" className="explore-logo">
+                repo<span className="explore-logo-dot">.</span>box
+              </Link>
+              <nav className="explore-nav-links">
+                <Link href="/" className="explore-nav-link">Home</Link>
+                <Link href="/explore" className="explore-nav-link">Explore</Link>
+                <Link href="/docs" className="explore-nav-link">Docs</Link>
+              </nav>
+            </div>
+            <div className="explore-breadcrumb-nav">
+              <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
+              <span className="explore-breadcrumb-separator">/</span>
+              <span className="explore-breadcrumb-current">Resolving...</span>
+            </div>
+          </div>
+        </header>
+        
+        <div className="explore-main-content">
+          <div className="explore-loading">
+            <div className="explore-loading-spinner"></div>
+            <p>Resolving address...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div className="explore-page">
+        <header className="explore-main-header">
+          <div className="explore-main-header-content">
+            <div className="explore-nav">
+              <Link href="/" className="explore-logo">
+                repo<span className="explore-logo-dot">.</span>box
+              </Link>
+              <nav className="explore-nav-links">
+                <Link href="/" className="explore-nav-link">Home</Link>
+                <Link href="/explore" className="explore-nav-link">Explore</Link>
+                <Link href="/docs" className="explore-nav-link">Docs</Link>
+              </nav>
+            </div>
+            <div className="explore-breadcrumb-nav">
+              <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
+              <span className="explore-breadcrumb-separator">/</span>
+              <span className="explore-breadcrumb-current">Not Found</span>
+            </div>
+          </div>
+        </header>
+        
+        <div className="explore-main-content">
+          <div className="explore-empty">
+            <h3>Address not found</h3>
+            <p>Could not resolve "{addressOrName}" to an address.</p>
+            <Link href="/explore" className="explore-back-link">← Back to Explorer</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="explore-page">
@@ -120,23 +222,14 @@ export default function AddressPage() {
             <div className="explore-profile-details">
               <h1 className="explore-profile-title">Developer</h1>
               <div className="explore-profile-address">
-                <code>{address}</code>
-                <button 
-                  onClick={handleCopyAddress} 
-                  className="explore-profile-copy-btn"
-                  title="Copy address"
-                >
-                  {copied ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="20,6 9,17 4,12"></polyline>
-                    </svg>
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                  )}
-                </button>
+                <AddressDisplay 
+                  address={resolvedAddress || ''} 
+                  displayName={addressOrName !== resolvedAddress ? addressOrName : undefined}
+                  size="lg" 
+                  linkable={false}
+                  showCopy={true}
+                  showTooltip={true}
+                />
               </div>
             </div>
           </div>

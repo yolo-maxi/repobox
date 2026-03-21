@@ -24,11 +24,6 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### Address component with ENS/subdomain resolution + human-readable URLs
-- **Priority**: P1
-- **Tags**: feature, explorer, ui, ens
-Reusable `<AddressDisplay>` component. Resolution: ENS → repo.box subdomain → truncated hex. Hover: full address. Click: copy. All addresses clickable. Human-readable URL routing: `/explore/{ens-name}/` and `/explore/{subdomain}/` resolve and show repos. Add `/api/explorer/resolve/{name}` endpoint.
-
 ### ENS names in permissions
 - **Priority**: P1
 - **Tags**: feature, permissions, ens
@@ -61,17 +56,10 @@ Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented
 
 ## 🔨 In Progress
 
-### Fix repo detail page (explorer) — comprehensive overhaul
-- **Priority**: P0
-- **Tags**: explorer, ui, bugs
-Major overhaul of `/explore/[address]/[name]` page:
-1. **Sidebar layout**: Match explore home — left sidebar + constrained main column. No full-width.
-2. **Broken tabs**: Fix Files, Commits, Config, Contributors tabs — data seems correct but UI is broken/bad.
-3. **Remove SSH clone URL**: SSH not implemented. Only HTTPS with EVM-authed credential helper.
-4. **Fix contributor count inconsistency**: Explore list shows different count than repo detail.
-5. **Contribution chart**: Visual chart on Contributors tab.
-6. **Fix language bar "Other" duplication**: Shows "Other" twice. Exclude binary/data/blob files.
-7. **GitHub-style URL schema**: `/tree/{branch}/{path}`, `/blob/{branch}/{path}`, `/commits/{branch}`.
+### Address component with ENS/subdomain resolution + human-readable URLs
+- **Priority**: P1
+- **Tags**: feature, explorer, ui, ens
+Reusable `<AddressDisplay>` component. Resolution: ENS → repo.box subdomain → truncated hex. Hover: full address. Click: copy. All addresses clickable. Human-readable URL routing: `/explore/{ens-name}/` and `/explore/{subdomain}/` resolve and show repos. Add `/api/explorer/resolve/{name}` endpoint.
 
 ## 🚧 Blocked
 
