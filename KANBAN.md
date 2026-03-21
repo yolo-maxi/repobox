@@ -39,11 +39,6 @@ The "Recent Activity" column shows "No recent activity" — wire up the push log
 
 ## 📋 Backlog
 
-### Add .repobox/config.yml to all studio projects
-- **Priority**: P1
-- **Tags**: dogfood
-Push SSS, Oceangram, and other repos to git.repo.box with signed commits + configs.
-
 ### Install script improvements
 - **Priority**: P1
 - **Tags**: cli, distribution
@@ -60,6 +55,11 @@ Each commit should show which EVM address signed it. Different agents = differen
 Server should check if `.repobox/config.yml` exists in the pushed tree. Repos without config = no permission enforcement.
 
 ## 🔨 In Progress
+
+### Add .repobox/config.yml to all studio projects
+- **Priority**: P1
+- **Tags**: dogfood
+Push SSS, Oceangram, and other repos to git.repo.box with signed commits + configs.
 
 ### Wire up activity feed from push events
 - **Priority**: P1

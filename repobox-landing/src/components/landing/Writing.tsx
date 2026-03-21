@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, FormEvent } from "react";
 import Link from "next/link";
 
 const BLOG_POSTS = [
@@ -24,6 +24,143 @@ const BLOG_POSTS = [
       "Intelligence is commoditized. Skills are splitting into two species.",
   },
 ];
+
+function NewsletterForm() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [msg, setMsg] = useState("");
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setStatus("loading");
+    try {
+      const res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStatus("error");
+        setMsg(data.error || "Something went wrong");
+      } else {
+        setStatus("ok");
+        setMsg(data.message || "Subscribed!");
+        setEmail("");
+      }
+    } catch {
+      setStatus("error");
+      setMsg("Network error");
+    }
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 20,
+        padding: 20,
+        background: "var(--bp-surface)",
+        border: "1px solid var(--bp-border)",
+        borderRadius: 8,
+      }}
+    >
+      <p
+        style={{
+          fontSize: 12,
+          lineHeight: "20px",
+          color: "var(--bp-dim)",
+          marginBottom: 12,
+        }}
+      >
+        Get new posts. No spam, no schedule.
+      </p>
+      <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8 }}>
+        <input
+          type="email"
+          placeholder="you@example.com"
+          required
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (status !== "idle" && status !== "loading") setStatus("idle");
+          }}
+          style={{
+            flex: 1,
+            background: "var(--bp-bg)",
+            border: "1px solid var(--bp-border)",
+            borderRadius: 4,
+            padding: "8px 16px",
+            fontSize: 12,
+            lineHeight: "20px",
+            height: 40,
+            color: "var(--bp-text)",
+            fontFamily: "var(--font-mono), monospace",
+            outline: "none",
+          }}
+        />
+        <button
+          type="submit"
+          disabled={status === "loading"}
+          style={{
+            background:
+              status === "ok"
+                ? "#4caf50"
+                : status === "error"
+                ? "#f44336"
+                : "var(--bp-accent)",
+            color: "var(--bp-bg)",
+            border: "none",
+            borderRadius: 4,
+            padding: "8px 20px",
+            height: 40,
+            fontFamily: "var(--font-mono), monospace",
+            fontWeight: 600,
+            fontSize: 12,
+            lineHeight: "20px",
+            cursor: status === "loading" ? "wait" : "pointer",
+            whiteSpace: "nowrap",
+            opacity: status === "loading" ? 0.6 : 1,
+            transition: "background 0.2s, opacity 0.2s",
+          }}
+        >
+          {status === "loading"
+            ? "..."
+            : status === "ok"
+            ? "✓"
+            : status === "error"
+            ? "Retry"
+            : "Subscribe"}
+        </button>
+      </form>
+      {msg && (
+        <p
+          style={{
+            fontSize: 11,
+            lineHeight: "18px",
+            color: status === "error" ? "#f44336" : "#4caf50",
+            marginTop: 8,
+          }}
+        >
+          {msg}
+        </p>
+      )}
+      <a
+        href="/feed.xml"
+        style={{
+          fontFamily: "var(--font-mono), monospace",
+          fontSize: 12,
+          lineHeight: "20px",
+          color: "var(--bp-accent2)",
+          display: "inline-block",
+          marginTop: 12,
+        }}
+      >
+        RSS
+      </a>
+    </div>
+  );
+}
 
 export function LandingWriting() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -128,19 +265,7 @@ export function LandingWriting() {
         </Link>
       ))}
 
-      <a
-        href="/feed.xml"
-        style={{
-          fontFamily: "var(--font-mono), monospace",
-          fontSize: 12,
-          lineHeight: "20px",
-          color: "var(--bp-accent2)",
-          display: "inline-block",
-          marginTop: 8,
-        }}
-      >
-        RSS
-      </a>
+      <NewsletterForm />
     </section>
   );
 }
