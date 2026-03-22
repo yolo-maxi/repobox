@@ -13,6 +13,7 @@ import ContributionChart from '@/components/explore/ContributionChart';
 import FileTree from '@/components/explore/FileTree';
 import CodeViewer from '@/components/explore/CodeViewer';
 import { SiteNav } from '@/components/SiteNav';
+import AddressDisplay from '@/components/AddressDisplay';
 
 interface RepoDetails {
   address: string; name: string; owner_address: string; created_at: string;
@@ -95,7 +96,7 @@ function ContributorCard({ contributor }: { contributor: Contributor }) {
           </div>
           {ensName && <div className="rd-contributor-addr">{formatAddress(contributor.address)}</div>}
         </div>
-        {contributor.isOwner && <span className="rd-badge">owner</span>}
+        {contributor.isOwner && <span className="rd-badge rd-badge-subtle">creator</span>}
       </div>
       <div className="rd-contributor-stats">
         <span><strong>{contributor.pushCount}</strong> pushes</span>
@@ -379,10 +380,15 @@ export default function RepoPage() {
           {activeTab === 'config' && (
             <div className="rd-config">
               <div className="rd-config-section">
-                <h3 className="rd-config-heading">Owner Identity</h3>
+                <h3 className="rd-config-heading">Created By</h3>
                 <div className="rd-config-identity">
-                  <code>{repo.owner_address}</code>
-                  <span className="rd-badge">owner</span>
+                  <AddressDisplay
+                    address={repo.owner_address}
+                    size="md"
+                    linkable={true}
+                    showCopy={true}
+                  />
+                  <span className="rd-badge rd-badge-subtle">first push</span>
                 </div>
               </div>
               <div className="rd-config-section">
@@ -599,6 +605,11 @@ export default function RepoPage() {
           background: rgba(79, 195, 247, 0.12);
           color: var(--bp-accent); border-radius: 10px;
           font-weight: 500;
+        }
+        .rd-badge-subtle {
+          background: rgba(255, 255, 255, 0.06);
+          color: var(--bp-dim);
+          border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         /* README */

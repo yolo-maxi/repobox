@@ -5,9 +5,11 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress, copyToClipboard } from '@/lib/utils';
 import AddressDisplay from '@/components/AddressDisplay';
-import { resolveNameToAddress } from '@/lib/addressResolver';
+import { resolveNameToAddress, resolveAddressDisplay } from '@/lib/addressResolver';
 import EmptyState from '@/components/EmptyState';
 import { EmptyRepository, AddressNotFound } from '@/components/illustrations';
+import Jazzicon from '@/components/Jazzicon';
+import ActivityHeatmap from '@/components/ActivityHeatmap';
 
 interface Repo {
   address: string;
@@ -21,6 +23,17 @@ interface Repo {
 
 interface ContributorRepo extends Repo {
   permissions: string[];
+}
+
+interface ActivityDay {
+  day: string;
+  count: number;
+}
+
+interface ProfileData {
+  firstCommitDate: number | null;
+  activeRepos: number;
+  activity: ActivityDay[];
 }
 
 // Detect primary language from file list (simplified)
@@ -150,6 +163,9 @@ export default function AddressPage() {
   const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
   const [resolving, setResolving] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
 
   const addressOrName = Array.isArray(params.address) ? params.address[0] : params.address;
 
@@ -182,6 +198,20 @@ export default function AddressPage() {
     resolveAddress();
   }, [addressOrName, router]);
 
+  // Resolve display name
+  useEffect(() => {
+    if (!resolvedAddress) return;
+    const resolveDisplay = async () => {
+      try {
+        const name = await resolveAddressDisplay(resolvedAddress);
+        setDisplayName(name);
+      } catch (error) {
+        console.error('Display name resolution failed:', error);
+      }
+    };
+    resolveDisplay();
+  }, [resolvedAddress]);
+
   // Fetch repos data
   useEffect(() => {
     if (!resolvedAddress) return;
@@ -200,6 +230,25 @@ export default function AddressPage() {
       }
     };
     fetchData();
+  }, [resolvedAddress]);
+
+  // Fetch profile data
+  useEffect(() => {
+    if (!resolvedAddress) return;
+    const fetchProfileData = async () => {
+      try {
+        const res = await fetch(`/api/explorer/profile/${resolvedAddress}`);
+        if (res.ok) {
+          const data = await res.json();
+          setProfileData(data);
+        }
+      } catch (error) {
+        console.error('Profile data error:', error);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+    fetchProfileData();
   }, [resolvedAddress]);
 
   const formatCommitCount = (count: number): string => {
@@ -283,6 +332,35 @@ export default function AddressPage() {
 
   const totalRepoCount = repos.length + contributorRepos.length;
   const totalCommits = repos.reduce((sum, r) => sum + r.commit_count, 0);
+  
+  // Determine title: use resolved name if available, otherwise "Developer"
+  const profileTitle = displayName || "Developer";
+  
+  // Show full address if arrived via name resolution
+  const showFullAddress = addressOrName !== resolvedAddress && !!displayName;
+  
+  // Format member since date
+  const formatMemberSince = (timestamp: number | null): string => {
+    if (!timestamp) return 'Unknown';
+    const date = new Date(timestamp * 1000);
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString(undefined, options);
+  };
+  
+  // Handle copy address
+  const handleCopyAddress = async () => {
+    if (resolvedAddress) {
+      try {
+        await copyToClipboard(resolvedAddress);
+      } catch (error) {
+        console.error('Copy failed:', error);
+      }
+    }
+  };
 
   return (
     <div className="explore-page">
@@ -312,21 +390,73 @@ export default function AddressPage() {
         <div className="explore-profile-header">
           <div className="explore-profile-info">
             <div className="explore-profile-avatar">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-              </svg>
+              <Jazzicon address={resolvedAddress || ''} size={80} />
             </div>
             <div className="explore-profile-details">
-              <h1 className="explore-profile-title">Developer</h1>
-              <div className="explore-profile-address">
-                <AddressDisplay
-                  address={resolvedAddress || ''}
-                  displayName={addressOrName !== resolvedAddress ? addressOrName : undefined}
-                  size="lg"
-                  linkable={false}
-                  showCopy={true}
-                  showTooltip={true}
-                />
+              <h1 className="explore-profile-title">{profileTitle}</h1>
+              
+              {showFullAddress && (
+                <>
+                  <div className="explore-profile-full-address">
+                    <code>{resolvedAddress}</code>
+                    <button 
+                      onClick={handleCopyAddress}
+                      className="explore-profile-copy-btn"
+                      title="Copy address"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {addressOrName.includes('.') && (
+                    <div className="explore-profile-ens-source" title="Resolved via repobox.eth CCIP-Read">
+                      {addressOrName}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="m9 12 2 2 4-4"/>
+                        <circle cx="21" cy="12" r="3"/>
+                        <path d="m21 9-9 9-5-5"/>
+                      </svg>
+                    </div>
+                  )}
+                </>
+              )}
+              
+              {!showFullAddress && (
+                <div className="explore-profile-address">
+                  <AddressDisplay
+                    address={resolvedAddress || ''}
+                    displayName={addressOrName !== resolvedAddress ? addressOrName : undefined}
+                    size="lg"
+                    linkable={false}
+                    showCopy={true}
+                    showTooltip={true}
+                  />
+                </div>
+              )}
+
+              {profileData && (
+                <div className="explore-profile-extended-stats">
+                  <div className="explore-profile-extended-stat">
+                    <span className="explore-profile-extended-stat-label">Member since</span>
+                    <span className="explore-profile-extended-stat-value">
+                      {formatMemberSince(profileData.firstCommitDate)}
+                    </span>
+                  </div>
+                  
+                  <div className="explore-profile-extended-stat">
+                    <span className="explore-profile-extended-stat-label">Active repos</span>
+                    <span className="explore-profile-extended-stat-value">
+                      {profileData.activeRepos}
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              <div className="explore-profile-readonly-note">
+                Identity is your key. Reputation is your commits.
               </div>
             </div>
           </div>
@@ -344,6 +474,11 @@ export default function AddressPage() {
             </div>
           </div>
         </div>
+
+        {/* Activity Heatmap */}
+        {profileData && profileData.activity.length > 0 && (
+          <ActivityHeatmap activity={profileData.activity} />
+        )}
 
         {/* Owned Repositories */}
         <div className="explore-content-section">
