@@ -1,5 +1,23 @@
 import { reverseResolveENS } from './ens';
 
+// Known identities from .boxconfig — local fallback for display names
+const KNOWN_IDENTITIES: Record<string, string> = {
+  '0xdbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048': 'Ocean',
+  '0x69C2920CA309577bcd79e4e6e3afdda93287Cc8b': '0xfran.eth',
+  '0x9aBA6b1a5175CA8fd97D6c83c2Dd66dA6f47234b': 'PM Agent',
+  '0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00': 'Claude',
+  '0x82240a161Fea724D059a74F948C8E18674c0fA09': 'Codex',
+  '0xe4D4438Fd215c2befe8ef3fB78E72e14e011C307': 'Reviewer',
+};
+
+function lookupKnownIdentity(address: string): string | null {
+  const lower = address.toLowerCase();
+  for (const [addr, name] of Object.entries(KNOWN_IDENTITIES)) {
+    if (addr.toLowerCase() === lower) return name;
+  }
+  return null;
+}
+
 export interface AddressResolution {
   address: string;
   displayName: string | null;
@@ -23,6 +41,19 @@ export async function resolveAddressDisplay(address: string): Promise<string | n
   }
   
   try {
+    // 0. Check known identities (instant, local)
+    const known = lookupKnownIdentity(address);
+    if (known) {
+      const result: AddressResolution = {
+        address,
+        displayName: known,
+        type: 'subdomain',
+        isVerified: true
+      };
+      resolutionCache.set(address, { result, timestamp: Date.now() });
+      return known;
+    }
+
     // 1. Check for repo.box subdomain (future implementation)
     const subdomainName = await resolveRepoboxSubdomain(address);
     if (subdomainName) {
