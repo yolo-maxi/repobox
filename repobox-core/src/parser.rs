@@ -466,11 +466,11 @@ fn parse_rule_value(
 
                         let (deny, verb) = parse_verb_str(verb_str)?;
                         
-                        // Semantic validation: reject 'create' with branch targets
-                        if verb == Verb::Create && target.branch.is_some() {
+                        // Semantic validation: reject 'upload' with pure branch targets (no path)
+                        if verb == Verb::Upload && target.branch.is_some() && target.path.is_none() {
                             return Err(ConfigError::InvalidRule(format!(
-                                "'create' is for files only - use 'branch' for creating branches. \
-                                Change 'create {}' to 'branch {}'",
+                                "'upload' is for files only - use 'branch' for creating branches. \
+                                Change 'upload {}' to 'branch {}'",
                                 target_str, target_str
                             )));
                         }
@@ -499,7 +499,7 @@ fn parse_rule_value(
 /// because it's always repo-level (>*) regardless of the own target.
 const OWN_WRITE_VERBS: &[Verb] = &[
     Verb::Push, Verb::Merge, Verb::Branch, Verb::Delete, Verb::ForcePush,
-    Verb::Edit, Verb::Write, Verb::Append, Verb::Create,
+    Verb::Edit, Verb::Insert, Verb::Append, Verb::Upload,
 ];
 
 /// The repo-level read target, always >*
@@ -556,11 +556,11 @@ fn parse_flat_rule(s: &str, line: usize) -> Result<Vec<Rule>, ConfigError> {
     let (deny2, verb) = parse_verb_str(verb_str)?;
     let deny = deny || deny2;
 
-    // Semantic validation: reject 'create' with branch targets
-    if verb == Verb::Create && target.branch.is_some() {
+    // Semantic validation: reject 'upload' with pure branch targets (no path)
+    if verb == Verb::Upload && target.branch.is_some() && target.path.is_none() {
         return Err(ConfigError::InvalidRule(format!(
-            "'create' is for files only - use 'branch' for creating branches. \
-            Change 'create {}' to 'branch {}'",
+            "'upload' is for files only - use 'branch' for creating branches. \
+            Change 'upload {}' to 'branch {}'",
             target_str, target_str
         )));
     }
@@ -1298,9 +1298,9 @@ permissions:
         assert!(engine::check(&config, &founder, Verb::Delete, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::ForcePush, Some("main"), None).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Edit, Some("main"), Some("any.txt")).is_allowed());
-        assert!(engine::check(&config, &founder, Verb::Write, Some("main"), Some("any.txt")).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Insert, Some("main"), Some("any.txt")).is_allowed());
         assert!(engine::check(&config, &founder, Verb::Append, Some("main"), Some("any.txt")).is_allowed());
-        assert!(engine::check(&config, &founder, Verb::Create, Some("main"), Some("any.txt")).is_allowed());
+        assert!(engine::check(&config, &founder, Verb::Upload, Some("main"), Some("any.txt")).is_allowed());
     }
 
     #[test]
@@ -1339,11 +1339,33 @@ permissions:
     }
 
     #[test]
-    fn test_create_parses_as_file_verb_only() {
-        let verb = Verb::parse("create").unwrap();
-        assert_eq!(verb, Verb::Create);
+    fn test_upload_parses_as_file_verb_only() {
+        let verb = Verb::parse("upload").unwrap();
+        assert_eq!(verb, Verb::Upload);
         assert!(verb.is_file_verb());
         assert!(!verb.is_branch_verb());
+    }
+
+    #[test]
+    fn test_insert_parses_as_file_verb_only() {
+        let verb = Verb::parse("insert").unwrap();
+        assert_eq!(verb, Verb::Insert);
+        assert!(verb.is_file_verb());
+        assert!(!verb.is_branch_verb());
+    }
+
+    #[test]
+    fn test_deprecated_write_alias() {
+        // 'write' should parse to Upload with a deprecation warning
+        let verb = Verb::parse("write").unwrap();
+        assert_eq!(verb, Verb::Upload);
+    }
+
+    #[test]
+    fn test_deprecated_create_alias() {
+        // 'create' should parse to Upload with a deprecation warning
+        let verb = Verb::parse("create").unwrap();
+        assert_eq!(verb, Verb::Upload);
     }
 
     #[test]  
@@ -1355,7 +1377,24 @@ permissions:
     }
 
     #[test]
-    fn test_create_with_branch_target_rejected() {
+    fn test_upload_with_branch_target_rejected() {
+        let yaml = r#"
+groups:
+  devs: [evm:0xAAA0000000000000000000000000000000000001]
+permissions:
+  rules:
+    - devs upload >feature/test
+"#;
+        let result = parse(yaml);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("'upload' is for files only"));
+        assert!(err.contains("use 'branch'"));
+    }
+
+    #[test]
+    fn test_deprecated_create_with_branch_target_rejected() {
+        // 'create' is now a deprecated alias for 'upload', so it should also be rejected with branch targets
         let yaml = r#"
 groups:
   devs: [evm:0xAAA0000000000000000000000000000000000001]
@@ -1366,18 +1405,17 @@ permissions:
         let result = parse(yaml);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("'create' is for files only"));
-        assert!(err.contains("use 'branch'"));
+        assert!(err.contains("'upload' is for files only"));
     }
 
     #[test]
-    fn test_create_with_file_target_allowed() {
+    fn test_upload_with_file_target_allowed() {
         let yaml = r#"
 groups:
   devs: [evm:0xAAA0000000000000000000000000000000000001]
 permissions:
   rules:
-    - devs create ./src/**
+    - devs upload ./src/**
 "#;
         let result = parse(yaml);
         assert!(result.is_ok());
@@ -1397,7 +1435,7 @@ permissions:
     }
 
     #[test]
-    fn test_own_expands_to_include_both_create_and_branch() {
+    fn test_own_expands_to_include_both_upload_and_branch() {
         let yaml = r#"
 groups:
   owners: [evm:0xAAA0000000000000000000000000000000000001]
@@ -1406,12 +1444,13 @@ permissions:
     - owners own >main
 "#;
         let config = parse(yaml).unwrap();
-        // Should have 10 rules total (read + 9 write verbs including both branch and create)
+        // Should have 10 rules total (read + 9 write verbs including branch, upload, insert)
         assert_eq!(config.permissions.rules.len(), 10);
-        
+
         let verbs: Vec<_> = config.permissions.rules.iter().map(|r| r.verb).collect();
         assert!(verbs.contains(&Verb::Branch));
-        assert!(verbs.contains(&Verb::Create));
+        assert!(verbs.contains(&Verb::Upload));
+        assert!(verbs.contains(&Verb::Insert));
     }
 
     #[test]
