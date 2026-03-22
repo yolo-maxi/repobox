@@ -258,7 +258,7 @@ export default function RepoPage() {
           <div className="rd-breadcrumb">
             <Link href="/explore">explore</Link>
             <span>/</span>
-            <Link href={`/explore/${repo.owner_address}`}>{formatAddress(repo.owner_address)}</Link>
+            <Link href={`/explore/${repo.owner_address}`} className="rd-breadcrumb-addr">{formatAddress(repo.owner_address)}</Link>
             <span>/</span>
             <span className="rd-breadcrumb-current">{repo.name}</span>
           </div>
@@ -487,6 +487,7 @@ export default function RepoPage() {
         }
         .rd-breadcrumb a { color: var(--bp-accent); text-decoration: none; }
         .rd-breadcrumb a:hover { opacity: 0.8; }
+        .rd-breadcrumb a.rd-breadcrumb-addr { color: var(--bp-gold); }
         .rd-breadcrumb-current { color: var(--bp-heading); font-weight: 600; }
 
         .rd-header-row {
