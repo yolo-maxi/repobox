@@ -291,10 +291,26 @@ fn cmd_init(force: bool) -> ExitCode {
         .args(["config", "--local", "commit.gpgsign", "true"])
         .output();
 
-    println!("✅ Initialized repo.box");
-    println!("   Created .repobox/config.yml (edit to add groups and rules)");
-    println!("   Configured git to sign commits with repobox (gpg.program)");
-    println!("   Every `git commit` will now be EVM-signed automatically.");
+    // Auto-set user.signingkey if an identity already exists
+    match identity::get_identity(&home) {
+        Ok(Some(id)) => {
+            let identity_str = id.to_string();
+            let _ = Command::new(&real_git)
+                .args(["config", "--local", "user.signingkey", &identity_str])
+                .output();
+            println!("✅ Initialized repo.box");
+            println!("   Created .repobox/config.yml (edit to add groups and rules)");
+            println!("   Configured git to sign commits with repobox (gpg.program)");
+            println!("   Signing key set to {identity_str}");
+            println!("   Every `git commit` will now be EVM-signed automatically.");
+        }
+        _ => {
+            println!("✅ Initialized repo.box");
+            println!("   Created .repobox/config.yml (edit to add groups and rules)");
+            println!("   Configured git to sign commits with repobox (gpg.program)");
+            println!("   No identity found. Run: git repobox keys generate");
+        }
+    }
 
     ExitCode::SUCCESS
 }
