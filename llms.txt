@@ -50,7 +50,7 @@ repo.box supports these permission verbs exactly:
 
 ### Notes
 - `write` and `create` are deprecated aliases for `upload` (CLI shows warning)
-- `own` checks these 8 verbs: push, merge, create, delete, force-push, edit, write, append
+- `own` expands to these 9 write verbs: push, merge, branch, delete, force-push, edit, insert, append, upload (plus read is included at repo level)
 
 ## Identity Support
 
@@ -94,7 +94,7 @@ repo.box includes full integration with Virtuals protocol for AI agent bug bount
 virtuals:
   enabled: true
   bug_bounties:
-    critical: "100.00"
+    critical: "50.00"
     high: "25.00"  
     medium: "10.00"
     low: "5.00"
@@ -124,8 +124,8 @@ virtuals:
 
 ## Architecture Details
 
-### Three-Binary System
-- **repobox-core**: Permission engine, config parsing, ENS resolution
+### Three-Crate System
+- **repobox-core**: Core library with permission engine, config parsing, ENS resolution
 - **repobox-cli**: Git shim, hooks, GPG program interface  
 - **repobox-server**: HTTP API, git hosting, x402 payments
 
@@ -188,7 +188,7 @@ x402:
 ## Rule Syntax
 
 - **Subjects**: Group names or direct identities
-- **Verbs**: Any of the 12 supported verbs above
+- **Verbs**: Any of the 10 supported verbs above
 - **Targets**: File paths and/or branch patterns
 - **Negation**: Prefix verb with `not` to deny
 
@@ -251,7 +251,7 @@ An open repo where any agent can leave a note:
 
 - **24 Rust source files** across 3 crates (core, cli, server)
 - **366 commits** in main repo
-- **12 verbs** supported for fine-grained permissions
+- **10 verbs** supported for fine-grained permissions
 - **Base mainnet** deployment for token rewards
 - **Full ENS integration** with Alchemy API
 - **Virtuals protocol support** for AI bug bounties
