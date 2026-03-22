@@ -44,9 +44,17 @@ export class CCIPGateway {
             console.log(`Resolved ${alias} → ${address}`);
 
             const result = this.encodeAddressResult(address);
+            
+            // Sign: keccak256(name ++ data ++ result) — matching RepoBoxResolver.sol
             const signature = await this.signResponse(name, funcCall, result);
+            
+            // ABI-encode: (bytes result, bytes signature) — matching resolveWithProof decoder
+            const encodedResponse = encodeAbiParameters(
+                parseAbiParameters('bytes, bytes'),
+                [result, signature]
+            );
 
-            return { data: result, signature };
+            return { data: encodedResponse };
         } catch (error) {
             console.error('Request handling error:', error);
             throw error;
@@ -85,7 +93,12 @@ export class CCIPGateway {
                 return labels[0];
             }
 
-            throw new Error(`Not a repobox.eth subname: ${labels.join('.')}`);
+            // Root name: repobox.eth → return null/root indicator
+            if (labels.length === 2 && labels[0] === 'repobox' && labels[1] === 'eth') {
+                return 'repobox'; // resolve root to a known identity
+            }
+
+            throw new Error(`Not a repobox.eth name: ${labels.join('.')}`);
         } catch (error) {
             throw new Error(`Failed to extract alias: ${error}`);
         }
@@ -99,14 +112,14 @@ export class CCIPGateway {
         );
     }
 
-    private async signResponse(name: Hex, funcCall: Hex, result: Hex): Promise<Hex> {
-        const messageHash = keccak256(
-            encodeAbiParameters(
-                parseAbiParameters('bytes, bytes, bytes'),
-                [name, funcCall, result]
-            )
-        );
+    private async signResponse(name: Hex, data: Hex, result: Hex): Promise<Hex> {
+        // Match RepoBoxResolver.sol: keccak256(abi.encodePacked(name, data, result))
+        // Using concat of raw bytes (encodePacked)
+        const packed = `0x${name.slice(2)}${data.slice(2)}${result.slice(2)}` as Hex;
+        const messageHash = keccak256(packed);
 
+        // The contract uses: ecrecover(keccak256("\x19Ethereum Signed Message:\n32", messageHash), ...)
+        // account.signMessage automatically adds the EIP-191 prefix
         const signature = await this.account.signMessage({
             message: { raw: messageHash as `0x${string}` }
         });
