@@ -24,6 +24,15 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
+### Test ENS resolution end-to-end
+- **Priority**: P1
+- **Tags**: testing, ens, permissions, explorer
+Verify ENS resolution works across all surfaces with real names:
+1. **Real ENS name** (e.g. `vitalik.eth`) — resolves to address in explorer URLs, permission rules, and UI display
+2. **repobox.eth paid subdomain** (e.g. `ocean.repobox.eth`) — resolves correctly through our subdomain NFT system
+3. **Our own random subdomains/aliases** — repo.box aliases resolve in explorer and permissions
+Test each in: (a) Explorer URL routing (`/explore/vitalik.eth/`), (b) `<AddressDisplay>` component resolution, (c) Permission rules in `.repobox/config.yml` (e.g. `vitalik.eth push >main`), (d) Clone URLs. Document any failures and fix them. This must work flawlessly for the demo.
+
 ### Full knowledge sweep — all docs/skills/landing/llms.txt must be final
 - **Priority**: P0
 - **Tags**: docs, hackathon, demo-ready
