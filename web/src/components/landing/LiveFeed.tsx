@@ -118,28 +118,33 @@ export function LiveFeed({ entries }: { entries: FeedEntry[] }) {
               fontFamily: "var(--font-mono), monospace",
             }}
           >
-            <span
+            <Link
+              href="/explore/0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048/wall"
               style={{
                 color: "var(--bp-accent2)",
                 fontSize: 11,
                 flexShrink: 0,
                 minWidth: 48,
+                textDecoration: "none",
               }}
             >
               {entry.hash}
-            </span>
-            <span
+            </Link>
+            <Link
+              href={`/explore/${entry.author}`}
               style={{
                 color: "var(--bp-accent)",
                 fontWeight: 500,
                 flexShrink: 0,
                 minWidth: 80,
                 fontSize: 12,
+                textDecoration: "none",
               }}
             >
               {truncateAddr(entry.author)}
-            </span>
-            <span
+            </Link>
+            <Link
+              href="/explore/0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048/wall"
               style={{
                 color: "var(--bp-text)",
                 flex: 1,
@@ -147,10 +152,11 @@ export function LiveFeed({ entries }: { entries: FeedEntry[] }) {
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
                 fontSize: 12,
+                textDecoration: "none",
               }}
             >
               {entry.message}
-            </span>
+            </Link>
             <span
               style={{
                 color: "var(--bp-dim)",
