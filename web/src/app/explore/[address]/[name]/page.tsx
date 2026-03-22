@@ -277,7 +277,7 @@ export default function RepoPage() {
           <div className="rd-breadcrumb">
             <Link href="/explore">explore</Link>
             <span>/</span>
-            <Link href={`/explore/${repo.owner_address}`} className="rd-breadcrumb-addr">{formatAddress(repo.owner_address)}</Link>
+            <AddressDisplay address={repo.owner_address} size="sm" showCopy={false} linkable={true} className="rd-breadcrumb-addr" />
             <span>/</span>
             <span className="rd-breadcrumb-current">{repo.name}</span>
           </div>
