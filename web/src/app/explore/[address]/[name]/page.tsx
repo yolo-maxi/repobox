@@ -11,6 +11,7 @@ import BranchSelector from '@/components/BranchSelector';
 import CloneUrlWidget from '@/components/CloneUrlWidget';
 import ContributionChart from '@/components/explore/ContributionChart';
 import FileTree from '@/components/explore/FileTree';
+import CodeViewer from '@/components/explore/CodeViewer';
 import { SiteNav } from '@/components/SiteNav';
 
 interface RepoDetails {
@@ -389,7 +390,7 @@ export default function RepoPage() {
                 {repoConfig.exists ? (
                   <div className="rd-config-code-wrap">
                     <div className="rd-config-code-header">.repobox/config.yml</div>
-                    <pre className="rd-config-code" dangerouslySetInnerHTML={{ __html: highlightYaml(repoConfig.content) }} />
+                    <CodeViewer code={repoConfig.content} filePath=".repobox/config.yml" showLineNumbers={false} />
                   </div>
                 ) : (
                   <div className="rd-config-empty">

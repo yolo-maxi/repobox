@@ -8,6 +8,7 @@ import { formatTimeAgo, formatAddress, formatBytes, getFileIcon } from '@/lib/ut
 import { repoUrls, generateBreadcrumbs } from '@/lib/repoUrls';
 import { SiteNav } from '@/components/SiteNav';
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
+import CodeViewer from '@/components/explore/CodeViewer';
 
 interface Commit {
   hash: string; author: string; timestamp: number; message: string;
@@ -162,7 +163,7 @@ export default function BlobPage() {
                   />
                 </div>
               ) : (
-                <pre className="blob-code"><code>{fileContent.content}</code></pre>
+                <CodeViewer code={fileContent.content} filePath={filePath} />
               )}
             </div>
           </div>
