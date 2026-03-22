@@ -65,7 +65,7 @@ export function LandingCTA() {
             style={{
               display: "inline-flex",
               alignItems: "center",
-              background: "var(--bp-accent)",
+              background: "var(--bp-gold)",
               color: "#0a0f1a",
               fontFamily: "var(--font-mono), monospace",
               fontSize: 14,

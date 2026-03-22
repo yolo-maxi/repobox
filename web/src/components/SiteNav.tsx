@@ -3,13 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { Menu, X, FileCode, Play, BookOpen, Compass, Home, Palette } from 'lucide-react';
+import { Menu, X, Play, BookOpen, Compass, Home, Palette } from 'lucide-react';
 
-const LINKS = [
+const NAV_LINKS = [
   { href: '/', label: 'home', icon: Home },
   { href: '/explore', label: 'explorer', icon: Compass },
   { href: '/docs', label: 'docs', icon: BookOpen },
   { href: '/playground', label: 'playground', icon: Play },
+];
+
+const TRAY_EXTRA_LINKS = [
   { href: '/brand', label: 'brand', icon: Palette },
 ];
 
@@ -42,7 +45,7 @@ export function SiteNav() {
 
         {/* Desktop links */}
         <div className="site-nav-links">
-          {LINKS.map(l => (
+          {NAV_LINKS.map(l => (
             <Link
               key={l.href}
               href={l.href}
@@ -76,7 +79,7 @@ export function SiteNav() {
         </div>
 
         <div className="site-nav-tray-links">
-          {LINKS.map(l => {
+          {[...NAV_LINKS, ...TRAY_EXTRA_LINKS].map(l => {
             const Icon = l.icon;
             return (
               <Link

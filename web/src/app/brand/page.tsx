@@ -198,16 +198,44 @@ export default function BrandPage() {
         {/* Iconography */}
         <section className="brand-section">
           <h2>Iconography</h2>
-          <p>Emoji-based icons for file types. No icon library — keeps the bundle minimal and the aesthetic playful.</p>
+          <p>SVG icons via <a href="https://lucide.dev" target="_blank" rel="noopener" style={{ color: 'var(--bp-accent)' }}>lucide-react</a> — clean, consistent 24×24 stroke icons. Tree-shakeable, 300+ icons available. Used at 16px / 1.5 stroke width throughout.</p>
+
+          <h3>File Type Icons</h3>
+          <p style={{ color: 'var(--bp-dim)', fontSize: 13, marginBottom: 16 }}>Each file type maps to a specific lucide icon + language color. See <code style={{ color: 'var(--bp-accent)', fontSize: 12 }}>components/explore/FileIcon.tsx</code> for the full mapping.</p>
           <div className="brand-icon-grid">
             {[
-              ['📁', 'Directory'], ['📄', 'Generic file'], ['🦀', 'Rust'], ['🟦', 'TypeScript'],
-              ['🟨', 'JavaScript'], ['💎', 'Solidity'], ['⚙️', 'Config (yml/toml)'],
-              ['🔧', 'Shell script'], ['🔒', 'Lock file'], ['📝', 'Markdown'],
-              ['📋', 'JSON'], ['🌐', 'HTML'], ['🎨', 'CSS'], ['🖼️', 'Image'],
+              ['Folder', '#4fc3f7', 'Directory'],
+              ['FileCode', '#dea584', 'Rust (.rs)'],
+              ['FileCode', '#3178c6', 'TypeScript (.ts)'],
+              ['FileCode', '#f7df1e', 'JavaScript (.js)'],
+              ['Braces', '#627eea', 'Solidity (.sol)'],
+              ['FileCog', '#8fb0c8', 'Config (yml/toml)'],
+              ['FileTerminal', '#89e051', 'Shell (.sh)'],
+              ['Lock', '#636c76', 'Lock file'],
+              ['FileText', '#8fb0c8', 'Markdown (.md)'],
+              ['FileJson', '#8fb0c8', 'JSON'],
+              ['Globe', '#e34c26', 'HTML'],
+              ['Palette', '#563d7c', 'CSS'],
+              ['Image', '#8fb0c8', 'Image'],
+              ['Package', '#dea584', 'Cargo.toml'],
+            ].map(([icon, color, label]) => (
+              <div key={label} className="brand-icon-item">
+                <span className="brand-icon-emoji" style={{ color, fontSize: 16 }}>●</span>
+                <span>{label}</span>
+              </div>
+            ))}
+          </div>
+
+          <h3>Navigation Icons</h3>
+          <p style={{ color: 'var(--bp-dim)', fontSize: 13, marginBottom: 16 }}>Used in the mobile hamburger tray and UI elements.</p>
+          <div className="brand-icon-grid">
+            {[
+              ['Home', 'home'], ['Compass', 'explorer'], ['BookOpen', 'docs'],
+              ['Play', 'playground'], ['Palette', 'brand'], ['Menu', 'menu'],
+              ['X', 'close'], ['GitBranch', 'git'],
             ].map(([icon, label]) => (
               <div key={label} className="brand-icon-item">
-                <span className="brand-icon-emoji">{icon}</span>
+                <span className="brand-icon-emoji" style={{ color: 'var(--bp-accent)', fontSize: 14 }}>◆</span>
                 <span>{label}</span>
               </div>
             ))}

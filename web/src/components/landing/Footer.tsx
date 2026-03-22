@@ -144,6 +144,17 @@ export function LandingFooter() {
             >
               feed.xml
             </a>
+            <Link
+              href="/brand"
+              style={{
+                fontFamily: "var(--font-mono), monospace",
+                fontSize: 12,
+                lineHeight: "20px",
+                color: "var(--bp-accent2)",
+              }}
+            >
+              brand
+            </Link>
           </div>
         </div>
 

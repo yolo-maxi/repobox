@@ -273,7 +273,7 @@ export default function ExplorePage() {
         }
         .explore-stat-val {
           font-weight: 700;
-          color: var(--bp-heading);
+          color: var(--bp-gold);
           font-variant-numeric: tabular-nums;
         }
 

@@ -547,8 +547,8 @@ export default function RepoPage() {
         .rd-tab.disabled { opacity: 0.3; cursor: not-allowed; }
         .rd-tab-count {
           margin-left: 6px; font-size: 10px;
-          background: rgba(79, 195, 247, 0.1);
-          color: var(--bp-accent);
+          background: var(--bp-gold-dim);
+          color: var(--bp-gold);
           padding: 1px 6px; border-radius: 10px;
         }
 
@@ -582,7 +582,7 @@ export default function RepoPage() {
           padding: 4px 0; font-size: 12px; color: var(--bp-dim);
         }
         .rd-stat-row strong {
-          color: var(--bp-heading); font-variant-numeric: tabular-nums;
+          color: var(--bp-gold); font-variant-numeric: tabular-nums;
         }
         .rd-sidebar-commit { margin-bottom: 10px; }
         .rd-sidebar-commit:last-child { margin-bottom: 0; }
