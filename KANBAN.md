@@ -24,17 +24,14 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
+*No tasks currently in backlog*
+
+## 🔨 In Progress
+
 ### Docs — comprehensive, honest, up-to-date
 - **Priority**: P3
 - **Tags**: docs
 Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented features as "Coming Soon" / "Roadmap". Only run when no P0/P1/P2 tasks remain.
-
-## 🔨 In Progress
-
-### Empty state illustrations
-- **Priority**: P2
-- **Tags**: explorer, ui
-Replace "No recent activity" etc with SVG illustrations + helpful text.
 
 ## 🚧 Blocked
 
@@ -43,6 +40,10 @@ Replace "No recent activity" etc with SVG illustrations + helpful text.
 - **Tags**: infra
 
 ## ✅ Done
+
+### Empty state illustrations
+- **Completed**: 2026-03-22 | **Agent**: claude-agent + reviewer-agent
+Comprehensive empty state illustrations for improved UX. Implemented 6 empty state scenarios with monochromatic SVG illustrations, reusable TypeScript components, and accessibility coverage. Replaced "No recent activity" etc across explorer, profiles, diffs, and search results. Approved for deployment-ready quality.
 
 ### Accurate llms.txt — critical for agent judges
 - **Completed**: 2026-03-22 | **Agent**: claude-agent + reviewer-agent

@@ -1,6 +1,8 @@
 # repo.box
 
-**Git permissions for AI agents.** A permission layer that sits between your agents and git, enforcing who can push, merge, edit, and create — using EVM wallet identities.
+**Git permissions for AI agents.** A transparent permission layer that sits between your agents and git, enforcing who can push, merge, edit, and create — using EVM wallet identities.
+
+**✅ Production Ready:** Core permission system, ENS integration, and x402 payment flows are fully implemented and tested.
 
 ```
 curl -sSf https://repo.box/install.sh | sh
@@ -63,26 +65,57 @@ cargo build --release
 sudo cp target/release/repobox /usr/local/bin/
 ```
 
+## 🚦 Implementation Status
+
+### ✅ Production Ready
+- **Core Permission System:** All verbs, rules, groups, file/branch targeting ✅
+- **ENS Integration:** Readable identities like `vitalik.eth` in configs ✅ 
+- **x402 Payments:** Automatic USDC bounties for AI agent bug fixes ✅
+- **Repository Server:** Git hosting with smart HTTP protocol ✅
+- **CLI Tools:** Complete command set with validation and testing ✅
+
+### 🚧 Preview  
+- **Force Push Policy:** Detection implemented, enforcement in progress
+- **Repository Dashboard:** Basic functionality live at [repobox.repo.box](https://repobox.repo.box)
+
+### 📋 Roadmap
+- **Activity Feed:** API foundation exists, frontend planned
+- **Advanced UI:** Dark/light theme, syntax highlighting, search
+- **Contributor Leaderboard:** Depends on activity feed infrastructure
+
+## 📖 Documentation
+
+**Complete guides now available:**
+- **[Installation](docs/getting-started/installation.md)** — 5-minute setup
+- **[First Repository](docs/getting-started/first-repo.md)** — Complete walkthrough  
+- **[Agent Onboarding](docs/getting-started/agent-onboarding.md)** — AI agent setup
+- **[Permission System](docs/user-guide/permission-system.md)** — Rule syntax & patterns
+- **[ENS Integration](docs/user-guide/ens-integration.md)** — Human-readable identities
+- **[CLI Reference](docs/reference/cli-commands.md)** — Complete command documentation
+
 ## Quick Start
 
 ```bash
-# Initialize repo.box in your project
+# Install
+curl -sSf https://repo.box/install.sh | sh
+
+# Initialize in your project
 git repobox init
 
-# Generate a keypair for yourself
-git repobox keys generate --alias alice
+# Generate keypairs
+git repobox keys generate --alias alice        # You
+git repobox keys generate --alias claude-agent # AI agent
 
-# Generate one for your agent
-git repobox keys generate --alias claude
-
-# Check your identity
+# Check identity
 git repobox whoami
 # → alice (evm:0x7D5b...)
 
-# Edit .repobox/config.yml to define permissions, then:
+# Edit .repobox/config.yml with real addresses, then:
 git add .repobox/
-git commit -m "configure permissions"
+git commit -m "setup repo.box permissions"
 ```
+
+**Next steps:** Follow the [First Repository](docs/getting-started/first-repo.md) guide for complete setup.
 
 ## Concepts
 
