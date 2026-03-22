@@ -103,3 +103,53 @@ Self-lockout prevention on config edits while exercising founder, agent, and mis
   - explicit BLOCK,
   - root cause, and
   - next recovery step.
+
+## 2026-03-22 — Wrong remote, detached HEAD, no-upstream, and lockout hardening run
+
+### Scenario selected
+`wrong remote, detached HEAD, no upstream branch` plus mandatory self-lockout verification.
+
+### Environment
+- Remote attempt via SSH to `xiko@167.71.5.215` succeeded only for connectivity check; repo working tree for this run was not present there.
+- Ran locally in `/tmp/repobox-qa-20260322T210920` with the local shim binary.
+- Multiple identities: `qa-founder`, `qa-agent` (generated via `git repobox keys generate`) and an identity-less context.
+
+### Commands run (highlights)
+- Founder bootstrap: `git init`, `git repobox keys generate --alias qa-founder`, `git repobox keys generate --alias qa-agent`, `git repobox use qa-founder`, branch+seed commit.
+- Wrong remote test:
+  - `git remote add origin /tmp/repobox-qa-does-not-exist/none.git`
+  - `git push -u origin main`
+- Correct remote test and baseline lifecycle:
+  - set remote to local bare path, push `main`, clone as agent, agent branch permissions checks (`agent main edit` denied, `feature/qa` allowed).
+- Rebase + merge lifecycle:
+  - `git fetch`, `git checkout -b feature/qa origin/feature/qa`, `git rebase origin/feature/qa`
+  - `git checkout main`, `git merge --ff-only feature/qa`
+- Detached/no-upstream Git lifecycle:
+  - `git checkout --detach origin/main && git pull` (agent)
+  - `git checkout -b feature/no-upstream` + `git pull`
+- Mandatory lockout test:
+  - edited `.repobox/config.yml` to remove founder file-edit right and attempted commit.
+
+### Observed outputs
+- Wrong remote push failed with native git transport guidance:
+  - `fatal: '/tmp/repobox-qa-does-not-exist/none.git' does not appear to be a git repository...`
+- Main-branch hardening for agent works as intended:
+  - `❌ permission denied: qa-agent ... cannot edit README.md`
+- Feature branch self-serve permissions behave as configured:
+  - `git checkout -b feature/qa` allowed for agent.
+- Detached HEAD `pull` and no-upstream messaging are actionable:
+  - `You are not currently on a branch...`
+  - `There is no tracking information for the current branch...`
+- Self-lockout guard remained strict and explicit:
+  - `permission denied: qa-founder ... cannot commit this change because it removes your edit access to ./.repobox/config.yml.`
+  - includes recovery text: `Keep at least one identity/group with edit rights on ./.repobox/config.yml ...`
+
+### UX judgment
+- Good:
+  - Remote failure is clear and standard git error output.
+  - Main/feature role split is understandable (main denied, feature allowed) and actionable.
+  - Detached and no-upstream diagnostics are within the 30-second guidance target.
+  - Lockout block text is explicit and offers immediate remediation.
+- Minor cleanup:
+  - `git repobox lint` currently does not accept a file path argument; it must be run without args.
+    This is non-blocking UX noise but should be documented clearly in command examples.

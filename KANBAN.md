@@ -218,3 +218,18 @@ HTTP + on-chain resolvers with caching. Alchemy proxy.
 ### 150+ Rust tests passing
 - **Completed**: 2026-03-20
 135 core + 15 server tests. Now 184+ with verb refactor and force push.
+
+### Wrong remote + detached/no-upstream + explicit self-lockout adversarial pass
+- **Date:** 2026-03-22 | **Agent:** repobox-qa-pipeline
+- Ran one deep end-to-end scenario covering:
+  - wrong remote push path
+  - founder/agent identity-aware commit gating on main vs feature
+  - fetch/rebase/merge lifecycle
+  - detached HEAD and no-upstream `git pull` messaging
+  - self-lockout edit protection on `.repobox/config.yml`
+- Results:
+  - Wrong remote produced native git transport error (clear path issue).
+  - Agent main edits blocked; feature writes/push allowed per configured policy.
+  - Detached HEAD + no-upstream guidance returned explicit, actionable git instructions.
+  - Lockout guard returned explicit `BLOCK` + recovery hint.
+- No code changes required in CLI logic for this run; no regressions found in tested path.
