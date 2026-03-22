@@ -112,6 +112,24 @@ export default function TreePage() {
       {/* Content grid */}
       <div className="tree-content">
         <main className="tree-main">
+          {/* Folder header — matches blob file header */}
+          <div className="tree-folder-card">
+            <div className="tree-folder-header">
+              <div className="tree-folder-info">
+                <span className="tree-folder-icon">📁</span>
+                <span className="tree-folder-name">{pathSegments[pathSegments.length - 1] || name}</span>
+              </div>
+              <div className="tree-folder-actions">
+                {pathSegments.length > 1 ? (
+                  <Link href={repoUrls.tree(address, name, branch, pathSegments.slice(0, -1).join('/'))} className="tree-action-btn">↑ Parent</Link>
+                ) : pathSegments.length === 1 ? (
+                  <Link href={repoUrls.home(address, name)} className="tree-action-btn">↑ Parent</Link>
+                ) : null}
+                <Link href={repoUrls.home(address, name)} className="tree-action-btn">Repository</Link>
+              </div>
+            </div>
+          </div>
+
           <FileTree
             address={address}
             repoName={name}
@@ -188,6 +206,44 @@ export default function TreePage() {
           grid-template-columns: 1fr 280px;
           gap: 24px;
           align-items: start;
+        }
+
+        .tree-folder-card {
+          border: 1px solid var(--bp-border);
+          border-radius: 8px 8px 0 0;
+          overflow: hidden;
+          border-bottom: none;
+        }
+        .tree-folder-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 10px 16px;
+          background: var(--bp-surface);
+          border-bottom: 1px solid var(--bp-border);
+          gap: 12px; flex-wrap: wrap;
+        }
+        .tree-folder-info {
+          display: flex; align-items: center; gap: 8px;
+        }
+        .tree-folder-icon { font-size: 14px; }
+        .tree-folder-name { color: var(--bp-heading); font-weight: 500; font-size: 13px; }
+        .tree-folder-actions { display: flex; gap: 8px; }
+        .tree-action-btn {
+          padding: 4px 10px;
+          border: 1px solid var(--bp-border);
+          border-radius: 4px;
+          color: var(--bp-dim); font-size: 11px;
+          text-decoration: none;
+          transition: all 0.12s;
+        }
+        .tree-action-btn:hover {
+          border-color: rgba(79, 195, 247, 0.3);
+          color: var(--bp-accent);
+        }
+
+        /* Connect folder header to file tree below */
+        .tree-main .ft-root {
+          border-top-left-radius: 0;
+          border-top-right-radius: 0;
         }
 
         .tree-sidebar-card {
