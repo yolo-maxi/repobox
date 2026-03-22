@@ -12,8 +12,6 @@ struct RawConfig {
     #[serde(default)]
     permissions: Option<RawPermissions>,
     #[serde(default)]
-    x402: Option<RawX402Config>,
-    #[serde(default)]
     virtuals: Option<RawVirtualsConfig>,
 }
 
@@ -136,13 +134,6 @@ fn default_rules() -> serde_yaml::Value {
 
 fn default_allow() -> String {
     "allow".to_string()
-}
-
-#[derive(Debug, Deserialize)]
-struct RawX402Config {
-    read_price: String,
-    recipient: String,
-    network: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -423,13 +414,6 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
         },
     };
 
-    // Parse x402 config
-    let x402 = raw.x402.map(|raw_x402| X402Config {
-        read_price: raw_x402.read_price,
-        recipient: raw_x402.recipient,
-        network: raw_x402.network,
-    });
-
     // Parse virtuals config
     let virtuals = if let Some(raw_virtuals) = raw.virtuals {
         let agent_requirements = raw_virtuals.agent_requirements.unwrap_or(RawAgentRequirements {
@@ -484,7 +468,6 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
     Ok(Config {
         groups,
         permissions,
-        x402,
         virtuals,
     })
 }
@@ -871,6 +854,24 @@ fn validate_payment_config(payments: &RawVirtualsPaymentConfig) -> Result<(), Co
     }
 
     Ok(())
+}
+
+/// Raw YAML structure for .repobox/x402.yml.
+#[derive(Debug, Deserialize)]
+struct RawX402Config {
+    read_price: String,
+    recipient: String,
+    network: String,
+}
+
+/// Parse a .repobox/x402.yml YAML string into an X402Config.
+pub fn parse_x402(yaml: &str) -> Result<X402Config, ConfigError> {
+    let raw: RawX402Config = serde_yaml::from_str(yaml)?;
+    Ok(X402Config {
+        read_price: raw.read_price,
+        recipient: raw.recipient,
+        network: raw.network,
+    })
 }
 
 #[cfg(test)]

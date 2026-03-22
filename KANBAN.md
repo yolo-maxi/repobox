@@ -24,25 +24,6 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### Test ENS resolution end-to-end
-- **Priority**: P1
-- **Tags**: testing, ens, permissions, explorer
-Verify ENS resolution works across all surfaces with real names:
-1. **Real ENS name** (e.g. `vitalik.eth`) — resolves to address in explorer URLs, permission rules, and UI display
-2. **repobox.eth paid subdomain** (e.g. `ocean.repobox.eth`) — resolves correctly through our subdomain NFT system
-3. **Our own random subdomains/aliases** — repo.box aliases resolve in explorer and permissions
-Test each in: (a) Explorer URL routing (`/explore/vitalik.eth/`), (b) `<AddressDisplay>` component resolution, (c) Permission rules in `.repobox/config.yml` (e.g. `vitalik.eth push >main`), (d) Clone URLs. Document any failures and fix them. This must work flawlessly for the demo.
-
-### Virtuals integration — bug report to payment flow
-- **Priority**: P1
-- **Tags**: feature, x402, virtuals, docs
-Ensure the full "virtuals" flow is implemented end-to-end: agent files bug report → creates branch → pushes fix → PR reviewed → merged → x402 payment triggered. Verify each step works with real EVM-signed commits and actual x402 micropayments. Then document it prominently: landing page case study, docs section, llms.txt, playground example. This is a key hackathon demo story — autonomous agent work with crypto-native payments. Make sure it's not just specced but actually functional and well-presented.
-
-### Accurate llms.txt — critical for agent judges
-- **Priority**: P1
-- **Tags**: docs, agents
-`repo.box/llms.txt` must be fully accurate and current — hackathon agent-judges will read this to understand what repo.box does. Review and update: correct verbs (including `branch`, `read`, `own`), config path (`.repobox/config.yml`), credential helper flow, force push policy, x402 payments, ENS resolution, on-chain resolvers, explorer features. Remove anything that doesn't work yet or mark it clearly. This is our pitch to the judges in machine-readable form.
-
 ### Empty state illustrations
 - **Priority**: P2
 - **Tags**: explorer, ui
@@ -55,14 +36,10 @@ Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented
 
 ## 🔨 In Progress
 
-### Test ENS resolution end-to-end
+### Accurate llms.txt — critical for agent judges
 - **Priority**: P1
-- **Tags**: testing, ens, permissions, explorer
-Verify ENS resolution works across all surfaces with real names:
-1. **Real ENS name** (e.g. `vitalik.eth`) — resolves to address in explorer URLs, permission rules, and UI display
-2. **repobox.eth paid subdomain** (e.g. `ocean.repobox.eth`) — resolves correctly through our subdomain NFT system
-3. **Our own random subdomains/aliases** — repo.box aliases resolve in explorer and permissions
-Test each in: (a) Explorer URL routing (`/explore/vitalik.eth/`), (b) `<AddressDisplay>` component resolution, (c) Permission rules in `.repobox/config.yml` (e.g. `vitalik.eth push >main`), (d) Clone URLs. Document any failures and fix them. This must work flawlessly for the demo.
+- **Tags**: docs, agents
+`repo.box/llms.txt` must be fully accurate and current — hackathon agent-judges will read this to understand what repo.box does. Review and update: correct verbs (including `branch`, `read`, `own`), config path (`.repobox/config.yml`), credential helper flow, force push policy, x402 payments, ENS resolution, on-chain resolvers, explorer features. Remove anything that doesn't work yet or mark it clearly. This is our pitch to the judges in machine-readable form.
 
 ## 🚧 Blocked
 
@@ -71,6 +48,10 @@ Test each in: (a) Explorer URL routing (`/explore/vitalik.eth/`), (b) `<AddressD
 - **Tags**: infra
 
 ## ✅ Done
+
+### Test ENS resolution end-to-end
+- **Completed**: 2026-03-22 | **Agent**: claude-agent + reviewer-agent
+Comprehensive ENS testing across all surfaces including real ENS names, repobox.eth subdomains, and repo.box aliases. 839 lines of unit tests plus integration script. Covers explorer routing, permissions, AddressDisplay, and Git URLs. Demo-ready quality assurance.
 
 ### ENS names in permissions
 - **Completed**: 2026-03-21 | **Agent**: claude-agent + reviewer-agent

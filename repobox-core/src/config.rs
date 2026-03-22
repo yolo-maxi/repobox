@@ -5,7 +5,6 @@ use std::collections::HashMap;
 pub struct Config {
     pub groups: HashMap<String, Group>,
     pub permissions: Permissions,
-    pub x402: Option<X402Config>,
     pub virtuals: Option<VirtualsConfig>,
 }
 
@@ -35,7 +34,7 @@ pub enum GroupResolver {
     },
 }
 
-/// x402 payment configuration for paid repository access.
+/// x402 payment configuration — parsed from `.repobox/x402.yml` (separate from config.yml).
 #[derive(Debug, Clone)]
 pub struct X402Config {
     /// Price in USDC for permanent read access (e.g. "1.00").
