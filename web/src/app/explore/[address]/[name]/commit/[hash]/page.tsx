@@ -6,34 +6,17 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
 import { repoUrls } from '@/lib/repoUrls';
-import ExploreHeader from '@/components/explore/ExploreHeader';
-import ExploreSidebar from '@/components/explore/ExploreSidebar';
-
-interface RepoDetails {
-  address: string;
-  name: string;
-  owner_address: string;
-  default_branch: string;
-}
+import { SiteNav } from '@/components/SiteNav';
 
 interface CommitDetails {
-  hash: string;
-  shortHash: string;
-  author: string;
-  email: string;
-  timestamp: number;
-  message: string;
-  parentHash: string | null;
-  childHash: string | null;
-  // Note: In a full implementation, you'd also include file changes here
+  hash: string; author: string; email: string;
+  timestamp: number; message: string;
 }
 
 export default function CommitPage() {
   const params = useParams();
-  const [repo, setRepo] = useState<RepoDetails | null>(null);
   const [commit, setCommit] = useState<CommitDetails | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const address = Array.isArray(params.address) ? params.address[0] : params.address;
   const name = Array.isArray(params.name) ? params.name[0] : params.name;
@@ -41,168 +24,74 @@ export default function CommitPage() {
 
   useEffect(() => {
     if (!address || !name || !hash) return;
-
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Get repository details
-        const repoRes = await fetch(`/api/explorer/repos/${address}/${name}`);
-        if (!repoRes.ok) {
-          throw new Error('Repository not found');
-        }
-        const repoData = await repoRes.json();
-        setRepo(repoData);
-
-        // Try to get commit details
-        // Note: This would need a new API endpoint in a full implementation
-        // For now, we'll create a minimal commit object
-        const commitData: CommitDetails = {
-          hash,
-          shortHash: hash.slice(0, 7),
-          author: 'Unknown',
-          email: '',
-          timestamp: Date.now() / 1000,
-          message: 'Commit details not yet implemented',
-          parentHash: null,
-          childHash: null
-        };
-        
-        setCommit(commitData);
-      } catch (err) {
-        console.error('Commit page error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load commit');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+    // Try to find the commit in the commits list
+    fetch(`/api/explorer/repos/${address}/${name}/commits?limit=100`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        const found = (d?.commits || []).find((c: any) => c.hash === hash || c.hash.startsWith(hash));
+        if (found) setCommit(found);
+        else setCommit({ hash, author: 'Unknown', email: '', timestamp: Date.now() / 1000, message: 'Commit details unavailable' });
+      })
+      .catch(() => setCommit({ hash, author: 'Unknown', email: '', timestamp: Date.now() / 1000, message: 'Commit details unavailable' }))
+      .finally(() => setLoading(false));
   }, [address, name, hash]);
 
-  if (!address || !name || !hash) {
-    return notFound();
-  }
-
-  if (loading) {
-    return (
-      <div className="explore-layout">
-        <ExploreHeader />
-        <div className="explore-container">
-          <ExploreSidebar />
-          <main className="explore-main">
-            <div className="explore-loading">
-              <div className="explore-loading-spinner"></div>
-              <p>Loading commit...</p>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !repo || !commit) {
-    return (
-      <div className="explore-layout">
-        <ExploreHeader />
-        <div className="explore-container">
-          <ExploreSidebar />
-          <main className="explore-main">
-            <div className="explore-empty">
-              <h3>Commit not found</h3>
-              <p>{error}</p>
-              <Link href={repoUrls.home(address, name)} className="explore-back-link">
-                ← Back to repository
-              </Link>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
+  if (!address || !name || !hash) return notFound();
 
   return (
-    <div className="explore-layout">
-      <ExploreHeader />
-      
-      <div className="explore-breadcrumb-nav">
-        <div className="explore-main-header-content">
-          <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
-          <span className="explore-breadcrumb-separator">/</span>
-          <Link href={`/explore/${repo.owner_address}`} className="explore-breadcrumb-link">
-            {formatAddress(repo.owner_address)}
-          </Link>
-          <span className="explore-breadcrumb-separator">/</span>
-          <Link href={repoUrls.home(address, name)} className="explore-breadcrumb-link">
-            {repo.name}
-          </Link>
-          <span className="explore-breadcrumb-separator">/</span>
-          <span className="explore-breadcrumb-current">commit</span>
-          <span className="explore-breadcrumb-separator">/</span>
-          <span className="explore-breadcrumb-current">{commit.shortHash}</span>
+    <div style={{ minHeight: '100vh', background: 'var(--bp-bg)', color: 'var(--bp-text)', fontFamily: 'var(--font-mono, monospace)', fontSize: 13 }}>
+      <SiteNav />
+      <div style={{ borderBottom: '1px solid var(--bp-border)', padding: '16px 32px' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--bp-dim)', flexWrap: 'wrap' }}>
+          <Link href="/explore" style={{ color: 'var(--bp-accent)', textDecoration: 'none' }}>explore</Link>
+          <span>/</span>
+          <Link href={`/explore/${address}`} style={{ color: 'var(--bp-accent)', textDecoration: 'none' }}>{formatAddress(address)}</Link>
+          <span>/</span>
+          <Link href={repoUrls.home(address, name)} style={{ color: 'var(--bp-accent)', textDecoration: 'none' }}>{name}</Link>
+          <span>/</span>
+          <span style={{ color: 'var(--bp-heading)', fontWeight: 600 }}>commit {hash.slice(0, 7)}</span>
         </div>
       </div>
 
-      <div className="explore-container">
-        <ExploreSidebar />
-        
-        <main className="explore-main">
-          <div className="explore-repo-detail-header">
-            <div className="explore-repo-detail-info">
-              <h1 className="explore-repo-detail-title">
-                {commit.message}
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 32px' }}>
+        {loading ? (
+          <p style={{ color: 'var(--bp-dim)' }}>Loading…</p>
+        ) : commit ? (
+          <>
+            <div style={{
+              background: 'var(--bp-surface)', border: '1px solid var(--bp-border)',
+              borderRadius: 8, padding: 24, marginBottom: 24,
+            }}>
+              <h1 style={{ fontSize: 18, fontWeight: 600, color: 'var(--bp-heading)', marginBottom: 12, lineHeight: 1.4 }}>
+                {commit.message.split('\n')[0]}
               </h1>
-              <div className="explore-commit-details">
-                <code className="explore-commit-author">
-                  {formatAddress(repo.owner_address)}
-                </code>
-                <span className="explore-commit-time">
-                  committed {formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}
-                </span>
+              {commit.message.split('\n').length > 1 && (
+                <pre style={{ color: 'var(--bp-dim)', fontSize: 12, margin: '12px 0 0', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                  {commit.message.split('\n').slice(1).join('\n').trim()}
+                </pre>
+              )}
+              <div style={{ display: 'flex', gap: 16, marginTop: 16, fontSize: 12, color: 'var(--bp-dim)', flexWrap: 'wrap' }}>
+                <span><strong style={{ color: 'var(--bp-text)' }}>{commit.author}</strong> committed</span>
+                <span>{formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}</span>
               </div>
             </div>
-            <div className="explore-repo-detail-actions">
-              <Link
-                href={repoUrls.commits(address, name, repo.default_branch)}
-                className="explore-action-btn"
-              >
-                Browse commits
-              </Link>
-              <Link
-                href={repoUrls.tree(address, name, repo.default_branch)}
-                className="explore-action-btn"
-              >
-                Browse files
-              </Link>
-            </div>
-          </div>
 
-          <div className="explore-repo-tab-content">
-            <div className="explore-commit-info">
-              <div className="explore-commit-hash-section">
-                <h3>Commit Hash</h3>
-                <code className="explore-commit-full-hash">{commit.hash}</code>
-              </div>
-              
-              <div className="explore-commit-placeholder">
-                <h3>📋 Feature Coming Soon</h3>
-                <p>Detailed commit diff view is not yet implemented.</p>
-                <p>This page will show:</p>
-                <ul>
-                  <li>File changes and diffs</li>
-                  <li>Added and removed lines</li>
-                  <li>Parent/child commit navigation</li>
-                  <li>Commit statistics</li>
-                </ul>
-                <p>
-                  For now, you can browse the repository at this commit state by 
-                  navigating to the files tab.
-                </p>
-              </div>
+            <div style={{
+              background: 'var(--bp-surface)', border: '1px solid var(--bp-border)',
+              borderRadius: 8, padding: 20,
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: 'var(--bp-dim)', marginBottom: 12 }}>Commit Hash</div>
+              <code style={{ fontSize: 12, color: 'var(--bp-accent)', wordBreak: 'break-all' as const }}>{commit.hash}</code>
             </div>
-          </div>
-        </main>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+              <Link href={repoUrls.home(address, name)} style={{
+                padding: '8px 16px', border: '1px solid var(--bp-border)', borderRadius: 6,
+                color: 'var(--bp-dim)', fontSize: 12, textDecoration: 'none',
+              }}>← Repository</Link>
+            </div>
+          </>
+        ) : null}
       </div>
     </div>
   );

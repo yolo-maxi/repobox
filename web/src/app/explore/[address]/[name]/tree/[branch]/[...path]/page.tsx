@@ -4,17 +4,10 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { formatBytes, getFileIcon } from '@/lib/utils';
+import { formatTimeAgo, formatAddress, formatBytes } from '@/lib/utils';
 import { repoUrls } from '@/lib/repoUrls';
-import ExploreHeader from '@/components/explore/ExploreHeader';
-import ExploreSidebar from '@/components/explore/ExploreSidebar';
-
-interface RepoDetails {
-  address: string;
-  name: string;
-  owner_address: string;
-  default_branch: string;
-}
+import { SiteNav } from '@/components/SiteNav';
+import FileTree from '@/components/explore/FileTree';
 
 interface FileEntry {
   type: 'blob' | 'tree';
@@ -23,10 +16,14 @@ interface FileEntry {
   path: string;
 }
 
+interface Commit {
+  hash: string; author: string; timestamp: number; message: string;
+}
+
 export default function TreePage() {
   const params = useParams();
-  const [repo, setRepo] = useState<RepoDetails | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
+  const [recentCommits, setRecentCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,195 +31,199 @@ export default function TreePage() {
   const name = Array.isArray(params.name) ? params.name[0] : params.name;
   const branch = Array.isArray(params.branch) ? params.branch[0] : params.branch;
   const pathSegments = params.path ? (Array.isArray(params.path) ? params.path : [params.path]) : [];
-  const currentPath = pathSegments.join('/');
+  const treePath = pathSegments.join('/');
 
   useEffect(() => {
     if (!address || !name || !branch) return;
-
     const fetchData = async () => {
       try {
         setLoading(true);
-        setError(null);
-
-        // Get repository details
-        const repoRes = await fetch(`/api/explorer/repos/${address}/${name}`);
-        if (!repoRes.ok) {
-          throw new Error('Repository not found');
+        const [treeRes, commitsRes] = await Promise.all([
+          fetch(`/api/explorer/repos/${address}/${name}/tree?path=${encodeURIComponent(treePath)}&branch=${branch}`),
+          fetch(`/api/explorer/repos/${address}/${name}/commits?limit=5&branch=${branch}`),
+        ]);
+        if (!treeRes.ok) throw new Error('Directory not found');
+        const td = await treeRes.json();
+        setFiles(td.files || []);
+        if (commitsRes.ok) {
+          const cd = await commitsRes.json();
+          setRecentCommits(cd.commits || []);
         }
-        const repoData = await repoRes.json();
-        setRepo(repoData);
-
-        // Get file tree for current path
-        const treePath = currentPath ? `/${currentPath}` : '';
-        const treeRes = await fetch(`/api/explorer/repos/${address}/${name}/tree${treePath}?branch=${branch}`);
-        if (!treeRes.ok) {
-          if (treeRes.status === 404) {
-            throw new Error('Path not found');
-          }
-          throw new Error('Failed to load directory');
-        }
-        
-        const treeData = await treeRes.json();
-        setFiles(treeData.files || []);
       } catch (err) {
-        console.error('Tree page error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load directory');
-      } finally {
-        setLoading(false);
-      }
+        setError(err instanceof Error ? err.message : 'Failed to load');
+      } finally { setLoading(false); }
     };
-
     fetchData();
-  }, [address, name, branch, currentPath]);
+  }, [address, name, branch, treePath]);
 
-  if (!address || !name || !branch) {
-    return notFound();
-  }
+  if (!address || !name || !branch) return notFound();
 
   if (loading) {
     return (
-      <div className="explore-layout">
-        <ExploreHeader />
-        <div className="explore-container">
-          <ExploreSidebar />
-          <main className="explore-main">
-            <div className="explore-loading">
-              <div className="explore-loading-spinner"></div>
-              <p>Loading directory...</p>
-            </div>
-          </main>
-        </div>
+      <div className="tree-root">
+        <SiteNav />
+        <div className="tree-center"><div className="tree-spinner" /><p>Loading…</p></div>
       </div>
     );
   }
 
-  if (error || !repo) {
+  if (error) {
     return (
-      <div className="explore-layout">
-        <ExploreHeader />
-        <div className="explore-container">
-          <ExploreSidebar />
-          <main className="explore-main">
-            <div className="explore-empty">
-              <h3>Directory not found</h3>
-              <p>{error}</p>
-              <Link href={repoUrls.home(address, name)} className="explore-back-link">
-                ← Back to repository
-              </Link>
-            </div>
-          </main>
+      <div className="tree-root">
+        <SiteNav />
+        <div className="tree-center">
+          <h3>Directory not found</h3>
+          <p>{error}</p>
+          <Link href={repoUrls.home(address, name)} style={{ color: 'var(--bp-accent)' }}>← Back to repository</Link>
         </div>
       </div>
     );
   }
 
-  // Generate breadcrumb navigation
-  const breadcrumbs = [
-    { label: repo.name, href: repoUrls.home(address, name) }
-  ];
-
-  if (currentPath) {
-    const pathParts = currentPath.split('/').filter(Boolean);
-    for (let i = 0; i < pathParts.length; i++) {
-      const partialPath = pathParts.slice(0, i + 1).join('/');
-      breadcrumbs.push({
-        label: pathParts[i],
-        href: repoUrls.tree(address, name, branch, partialPath)
-      });
-    }
-  }
+  const handleFileClick = (filePath: string) => {
+    window.location.href = repoUrls.blob(address, name, branch, filePath);
+  };
 
   return (
-    <div className="explore-layout">
-      <ExploreHeader />
-      
-      <div className="explore-breadcrumb-nav">
-        <div className="explore-main-header-content">
-          <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
-          <span className="explore-breadcrumb-separator">/</span>
-          <Link href={`/explore/${repo.owner_address}`} className="explore-breadcrumb-link">
-            {repo.owner_address.slice(0, 6)}...{repo.owner_address.slice(-4)}
-          </Link>
-          <span className="explore-breadcrumb-separator">/</span>
-          {breadcrumbs.map((crumb, index) => (
-            <span key={index}>
-              {index > 0 && <span className="explore-breadcrumb-separator">/</span>}
-              <Link href={crumb.href} className="explore-breadcrumb-link">
-                {crumb.label}
-              </Link>
-            </span>
-          ))}
-          <span className="explore-breadcrumb-separator">@</span>
-          <span className="explore-breadcrumb-current">{branch}</span>
+    <div className="tree-root">
+      <SiteNav />
+
+      {/* Breadcrumb header */}
+      <div className="tree-header">
+        <div className="tree-header-inner">
+          <div className="tree-breadcrumb">
+            <Link href="/explore">explore</Link>
+            <span>/</span>
+            <Link href={`/explore/${address}`}>{formatAddress(address)}</Link>
+            <span>/</span>
+            <Link href={repoUrls.home(address, name)}>{name}</Link>
+            <span>/</span>
+            {pathSegments.map((seg, i) => (
+              <span key={i}>
+                {i > 0 && <span>/</span>}
+                <Link href={repoUrls.tree(address, name, branch, pathSegments.slice(0, i + 1).join('/'))}>{seg}</Link>
+              </span>
+            ))}
+            <span className="tree-breadcrumb-branch">@ {branch}</span>
+          </div>
         </div>
       </div>
 
-      <div className="explore-container">
-        <ExploreSidebar />
-        
-        <main className="explore-main">
-          <div className="explore-repo-detail-header">
-            <div className="explore-repo-detail-info">
-              <h1 className="explore-repo-detail-title">
-                {currentPath ? currentPath : '/'}
-              </h1>
-              <p className="explore-repo-detail-subtitle">
-                Branch: <code>{branch}</code> • 
-                {files.length} {files.length === 1 ? 'item' : 'items'}
-              </p>
-            </div>
-          </div>
-
-          <div className="explore-repo-tab-content">
-            <div className="explore-file-list">
-              {/* Parent directory link */}
-              {currentPath && (
-                <Link
-                  href={
-                    pathSegments.length > 1 
-                      ? repoUrls.tree(address, name, branch, pathSegments.slice(0, -1).join('/'))
-                      : repoUrls.tree(address, name, branch)
-                  }
-                  className="explore-file-item"
-                >
-                  <div className="explore-file-info">
-                    <span className="explore-file-icon">📁</span>
-                    <span className="explore-file-name">..</span>
-                  </div>
-                </Link>
-              )}
-
-              {files.length === 0 ? (
-                <div className="explore-empty">
-                  <p>Empty directory</p>
-                </div>
-              ) : (
-                files.map((file, i) => (
-                  <Link
-                    key={i}
-                    href={
-                      file.type === 'tree'
-                        ? repoUrls.tree(address, name, branch, file.path)
-                        : repoUrls.blob(address, name, branch, file.path)
-                    }
-                    className="explore-file-item"
-                  >
-                    <div className="explore-file-info">
-                      <span className="explore-file-icon">
-                        {getFileIcon(file.name, file.type === 'tree')}
-                      </span>
-                      <span className="explore-file-name">{file.name}</span>
-                    </div>
-                    {file.size !== undefined && (
-                      <span className="explore-file-size">{formatBytes(file.size)}</span>
-                    )}
-                  </Link>
-                ))
-              )}
-            </div>
-          </div>
+      {/* Content grid */}
+      <div className="tree-content">
+        <main className="tree-main">
+          <FileTree
+            address={address}
+            repoName={name}
+            branch={branch}
+            initialFiles={files}
+            onFileClick={handleFileClick}
+          />
         </main>
+
+        <aside className="tree-sidebar">
+          <div className="tree-sidebar-card">
+            <div className="tree-sidebar-label">Recent Commits</div>
+            {recentCommits.length === 0 ? (
+              <p className="tree-dim">No commits</p>
+            ) : (
+              recentCommits.map(c => (
+                <div key={c.hash} className="tree-sidebar-commit">
+                  <Link href={repoUrls.commit(address, name, c.hash)} className="tree-sidebar-commit-msg">
+                    {c.message.split('\n')[0].substring(0, 60)}{c.message.length > 60 ? '…' : ''}
+                  </Link>
+                  <div className="tree-sidebar-commit-meta">
+                    <code>{c.hash.slice(0, 7)}</code>
+                    <span>{formatTimeAgo(new Date(c.timestamp * 1000).toISOString())}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </aside>
       </div>
+
+      <style>{`
+        .tree-root {
+          min-height: 100vh;
+          background: var(--bp-bg);
+          color: var(--bp-text);
+          font-family: var(--font-mono, 'JetBrains Mono', monospace);
+          font-size: 13px;
+        }
+        .tree-center {
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          min-height: 60vh; gap: 12px; color: var(--bp-dim);
+        }
+        .tree-spinner {
+          width: 24px; height: 24px;
+          border: 2px solid var(--bp-border);
+          border-top-color: var(--bp-accent);
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .tree-header {
+          border-bottom: 1px solid var(--bp-border);
+          padding: 16px 32px;
+        }
+        .tree-header-inner { max-width: 1280px; margin: 0 auto; }
+        .tree-breadcrumb {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 12px; color: var(--bp-dim); flex-wrap: wrap;
+        }
+        .tree-breadcrumb a { color: var(--bp-accent); text-decoration: none; }
+        .tree-breadcrumb a:hover { opacity: 0.8; }
+        .tree-breadcrumb-branch {
+          color: var(--bp-dim); opacity: 0.5;
+          margin-left: 4px; font-size: 11px;
+        }
+
+        .tree-content {
+          max-width: 1280px; margin: 0 auto;
+          padding: 24px 32px;
+          display: grid;
+          grid-template-columns: 1fr 280px;
+          gap: 24px;
+          align-items: start;
+        }
+
+        .tree-sidebar-card {
+          background: var(--bp-surface);
+          border: 1px solid var(--bp-border);
+          border-radius: 8px;
+          padding: 16px;
+        }
+        .tree-sidebar-label {
+          font-size: 10px; font-weight: 600;
+          text-transform: uppercase; letter-spacing: 0.1em;
+          color: var(--bp-dim); margin-bottom: 12px;
+        }
+        .tree-sidebar-commit { margin-bottom: 10px; }
+        .tree-sidebar-commit:last-child { margin-bottom: 0; }
+        .tree-sidebar-commit-msg {
+          color: var(--bp-text); text-decoration: none;
+          font-size: 12px; line-height: 1.4; display: block;
+        }
+        .tree-sidebar-commit-msg:hover { color: var(--bp-accent); }
+        .tree-sidebar-commit-meta {
+          display: flex; gap: 8px; font-size: 10px;
+          color: var(--bp-dim); opacity: 0.6; margin-top: 2px;
+        }
+        .tree-dim { color: var(--bp-dim); font-size: 12px; }
+
+        @media (max-width: 900px) {
+          .tree-content {
+            grid-template-columns: 1fr;
+            padding: 16px;
+          }
+          .tree-main { order: 1; }
+          .tree-sidebar { order: 2; }
+          .tree-header { padding: 12px 16px; }
+        }
+      `}</style>
     </div>
   );
 }
