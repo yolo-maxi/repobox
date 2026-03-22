@@ -3308,7 +3308,7 @@ html {
 
 .contribution-chart-contributor code {
   font-size: 12px;
-  color: var(--explore-text);
+  color: var(--bp-gold);
 }
 
 .contribution-chart-total {
