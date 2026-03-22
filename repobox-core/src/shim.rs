@@ -16,7 +16,7 @@ const PASSTHROUGH_COMMANDS: &[&str] = &[
 
 /// Commands that need permission checks.
 const CHECKED_COMMANDS: &[&str] = &[
-    "commit", "merge", "push", "checkout", "branch", "pull",
+    "commit", "merge", "push", "checkout", "branch",
 ];
 
 /// Result of the shim processing a git command.
@@ -77,6 +77,11 @@ pub fn process_command_with_resolver(
         return ShimAction::Passthrough;
     }
 
+    // Pull should always be allowed (local sync UX).
+    if cmd == "pull" {
+        return ShimAction::Delegate;
+    }
+
     // Unknown commands → passthrough
     if !CHECKED_COMMANDS.contains(&cmd.as_str()) {
         return ShimAction::Passthrough;
@@ -92,13 +97,7 @@ pub fn process_command_with_resolver(
         }
     };
 
-    // `git pull` only updates local state; it should never be policy-blocked.
-    // (merge/push permissions are enforced on explicit merge/push operations)
-    if cmd == "pull" {
-        return ShimAction::Delegate;
-    }
-
-    // Parse local config for non-pull checked commands
+    // Parse local config for checked commands
     let config_content = match std::fs::read_to_string(&config_path) {
         Ok(c) => c,
         Err(e) => {
@@ -1014,6 +1013,29 @@ permissions:
                 "{cmd} should passthrough"
             );
         }
+    }
+
+    #[test]
+    fn test_pull_always_delegates_even_without_identity_or_valid_config() {
+        let (_tmp, repo) = setup_repo_with_config("invalid: yaml: [[[");
+
+        // No identity should still allow pull.
+        let action = process_command(
+            &args("pull --rebase origin main"),
+            Some(&repo),
+            None,
+            Some("main"),
+        );
+        assert!(matches!(action, ShimAction::Delegate));
+
+        // With identity, also delegate.
+        let action2 = process_command(
+            &args("pull origin main"),
+            Some(&repo),
+            Some(&id("evm:0xAAA0000000000000000000000000000000000001")),
+            Some("main"),
+        );
+        assert!(matches!(action2, ShimAction::Delegate));
     }
 
     // ================================================================
