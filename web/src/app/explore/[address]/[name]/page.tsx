@@ -343,7 +343,12 @@ export default function RepoPage() {
                       {c.message.split('\n')[0]}
                     </Link>
                     <div className="rd-commit-meta">
-                      <code className="rd-commit-author">{c.author}</code>
+                      <AddressDisplay 
+                        address={repo?.owner_address || resolvedAddress || ''} 
+                        size="sm" 
+                        showCopy={false} 
+                        linkable={true}
+                      />
                       <span className="rd-dim">committed {formatTimeAgo(new Date(c.timestamp * 1000).toISOString())}</span>
                     </div>
                   </div>

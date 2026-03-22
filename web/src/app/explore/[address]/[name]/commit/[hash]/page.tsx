@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
+import AddressDisplay from '@/components/AddressDisplay';
 import { repoUrls } from '@/lib/repoUrls';
 import { SiteNav } from '@/components/SiteNav';
 
@@ -70,8 +71,11 @@ export default function CommitPage() {
                   {commit.message.split('\n').slice(1).join('\n').trim()}
                 </pre>
               )}
-              <div style={{ display: 'flex', gap: 16, marginTop: 16, fontSize: 12, color: 'var(--bp-dim)', flexWrap: 'wrap' }}>
-                <span><strong style={{ color: 'var(--bp-text)' }}>{commit.author}</strong> committed</span>
+              <div style={{ display: 'flex', gap: 16, marginTop: 16, fontSize: 12, color: 'var(--bp-dim)', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <AddressDisplay address={address} size="sm" showCopy={false} linkable={true} />
+                  <span>committed</span>
+                </span>
                 <span>{formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}</span>
               </div>
             </div>

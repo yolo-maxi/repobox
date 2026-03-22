@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
+import AddressDisplay from '@/components/AddressDisplay';
 import { repoUrls } from '@/lib/repoUrls';
 import ExploreHeader from '@/components/explore/ExploreHeader';
 import ExploreSidebar from '@/components/explore/ExploreSidebar';
@@ -204,9 +205,12 @@ export default function CommitsPage() {
                         </Link>
                       </div>
                       <div className="explore-commit-meta">
-                        <code className="explore-commit-author">
-                          {formatAddress(repo.owner_address)}
-                        </code>
+                        <AddressDisplay
+                          address={repo.owner_address}
+                          size="sm"
+                          showCopy={false}
+                          linkable={true}
+                        />
                         <span className="explore-commit-time">
                           {formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}
                         </span>
