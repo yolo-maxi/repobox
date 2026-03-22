@@ -249,8 +249,8 @@ export default function ExplorePage() {
         }
 
         .explore-card {
-          background: var(--bp-surface);
-          border: 1px solid var(--bp-border);
+          background: rgba(20, 40, 65, 0.6);
+          border: 1px solid rgba(60, 120, 180, 0.2);
           border-radius: 8px;
           padding: 16px;
         }
@@ -355,7 +355,12 @@ export default function ExplorePage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 24px;
+          margin-bottom: 0;
+          padding: 16px 20px;
+          background: rgba(20, 40, 65, 0.6);
+          border: 1px solid rgba(60, 120, 180, 0.2);
+          border-radius: 8px 8px 0 0;
+          border-bottom: 1px solid var(--bp-border);
         }
         .explore-title {
           font-size: 16px;
@@ -398,8 +403,9 @@ export default function ExplorePage() {
         /* Repo list */
         .explore-repo-list {
           background: var(--bp-surface);
-          border: 1px solid var(--bp-border);
-          border-radius: 8px;
+          border: 1px solid rgba(60, 120, 180, 0.2);
+          border-top: none;
+          border-radius: 0 0 8px 8px;
           overflow: hidden;
           flex: 1;
         }
