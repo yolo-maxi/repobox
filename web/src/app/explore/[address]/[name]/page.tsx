@@ -14,6 +14,7 @@ import FileTree from '@/components/explore/FileTree';
 import CodeViewer from '@/components/explore/CodeViewer';
 import { SiteNav } from '@/components/SiteNav';
 import AddressDisplay from '@/components/AddressDisplay';
+import EnsSubdomainModal from '@/components/EnsSubdomainModal';
 
 interface RepoDetails {
   address: string; name: string; owner_address: string; created_at: string;
@@ -253,6 +254,14 @@ export default function RepoPage() {
     { id: 'config', label: 'Config' },
   ];
 
+  // If user arrived via /explore/<name>/<repo>, avoid re-resolving same identity in breadcrumb.
+  const breadcrumbDisplayName = /^0x[a-fA-F0-9]{40}$/.test(addressOrName || '')
+    ? undefined
+    : (addressOrName || undefined);
+  const breadcrumbHref = addressOrName
+    ? `/explore/${encodeURIComponent(addressOrName)}`
+    : `/explore/${repo.owner_address}`;
+
   // Sort files: directories first, then alphabetical
   const sortedFiles = [...currentFiles].sort((a, b) => {
     if (a.type !== b.type) return a.type === 'tree' ? -1 : 1;
@@ -269,7 +278,15 @@ export default function RepoPage() {
           <div className="rd-breadcrumb">
             <Link href="/explore">explore</Link>
             <span>/</span>
-            <AddressDisplay address={repo.owner_address} size="sm" showCopy={false} linkable={true} className="rd-breadcrumb-addr" />
+            <AddressDisplay
+              address={repo.owner_address}
+              displayName={breadcrumbDisplayName}
+              size="sm"
+              showCopy={false}
+              linkable={true}
+              href={breadcrumbHref}
+              className="rd-breadcrumb-addr"
+            />
             <span>/</span>
             <span className="rd-breadcrumb-current">{repo.name}</span>
           </div>
@@ -444,6 +461,15 @@ export default function RepoPage() {
 
           {/* Clone */}
           <CloneUrlWidget ownerAddress={repo.owner_address} repoName={repo.name} />
+
+          {/* ENS Sale CTA */}
+          <div className="rd-sidebar-card">
+            <div className="rd-sidebar-label">ENS Subdomain</div>
+            <p className="rd-dim" style={{ marginTop: 0, marginBottom: 10 }}>
+              Turn your wallet into a permanent human-readable identity.
+            </p>
+            <EnsSubdomainModal triggerLabel="Buy .repobox.eth" />
+          </div>
 
           {/* Recent commits */}
           <div className="rd-sidebar-card">
