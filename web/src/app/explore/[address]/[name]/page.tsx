@@ -10,6 +10,7 @@ import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
 import BranchSelector from '@/components/BranchSelector';
 import CloneUrlWidget from '@/components/CloneUrlWidget';
 import ContributionChart from '@/components/explore/ContributionChart';
+import FileTree from '@/components/explore/FileTree';
 import { SiteNav } from '@/components/SiteNav';
 
 interface RepoDetails {
@@ -318,46 +319,13 @@ export default function RepoPage() {
           {/* Files */}
           {activeTab === 'files' && (
             <div className="rd-files">
-              {(currentPath || fileContent) && (
-                <div className="rd-file-breadcrumb">
-                  <button onClick={goBack} className="rd-back-btn">←</button>
-                  <button onClick={() => { setCurrentPath(''); setCurrentFiles(repo.file_tree || []); setFileContent(null); }} className="rd-crumb-link">{repo.name}</button>
-                  {currentPath.split('/').filter(Boolean).map((seg, i, arr) => (
-                    <span key={i}>
-                      <span className="rd-crumb-sep">/</span>
-                      <button onClick={() => navigateToPath(arr.slice(0, i + 1).join('/'))} className="rd-crumb-link">{seg}</button>
-                    </span>
-                  ))}
-                  {fileContent && (
-                    <><span className="rd-crumb-sep">/</span><span className="rd-crumb-file">{fileContent.path.split('/').pop()}</span></>
-                  )}
-                </div>
-              )}
-
-              {fileContent ? (
-                <div className="rd-file-viewer">
-                  <div className="rd-file-viewer-header">
-                    <span>{getFileIcon(fileContent.path, false)} {fileContent.path.split('/').pop()}</span>
-                  </div>
-                  <pre className="rd-file-code"><code>{fileContent.content}</code></pre>
-                </div>
-              ) : (
-                <div className="rd-file-table">
-                  {sortedFiles.length === 0 ? (
-                    <div className="rd-empty">Empty directory</div>
-                  ) : sortedFiles.map((file, i) => (
-                    <button
-                      key={i}
-                      onClick={() => file.type === 'tree' ? navigateToPath(file.path) : viewFile(file.path)}
-                      className="rd-file-row"
-                    >
-                      <span className="rd-file-icon">{getFileIcon(file.name, file.type === 'tree')}</span>
-                      <span className={`rd-file-name ${file.type === 'tree' ? 'dir' : ''}`}>{file.name}</span>
-                      <span className="rd-file-size">{file.size !== undefined ? formatBytes(file.size) : ''}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <FileTree
+                address={resolvedAddress || ''}
+                repoName={name}
+                branch={selectedBranch}
+                initialFiles={repo.file_tree || []}
+                onFileClick={(path) => viewFile(path)}
+              />
             </div>
           )}
 
