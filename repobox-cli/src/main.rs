@@ -1134,6 +1134,45 @@ fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
             }
             ExitCode::SUCCESS
         }
+        "post-receive" => {
+            // Server-side hook: process successful pushes, trigger payments for merged agent PRs
+            // stdin: <old sha> <new sha> <ref name>
+            use std::io::BufRead;
+            let stdin = std::io::stdin();
+            
+            for line in stdin.lock().lines().flatten() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() != 3 {
+                    continue;
+                }
+                
+                let old_sha = parts[0];
+                let new_sha = parts[1];
+                let ref_name = parts[2];
+                
+                // Skip non-branch refs
+                let branch_name = match ref_name.strip_prefix("refs/heads/") {
+                    Some(name) => name,
+                    None => continue,
+                };
+                
+                // Skip deletions (new_sha = all zeros)
+                if new_sha == "0000000000000000000000000000000000000000" {
+                    continue;
+                }
+                
+                // Check if this is a merge to main with Virtuals enabled
+                if let Some(ref virtuals_config) = config.virtuals {
+                    if virtuals_config.enabled && branch_name == "main" {
+                        if let Err(e) = process_virtuals_merge_payment(&config, &identity, old_sha, new_sha) {
+                            eprintln!("⚠️ payment processing failed: {}", e);
+                            // Don't fail the push for payment errors, just log them
+                        }
+                    }
+                }
+            }
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("unknown hook: {hook}");
             ExitCode::FAILURE
@@ -1379,6 +1418,220 @@ fn validate_agent_branch_naming(identity: &Identity, branch_name: &str) -> Resul
         }
     }
     
+    Ok(())
+}
+
+/// Process Virtuals payment for agent PR merges to main branch.
+/// This function is called by the post-receive hook when an agent's fix
+/// is merged into the main branch.
+fn process_virtuals_merge_payment(
+    config: &repobox::config::Config,
+    _identity: &repobox::config::Identity,
+    old_sha: &str,
+    new_sha: &str,
+) -> Result<(), String> {
+    let virtuals_config = match config.virtuals.as_ref() {
+        Some(config) if config.enabled => config,
+        _ => return Ok(()), // Virtuals not enabled
+    };
+    
+    let payment_config = match virtuals_config.payments.as_ref() {
+        Some(config) => config,
+        None => {
+            eprintln!("⚠️ virtuals payment configuration not found");
+            return Ok(()); // No payment config, skip
+        }
+    };
+    
+    // Get commits that were merged
+    let real_git = find_real_git();
+    let range = if old_sha == "0000000000000000000000000000000000000000" {
+        // New branch case
+        new_sha.to_string()
+    } else {
+        format!("{}..{}", old_sha, new_sha)
+    };
+    
+    // Find agent commits in the merge
+    let output = Command::new(&real_git)
+        .args(["log", "--format=%H|%an|%s|%B", &range, "--grep=Agent:"])
+        .output()
+        .map_err(|e| format!("failed to get merge commits: {}", e))?;
+    
+    if !output.status.success() {
+        return Err("failed to retrieve commit log".to_string());
+    }
+    
+    let log_output = String::from_utf8_lossy(&output.stdout);
+    
+    for entry in log_output.split("\n\n") {
+        if entry.trim().is_empty() {
+            continue;
+        }
+        
+        let lines: Vec<&str> = entry.lines().collect();
+        if lines.is_empty() {
+            continue;
+        }
+        
+        let first_line = lines[0];
+        let parts: Vec<&str> = first_line.split('|').collect();
+        if parts.len() < 4 {
+            continue;
+        }
+        
+        let commit_hash = parts[0];
+        let _author = parts[1];
+        let subject = parts[2];
+        let full_message = &lines[3..].join("\n");
+        
+        // Extract agent information from commit message
+        if let Some(agent_info) = extract_agent_payment_info(subject, full_message) {
+            println!(
+                "💰 Processing payment for agent {} - Issue #{} - {} USDC",
+                agent_info.agent_address, agent_info.issue_id, agent_info.bounty_amount
+            );
+            
+            // In a real implementation, this would trigger the actual payment
+            // For now, we'll log the payment details and create a claim record
+            if let Err(e) = create_payment_claim(&agent_info, commit_hash, payment_config) {
+                eprintln!("⚠️ failed to create payment claim: {}", e);
+            } else {
+                println!("✅ Payment claim created for agent {}", agent_info.agent_address);
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Information extracted from agent commit messages for payment processing.
+#[derive(Debug)]
+struct AgentPaymentInfo {
+    agent_address: String,
+    issue_id: String,
+    bounty_amount: String,
+    severity: String,
+}
+
+/// Extract agent payment information from commit message.
+/// Expected format includes lines like:
+/// Agent: 0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00
+/// Bounty: 25.00 USDC
+/// Issue: #42 (severity: high)
+fn extract_agent_payment_info(subject: &str, full_message: &str) -> Option<AgentPaymentInfo> {
+    let mut agent_address = None;
+    let mut issue_id = None;
+    let mut bounty_amount = None;
+    let mut severity = "medium".to_string(); // default
+    
+    // Parse full commit message for agent metadata
+    for line in full_message.lines() {
+        let line = line.trim();
+        
+        if let Some(addr) = line.strip_prefix("Agent:") {
+            agent_address = Some(addr.trim().to_string());
+        } else if let Some(bounty) = line.strip_prefix("Bounty:") {
+            // Parse "25.00 USDC" -> "25.00"
+            bounty_amount = Some(bounty.trim().replace(" USDC", ""));
+        } else if let Some(issue_info) = line.strip_prefix("Issue:") {
+            // Parse "#42 (severity: high)" or just "#42"
+            if let Some(issue_num) = issue_info.trim().strip_prefix('#') {
+                let issue_part = issue_num.split_whitespace().next().unwrap_or(issue_num);
+                issue_id = Some(issue_part.to_string());
+                
+                // Extract severity if present
+                if issue_info.contains("severity:") {
+                    if let Some(sev_part) = issue_info.split("severity:").nth(1) {
+                        let sev = sev_part.trim().trim_end_matches(')').trim();
+                        severity = sev.to_string();
+                    }
+                }
+            }
+        }
+    }
+    
+    // Also try to extract issue from subject line (fallback)
+    if issue_id.is_none() {
+        if let Some(issue) = extract_issue_from_subject(subject) {
+            issue_id = Some(issue);
+        }
+    }
+    
+    // Construct payment info if all required fields are present
+    match (agent_address, issue_id, bounty_amount) {
+        (Some(agent), Some(issue), Some(bounty)) => Some(AgentPaymentInfo {
+            agent_address: agent,
+            issue_id: issue,
+            bounty_amount: bounty,
+            severity,
+        }),
+        _ => None,
+    }
+}
+
+/// Extract issue number from commit subject line.
+/// Looks for patterns like "fix #42", "closes issue #123", etc.
+fn extract_issue_from_subject(subject: &str) -> Option<String> {
+    let issue_patterns = [
+        r"#(\d+)",
+        r"issue #(\d+)",
+        r"closes #(\d+)",
+        r"fixes #(\d+)",
+        r"resolves #(\d+)",
+    ];
+    
+    for pattern in &issue_patterns {
+        if let Ok(re) = regex::Regex::new(pattern) {
+            if let Some(captures) = re.captures(subject) {
+                if let Some(issue_match) = captures.get(1) {
+                    return Some(issue_match.as_str().to_string());
+                }
+            }
+        }
+    }
+    
+    None
+}
+
+/// Create a payment claim record for the agent.
+/// In a real implementation, this would store the claim in a database
+/// and trigger the actual x402 payment process.
+fn create_payment_claim(
+    agent_info: &AgentPaymentInfo,
+    commit_hash: &str,
+    payment_config: &repobox::config::VirtualsPaymentConfig,
+) -> Result<(), String> {
+    // For this implementation, we'll write claim details to a local file
+    // In production, this would integrate with the payment API
+    
+    let claim_data = format!(
+        "AGENT_PAYMENT_CLAIM\n\
+         Agent: {}\n\
+         Issue: #{}\n\
+         Amount: {} USDC\n\
+         Severity: {}\n\
+         Commit: {}\n\
+         Network: {}\n\
+         Treasury: {}\n\
+         Timestamp: {}\n\
+         Status: pending\n\n",
+        agent_info.agent_address,
+        agent_info.issue_id,
+        agent_info.bounty_amount,
+        agent_info.severity,
+        commit_hash,
+        payment_config.network,
+        payment_config.treasury,
+        chrono::Utc::now().to_rfc3339()
+    );
+    
+    // Write to payment claims log
+    let claims_file = ".repobox/payment_claims.log";
+    std::fs::write(claims_file, claim_data)
+        .map_err(|e| format!("failed to write payment claim: {}", e))?;
+    
+    println!("💾 Payment claim logged to {}", claims_file);
     Ok(())
 }
 
