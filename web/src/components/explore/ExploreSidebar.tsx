@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatTimeAgo } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
@@ -29,16 +29,16 @@ interface ExploreSidebarProps {
   className?: string;
 }
 
-function truncateMessage(message: string, maxLength: number = 55): string {
+function truncateMessage(message: string, maxLength: number = 60): string {
   if (message.length <= maxLength) return message;
-  return message.substring(0, maxLength).trim() + '...';
+  return message.substring(0, maxLength).trim() + '…';
 }
 
-export default function ExploreSidebar({
-  showSort = false,
-  sortBy = 'latest',
+export default function ExploreSidebar({ 
+  showSort = false, 
+  sortBy = 'latest', 
   onSortChange,
-  className = ''
+  className = '' 
 }: ExploreSidebarProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [activity, setActivity] = useState<Activity[]>([]);
@@ -48,9 +48,13 @@ export default function ExploreSidebar({
       try {
         const [statsRes, activityRes] = await Promise.all([
           fetch('/api/explorer/stats'),
-          fetch('/api/explorer/activity?limit=15')
+          fetch('/api/explorer/activity?limit=8')
         ]);
-        if (statsRes.ok) setStats(await statsRes.json());
+        
+        if (statsRes.ok) {
+          setStats(await statsRes.json());
+        }
+        
         if (activityRes.ok) {
           const data = await activityRes.json();
           setActivity(data.activity || []);
@@ -59,66 +63,57 @@ export default function ExploreSidebar({
         console.error('Error fetching sidebar data:', error);
       }
     };
+
     fetchData();
 
+    // Refresh activity every 30 seconds
     const interval = setInterval(() => {
-      fetch('/api/explorer/activity?limit=15')
+      fetch('/api/explorer/activity?limit=8')
         .then(res => res.ok ? res.json() : null)
         .then(data => { if (data?.activity) setActivity(data.activity); })
         .catch(() => {});
     }, 30000);
+
     return () => clearInterval(interval);
   }, []);
 
-  // Deduplicate activity: one entry per repo
-  const deduplicatedActivity = useMemo(() => {
-    const seen = new Map<string, Activity>();
-    for (const item of activity) {
-      const key = `${item.address}/${item.name}`;
-      if (!seen.has(key)) {
-        seen.set(key, item);
-      }
-    }
-    return Array.from(seen.values()).slice(0, 6);
-  }, [activity]);
-
   return (
-    <aside className={`rd-sidebar ${className}`}>
-      {/* Stats */}
+    <aside className={`explore-sidebar ${className}`}>
+      {/* Stats Overview */}
       {stats && (
-        <div className="rd-sidebar-section">
-          <h3 className="rd-sidebar-title">Overview</h3>
-          <div className="rd-sidebar-stats">
-            <div className="rd-sidebar-stat">
-              <span className="rd-sidebar-stat-val">{stats.totalRepos}</span>
-              <span className="rd-sidebar-stat-label">Repos</span>
+        <div className="explore-sidebar-section">
+          <h3 className="explore-sidebar-title">Overview</h3>
+          <div className="explore-sidebar-stats">
+            <div className="explore-sidebar-stat">
+              <span className="explore-sidebar-stat-label">Repositories</span>
+              <span className="explore-sidebar-stat-value">{stats.totalRepos}</span>
             </div>
-            <div className="rd-sidebar-stat">
-              <span className="rd-sidebar-stat-val">{stats.totalOwners}</span>
-              <span className="rd-sidebar-stat-label">Owners</span>
+            <div className="explore-sidebar-stat">
+              <span className="explore-sidebar-stat-label">Owners</span>
+              <span className="explore-sidebar-stat-value">{stats.totalOwners}</span>
             </div>
-            <div className="rd-sidebar-stat">
-              <span className="rd-sidebar-stat-val">{stats.totalCommits}</span>
-              <span className="rd-sidebar-stat-label">Commits</span>
+            <div className="explore-sidebar-stat">
+              <span className="explore-sidebar-stat-label">Commits</span>
+              <span className="explore-sidebar-stat-value">{stats.totalCommits}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Sort */}
+      {/* Sort Options */}
       {showSort && onSortChange && (
-        <div className="rd-sidebar-section">
-          <h3 className="rd-sidebar-title">Sort by</h3>
-          <div className="rd-sidebar-sort">
+        <div className="explore-sidebar-section">
+          <h3 className="explore-sidebar-title">Sort by</h3>
+          <div className="explore-sidebar-sort">
             {[
-              { key: 'latest', label: 'Recently updated' },
-              { key: 'commits', label: 'Most commits' },
-              { key: 'name', label: 'Name' }
+              { key: 'latest', label: '🕐 Recently updated' },
+              { key: 'commits', label: '📊 Most commits' },
+              { key: 'name', label: '🔤 Name' }
             ].map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => onSortChange(key)}
-                className={`rd-sidebar-sort-btn ${sortBy === key ? 'rd-sidebar-sort-btn--active' : ''}`}
+                className={`explore-sidebar-sort-btn ${sortBy === key ? 'active' : ''}`}
               >
                 {label}
               </button>
@@ -127,36 +122,33 @@ export default function ExploreSidebar({
         </div>
       )}
 
-      {/* Activity */}
-      <div className="rd-sidebar-section">
-        <h3 className="rd-sidebar-title">Recent Activity</h3>
-        {deduplicatedActivity.length === 0 ? (
+      {/* Recent Activity */}
+      <div className="explore-sidebar-section">
+        <h3 className="explore-sidebar-title">Recent Activity</h3>
+        {activity.length === 0 ? (
           <EmptyState
             illustration={QuietActivity}
             title="No recent activity"
             size="sm"
           />
         ) : (
-          <div className="rd-activity-list">
-            {deduplicatedActivity.map(item => (
-              <div key={item.id} className="rd-activity-item">
-                <div className="rd-activity-dot" />
-                <div className="rd-activity-content">
-                  <Link
-                    href={`/explore/${item.address}/${item.name}`}
-                    className="rd-activity-repo"
-                  >
-                    {item.name}
-                  </Link>
-                  {item.commit_message && (
-                    <p className="rd-activity-msg">
-                      {truncateMessage(item.commit_message)}
-                    </p>
-                  )}
-                  <span className="rd-activity-time">
-                    {formatTimeAgo(item.pushed_at)}
-                  </span>
-                </div>
+          <div className="explore-sidebar-activity">
+            {activity.map(item => (
+              <div key={item.id} className="explore-sidebar-activity-item">
+                <Link
+                  href={`/explore/${item.address}/${item.name}`}
+                  className="explore-sidebar-activity-link"
+                >
+                  {item.name}
+                </Link>
+                {item.commit_message && (
+                  <p className="explore-sidebar-activity-message">
+                    {truncateMessage(item.commit_message)}
+                  </p>
+                )}
+                <span className="explore-sidebar-activity-time">
+                  {formatTimeAgo(item.pushed_at)}
+                </span>
               </div>
             ))}
           </div>
