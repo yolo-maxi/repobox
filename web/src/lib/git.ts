@@ -424,13 +424,13 @@ function getChildCommit(repoPath: string, hash: string): string | null {
 function getCommitFileChanges(repoPath: string, hash: string): FileChange[] {
   try {
     // Get list of changed files with status and numstat
-    const filesOutput = gitCommand(repoPath, `diff-tree --name-status ${hash}^..${hash}`);
+    const filesOutput = gitCommand(repoPath, `diff-tree -r --name-status ${hash}^..${hash}`);
     if (!filesOutput) return [];
     
     const fileEntries = filesOutput.split('\n').filter(Boolean);
     
     // Get numstat for file statistics (faster than parsing diff)
-    const numstatOutput = gitCommand(repoPath, `diff-tree --numstat ${hash}^..${hash}`);
+    const numstatOutput = gitCommand(repoPath, `diff-tree -r --numstat ${hash}^..${hash}`);
     const numstatLines = numstatOutput.split('\n').filter(Boolean);
     
     const fileStats = new Map();
