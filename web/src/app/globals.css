@@ -1669,7 +1669,7 @@ html {
 .explore-profile-title {
   font-size: 20px;
   font-weight: 600;
-  color: var(--bp-heading);
+  color: var(--bp-gold);
   margin: 0 0 6px;
   font-family: var(--font-mono), monospace;
 }
@@ -2992,7 +2992,7 @@ html {
 .explore-contributor-address {
   font-family: var(--font-mono), "JetBrains Mono", monospace;
   font-size: 12px;
-  color: var(--bp-heading);
+  color: var(--bp-gold);
   font-weight: 600;
 }
 
@@ -3800,16 +3800,16 @@ html {
   font-weight: 600;
 }
 
-/* Tier 3: Auto-assigned alias — muted, italic */
+/* Tier 3: Auto-assigned alias — gold, italic to show it's generated */
 .address-display--tier-auto-alias .address-display__text {
-  color: var(--bp-dim, #8a8a8a);
+  color: var(--bp-gold);
   font-style: italic;
   font-weight: 400;
 }
 
-/* Fallback: raw address */
+/* Fallback: raw address — gold */
 .address-display--tier-address .address-display__text {
-  color: var(--bp-text, #b0b0b0);
+  color: var(--bp-gold);
   font-family: var(--font-mono), monospace;
 }
 
