@@ -168,9 +168,40 @@ permissions:
 
 - **Bare word** = group name (self-defined in `groups:`)
 - **`evm:0x...`** = EVM address (external identity)
+- **`vitalik.eth`** = ENS name (auto-detected by `.eth`/`.box`/`.xyz`/etc. suffix)
+- **`ens:vitalik.eth`** = explicit ENS prefix (equivalent to bare form above)
 - **`./path`** = file path (`./` is optional but recommended for clarity)
 - **`>branch`** = branch target
 - **`*`** = wildcard (matches all files or all branches)
+
+### Identity formats
+
+Three ways to specify an identity — all equivalent:
+
+| Format | Example | Notes |
+|--------|---------|-------|
+| `evm:0x...` | `evm:0xAAA...123` | EVM address (42-char hex with checksum) |
+| `name.eth` | `vitalik.eth` | ENS name — auto-detected from TLD suffix |
+| `ens:name.eth` | `ens:vitalik.eth` | Explicit ENS prefix (same as bare form) |
+
+The parser auto-detects ENS names by their suffix (`.eth`, `.box`, `.com`, `.xyz`, `.org`, `.io`, `.dev`, `.app`). The `ens:` prefix is accepted but redundant — `vitalik.eth` and `ens:vitalik.eth` are identical internally.
+
+ENS names are resolved to EVM addresses at evaluation time via on-chain resolution. This means:
+- Groups can mix addresses and ENS names freely
+- ENS names in rules work the same as addresses
+- Resolution is cached with TTL (fail-closed: unresolvable name = denied)
+
+```yaml
+groups:
+  founders:
+    - vitalik.eth              # ENS name (auto-detected)
+    - ens:nick.eth             # explicit prefix (equivalent)  
+    - evm:0xAAA...123          # raw address
+
+permissions:
+  rules:
+    - vitalik.eth push >main   # ENS name in flat rules works too
+```
 
 ### Structure rules
 
@@ -181,8 +212,7 @@ permissions:
   - A **string** (flat rule): `"founders push >*"`
   - A **mapping** (nested rule): `{ "agents": { push: [">feature/**"] } }`
 - Both flat and nested can be mixed freely in the same list
-- Groups are a list of `evm:0x...` addresses and/or bare group names (for includes)
-- Members are always full `evm:0x...` addresses (42 hex chars with checksum)
+- Groups can contain `evm:0x...` addresses, ENS names, and/or bare group names (for includes)
 - `./` prefix on file paths is stripped by the parser (purely visual)
 - `**` in globs means recursive: `./src/**` matches `src/a.rs` and `src/deep/b.rs`
 - Combined targets: `./contracts/** >dev` means "files matching `contracts/**` on branch `dev`"

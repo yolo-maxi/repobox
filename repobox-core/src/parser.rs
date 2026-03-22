@@ -669,7 +669,15 @@ fn parse_subject(s: &str) -> Result<Subject, ConfigError> {
     }
 }
 
-// Helper function for ENS name detection (copied from config.rs)
+/// Detect if a string is an ENS name by checking its TLD suffix.
+/// Supports: .eth, .box, .com, .xyz, .org, .io, .dev, .app
+/// 
+/// This enables bare ENS names in configs without an "ens:" prefix:
+///   - `vitalik.eth`     → parsed as Identity { kind: Ens, address: "vitalik.eth" }
+///   - `ens:vitalik.eth` → same result (explicit prefix also accepted)
+///
+/// The bare form is preferred in configs for readability, similar to how
+/// `0xAAA...` is accepted without an `evm:` prefix.
 fn is_ens_name(s: &str) -> bool {
     if s.is_empty() || s.starts_with('.') || s.ends_with('.') {
         return false;

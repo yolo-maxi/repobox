@@ -11,12 +11,14 @@ Agents get their own EVM identities. A config file defines who can push where:
 ```yaml
 groups:
   founders:
-    - evm:0xDbbA...  # human
+    - vitalik.eth            # ENS name (auto-detected by .eth suffix)
+    - evm:0xDbbA...          # raw EVM address
   agents:
-    - evm:0xAAc0...  # Claude
-    - evm:0x8224...  # Codex
+    - evm:0xAAc0...          # Claude
+    - evm:0x8224...          # Codex
   reviewers:
-    - evm:0xe4D4...  # review bot
+    - ens:nick.eth           # explicit ENS prefix (same as bare form)
+    - evm:0xe4D4...          # review bot
 
 permissions:
   default: deny

@@ -9,24 +9,29 @@ All repo.box rules live in a single file: `.repobox/config.yml` at the repo root
 
 ## Groups
 
-Groups are named sets of EVM identities.
+Groups are named sets of identities. You can use EVM addresses, ENS names, or a mix of both.
 
 ```yaml
 groups:
   founders:
-    - evm:0xAAA0000000000000000000000000000000000001   # Alice
-    - evm:0xAAA0000000000000000000000000000000000002   # Bob
+    - vitalik.eth                                       # ENS name (auto-detected)
+    - evm:0xAAA0000000000000000000000000000000000002   # raw address
   agents:
     - evm:0xBBB0000000000000000000000000000000000001   # Claude
     - evm:0xBBB0000000000000000000000000000000000002   # Codex
   all-humans:
-    - evm:0xDDD0000000000000000000000000000000000001   # External reviewer
+    - ens:nick.eth                                      # explicit ens: prefix (same as bare)
     - founders                                          # includes all founders
 ```
 
+ENS names are resolved to addresses at evaluation time. Resolution is cached and fail-closed — if a name can't be resolved, access is denied.
+
 - **Bare word** = group name
 - **`evm:0x...`** = individual EVM identity (42 hex chars, checksummed)
+- **`name.eth`** = ENS name (auto-detected by suffix — `.eth`, `.box`, `.xyz`, etc.)
+- **`ens:name.eth`** = explicit ENS prefix (equivalent to the bare form above)
 - Groups can include other groups by bare name
+- Groups can mix EVM addresses and ENS names freely
 
 ## Rule Formats
 

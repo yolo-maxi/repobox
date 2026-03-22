@@ -122,7 +122,10 @@ impl Identity {
                 address: name.to_string(),
             })
         } else if is_ens_name(s) {
-            // Implicit ENS detection
+            // Implicit ENS detection: bare names like "vitalik.eth" are auto-detected
+            // by their TLD suffix (.eth, .box, .xyz, etc.) without requiring an "ens:" prefix.
+            // Both forms are equivalent: "vitalik.eth" == "ens:vitalik.eth"
+            // The canonical form (used in Display/serialization) always includes the prefix.
             validate_ens_name(s)?;
             Ok(Identity {
                 kind: IdentityKind::Ens,
