@@ -1887,6 +1887,29 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                 if let Some(root) = &repo_root {
                     let repobox_config = root.join(".repobox").join("config.yml");
                     if repobox_config.exists() {
+                        // A signer is required in repo.box repos.
+                        let id = match &identity {
+                            Some(id) => id,
+                            None => {
+                                eprintln!("❌ signer not configured for this repo.box repo.");
+                                eprintln!("   Run: git repobox keys generate --alias me");
+                                eprintln!("   Then: git repobox use me");
+                                return ExitCode::FAILURE;
+                            }
+                        };
+
+                        // Ensure the private key for the active signer exists locally.
+                        let key_path = identity::repobox_home_with_base(home)
+                            .join("keys")
+                            .join(format!("{}.key", id.address));
+                        if !key_path.exists() {
+                            eprintln!("❌ signer key not found for {}", id);
+                            eprintln!("   Expected key file: {}", key_path.display());
+                            eprintln!("   Run: git repobox keys generate --alias me");
+                            eprintln!("   Then: git repobox use me");
+                            return ExitCode::FAILURE;
+                        }
+
                         // Disallow unsigned commits by removing explicit opt-out flags.
                         effective_args.retain(|a| a != "--no-gpg-sign");
 
@@ -1911,13 +1934,11 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                             .args(["config", "--local", "commit.gpgsign", "true"])
                             .output();
 
-                        if let Some(id) = &identity {
-                            let identity_str = id.to_string();
-                            let _ = Command::new(&real_git)
-                                .current_dir(root)
-                                .args(["config", "--local", "user.signingkey", &identity_str])
-                                .output();
-                        }
+                        let identity_str = id.to_string();
+                        let _ = Command::new(&real_git)
+                            .current_dir(root)
+                            .args(["config", "--local", "user.signingkey", &identity_str])
+                            .output();
                     }
                 }
             }
