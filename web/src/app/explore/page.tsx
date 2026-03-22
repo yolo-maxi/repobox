@@ -12,10 +12,6 @@ function truncateMessage(message: string, maxLength: number = 80): string {
   return message.substring(0, maxLength).trim() + '…';
 }
 
-function pluralize(count: number, singular: string, plural?: string): string {
-  return count === 1 ? `${count} ${singular}` : `${count} ${plural || singular + 's'}`;
-}
-
 interface Stats {
   totalRepos: number;
   totalOwners: number;
@@ -50,6 +46,7 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'latest' | 'commits' | 'name'>('latest');
+  const [showDemo, setShowDemo] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -85,10 +82,19 @@ export default function ExplorePage() {
     return () => clearInterval(interval);
   }, [sortBy]);
 
-  const filteredRepos = repos.filter(repo =>
+  const realRepos = repos.filter(r => !r.name.startsWith('demo-hackathon-') && r.name !== 'private-test');
+  const demoRepos = repos.filter(r => r.name.startsWith('demo-hackathon-') || r.name === 'private-test');
+  const displayRepos = showDemo ? repos : realRepos;
+  const filteredRepos = displayRepos.filter(repo =>
     repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     repo.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Deduplicate activity by repo name (show latest per repo)
+  const deduped = activity.reduce((acc, item) => {
+    if (!acc.find(a => a.name === item.name)) acc.push(item);
+    return acc;
+  }, [] as Activity[]);
 
   return (
     <div style={{
@@ -97,19 +103,18 @@ export default function ExplorePage() {
       color: '#e6edf3',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif',
     }}>
-      {/* Header */}
+      {/* Nav */}
       <header style={{
         borderBottom: '1px solid #21262d',
         backgroundColor: '#010409',
-        padding: '12px 24px',
+        padding: '12px 32px',
         position: 'sticky',
         top: 0,
         zIndex: 100,
       }}>
         <div style={{
-          maxWidth: 1400,
+          maxWidth: 1280,
           margin: '0 auto',
-          padding: '0 8px',
           display: 'flex',
           alignItems: 'center',
           gap: 24,
@@ -124,145 +129,286 @@ export default function ExplorePage() {
           }}>
             repo<span style={{ color: '#58a6ff' }}>.</span>box
           </Link>
-
           <nav style={{ display: 'flex', gap: 16, fontSize: 14 }}>
             <Link href="/" style={{ color: '#8b949e', textDecoration: 'none' }}>Home</Link>
             <Link href="/explore" style={{ color: '#e6edf3', textDecoration: 'none', fontWeight: 500 }}>Explore</Link>
             <Link href="/docs" style={{ color: '#8b949e', textDecoration: 'none' }}>Docs</Link>
             <Link href="/playground" style={{ color: '#8b949e', textDecoration: 'none' }}>Playground</Link>
           </nav>
-
-          <div style={{ marginLeft: 'auto', position: 'relative', width: 280 }}>
-            <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} width="16" height="16" viewBox="0 0 16 16" fill="#8b949e">
-              <path d="M10.68 11.74a6 6 0 0 1-7.92-8.98 6 6 0 0 1 8.98 7.92l3.81 3.81a.75.75 0 0 1-1.06 1.06l-3.81-3.81zM6.5 11a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z"/>
-            </svg>
-            <input
-              type="text"
-              placeholder="Search repositories…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '6px 12px 6px 32px',
-                backgroundColor: '#0d1117',
-                border: '1px solid #30363d',
-                borderRadius: 6,
-                color: '#e6edf3',
-                fontSize: 14,
-                outline: 'none',
-              }}
-            />
-          </div>
         </div>
       </header>
 
-      {/* Main layout */}
+      {/* Hero — full width */}
       <div style={{
-        maxWidth: 1400,
-        margin: '0 auto',
-        padding: '24px 32px',
-        display: 'grid',
-        gridTemplateColumns: '1fr 300px',
-        gap: 32,
+        borderBottom: '1px solid #21262d',
+        padding: '48px 32px 40px',
+        background: 'linear-gradient(180deg, #0d1117 0%, #161b22 100%)',
       }}>
-        {/* Sidebar */}
-        <aside style={{ fontSize: 14, order: 2 }}>
-          {/* Stats */}
+        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+          <h1 style={{
+            fontSize: 32,
+            fontWeight: 700,
+            letterSpacing: '-0.5px',
+            marginBottom: 8,
+            lineHeight: 1.2,
+          }}>
+            Explore repositories
+          </h1>
+          <p style={{ fontSize: 16, color: '#8b949e', marginBottom: 28, maxWidth: 540 }}>
+            Every commit EVM-signed. Every push permission-checked on-chain.
+          </p>
+
+          {/* Stats row */}
           {stats && (
-            <div style={{
-              padding: '16px',
-              backgroundColor: '#161b22',
-              border: '1px solid #21262d',
-              borderRadius: 6,
-              marginBottom: 16,
-            }}>
-              <h3 style={{ fontSize: 12, fontWeight: 600, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
-                Overview
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#8b949e' }}>Repositories</span>
-                  <span style={{ fontWeight: 600 }}>{stats.totalRepos}</span>
+            <div style={{ display: 'flex', gap: 32 }}>
+              {[
+                { label: 'Repositories', value: stats.totalRepos, icon: '📦' },
+                { label: 'Developers', value: stats.totalOwners, icon: '👤' },
+                { label: 'Signed Commits', value: stats.totalCommits, icon: '⬡' },
+              ].map(s => (
+                <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 14 }}>{s.icon}</span>
+                  <span style={{ fontSize: 24, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{s.value}</span>
+                  <span style={{ fontSize: 13, color: '#8b949e' }}>{s.label}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#8b949e' }}>Owners</span>
-                  <span style={{ fontWeight: 600 }}>{stats.totalOwners}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#8b949e' }}>Commits</span>
-                  <span style={{ fontWeight: 600 }}>{stats.totalCommits}</span>
-                </div>
-              </div>
+              ))}
             </div>
           )}
+        </div>
+      </div>
 
-          {/* Sort */}
+      {/* Content grid */}
+      <div style={{
+        maxWidth: 1280,
+        margin: '0 auto',
+        padding: '24px 32px 64px',
+        display: 'grid',
+        gridTemplateColumns: '1fr 320px',
+        gap: 32,
+        alignItems: 'start',
+      }}>
+        {/* Main — repo list */}
+        <main>
+          {/* Toolbar */}
           <div style={{
-            padding: '16px',
-            backgroundColor: '#161b22',
-            border: '1px solid #21262d',
-            borderRadius: 6,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
             marginBottom: 16,
+            paddingBottom: 16,
+            borderBottom: '1px solid #21262d',
           }}>
-            <h3 style={{ fontSize: 12, fontWeight: 600, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
-              Sort by
-            </h3>
-            {(['latest', 'commits', 'name'] as const).map(opt => (
-              <button
-                key={opt}
-                onClick={() => setSortBy(opt)}
+            {/* Search */}
+            <div style={{ position: 'relative', flex: 1 }}>
+              <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} width="16" height="16" viewBox="0 0 16 16" fill="#8b949e">
+                <path d="M10.68 11.74a6 6 0 0 1-7.92-8.98 6 6 0 0 1 8.98 7.92l3.81 3.81a.75.75 0 0 1-1.06 1.06l-3.81-3.81zM6.5 11a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z"/>
+              </svg>
+              <input
+                type="text"
+                placeholder="Find a repository…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 style={{
-                  display: 'block',
                   width: '100%',
-                  textAlign: 'left',
-                  padding: '6px 8px',
-                  marginBottom: 2,
-                  borderRadius: 4,
-                  border: 'none',
-                  cursor: 'pointer',
+                  padding: '8px 12px 8px 34px',
+                  backgroundColor: '#010409',
+                  border: '1px solid #30363d',
+                  borderRadius: 6,
+                  color: '#e6edf3',
                   fontSize: 14,
-                  backgroundColor: sortBy === opt ? '#1f6feb22' : 'transparent',
-                  color: sortBy === opt ? '#58a6ff' : '#e6edf3',
-                  fontWeight: sortBy === opt ? 500 : 400,
+                  outline: 'none',
                 }}
-              >
-                {opt === 'latest' ? '🕐 Recently updated' : opt === 'commits' ? '📊 Most commits' : '🔤 Name'}
-              </button>
-            ))}
+              />
+            </div>
+            {/* Sort tabs */}
+            <div style={{ display: 'flex', gap: 2, backgroundColor: '#21262d', borderRadius: 6, padding: 2 }}>
+              {(['latest', 'commits', 'name'] as const).map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => setSortBy(opt)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 4,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    backgroundColor: sortBy === opt ? '#30363d' : 'transparent',
+                    color: sortBy === opt ? '#e6edf3' : '#8b949e',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {opt === 'latest' ? 'Recent' : opt === 'commits' ? 'Commits' : 'Name'}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Recent Activity - sidebar version */}
+          {/* Repo list */}
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {[1,2,3,4,5].map(i => (
+                <div key={i} style={{
+                  height: 72,
+                  backgroundColor: '#161b22',
+                  borderBottom: '1px solid #21262d',
+                  animation: 'pulse 2s ease-in-out infinite',
+                }} />
+              ))}
+            </div>
+          ) : filteredRepos.length === 0 ? (
+            <EmptyState
+              illustration={searchTerm ? NoSearchResults : EmptyRepository}
+              title={searchTerm ? 'No matching repositories' : 'No repositories yet'}
+              description={searchTerm 
+                ? 'Try a different search term' 
+                : 'Push your first signed commit to get started'}
+              size="lg"
+            />
+          ) : (
+            <>
+              <div style={{
+                border: '1px solid #21262d',
+                borderRadius: 8,
+                overflow: 'hidden',
+                backgroundColor: '#0d1117',
+              }}>
+                {filteredRepos.map((repo, idx) => (
+                  <Link
+                    key={`${repo.address}/${repo.name}`}
+                    href={`/explore/${repo.address}/${repo.name}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '16px 20px',
+                      borderBottom: idx < filteredRepos.length - 1 ? '1px solid #21262d' : 'none',
+                      textDecoration: 'none',
+                      color: 'inherit',
+                      transition: 'background-color 0.12s ease',
+                      gap: 16,
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#161b22')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    {/* Repo icon */}
+                    <div style={{
+                      width: 32, height: 32,
+                      borderRadius: 6,
+                      backgroundColor: '#21262d',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                      fontSize: 14,
+                    }}>
+                      📦
+                    </div>
+
+                    {/* Name + desc */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
+                        <span style={{ color: '#58a6ff', fontSize: 15, fontWeight: 600 }}>
+                          {repo.name}
+                        </span>
+                        <span style={{ color: '#484f58', fontSize: 12 }}>
+                          {formatAddress(repo.owner_address)}
+                        </span>
+                      </div>
+                      {repo.description && (
+                        <p style={{
+                          color: '#8b949e', fontSize: 13, margin: 0,
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {repo.description.replace(/\n/g, ' ').trim()}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Stats pills */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, fontSize: 12, color: '#8b949e' }}>
+                      {repo.contributor_count > 0 && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 10 }}>👤</span> {repo.contributor_count}
+                        </span>
+                      )}
+                      <span style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        color: repo.commit_count > 10 ? '#58a6ff' : '#8b949e',
+                      }}>
+                        ⬡ {repo.commit_count}
+                      </span>
+                      {repo.last_commit_date && (
+                        <span style={{ color: '#484f58', whiteSpace: 'nowrap' }}>
+                          {formatTimeAgo(repo.last_commit_date)}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Show demo repos toggle */}
+              {demoRepos.length > 0 && (
+                <button
+                  onClick={() => setShowDemo(!showDemo)}
+                  style={{
+                    display: 'block',
+                    margin: '12px auto 0',
+                    padding: '6px 16px',
+                    backgroundColor: 'transparent',
+                    border: '1px solid #30363d',
+                    borderRadius: 20,
+                    color: '#8b949e',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {showDemo ? 'Hide demo repos' : `Show all (+${demoRepos.length} demo)`}
+                </button>
+              )}
+            </>
+          )}
+        </main>
+
+        {/* Sidebar — right */}
+        <aside style={{ fontSize: 14 }}>
+          {/* Recent Activity */}
           <div style={{
             padding: '16px',
             backgroundColor: '#161b22',
             border: '1px solid #21262d',
-            borderRadius: 6,
+            borderRadius: 8,
+            marginBottom: 16,
           }}>
-            <h3 style={{ fontSize: 12, fontWeight: 600, color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+            <h3 style={{
+              fontSize: 12, fontWeight: 600, color: '#8b949e',
+              textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12,
+            }}>
               Recent Activity
             </h3>
-            {activity.length === 0 ? (
-              <EmptyState
-                illustration={QuietActivity}
-                title="No recent activity"
-                size="sm"
-              />
+            {deduped.length === 0 ? (
+              <p style={{ color: '#484f58', fontSize: 13 }}>No recent activity</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {activity.slice(0, 8).map(item => (
-                  <div key={item.id} style={{ fontSize: 13 }}>
-                    <Link
-                      href={`/explore/${item.address}/${item.name}`}
-                      style={{ color: '#58a6ff', textDecoration: 'none', fontWeight: 500 }}
-                    >
-                      {item.name}
-                    </Link>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {deduped.slice(0, 8).map(item => (
+                  <div key={item.id} style={{ lineHeight: 1.4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        backgroundColor: '#3fb950', flexShrink: 0,
+                      }} />
+                      <Link
+                        href={`/explore/${item.address}/${item.name}`}
+                        style={{ color: '#58a6ff', textDecoration: 'none', fontWeight: 500, fontSize: 13 }}
+                      >
+                        {item.name}
+                      </Link>
+                    </div>
                     {item.commit_message && (
-                      <p style={{ color: '#8b949e', margin: '2px 0 0', fontSize: 12, lineHeight: 1.4 }}>
-                        {truncateMessage(item.commit_message, 60)}
+                      <p style={{ color: '#8b949e', margin: '2px 0 0 12px', fontSize: 12 }}>
+                        {truncateMessage(item.commit_message, 55)}
                       </p>
                     )}
-                    <span style={{ color: '#484f58', fontSize: 11 }}>
+                    <span style={{ color: '#484f58', fontSize: 11, marginLeft: 12 }}>
                       {formatTimeAgo(item.pushed_at)}
                     </span>
                   </div>
@@ -270,133 +416,34 @@ export default function ExplorePage() {
               </div>
             )}
           </div>
-        </aside>
 
-        {/* Main content */}
-        <main style={{ order: 1 }}>
-          {loading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[1,2,3,4,5].map(i => (
-                <div key={i} style={{
-                  height: 72,
-                  backgroundColor: '#161b22',
-                  border: '1px solid #21262d',
-                  borderRadius: 6,
-                  animation: 'pulse 2s ease-in-out infinite',
-                }} />
-              ))}
+          {/* About */}
+          <div style={{
+            padding: '16px',
+            backgroundColor: '#161b22',
+            border: '1px solid #21262d',
+            borderRadius: 8,
+          }}>
+            <h3 style={{
+              fontSize: 12, fontWeight: 600, color: '#8b949e',
+              textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12,
+            }}>
+              About repo.box
+            </h3>
+            <p style={{ color: '#8b949e', fontSize: 13, lineHeight: 1.5, margin: 0 }}>
+              Git hosting where every commit is EVM-signed and every push is permission-checked. 
+              Built for AI agents with on-chain identity.
+            </p>
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Link href="/docs" style={{ color: '#58a6ff', textDecoration: 'none', fontSize: 13 }}>
+                → Documentation
+              </Link>
+              <Link href="/playground" style={{ color: '#58a6ff', textDecoration: 'none', fontSize: 13 }}>
+                → Try the playground
+              </Link>
             </div>
-          ) : (
-            <>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 16,
-                paddingBottom: 12,
-                borderBottom: '1px solid #21262d',
-              }}>
-                <h2 style={{ fontSize: 16, fontWeight: 600 }}>
-                  {searchTerm ? `Results for "${searchTerm}"` : 'Repositories'}
-                </h2>
-                <span style={{ fontSize: 13, color: '#8b949e' }}>
-                  {filteredRepos.length} {filteredRepos.length === 1 ? 'repository' : 'repositories'}
-                </span>
-              </div>
-
-              {filteredRepos.length === 0 ? (
-                <EmptyState
-                  illustration={searchTerm ? NoSearchResults : EmptyRepository}
-                  title={searchTerm ? 'No matching repositories' : 'No repositories yet'}
-                  description={searchTerm 
-                    ? 'Try a different search term or browse all repositories' 
-                    : 'Push your first signed commit to get started'}
-                  size="lg"
-                />
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {filteredRepos.map((repo, idx) => (
-                    <Link
-                      key={`${repo.address}/${repo.name}`}
-                      href={`/explore/${repo.address}/${repo.name}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '14px 16px',
-                        borderBottom: idx < filteredRepos.length - 1 ? '1px solid #21262d' : 'none',
-                        textDecoration: 'none',
-                        color: 'inherit',
-                        transition: 'background-color 0.15s',
-                        gap: 16,
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#161b22')}
-                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                    >
-                      {/* Left: name + description */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
-                          <span style={{ color: '#58a6ff', fontSize: 15, fontWeight: 600 }}>
-                            {repo.name}
-                          </span>
-                          <AddressDisplay 
-                            address={repo.owner_address}
-                            size="sm"
-                            showCopy={false}
-                            linkable={true}
-                            className="explore-repo-owner"
-                          />
-                        </div>
-                        {repo.description && (
-                          <p style={{ color: '#8b949e', fontSize: 13, margin: 0, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {repo.description.replace(/\n/g, ' ').trim()}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Right: stats */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0, fontSize: 12, color: '#8b949e' }}>
-                        {repo.contributor_count > 0 && (
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            padding: '2px 8px',
-                            backgroundColor: '#21262d',
-                            borderRadius: 10,
-                            fontSize: 12,
-                            color: '#8b949e',
-                            fontWeight: 500,
-                          }}>
-                            <span style={{ fontSize: 10 }}>👤</span> {repo.contributor_count}
-                          </div>
-                        )}
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '2px 8px',
-                          backgroundColor: repo.commit_count > 10 ? '#1f6feb22' : '#21262d',
-                          borderRadius: 10,
-                          fontSize: 12,
-                          color: repo.commit_count > 10 ? '#58a6ff' : '#8b949e',
-                          fontWeight: 500,
-                        }}>
-                          <span>⬡</span> {repo.commit_count}
-                        </div>
-                        {repo.last_commit_date && (
-                          <span style={{ color: '#484f58', whiteSpace: 'nowrap', minWidth: 100, textAlign: 'right' }}>
-                            {formatTimeAgo(repo.last_commit_date)}
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </main>
+          </div>
+        </aside>
       </div>
 
       <style>{`
@@ -404,8 +451,8 @@ export default function ExplorePage() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }
-        @media (max-width: 768px) {
-          /* Stack sidebar below on mobile */
+        @media (max-width: 900px) {
+          /* Stack on mobile/tablet */
         }
       `}</style>
     </div>
