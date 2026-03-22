@@ -84,7 +84,7 @@ Keys are stored at `~/.repobox/keys/<address>.key`.
 
 After setup, the following git commands are intercepted and checked against `.repobox/config.yml`:
 
-- `git commit` — checks file-level verbs (`write`, `append`, `edit`) on staged files
+- `git commit` — checks file-level verbs (`upload`, `append`, `insert`, `edit`) on staged files
 - `git push` — checks `push` verb on the target branch; checks `force-push` if `--force`
 - `git merge` — checks `merge` verb on the target branch
 - `git branch` — checks `create` / `delete` verbs
@@ -185,18 +185,21 @@ agents not push >main
 | `push` | Branches | `git push` | Can push to the branch |
 | `merge` | Branches | `git merge` | Can merge into the branch |
 | `branch` | Branches | `git branch`, `git checkout -b` | Can create new branches |
-| `create` | Files only | `git commit` (new file) | Can add new files |
 | `delete` | Branches | `git branch -d` | Can delete the branch |
 | `force-push` | Branches | `git push --force` | Can force-push to the branch |
-| `write` | Files | `git commit` | General file write (currently not auto-classified; use `create` for new files) |
-| `append` | Files | `git commit` | Can add lines to files (no deletions) |
-| `edit` | Files | `git commit` | Can modify or delete content (superset of `write` and `append`) |
+| `upload` | Files | `git commit` (new file) | Can create new files only; cannot modify existing files |
+| `append` | Files | `git commit` (append-only) | Can add lines at the end of a file; no deletions; includes new files |
+| `insert` | Files | `git commit` (add-only) | Can add lines anywhere; no deletions; includes new files |
+| `edit` | Files | `git commit` (any change) | Full modify/delete — can add, change, or remove lines |
 
-**Verb hierarchy**: `edit` is the general file-modification verb. `create`, `write`, and `append` are specific sub-verbs. If you grant `edit`, it implicitly covers all sub-verbs. **But not the reverse** — granting `append` does NOT give `create`, `write`, or `edit` permission. The sub-verbs are independent of each other. Also: if `edit` is explicitly denied, it blocks all sub-verbs regardless of their individual permissions.
+**File verb hierarchy**: `edit > insert > append > upload`. Each level implies all levels below it. If you grant `edit`, it implicitly covers `insert`, `append`, and `upload`. If you grant `insert`, it covers `append` and `upload`. If you grant `append`, it covers `upload`. **But not the reverse** — granting `append` does NOT give `insert` or `edit` permission. Also: if a higher-level verb is explicitly denied, it blocks all sub-verbs regardless of their individual permissions.
+
+> **Deprecated aliases:** `write` and `create` (for files) are accepted but deprecated — both map to `upload`. Use the new verb names in new configs.
 
 **Verb classification** (at commit time, client-side shim):
-- New file (staged as `A`) → `create`
-- Modified file, only additions in diff, zero deletions → `append`  
+- New file (staged as `A`) → `upload`
+- Modified file, only additions in diff, all at end → `append`
+- Modified file, only additions in diff, not all at end → `insert`
 - Modified file with any deletions → `edit`
 
 ### Rule Evaluation

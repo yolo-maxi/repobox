@@ -22,9 +22,9 @@ Permissions control what identities and groups can do — which branches they ca
 Every git operation may trigger **two independent checks**:
 
 1. **Branch check** — can you perform this branch operation? (`push`, `merge`, `create`, `delete`, `force-push`)
-2. **File check** — can you modify these files? (`edit`, `write`, `append`)
+2. **File check** — can you modify these files? (`edit`, `insert`, `append`, `upload`)
 
-**Both must pass.** Having `push` permission on a branch doesn't automatically grant `edit` on every file. But if no `edit` rules exist at all, file editing is unrestricted (with `default: allow`).
+**Both must pass.** Having `push` permission on a branch doesn't automatically grant `edit` on every file. But if no file verb rules exist at all, file editing is unrestricted (with `default: allow`).
 
 This means a minimal config can just use branch rules and skip file rules entirely:
 
@@ -38,7 +38,7 @@ permissions:
     - agents create >feature/**
 ```
 
-No `edit`/`write`/`append` rules → no file restrictions. Anyone who can push can modify any file. Add file rules only when you need file-level control.
+No `edit`/`insert`/`append`/`upload` rules → no file restrictions. Anyone who can push can modify any file. Add file rules only when you need file-level control.
 
 ## Rule Syntax
 
@@ -129,27 +129,33 @@ Formats B and C both use a top-level mapping for `rules:`. Write it however feel
 | `delete` | Delete a branch |
 | `force-push` | Rewrite history (force push) |
 
-**File verbs** (control file modifications):
+**File verbs** (hierarchy: `edit > insert > append > upload`):
 
 | Verb | Meaning |
 |------|---------|
+| `upload` | Create new files only; cannot modify existing files |
+| `append` | Add lines at end of file only; no deletions; includes new files |
+| `insert` | Add lines anywhere; no deletions; includes new files |
 | `edit` | Full file modification — add, change, or remove lines |
-| `write` | Add lines only — no deletions allowed |
-| `append` | Add lines strictly at the end of the file only |
+
+> **Deprecated aliases:** `write` and `create` (for files) are accepted but deprecated — both map to `upload`.
 
 Prefix any verb with `not` to deny: `agents not merge >main`
 
-#### `edit` vs `write` vs `append`
+#### File verb hierarchy: `edit > insert > append > upload`
 
-Three levels of file modification, each a subset of the previous:
+Four levels of file modification. Each level implies all levels below it:
 
-- **`edit`**: Full power. Add, modify, delete any line.
-- **`write`**: Can add new lines anywhere, but cannot remove or modify existing lines. Diff may only contain `+` lines, no `-` lines.
-- **`append`**: Can only add lines at the end of the file. Preserves the entire existing file and only extends it.
+- **`edit`**: Full power. Add, modify, delete any line. Covers `insert`, `append`, and `upload`.
+- **`insert`**: Can add new lines anywhere, but cannot remove or modify existing lines. Diff may only contain `+` lines, no `-` lines. Covers `append` and `upload`.
+- **`append`**: Can only add lines at the end of the file. Preserves the entire existing file and only extends it. Covers `upload`.
+- **`upload`**: Can only create new files. Cannot modify existing files at all.
 
-The shim validates at commit time by inspecting the diff:
-- `write`: rejects any diff hunk containing `-` lines for that file
-- `append`: rejects if any `+` lines appear before the last existing line of the file
+The shim classifies changes at commit time by inspecting the diff:
+- New file (staged as `A`) → needs `upload` (or any higher verb)
+- Modified file, additions only, all at end → needs `append` (or higher)
+- Modified file, additions only, not all at end → needs `insert` (or higher)
+- Modified file with any deletions → needs `edit`
 
 ### Targets
 
@@ -166,10 +172,10 @@ The shim validates at commit time by inspecting the diff:
 A target can combine a file path and branch:
 
 ```
-devs write contracts/** >feature/*
+devs insert contracts/** >feature/*
 ```
 
-This means: "devs can write to files matching `contracts/**` on branches matching `feature/*`." Both the path and branch must match for the rule to apply.
+This means: "devs can add lines to files matching `contracts/**` on branches matching `feature/*`." Both the path and branch must match for the rule to apply.
 
 If only a branch is specified (`>main`), the rule applies to all files on that branch.
 If only a path is specified (`contracts/**`), the rule applies on all branches.
@@ -326,7 +332,7 @@ Agents can grant sub-agents temporary access on feature branches:
 
 1. Agent on `feature/fix` generates a key for a sub-agent
 2. Agent appends a direct permission rule to `.repobox/config.yml`:
-   `evm:0xSub write >feature/fix/*`
+   `evm:0xSub insert >feature/fix/*`
 3. Commits the change → ✅ (has append permission on feature branch)
 4. Sub-agent works within its scope
 5. Work done. Agent reverts `.repobox/config.yml` changes.
@@ -358,7 +364,7 @@ The server evaluates permissions from the `.repobox/config.yml` on the **target 
 
 - Intercepts `git commit`, `git merge`, `git push`, `git checkout -b`, `git branch`
 - Validates every commit against `.repobox/config.yml` before delegating to real git
-- Validates `write`/`append` constraints by inspecting the diff
+- Validates `upload`/`append`/`insert`/`edit` constraints by inspecting the diff
 - **Cannot be bypassed** — it IS the `git` command in the agent's environment
 - Read-only commands (`git status`, `git log`, `git diff`, etc.) pass through unchanged
 

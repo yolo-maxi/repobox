@@ -86,11 +86,14 @@ Each rule follows: `<subject> [not] <verb> <target>`
 - `delete` — delete a branch
 - `force-push` — rewrite history
 
-### File Verbs
+### File Verbs (hierarchy: `edit > insert > append > upload`)
 
 - `edit` — full modification (add, change, remove lines)
-- `write` — add lines only, no deletions
-- `append` — add lines at end of file only
+- `insert` — add lines anywhere, no deletions; includes new files
+- `append` — add lines at end of file only, no deletions; includes new files
+- `upload` — create new files only, cannot modify existing
+
+> **Deprecated:** `write` and `create` (for files) are accepted but map to `upload`.
 
 Prefix with `not` to deny: `agents not merge >main`
 

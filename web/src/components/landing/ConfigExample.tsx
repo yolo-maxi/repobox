@@ -79,7 +79,7 @@ function colorizeValue(val: string): React.ReactNode {
         {" "}
         {parts.map((p, i) => {
           if (p.startsWith(">")) return <span key={i} style={{ color: "#ffcb6b" }}>{p}</span>;
-          if (["own", "push", "read", "merge", "edit", "not"].includes(p))
+          if (["own", "push", "read", "merge", "edit", "insert", "append", "upload", "not"].includes(p))
             return <span key={i} style={{ color: p === "not" ? "#ef5350" : "#c792ea" }}>{p}</span>;
           return <span key={i} style={{ color: "#c3e88d" }}>{p}</span>;
         })}

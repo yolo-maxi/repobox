@@ -41,7 +41,7 @@ function highlightYamlAdvanced(text: string): string {
     // List markers
     .replace(/^(\s*)(- )/gm, '$1<span class="yaml-marker">$2</span>')
     // Verbs (push, merge, own, etc.)
-    .replace(/\b(push|merge|branch|create|delete|force-push|edit|write|append|read|own|not)\b/g, '<span class="yaml-verb">$1</span>')
+    .replace(/\b(push|merge|branch|create|delete|force-push|edit|insert|write|append|upload|read|own|not)\b/g, '<span class="yaml-verb">$1</span>')
     // Default policy values
     .replace(/\b(allow|deny)\b/g, '<span class="yaml-policy">$1</span>');
 }
@@ -61,7 +61,7 @@ function highlightExplanationAdvanced(text: string): string {
     .replace(/✅/g, '<span class="exp-allowed">✅</span>')
     .replace(/❌/g, '<span class="exp-denied">❌</span>')
     // Permissions keywords
-    .replace(/\b(can|cannot|allowed|denied|permitted|forbidden|read|write|push|merge|branch|create|delete|edit|append|force-push)\b/gi, '<span class="exp-permission">$1</span>')
+    .replace(/\b(can|cannot|allowed|denied|permitted|forbidden|read|write|push|merge|branch|create|delete|edit|insert|append|upload|force-push)\b/gi, '<span class="exp-permission">$1</span>')
     // Branch names
     .replace(/\b(main|master|dev|feature|fix|contributor)\b/g, '<span class="exp-branch">$1</span>')
     // Group names in explanations

@@ -49,7 +49,8 @@ SUBJECTS in rules: bare group names (founders, agents) or evm:0x... addresses. N
 
 ACCESS VERBS: read
 BRANCH VERBS: push, merge, branch, create, delete, force-push
-FILE VERBS: edit (full modify), write (add-only), append (end-only)
+FILE VERBS (hierarchy: edit > insert > append > upload): edit (full modify/delete), insert (add lines anywhere, no deletions), append (add lines at end only), upload (new files only)
+DEPRECATED: write and create (for files) are accepted but map to upload
 SPECIAL: own (expands to ALL verbs: read >* + all write verbs at specified target)
 DENY: "groupname not verb target"
 

@@ -23,6 +23,7 @@ permissions:
   rules:
     - founders own >*
     - agents push >feature/**
+    - agents insert ./* >feature/**
     - reviewers push >review/**
 ```
 

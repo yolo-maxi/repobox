@@ -30,7 +30,7 @@ permissions:
   rules:
     - founders own >*                    # full control everywhere
     - agents push >feature/**            # agents push to feature branches only
-    - agents edit * >feature/**          # agents edit files on feature branches
+    - agents insert * >feature/**        # agents can add lines on feature branches
     - agents append ./CHANGELOG.md       # agents can append to changelog anywhere
     - agents not edit .repobox/config.yml       # agents can never touch the config
     - weth-holders push >*               # token holders can push anywhere
@@ -134,21 +134,33 @@ Supported chains: Ethereum, Base, Optimism, Arbitrum, Polygon, and [40+ more](ht
 
 ### Verbs
 
+**Branch verbs:**
+
 | Verb | What it controls |
 |------|-----------------|
 | `read` | Clone repo, view files, fetch branches |
 | `push` | Push to a branch |
 | `merge` | Merge into a branch |
 | `branch` | Create a new branch |
-| `create` | Create new files (alias for write) |
+| `create` | Create a new branch (via `git checkout -b`) |
 | `delete` | Delete a branch |
 | `force-push` | Force-push to a branch |
-| `edit` | Modify any file (superset of write/append) |
-| `write` | Create new files |
-| `append` | Append to existing files (no deletions) |
-| `own` | All of the above (expands to all rules) |
 
-The shim inspects git diffs at commit time to classify changes: new files need `write`, append-only changes need `append`, and modifications need `edit`. Having `edit` permission covers both `write` and `append`.
+**File verbs** (hierarchy: `edit > insert > append > upload`):
+
+| Verb | What it controls |
+|------|-----------------|
+| `upload` | Create new files only; cannot modify existing files |
+| `append` | Add lines at end of file only; no deletions; includes new files |
+| `insert` | Add lines anywhere; no deletions; includes new files |
+| `edit` | Full modify/delete — add, change, or remove lines |
+| `own` | All of the above (expands to all verbs) |
+
+Each level in the file verb hierarchy implies all levels below it. `edit` covers `insert`, `append`, and `upload`. `insert` covers `append` and `upload`. `append` covers `upload`. But not the reverse — `append` does NOT grant `insert` or `edit`.
+
+> **Deprecated:** `write` and `create` (for files) are accepted but deprecated — both map to `upload`.
+
+The shim inspects git diffs at commit time to classify changes: new files need `upload`, append-only changes need `append`, additions not at the end need `insert`, and modifications with deletions need `edit`.
 
 ### Targets
 
@@ -160,7 +172,7 @@ rules:
   - agents edit .repobox/config.yml       # specific file
   - agents edit src/**             # file glob
   - agents edit *                  # all files
-  - agents edit * >feature/**     # files + branch scope
+  - agents insert * >feature/**  # files + branch scope
 ```
 
 ### Rule Evaluation
@@ -176,7 +188,7 @@ rules:
 - founders own >*
 ```
 
-Expands at parse time to: `push`, `merge`, `create`, `delete`, `force-push`, `edit`, `write`, `append` — all on the same target.
+Expands at parse time to: `read` (always `>*`), `push`, `merge`, `branch`, `create`, `delete`, `force-push`, `edit`, `insert`, `append`, `upload` — all on the same target.
 
 ## Commands
 
