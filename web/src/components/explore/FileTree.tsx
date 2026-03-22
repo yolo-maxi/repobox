@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { formatBytes } from '@/lib/utils';
+import { FileIcon } from './FileIcon';
 
 interface FileEntry {
   type: 'blob' | 'tree';
@@ -101,7 +102,7 @@ function TreeNode({
           </span>
         )}
         {!isDir && <span className="ft-chevron-spacer" />}
-        <span className="ft-icon">{fileIcon(entry.name, isDir)}</span>
+        <span className="ft-icon"><FileIcon name={entry.name} isDir={isDir} /></span>
         <span className={`ft-name ${isDir ? 'dir' : ''}`}>{entry.name}</span>
         {!isDir && entry.size !== undefined && (
           <span className="ft-size">{formatBytes(entry.size)}</span>

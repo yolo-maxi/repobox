@@ -101,6 +101,18 @@ export default function BrandPage() {
             <Swatch color="rgba(79, 195, 247, 0.03)" label="Hover" value="rgba(79, 195, 247, 0.03)" />
           </div>
 
+          <h3>Gold Accent (Interactive / Emphasis)</h3>
+          <div className="brand-swatches">
+            <Swatch color="#f0b860" label="Gold" value="#f0b860" />
+            <Swatch color="rgba(240, 184, 96, 0.15)" label="Gold Tint" value="rgba(240, 184, 96, 0.15)" />
+          </div>
+
+          <h3>Card Levels</h3>
+          <div className="brand-swatches">
+            <Swatch color="rgba(20, 40, 65, 0.6)" label="Card (default)" value="rgba(20, 40, 65, 0.6)" />
+            <Swatch color="rgba(25, 50, 80, 0.7)" label="Card Elevated" value="rgba(25, 50, 80, 0.7)" />
+          </div>
+
           <h3>Semantic</h3>
           <div className="brand-swatches">
             <Swatch color="#3fb950" label="Success / Green" value="#3fb950" />
@@ -241,6 +253,14 @@ export default function BrandPage() {
 --bp-dim:     #7a9ab4;
 --bp-accent:  #4fc3f7;
 --bp-accent2: #81d4fa;
+--bp-gold:    #f0b860;
+--bp-gold-dim: rgba(240, 184, 96, 0.15);
+
+/* Card levels */
+--bp-card:               rgba(20, 40, 65, 0.6);
+--bp-card-border:        rgba(60, 120, 180, 0.2);
+--bp-card-elevated:      rgba(25, 50, 80, 0.7);
+--bp-card-elevated-border: rgba(70, 140, 200, 0.25);
 
 /* Font */
 --font-mono: 'JetBrains Mono', 'Fira Code', monospace;`}</pre>

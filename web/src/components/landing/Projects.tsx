@@ -28,7 +28,7 @@ function FeatureList({ items }: { items: FeatureItem[] }) {
       {items.map((f) => (
         <div key={f.label} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
           <span style={{ fontSize: 14, flexShrink: 0 }}>{f.icon}</span>
-          <span style={{ whiteSpace: "nowrap" }}>
+          <span>
             <span style={{ color: "#ffffff", fontWeight: 600, fontSize: 14 }}>{f.label}</span>
             <span style={{ color: "var(--bp-dim)", fontSize: 13 }}> — {f.detail}</span>
           </span>
