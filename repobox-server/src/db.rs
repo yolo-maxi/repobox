@@ -54,6 +54,21 @@ pub(crate) fn init(db_path: &Path) -> std::io::Result<()> {
         )
         .map_err(to_io_error)?;
 
+    // Create x402_access table for paid read access
+    connection
+        .execute(
+            "CREATE TABLE IF NOT EXISTS x402_access (
+                repo_address TEXT NOT NULL,
+                repo_name TEXT NOT NULL,
+                payer_address TEXT NOT NULL,
+                tx_hash TEXT NOT NULL,
+                granted_at TEXT NOT NULL,
+                PRIMARY KEY(repo_address, repo_name, payer_address)
+            )",
+            [],
+        )
+        .map_err(to_io_error)?;
+
     // Create indexes for performance
     create_push_log_indexes(&connection).map_err(to_io_error)?;
     Ok(())
@@ -228,6 +243,44 @@ pub(crate) fn get_alias_for_address(db_path: &Path, address: &str) -> std::io::R
 /// Validate if an alias has the correct format
 pub(crate) fn is_valid_alias_format(alias: &str) -> bool {
     crate::words::is_valid_alias(alias)
+}
+
+/// Grant x402 paid read access to a payer address for a repo.
+pub(crate) fn grant_x402_access(
+    db_path: &Path,
+    repo_address: &str,
+    repo_name: &str,
+    payer_address: &str,
+    tx_hash: &str,
+) -> std::io::Result<()> {
+    let connection = Connection::open(db_path).map_err(to_io_error)?;
+    connection
+        .execute(
+            "INSERT OR IGNORE INTO x402_access(repo_address, repo_name, payer_address, tx_hash, granted_at)
+             VALUES(?1, ?2, ?3, ?4, ?5)",
+            params![repo_address, repo_name, payer_address, tx_hash, now_string()],
+        )
+        .map_err(to_io_error)?;
+    Ok(())
+}
+
+/// Check if a payer address has x402 paid read access to a repo.
+pub(crate) fn has_x402_access(
+    db_path: &Path,
+    repo_address: &str,
+    repo_name: &str,
+    payer_address: &str,
+) -> std::io::Result<bool> {
+    let connection = Connection::open(db_path).map_err(to_io_error)?;
+    let count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM x402_access
+             WHERE repo_address = ?1 AND repo_name = ?2 AND payer_address = ?3",
+            params![repo_address, repo_name, payer_address],
+            |row| row.get(0),
+        )
+        .map_err(to_io_error)?;
+    Ok(count > 0)
 }
 
 #[cfg(test)]

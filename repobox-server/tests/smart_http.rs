@@ -533,7 +533,7 @@ fn x402_payment_required_response() {
     let source_repo = init_working_repo(temp.path().join("source"));
     let repobox_home = setup_repobox_key(temp.path(), private_key, owner_address);
 
-    // Create repo with x402 config
+    // Create repo with separate x402 config
     let config_content = r#"
 groups:
   paid-readers: []
@@ -542,15 +542,17 @@ permissions:
   default: deny
   rules:
     - paid-readers read >*
+"#;
 
-x402:
-  read_price: "1.50"
-  recipient: "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048"
-  network: "base"
+    let x402_content = r#"
+read_price: "1.50"
+recipient: "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048"
+network: "base"
 "#;
 
     std::fs::create_dir_all(&source_repo.join(".repobox")).unwrap();
     write_file(&source_repo.join(".repobox").join("config.yml"), config_content);
+    write_file(&source_repo.join(".repobox").join("x402.yml"), x402_content);
     write_file(&source_repo.join("README.md"), "# paid repo\n");
 
     git(&source_repo, &["add", "."]);
@@ -595,7 +597,7 @@ fn x402_grant_access_endpoint() {
     let source_repo = init_working_repo(temp.path().join("source"));
     let repobox_home = setup_repobox_key(temp.path(), private_key, owner_address);
 
-    // Create repo with x402 config
+    // Create repo with separate x402 config
     let config_content = r#"
 groups:
   paid-readers: []
@@ -604,15 +606,17 @@ permissions:
   default: deny
   rules:
     - paid-readers read >*
+"#;
 
-x402:
-  read_price: "2.00"
-  recipient: "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048"
-  network: "base"
+    let x402_content = r#"
+read_price: "2.00"
+recipient: "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048"
+network: "base"
 "#;
 
     std::fs::create_dir_all(&source_repo.join(".repobox")).unwrap();
     write_file(&source_repo.join(".repobox").join("config.yml"), config_content);
+    write_file(&source_repo.join(".repobox").join("x402.yml"), x402_content);
     write_file(&source_repo.join("README.md"), "# paid repo for grant test\n");
 
     git(&source_repo, &["add", "."]);

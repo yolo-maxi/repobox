@@ -451,33 +451,35 @@ fn check_read_access(
     } else {
         tracing::warn!(identity = %identity, result = ?result, "read access denied");
 
-        // Check if x402 payment is configured
-        if let Some(x402_config) = &config.x402 {
-            // Return 402 Payment Required with x402 payment headers
-            let payment_json = serde_json::json!({
-                "scheme": "exact",
-                "network": x402_config.network,
-                "currency": "USDC",
-                "amount": parse_usdc_amount(&x402_config.read_price).unwrap_or_else(|| "1000000".to_string()),
-                "recipient": x402_config.recipient,
-                "memo": format!("read:{}", repo.name)
-            });
+        // Check if x402 payment is configured (read from separate .repobox/x402.yml)
+        if let Some(x402_content) = read_x402_from_repo(&repo_dir) {
+            if let Ok(x402_config) = repobox::parser::parse_x402(&x402_content) {
+                // Return 402 Payment Required with x402 payment headers
+                let payment_json = serde_json::json!({
+                    "scheme": "exact",
+                    "network": x402_config.network,
+                    "currency": "USDC",
+                    "amount": parse_usdc_amount(&x402_config.read_price).unwrap_or_else(|| "1000000".to_string()),
+                    "recipient": x402_config.recipient,
+                    "memo": format!("read:{}", repo.name)
+                });
 
-            let mut response = (StatusCode::PAYMENT_REQUIRED, "payment required for read access").into_response();
-            response.headers_mut().insert(
-                "X-Payment",
-                HeaderValue::from_str(&payment_json.to_string()).unwrap(),
-            );
-            tracing::info!(
-                identity = %identity,
-                repo = %format!("{}/{}", repo.address, repo.name),
-                price = %x402_config.read_price,
-                "returning 402 payment required"
-            );
-            Err(response)
-        } else {
-            Err((StatusCode::FORBIDDEN, format!("read access denied for {}", identity)).into_response())
+                let mut response = (StatusCode::PAYMENT_REQUIRED, "payment required for read access").into_response();
+                response.headers_mut().insert(
+                    "X-Payment",
+                    HeaderValue::from_str(&payment_json.to_string()).unwrap(),
+                );
+                tracing::info!(
+                    identity = %identity,
+                    repo = %format!("{}/{}", repo.address, repo.name),
+                    price = %x402_config.read_price,
+                    "returning 402 payment required"
+                );
+                return Err(response);
+            }
         }
+
+        Err((StatusCode::FORBIDDEN, format!("read access denied for {}", identity)).into_response())
     }
 }
 
@@ -527,6 +529,45 @@ pub(crate) fn read_config_from_repo(repo_dir: &std::path::Path) -> Option<String
         Some(config)
     } else {
         tracing::warn!("fallback config read failed");
+        None
+    }
+}
+
+/// Read .repobox/x402.yml from a bare git repo.
+/// Uses the first available branch (not HEAD, which may point to a non-existent branch).
+fn read_x402_from_repo(repo_dir: &std::path::Path) -> Option<String> {
+    // First try HEAD
+    let output = std::process::Command::new("git")
+        .args(["show", "HEAD:.repobox/x402.yml"])
+        .current_dir(repo_dir)
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        return Some(String::from_utf8_lossy(&output.stdout).to_string());
+    }
+
+    // HEAD failed — find first available ref
+    let refs_output = std::process::Command::new("git")
+        .args(["for-each-ref", "--format=%(refname:short)", "refs/heads"])
+        .current_dir(repo_dir)
+        .output()
+        .ok()?;
+
+    let first_branch = String::from_utf8_lossy(&refs_output.stdout)
+        .lines()
+        .next()?
+        .to_string();
+
+    let output = std::process::Command::new("git")
+        .args(["show", &format!("{}:.repobox/x402.yml", first_branch)])
+        .current_dir(repo_dir)
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
         None
     }
 }
@@ -859,22 +900,22 @@ async fn grant_access(
         Err(status) => return status.into_response(),
     };
 
-    // Read config to verify x402 is enabled
+    // Read x402.yml to verify x402 is enabled
     let repo_dir = git::repo_dir(&state.data_dir, &repo);
-    let config_content = match read_config_from_repo(&repo_dir) {
+    let x402_content = match read_x402_from_repo(&repo_dir) {
         Some(content) => content,
         None => return (StatusCode::NOT_FOUND, "no x402 config found").into_response(),
     };
 
-    let mut config = match repobox::parser::parse(&config_content) {
+    let _x402_config = match repobox::parser::parse_x402(&x402_content) {
         Ok(c) => c,
-        Err(_) => return (StatusCode::BAD_REQUEST, "invalid config").into_response(),
+        Err(_) => return (StatusCode::BAD_REQUEST, "invalid x402 config").into_response(),
     };
 
-    let _x402_config = match &config.x402 {
-        Some(cfg) => cfg,
-        None => return (StatusCode::NOT_FOUND, "x402 not enabled for this repo").into_response(),
-    };
+    // Validate payer address format
+    if repobox::config::Identity::parse(&format!("evm:{}", payload.address)).is_err() {
+        return (StatusCode::BAD_REQUEST, "invalid address format").into_response();
+    }
 
     // TODO: Verify payment on-chain using payload.tx_hash
     // For MVP, we'll skip verification and just grant access
@@ -886,29 +927,16 @@ async fn grant_access(
         "granting paid read access (payment verification skipped for MVP)"
     );
 
-    // Add the address to the paid-readers group
-    let paid_readers_group = config.groups.entry("paid-readers".to_string()).or_insert_with(|| {
-        repobox::config::Group {
-            name: "paid-readers".to_string(),
-            members: vec![],
-            includes: vec![],
-            resolver: None,
-        }
-    });
-
-    let identity = match repobox::config::Identity::parse(&format!("evm:{}", payload.address)) {
-        Ok(id) => id,
-        Err(_) => return (StatusCode::BAD_REQUEST, "invalid address format").into_response(),
-    };
-
-    if !paid_readers_group.members.contains(&identity) {
-        paid_readers_group.members.push(identity);
-
-        // Write updated config back to the repo
-        if let Err(e) = write_config_to_repo(&repo_dir, &config) {
-            tracing::error!(error = %e, "failed to update config");
-            return (StatusCode::INTERNAL_SERVER_ERROR, "failed to update config").into_response();
-        }
+    // Write to x402 store instead of modifying config.yml
+    if let Err(e) = db::grant_x402_access(
+        &state.db_path,
+        &repo.address,
+        &repo.name,
+        &payload.address,
+        &payload.tx_hash,
+    ) {
+        tracing::error!(error = %e, "failed to grant x402 access");
+        return (StatusCode::INTERNAL_SERVER_ERROR, "failed to grant access").into_response();
     }
 
     (StatusCode::OK, "access granted").into_response()
@@ -983,14 +1011,6 @@ fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Co
             "*".to_string()
         };
         yaml_content.push_str(&format!("    - \"{} {}{} {}\"\n", subject_str, deny_str, rule.verb, target_str));
-    }
-
-    // Write x402 config if present
-    if let Some(x402) = &config.x402 {
-        yaml_content.push_str("\nx402:\n");
-        yaml_content.push_str(&format!("  read_price: \"{}\"\n", x402.read_price));
-        yaml_content.push_str(&format!("  recipient: \"{}\"\n", x402.recipient));
-        yaml_content.push_str(&format!("  network: \"{}\"\n", x402.network));
     }
 
     // Write to a temporary file and then commit it
