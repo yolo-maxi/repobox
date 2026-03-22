@@ -29,8 +29,8 @@ function FeatureList({ items }: { items: FeatureItem[] }) {
         <div key={f.label} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
           <span style={{ fontSize: 14, flexShrink: 0 }}>{f.icon}</span>
           <span style={{ whiteSpace: "nowrap" }}>
-            <span style={{ color: "#ffffff", fontWeight: 600, fontSize: 13 }}>{f.label}</span>
-            <span style={{ color: "var(--bp-dim)", fontSize: 12 }}> — {f.detail}</span>
+            <span style={{ color: "#ffffff", fontWeight: 600, fontSize: 14 }}>{f.label}</span>
+            <span style={{ color: "var(--bp-dim)", fontSize: 13 }}> — {f.detail}</span>
           </span>
         </div>
       ))}
@@ -56,10 +56,16 @@ export function LandingProjects() {
 
   return (
     <section ref={sectionRef} className="reveal" style={{ marginBottom: 60 }}>
-      <div style={{ marginBottom: 28 }}>
+      <div style={{ 
+        marginBottom: 48, 
+        background: "rgba(0, 0, 0, 0.2)",
+        border: "1px solid var(--bp-border)",
+        borderRadius: 8,
+        padding: "24px 28px"
+      }}>
         <h2
           style={{
-            fontSize: 12,
+            fontSize: 14,
             textTransform: "uppercase",
             letterSpacing: "0.12em",
             color: "var(--bp-accent)",
@@ -72,10 +78,15 @@ export function LandingProjects() {
         <FeatureList items={AGENT_FEATURES} />
       </div>
 
-      <div>
+      <div style={{
+        background: "rgba(0, 0, 0, 0.2)",
+        border: "1px solid var(--bp-border)",
+        borderRadius: 8,
+        padding: "24px 28px"
+      }}>
         <h2
           style={{
-            fontSize: 12,
+            fontSize: 14,
             textTransform: "uppercase",
             letterSpacing: "0.12em",
             color: "var(--bp-accent2)",

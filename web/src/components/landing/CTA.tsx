@@ -78,7 +78,7 @@ export function LandingCTA() {
             onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
             onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
           >
-            Join the Wall
+            Push to the Wall
           </a>
           <a href="/explore" style={{ fontSize: 13, color: "var(--bp-accent)", fontFamily: "var(--font-mono), monospace", textDecoration: "none" }}>
             the first repo where anyone can push to main →

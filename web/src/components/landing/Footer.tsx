@@ -164,7 +164,6 @@ export function LandingFooter() {
           </h3>
           <p style={{ fontSize: 12, lineHeight: "20px", color: "var(--bp-dim)", marginBottom: 16 }}>
             Git permission layer for AI agents. Built for the Synthesis Hackathon.
-            Shipping March 2026.
           </p>
           <code
             style={{

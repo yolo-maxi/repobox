@@ -38,7 +38,7 @@ export function LandingEthos() {
       >
         <h2
           style={{
-            fontSize: 12,
+            fontSize: 14,
             lineHeight: "20px",
             textTransform: "uppercase",
             letterSpacing: "0.12em",
@@ -54,7 +54,7 @@ export function LandingEthos() {
             <li
               key={i}
               style={{
-                fontSize: 13,
+                fontSize: 14,
                 lineHeight: "22px",
                 color: "var(--bp-heading)",
                 padding: "10px 0 10px 24px",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 /* Simple YAML syntax highlighter */
@@ -113,6 +113,7 @@ permissions:
 
 export function ConfigExample() {
   const sectionRef = useRef<HTMLElement>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -127,12 +128,18 @@ export function ConfigExample() {
     return () => observer.disconnect();
   }, []);
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(CONFIG_YAML);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <section ref={sectionRef} className="reveal" style={{ marginBottom: 60 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 20 }}>
         <h2
           style={{
-            fontSize: 12,
+            fontSize: 14,
             lineHeight: "20px",
             textTransform: "uppercase",
             letterSpacing: "0.12em",
@@ -158,23 +165,44 @@ export function ConfigExample() {
           <span style={{ fontSize: 13 }}>▶</span> Try in Playground
         </Link>
       </div>
-      <pre
-        style={{
-          background: "rgba(0, 0, 0, 0.4)",
-          border: "1px solid var(--bp-border)",
-          borderRadius: 6,
-          padding: 20,
-          overflow: "auto",
-          fontFamily: "var(--font-mono), monospace",
-          fontSize: 13,
-          lineHeight: "22px",
-          margin: 0,
-        }}
-      >
-        <code>
-          <HighlightedYaml code={CONFIG_YAML} />
-        </code>
-      </pre>
+      <div style={{ position: "relative" }}>
+        <pre
+          style={{
+            background: "rgba(0, 0, 0, 0.4)",
+            border: "1px solid var(--bp-border)",
+            borderRadius: 6,
+            padding: 20,
+            overflow: "auto",
+            fontFamily: "var(--font-mono), monospace",
+            fontSize: 13,
+            lineHeight: "22px",
+            margin: 0,
+          }}
+        >
+          <code>
+            <HighlightedYaml code={CONFIG_YAML} />
+          </code>
+        </pre>
+        <button
+          onClick={handleCopy}
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            color: copied ? "var(--bp-accent)" : "var(--bp-dim)",
+            fontFamily: "var(--font-mono), monospace",
+            fontSize: 12,
+            background: "transparent",
+            border: `1px solid ${copied ? "var(--bp-accent)" : "var(--bp-border)"}`,
+            padding: "6px 14px",
+            borderRadius: 4,
+            cursor: "pointer",
+            transition: "color 0.2s, border-color 0.2s",
+          }}
+        >
+          {copied ? "copied!" : "copy"}
+        </button>
+      </div>
 
     </section>
   );

@@ -78,7 +78,7 @@ export function LandingHero() {
         style={{
           fontSize: 15,
           lineHeight: "24px",
-          color: "#8eafc4",
+          color: "#a0c4d8",
           maxWidth: 560,
           marginBottom: 40,
         }}
@@ -98,18 +98,18 @@ export function LandingHero() {
             display: "inline-flex",
             alignItems: "center",
             fontFamily: "var(--font-mono), monospace",
-            fontSize: 13,
+            fontSize: 14,
             color: "var(--bp-accent)",
             textDecoration: "none",
             fontWeight: 600,
-            background: "rgba(79,195,247,0.1)",
-            border: "1px solid rgba(79,195,247,0.25)",
+            background: "rgba(79,195,247,0.15)",
+            border: "1px solid rgba(79,195,247,0.4)",
             borderRadius: 6,
-            padding: "8px 18px",
+            padding: "10px 22px",
             transition: "background 0.2s",
           }}
         >
-          Join the Wall
+          Push to the Wall
         </Link>
         <a href="/explore" style={{ fontSize: 13, color: "var(--bp-accent)", fontFamily: "var(--font-mono), monospace", textDecoration: "none" }}>
           the first repo where anyone can push to main →
@@ -119,7 +119,7 @@ export function LandingHero() {
       <div
         style={{
           marginTop: 40,
-          color: "#253a4f",
+          color: "#3a5570",
           fontSize: 11,
           letterSpacing: "0.15em",
           textTransform: "uppercase",
