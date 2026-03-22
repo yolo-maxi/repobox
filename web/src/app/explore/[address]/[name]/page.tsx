@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatTimeAgo, formatAddress, formatBytes, getFileIcon, copyToClipboard } from '@/lib/utils';
+import { formatTimeAgo, formatAddress, formatBytes, getFileIcon } from '@/lib/utils';
 import { resolveNameToAddress } from '@/lib/addressResolver';
 import { repoUrls, generateBreadcrumbs } from '@/lib/repoUrls';
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
@@ -124,7 +124,6 @@ export default function RepoPage() {
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('readme');
   const [loading, setLoading] = useState(true);
-  const [addrCopied, setAddrCopied] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string>('HEAD');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchLoading, setBranchLoading] = useState(false);
@@ -222,13 +221,6 @@ export default function RepoPage() {
       else { setCurrentPath(''); setCurrentFiles(repo?.file_tree || []); }
     }
   };
-  const handleCopyAddr = async () => {
-    if (!repo) return;
-    await copyToClipboard(repo.owner_address);
-    setAddrCopied(true);
-    setTimeout(() => setAddrCopied(false), 2000);
-  };
-
   if (!addressOrName || !name) return null;
 
   // Loading / not found states
@@ -294,14 +286,6 @@ export default function RepoPage() {
                 />
               )}
             </div>
-          </div>
-          <div className="rd-owner-row">
-            <span className="rd-owner-addr">
-              <AddressDisplay address={repo.owner_address} size="sm" showCopy={false} linkable={false} />
-            </span>
-            <button onClick={handleCopyAddr} className="rd-copy-btn" title="Copy address">
-              {addrCopied ? '✓' : '⎘'}
-            </button>
           </div>
         </div>
       </div>
@@ -529,18 +513,6 @@ export default function RepoPage() {
           letter-spacing: -0.5px;
         }
         .rd-header-actions { display: flex; gap: 8px; align-items: center; }
-        .rd-owner-row {
-          display: flex; align-items: center; gap: 8px;
-          font-size: 11px; color: var(--bp-dim);
-        }
-        .rd-owner-addr { font-size: 11px; opacity: 0.7; }
-        .rd-copy-btn {
-          background: none; border: none; color: var(--bp-dim);
-          cursor: pointer; font-size: 14px; padding: 2px 4px;
-          border-radius: 3px; transition: color 0.15s;
-          font-family: inherit;
-        }
-        .rd-copy-btn:hover { color: var(--bp-accent); }
 
         /* Content grid */
         .rd-content {
