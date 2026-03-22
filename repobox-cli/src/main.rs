@@ -166,7 +166,8 @@ enum AliasAction {
     /// Add or update an alias
     Add {
         name: String,
-        address: String,
+        /// Address/identity (optional). If omitted, uses current identity.
+        address: Option<String>,
     },
     /// Remove an alias
     Remove {
@@ -543,8 +544,13 @@ fn cmd_whoami(home: &Path) -> ExitCode {
     match identity::get_identity(home) {
         Ok(Some(id)) => {
             let id_str = id.to_string();
-            let display = aliases::display_identity(home, &id_str);
-            println!("{display}");
+            if let Some(alias) = aliases::get_alias_for_address(home, &id_str) {
+                println!("alias: {alias}");
+                println!("identity: {id_str}");
+            } else {
+                println!("identity: {id_str}");
+                println!("tip: set an alias with `git repobox alias add me` (uses current identity)");
+            }
             ExitCode::SUCCESS
         }
         Ok(None) => {
@@ -563,11 +569,32 @@ fn cmd_whoami(home: &Path) -> ExitCode {
 fn cmd_alias(action: AliasAction, home: &Path) -> ExitCode {
     match action {
         AliasAction::Add { name, address } => {
-            if let Err(e) = aliases::set_alias(home, &name, &address) {
+            let target = match address {
+                Some(a) => a,
+                None => match identity::get_identity(home) {
+                    Ok(Some(id)) => id.to_string(),
+                    Ok(None) => {
+                        eprintln!("error: no address provided and no active identity.");
+                        eprintln!("       use: git repobox alias add <name> <evm:0x...>");
+                        return ExitCode::FAILURE;
+                    }
+                    Err(e) => {
+                        eprintln!("error: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                },
+            };
+
+            if let Err(e) = aliases::set_alias(home, &name, &target) {
                 eprintln!("error: {e}");
                 return ExitCode::FAILURE;
             }
-            println!("✅ {name} → {address}");
+            let normalized = aliases::resolve_alias(home, &name)
+                .ok()
+                .flatten()
+                .unwrap_or(target.clone());
+            let display = aliases::display_identity(home, &normalized);
+            println!("✅ {name} → {display}");
             ExitCode::SUCCESS
         }
         AliasAction::Remove { name } => {

@@ -51,11 +51,30 @@ fn write_aliases(base: &Path, aliases: &HashMap<String, String>) -> Result<(), s
     fs::write(&path, lines.join("\n") + "\n")
 }
 
+fn normalize_alias_target(input: &str) -> String {
+    let s = input.trim();
+    if s.starts_with("0x") || s.starts_with("0X") {
+        return format!("evm:{s}");
+    }
+    if s.to_lowercase().starts_with("evm:0x") {
+        return format!("evm:{}", &s[4..]);
+    }
+    s.to_string()
+}
+
+fn canonical_identity_key(input: &str) -> String {
+    let normalized = normalize_alias_target(input);
+    if let Some(addr) = normalized.strip_prefix("evm:") {
+        return format!("evm:{}", addr.to_lowercase());
+    }
+    normalized.to_lowercase()
+}
+
 /// Add or update an alias.
 pub fn set_alias(base: &Path, name: &str, address: &str) -> Result<(), std::io::Error> {
     validate_alias_name(name).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
     let mut aliases = read_aliases(base);
-    aliases.insert(name.to_string(), address.to_string());
+    aliases.insert(name.to_string(), normalize_alias_target(address));
     write_aliases(base, &aliases)
 }
 
@@ -75,12 +94,13 @@ pub fn resolve_alias(base: &Path, name: &str) -> Result<Option<String>, std::io:
     Ok(aliases.get(name).cloned())
 }
 
-/// Reverse lookup: find the alias for an address.
+/// Reverse lookup: find the alias for an address/identity.
 pub fn get_alias_for_address(base: &Path, address: &str) -> Option<String> {
     let aliases = read_aliases(base);
+    let needle = canonical_identity_key(address);
     aliases
         .iter()
-        .find(|(_, v)| v.as_str() == address)
+        .find(|(_, v)| canonical_identity_key(v) == needle)
         .map(|(k, _)| k.clone())
 }
 
@@ -206,5 +226,20 @@ mod tests {
 
         let alias = get_alias_for_address(tmp.path(), "evm:0xBBB0000000000000000000000000000000000002");
         assert_eq!(alias, Some("claude".to_string()));
+    }
+
+    #[test]
+    fn test_alias_normalizes_bare_address_and_matches_evm_identity() {
+        let tmp = TempDir::new().unwrap();
+        set_alias(tmp.path(), "ocean", "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048").unwrap();
+
+        let aliases = read_aliases(tmp.path());
+        assert_eq!(
+            aliases.get("ocean"),
+            Some(&"evm:0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048".to_string())
+        );
+
+        let alias = get_alias_for_address(tmp.path(), "evm:0xDBBAFC2A00175D0CDDFDF130EFC9FA0FB61D2048");
+        assert_eq!(alias, Some("ocean".to_string()));
     }
 }
