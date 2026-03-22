@@ -8,7 +8,7 @@ REPO_BOX_VERSION="${REPO_BOX_VERSION:-latest}"
 REPOBOX_INSTALL_DIR="${REPOBOX_INSTALL_DIR:-}"
 REPOBOX_NO_MODIFY_PATH="${REPOBOX_NO_MODIFY_PATH:-}"
 REPOBOX_SKIP_VERIFY="${REPOBOX_SKIP_VERIFY:-}"
-BASE_URL="https://repo.box/releases/${REPO_BOX_VERSION}"
+GITHUB_REPO="yolo-maxi/repobox"
 REPOBOX_HOME="$HOME/.repobox"
 
 # Cleanup function
@@ -266,11 +266,39 @@ check_existing_version() {
   fi
 }
 
+# Resolve version (fetch latest tag from GitHub API if needed)
+resolve_version() {
+  if [ "$REPO_BOX_VERSION" = "latest" ]; then
+    echo "🔍 Resolving latest version..."
+    local tag
+    if command -v curl >/dev/null 2>&1; then
+      tag=$(curl -sSf "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null \
+            | grep '"tag_name"' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
+    elif command -v wget >/dev/null 2>&1; then
+      tag=$(wget -qO- "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null \
+            | grep '"tag_name"' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
+    fi
+    if [ -z "$tag" ]; then
+      echo "❌ Could not resolve latest version from GitHub"
+      echo "   Try specifying a version: REPO_BOX_VERSION=v0.2.0 curl -sSf https://repo.box/install.sh | sh"
+      exit 1
+    fi
+    REPO_BOX_VERSION="$tag"
+    echo "   Resolved: $REPO_BOX_VERSION"
+  fi
+}
+
 # Main installation
 main() {
   echo "📦 repo.box installer"
+
+  # Resolve version
+  resolve_version
   echo "   Version: $REPO_BOX_VERSION"
-  
+
+  # Set download base URL
+  BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/${REPO_BOX_VERSION}"
+
   # Detect platform
   local platform
   platform=$(detect_platform)
@@ -295,9 +323,9 @@ main() {
     echo "   Pre-built binary not available for $platform (version $REPO_BOX_VERSION)"
     echo ""
     echo "   Try:"
-    echo "   1. Check available versions: https://repo.box/releases/"
-    echo "   2. Build from source: cargo install --git https://github.com/yolo-maxi/repobox repobox-cli"
-    echo "   3. Report issue: https://github.com/yolo-maxi/repobox/issues"
+    echo "   1. Check available versions: https://github.com/${GITHUB_REPO}/releases"
+    echo "   2. Build from source: cargo install --git https://github.com/${GITHUB_REPO} repobox-cli"
+    echo "   3. Report issue: https://github.com/${GITHUB_REPO}/issues"
     exit 1
   fi
   
