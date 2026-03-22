@@ -3366,14 +3366,7 @@ html {
   background: var(--explore-bg);
 }
 
-.explore-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px;
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 24px;
-}
+/* explore-container removed — layout now handled in page.tsx */
 
 .explore-main {
   min-width: 0; /* Prevent overflow */

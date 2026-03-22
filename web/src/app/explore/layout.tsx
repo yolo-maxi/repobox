@@ -3,9 +3,5 @@ export default function ExploreLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div className="explore-container">
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }
