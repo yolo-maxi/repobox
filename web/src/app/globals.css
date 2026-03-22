@@ -1101,18 +1101,19 @@ html {
 /* ── Modern Explorer Styles ── */
 
 :root {
-  --explore-bg: #0d1117;
-  --explore-surface: #161b22;
-  --explore-surface-hover: #21262d;
-  --explore-border: #30363d;
-  --explore-border-subtle: #21262d;
-  --explore-text: #f0f6fc;
-  --explore-text-secondary: #8b949e;
-  --explore-text-muted: #656d76;
-  --explore-accent: #238636;
-  --explore-accent-fg: #2ea043;
-  --explore-link: #58a6ff;
-  --explore-warning: #d29922;
+  /* Mapped to --bp-* design system for brand consistency */
+  --explore-bg: var(--bp-bg);
+  --explore-surface: var(--bp-surface);
+  --explore-surface-hover: rgba(25, 50, 80, 0.5);
+  --explore-border: var(--bp-border);
+  --explore-border-subtle: rgba(50, 100, 160, 0.15);
+  --explore-text: var(--bp-heading);
+  --explore-text-secondary: var(--bp-dim);
+  --explore-text-muted: rgba(143, 176, 200, 0.5);
+  --explore-accent: var(--bp-accent);
+  --explore-accent-fg: var(--bp-accent);
+  --explore-link: var(--bp-accent);
+  --explore-warning: var(--bp-gold);
   --explore-danger: #f85149;
 }
 
@@ -1629,12 +1630,13 @@ html {
 }
 
 /* Profile Header */
+/* === Profile Page (--bp-* design system) === */
 .explore-profile-header {
-  background: var(--explore-surface);
-  border: 1px solid var(--explore-border);
-  border-radius: 8px;
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  border-radius: 6px;
   padding: 24px;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1644,20 +1646,19 @@ html {
 .explore-profile-info {
   display: flex;
   align-items: flex-start;
-  gap: 24px;
+  gap: 20px;
 }
 
 .explore-profile-avatar {
-  width: 80px;
-  height: 80px;
-  background: var(--explore-bg);
-  border: 1px solid var(--explore-border);
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--bp-border);
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--explore-text-secondary);
-  flex-shrink: 0;
 }
 
 .explore-profile-details {
@@ -1666,10 +1667,11 @@ html {
 }
 
 .explore-profile-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
-  color: var(--explore-text);
-  margin: 0 0 8px;
+  color: var(--bp-heading);
+  margin: 0 0 6px;
+  font-family: var(--font-mono), monospace;
 }
 
 .explore-profile-address {
@@ -1680,36 +1682,92 @@ html {
 
 .explore-profile-address code {
   font-family: var(--font-mono), monospace;
-  font-size: 14px;
-  color: var(--explore-text-secondary);
-  background: var(--explore-bg);
-  border: 1px solid var(--explore-border);
-  padding: 8px 12px;
-  border-radius: 6px;
+  font-size: 12px;
+  color: var(--bp-dim);
+}
+
+.explore-profile-full-address {
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  color: var(--bp-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.explore-profile-full-address code {
   word-break: break-all;
 }
 
 .explore-profile-copy-btn {
   background: transparent;
-  border: 1px solid var(--explore-border);
-  color: var(--explore-text-secondary);
-  padding: 8px;
-  border-radius: 6px;
+  border: none;
+  color: var(--bp-dim);
+  padding: 4px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .explore-profile-copy-btn:hover {
-  background: var(--explore-surface-hover);
-  color: var(--explore-text);
+  color: var(--bp-accent);
+}
+
+.explore-profile-ens-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(79, 195, 247, 0.08);
+  border: 1px solid rgba(79, 195, 247, 0.2);
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--bp-accent);
+  margin-top: 6px;
+  font-family: var(--font-mono), monospace;
+}
+
+.explore-profile-readonly-note {
+  color: var(--bp-dim);
+  font-size: 11px;
+  font-style: italic;
+  margin-top: 12px;
+  opacity: 0.6;
+}
+
+.explore-profile-extended-stats {
+  display: flex;
+  gap: 24px;
+  margin-top: 12px;
+}
+
+.explore-profile-extended-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.explore-profile-extended-stat-label {
+  font-size: 10px;
+  color: var(--bp-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.explore-profile-extended-stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bp-heading);
 }
 
 .explore-profile-stats {
   display: flex;
-  gap: 32px;
+  gap: 24px;
   flex-shrink: 0;
 }
 
@@ -1721,125 +1779,40 @@ html {
   display: block;
   font-size: 20px;
   font-weight: 600;
-  color: var(--explore-text);
+  color: var(--bp-heading);
   line-height: 1.2;
+  font-family: var(--font-mono), monospace;
 }
 
 .explore-profile-stat-label {
   display: block;
-  font-size: 12px;
-  color: var(--explore-text-secondary);
+  font-size: 10px;
+  color: var(--bp-dim);
   margin-top: 2px;
-}
-
-/* Profile Enhancements */
-.explore-profile-full-address {
-  font-family: var(--font-mono), monospace;
-  font-size: 14px;
-  color: var(--explore-text-secondary);
-  background: var(--explore-bg);
-  border: 1px solid var(--explore-border);
-  padding: 8px 12px;
-  border-radius: 6px;
-  word-break: break-all;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.explore-profile-copy-btn {
-  background: transparent;
-  border: 1px solid var(--explore-border);
-  color: var(--explore-text-secondary);
-  padding: 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.explore-profile-copy-btn:hover {
-  background: var(--explore-surface-hover);
-  color: var(--explore-text);
-}
-
-.explore-profile-ens-source {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--explore-surface-hover);
-  border: 1px solid var(--explore-border);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: var(--explore-text-secondary);
-  margin-top: 4px;
-}
-
-.explore-profile-ens-source:hover {
-  background: var(--explore-border);
-}
-
-.explore-profile-readonly-note {
-  color: var(--explore-text-muted);
-  font-size: 12px;
-  font-style: italic;
-  margin-top: 16px;
-  text-align: center;
-  padding-top: 16px;
-  border-top: 1px solid var(--explore-border-subtle);
-}
-
-.explore-profile-extended-stats {
-  display: flex;
-  gap: 32px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--explore-border-subtle);
-}
-
-.explore-profile-extended-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.explore-profile-extended-stat-label {
-  font-size: 12px;
-  color: var(--explore-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  font-weight: 600;
-}
-
-.explore-profile-extended-stat-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--explore-text);
 }
 
 /* Activity Heatmap */
 .explore-activity-heatmap {
-  background: var(--explore-surface);
-  border: 1px solid var(--explore-border);
-  border-radius: 8px;
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  border-radius: 6px;
   padding: 20px;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .explore-activity-heatmap-header {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .explore-activity-heatmap-title {
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--explore-text);
+  color: var(--bp-dim);
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .explore-activity-heatmap-grid {
@@ -1862,8 +1835,9 @@ html {
   align-items: center;
   justify-content: center;
   font-size: 9px;
-  color: var(--explore-text-muted);
+  color: var(--bp-dim);
   line-height: 1;
+  opacity: 0.5;
 }
 
 .explore-activity-heatmap-weeks {
@@ -1886,29 +1860,28 @@ html {
 }
 
 .explore-activity-heatmap-day:hover {
-  transform: scale(1.1);
-  border: 1px solid var(--explore-text-secondary);
+  outline: 1px solid var(--bp-accent);
 }
 
-/* Activity levels - GitHub-inspired green */
+/* Heatmap levels — cyan/blue to match brand */
 .explore-activity-heatmap-day--level-0 {
-  background: var(--explore-border-subtle);
+  background: rgba(50, 100, 160, 0.1);
 }
 
 .explore-activity-heatmap-day--level-1 {
-  background: #0e4429;
+  background: rgba(79, 195, 247, 0.15);
 }
 
 .explore-activity-heatmap-day--level-2 {
-  background: #006d32;
+  background: rgba(79, 195, 247, 0.35);
 }
 
 .explore-activity-heatmap-day--level-3 {
-  background: #26a641;
+  background: rgba(79, 195, 247, 0.6);
 }
 
 .explore-activity-heatmap-day--level-4 {
-  background: #39d353;
+  background: var(--bp-accent);
 }
 
 .explore-activity-heatmap-legend {
@@ -1916,13 +1889,14 @@ html {
   align-items: center;
   gap: 8px;
   margin-top: 12px;
-  font-size: 11px;
-  color: var(--explore-text-muted);
+  font-size: 10px;
+  color: var(--bp-dim);
   justify-content: flex-end;
+  opacity: 0.6;
 }
 
 .explore-activity-heatmap-legend-text {
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .explore-activity-heatmap-legend-levels {

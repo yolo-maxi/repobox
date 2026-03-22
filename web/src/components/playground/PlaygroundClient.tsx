@@ -244,12 +244,7 @@ export function PlaygroundClient() {
             >
               Config → English
             </button>
-            <button
-              className="pg-test-btn"
-              onClick={() => setShowTests(!showTests)}
-            >
-              {showTests ? "Hide Tests" : "Show Tests"}
-            </button>
+            {/* Test suite hidden — internal dev tool, not user-facing */}
           </div>
 
           {/* Generate mode */}
@@ -347,10 +342,7 @@ export function PlaygroundClient() {
             </div>
           </div>
 
-          {/* Test Runner */}
-          {showTests && (
-            <TestRunner onRunTest={runGeneration} />
-          )}
+          {/* Test Runner — hidden from UI, kept for dev use */}
         </div>
 
         {/* Right sidebar */}
