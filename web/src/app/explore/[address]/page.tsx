@@ -10,6 +10,7 @@ import { EmptyRepository, AddressNotFound } from '@/components/illustrations';
 import Jazzicon from '@/components/Jazzicon';
 import ActivityHeatmap from '@/components/ActivityHeatmap';
 import { SiteNav } from '@/components/SiteNav';
+import EnsSubdomainModal from '@/components/EnsSubdomainModal';
 
 interface Repo {
   address: string;
@@ -392,6 +393,12 @@ export default function AddressPage() {
                   {identityTier === 'purchased' && (
                     <span className="explore-profile-premium-badge">supporter</span>
                   )}
+                </div>
+              )}
+
+              {identityTier !== 'purchased' && (
+                <div style={{ marginTop: 8 }}>
+                  <EnsSubdomainModal triggerLabel="Get premium ENS name" />
                 </div>
               )}
 
