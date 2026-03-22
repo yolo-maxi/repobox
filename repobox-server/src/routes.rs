@@ -435,12 +435,40 @@ fn check_read_access(
         } else {
             let repo_path_str = format!("{}/{}", repo.address, repo.name);
             match crate::auth::extract_identity(headers, &repo_path_str) {
-                Ok(Some(_)) => {
+                Ok(Some(identity)) => {
                     if let Some(ref x402) = x402_config {
-                        Err(payment_required_response(repo, x402))
-                    } else {
-                        Err((StatusCode::FORBIDDEN, "read access denied").into_response())
+                        match db::has_x402_access(
+                            &state.db_path,
+                            &repo.address,
+                            &repo.name,
+                            &identity.address,
+                        ) {
+                            Ok(true) => {
+                                tracing::debug!(
+                                    repo = %format!("{}/{}", repo.address, repo.name),
+                                    payer = %identity.address,
+                                    "x402 paid access granted"
+                                );
+                                return Ok(());
+                            }
+                            Ok(false) => return Err(payment_required_response(repo, x402)),
+                            Err(error) => {
+                                tracing::error!(
+                                    error = %error,
+                                    repo = %format!("{}/{}", repo.address, repo.name),
+                                    payer = %identity.address,
+                                    "failed to read x402 access grant"
+                                );
+                                return Err((
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    "failed to verify paid access",
+                                )
+                                    .into_response());
+                            }
+                        }
                     }
+
+                    Err((StatusCode::FORBIDDEN, "read access denied").into_response())
                 }
                 Ok(None) => {
                     if let Some(ref x402) = x402_config {

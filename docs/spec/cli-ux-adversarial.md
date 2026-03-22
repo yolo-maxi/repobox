@@ -229,3 +229,60 @@ Self-lockout prevention on config edits while exercising founder, agent, and mis
 ### UX outcome
 - Actionable under <30s: users now get explicit paid access metadata for non-auth/private repositories and discoverability is clearer.
 - Remaining gap: x402 grant verification is still one-way path for DB grants; paid grant validation remains outside scope for this pass.
+
+## 2026-03-22 — Private repo x402 paid-discovery + paid-access bypass run (post-fix)
+
+### Scenario selected
+`private repo paid access / x402 preview/discovery flow` with founder, agent, unknown identities.
+
+### Environment
+- Preferred DO host via SSH (`xiko@167.71.5.215`) was reachable, but `/home/xiko/repobox` is not present there.
+- Ran locally against current source with real server shim:
+  - `repobox-server`: `/home/xiko/repobox/target/debug/repobox-server`
+  - `repobox` client: `/home/xiko/repobox/target/debug/repobox`
+  - data dir: `/tmp/repobox-qa-data`
+
+### Commands run
+- bootstrapped fixture repo `/tmp/repobox-qa/fresh-private-repo2` as founder identity `0x760b...fBcf71`:
+  - `git init`, `repobox init`, `repobox identity set`, `repobox alias add`, `repobox whoami`
+  - staged `.repobox/config.yml`, `.repobox/x402.yml`, `README.md`
+  - `git commit -m "feat: init private repo"`
+  - `git push -u origin main`
+- exercised self-lockout check by changing config to `founders push >*` only:
+  - `repobox` commit returned explicit BLOCK + recovery guidance on `.repobox/config.yml` edit
+- identity checks:
+  - `repobox check <founder|agent> push >*`
+- pull/rebase lifecycle:
+  - authenticated founder token via `http.extraheader` pull with `git pull --rebase`
+- private-access UX probes:
+  - `curl` to `/info/refs?service=git-upload-pack` without auth
+  - signed identity checks using EVM auth header
+  - malformed token check (`Authorization: Basic badtoken`)
+  - `POST /0x.../fresh-private-repo2.git/x402/grant-access` with agent address
+
+### Findings before patch
+- For repos with no explicit `read` rules (`default: deny` + x402 config), authenticated identities without paid grant were denied as `402` (good), but paid identities also remained blocked because read access path skipped paid-check bypass.
+- Unknown/no-identity clone/pull flow was discoverability-poor on earlier attempts (opaque errors depending on token validity).
+
+### Fix applied
+- `repobox-server/src/routes.rs`:
+  - In `check_read_access`, for `!has_read_rules` + x402 config, added x402 DB grant bypass before returning `Payment Required`.
+  - On grant match, returns read access (`Ok(())`) with debug trace.
+  - On DB read failure, returns `500` with explicit log message.
+
+### Validation results
+- no-auth read: `HTTP/1.1 402 Payment Required` + `x-payment` metadata
+- malformed auth: `HTTP/1.1 401` + `auth error: invalid UTF-8 in Basic auth`
+- founder identity: `HTTP/1.1 200 OK` for `/info/refs`
+- agent identity before grant: `HTTP/1.1 402 Payment Required`
+- after `x402/grant-access`: same agent identity returns `HTTP/1.1 200 OK`
+- anonymous clone: `fatal ... returned error: 402`
+- self-lockout guard remains explicit and actionable:
+  - message includes: `cannot commit this change because it removes your edit access...`
+  - includes direct recovery recommendation.
+
+### UX verdict
+- This run moved x402 paid access from inconsistent “always blocked” behavior to a clearer discoverability path:
+  - private repos show payment intent by 402 + metadata,
+  - granted identities can read without config edits,
+  - denied identities are not silently blocked by auth-only errors.

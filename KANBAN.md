@@ -252,3 +252,15 @@ HTTP + on-chain resolvers with caching. Alchemy proxy.
     - unauth clone -> 402 payment required,
     - founder read -> 200,
     - unauthorized signed identities -> 402 with payment metadata.
+
+### x402 paid-read bypass for repos with no read rules (adversarial)
+- **Date:** 2026-03-22 | **Agent:** repobox-qa-pipeline
+- **Status:** ✅ Completed (fixed in server)
+- Scenario: private repo with `.repobox/x402.yml`, no explicit read rules, founder/agent/unknown identities.
+- Fix: `repobox-server/src/routes.rs` now checks `db::has_x402_access` when read rules are absent but x402 exists, and allows granted identities before returning payment-required.
+- Validation:
+  - no-identity `info/refs` returns 402 + x-payment metadata
+  - founder identity allowed
+  - unsigned/unknown identity still 402
+  - grant-access endpoint creates db entry and immediately bypasses read gate for granted identity
+- Follow-up: remove duplicated wording in older KANBAN docs entries that described the pre-fix state as already solved if/where present.
