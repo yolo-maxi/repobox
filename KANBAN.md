@@ -24,6 +24,19 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
+### Full knowledge sweep — all docs/skills/landing/llms.txt must be final
+- **Priority**: P0
+- **Tags**: docs, hackathon, demo-ready
+Comprehensive sweep across ALL knowledge surfaces. Fran needs final version locally for demo. Update each:
+1. **llms.txt** — accurate features, current verbs, real capabilities only
+2. **skill.md** — matches actual CLI behavior and config format
+3. **Landing page** — hero copy, features, case studies reflect what works
+4. **Docs** — all current, no stale examples, "Coming Soon" for unfinished
+5. **AGENTS.md** — accurate for agents consuming the repo
+6. **README.md** — clean, no stale instructions
+7. **Playground prompt** — knows all current verbs and syntax
+Cross-reference against Rust parser + config types as source of truth. No contradictions. Final polish before demo.
+
 ### Virtuals integration — bug report to payment flow
 - **Priority**: P1
 - **Tags**: feature, x402, virtuals, docs
