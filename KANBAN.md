@@ -28,10 +28,7 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 🔨 In Progress
 
-### Docs — comprehensive, honest, up-to-date
-- **Priority**: P3
-- **Tags**: docs
-Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented features as "Coming Soon" / "Roadmap". Only run when no P0/P1/P2 tasks remain.
+*No tasks currently in progress*
 
 ## 🚧 Blocked
 
@@ -40,6 +37,10 @@ Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented
 - **Tags**: infra
 
 ## ✅ Done
+
+### Docs — comprehensive, honest, up-to-date
+- **Completed**: 2026-03-22 | **Agent**: claude-agent + reviewer-agent
+Comprehensive documentation update covering all features including new verbs, x402 payments, ENS resolution, force push policy. Added agent workflows and payment system guides. Marked unimplemented features as "Coming Soon" for clarity.
 
 ### Empty state illustrations
 - **Completed**: 2026-03-22 | **Agent**: claude-agent + reviewer-agent

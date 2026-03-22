@@ -1,9 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveENS } from '@/lib/ens';
 import { resolveAddressDisplay } from '@/lib/addressResolver';
 
 interface RouteContext {
   params: Promise<{ name: string }>;
+}
+
+// ENS Universal Resolver on Ethereum mainnet
+const UNIVERSAL_RESOLVER = '0xce01f8eee7E479C928F8919abD53E553a36CeF67';
+// Multiple fallback RPCs — free public RPCs are unreliable
+const ETH_RPCS = [
+  'https://eth.drpc.org',
+  'https://ethereum-rpc.publicnode.com',
+  'https://rpc.mevblocker.io',
+];
+
+async function resolveENSViaRPC(name: string): Promise<string | null> {
+  // Use ethers for ENS resolution with fallback RPCs
+  const { ethers } = await import('ethers');
+  
+  for (const rpc of ETH_RPCS) {
+    try {
+      const provider = new ethers.JsonRpcProvider(rpc);
+      const address = await Promise.race([
+        provider.resolveName(name),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+      ]);
+      if (address) return address;
+    } catch (e) {
+      console.warn(`ENS resolution failed on ${rpc}:`, (e as Error).message);
+      continue;
+    }
+  }
+  return null;
 }
 
 export async function GET(
@@ -30,13 +58,12 @@ export async function GET(
     }
     // 2. Try ENS resolution
     else if (name.endsWith('.eth')) {
-      address = await resolveENS(name);
+      address = await resolveENSViaRPC(name);
       type = 'ens';
     }
     // 3. Future: subdomain resolution
     else {
       type = 'subdomain';
-      // For now, subdomains are not implemented
       return NextResponse.json(
         { error: 'Subdomain resolution not yet implemented' },
         { status: 501 }

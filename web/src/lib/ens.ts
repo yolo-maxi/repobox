@@ -1,98 +1,59 @@
-import { ethers } from 'ethers';
+// ENS resolution via the repo.box server's Alchemy-backed resolver.
+// Public RPCs (llamarpc, cloudflare-eth, 1rpc) all block ENS calls,
+// so we proxy through the server which has an Alchemy key.
 
-// Enhanced ENS cache
-const ensCache = new Map<string, { 
-  address: string | null; 
-  timestamp: number; 
-  name?: string; 
+const GIT_SERVER = process.env.NEXT_PUBLIC_GIT_SERVER || 'http://127.0.0.1:3490';
+
+const ensCache = new Map<string, {
+  address: string | null;
+  timestamp: number;
+  name?: string;
 }>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-// Initialize provider
-let provider: ethers.JsonRpcProvider | null = null;
-
-function getProvider(): ethers.JsonRpcProvider {
-  if (!provider) {
-    provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com');
-  }
-  return provider;
-}
-
 export async function resolveENS(name: string): Promise<string | null> {
   if (!name.endsWith('.eth')) return null;
-  
-  // Check cache
+
   const cached = ensCache.get(`forward:${name}`);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     return cached.address;
   }
-  
+
   try {
-    const prov = getProvider();
-    const address = await prov.resolveName(name);
-    
-    // Cache result
-    ensCache.set(`forward:${name}`, {
-      address,
-      timestamp: Date.now()
+    const res = await fetch(`${GIT_SERVER}/api/resolve?name=${encodeURIComponent(name)}`, {
+      signal: AbortSignal.timeout(10000),
     });
-    
+    if (!res.ok) {
+      ensCache.set(`forward:${name}`, { address: null, timestamp: Date.now() });
+      return null;
+    }
+    const data = await res.json();
+    const address = data.address || null;
+    ensCache.set(`forward:${name}`, { address, timestamp: Date.now() });
     return address;
   } catch (error) {
     console.error('ENS resolution error:', error);
-    
-    // Cache null result to prevent repeated failed lookups
-    ensCache.set(`forward:${name}`, {
-      address: null,
-      timestamp: Date.now()
-    });
-    
+    ensCache.set(`forward:${name}`, { address: null, timestamp: Date.now() });
     return null;
   }
 }
 
 export async function reverseResolveENS(address: string): Promise<string | null> {
   if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) return null;
-  
-  // Check cache
+
   const cached = ensCache.get(`reverse:${address.toLowerCase()}`);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     return cached.name || null;
   }
-  
-  try {
-    const prov = getProvider();
-    const name = await prov.lookupAddress(address);
-    
-    // Verify reverse resolution (prevent spoofing)
-    if (name) {
-      const verifyAddress = await prov.resolveName(name);
-      if (verifyAddress?.toLowerCase() !== address.toLowerCase()) {
-        console.warn('ENS reverse resolution verification failed');
-        return null;
-      }
-    }
-    
-    // Cache result
-    ensCache.set(`reverse:${address.toLowerCase()}`, {
-      address: address.toLowerCase(),
-      name: name || undefined,
-      timestamp: Date.now()
-    });
-    
-    return name;
-  } catch (error) {
-    console.error('ENS reverse resolution error:', error);
-    
-    // Cache null result
-    ensCache.set(`reverse:${address.toLowerCase()}`, {
-      address: address.toLowerCase(),
-      name: undefined,
-      timestamp: Date.now()
-    });
-    
-    return null;
-  }
+
+  // Reverse resolution requires an API call we don't have server-side yet.
+  // Cache null for now — forward resolution is the priority.
+  ensCache.set(`reverse:${address.toLowerCase()}`, {
+    address: address.toLowerCase(),
+    name: undefined,
+    timestamp: Date.now()
+  });
+  return null;
 }
 
 export function formatAddress(address: string): string {
