@@ -153,3 +153,79 @@ Self-lockout prevention on config edits while exercising founder, agent, and mis
 - Minor cleanup:
   - `git repobox lint` currently does not accept a file path argument; it must be run without args.
     This is non-blocking UX noise but should be documented clearly in command examples.
+
+## 2026-03-22 — Private repo x402 paid-access discovery run (DO fallback)
+
+### Scenario selected
+`private repo paid access / x402 preview/discovery flow` with founder/agent/unknown identities and full git lifecycle where possible.
+
+### Environment
+- Preferred remote host (`xiko@167.71.5.215`) was reachable, but repo exists locally only:
+  - `/home/xiko/repobox` was not present there.
+- Ran against local workspace source on this machine:
+  - `repobox-server`: `target/debug/repobox-server`
+  - `repobox-cli`: `target/release/repobox`
+- Data dir: `/tmp/repobox-server-data`
+- Repo under test: `http://127.0.0.1:3560/0xc6ff92A3Db57E04AEb3dC7F760e41f6949736266/fresh-repo.git`
+
+### Commands run
+- Prepared identities:
+  - founder: `/tmp/repobox-home-test` (`founder` key)
+  - agent: `/tmp/repobox-home-agent` (`agent` key)
+  - unknown: `/tmp/repobox-home-unknown` (`outsider` key)
+- Created and signed initial commit with bare repobox auth and pushed:
+  - `git init`
+  - set `commit.gpgsign` + `gpg.program` (repobox)
+  - `git commit -m "feat: initial private repo"`
+  - `git push -u origin master:refs/heads/main`
+- Added private/x402 policy and pushed:
+  - `.repobox/config.yml` (founder-only read/write/push on >*)
+  - `.repobox/x402.yml` (USDC read price)
+  - commit + push
+- Identity lifecycle checks:
+  - `repobox identity set <private-key>`
+  - `repobox whoami`
+  - `repobox alias add founder <founder_address>`
+  - `repobox alias list`
+  - `repobox check founder read ">main"`
+  - `repobox check 0x... read ">main"` (agent/unknown denied)
+- Git lifecycle:
+  - `git push` founder updates
+  - `git pull --rebase origin main` (from authenticated local repo)
+- Clone UX checks:
+  - unauthenticated clone:
+    - `git clone http://127.0.0.1:3560/.../fresh-repo.git unauth-clone`
+  - cloned with unauthorized signatures (agent/unknown): `git clone -c http.extraHeader="Authorization: Basic ..." ...`
+- x402 grant/discovery checks:
+  - `POST /{address}/{repo}.git/x402/grant-access` (agent, tx_hash placeholder)
+  - repeat clone/read checks after grant
+
+### Key outputs observed
+- Before fix, authenticated reads were inconsistent because read checks used no branch target (`None`) for read rules.
+- After changes:
+  - No-identity read for private repo now consistently returns:
+    - `HTTP/1.1 402 Payment Required`
+    - `x-payment: {...}` metadata
+  - Founder read check works when rules match (`HTTP/1.1 200 OK`)
+  - Unlisted/unauthorized identities show the same paid discovery UX (`402 + x-payment`) rather than opaque auth failure.
+
+### Fix implemented
+- Updated `repobox-server/src/routes.rs`:
+  - `check_read_access` now treats read checks as branch-scoped (`Some(">*")`) so configured read rules work with smart-http paths.
+  - Added shared `payment_required_response()` for x402 errors.
+  - No-auth + x402-private now returns 402 + payment hint instead of only generic auth error.
+  - When x402 config exists and repo has paid users, paid access in DB (`db::has_x402_access`) short-circuits to allow read access.
+
+### Test results
+- `cargo test -p repobox-server x402`:
+  - `test x402_grant_access_endpoint ... ok`
+  - `test x402_payment_required_response ... ok`
+- Manual CLI/server checks:
+  - unauth clone: `fatal ... 402`
+  - authorized founder read: `HTTP/1.1 200 OK`
+  - unauthorized identity read: `HTTP/1.1 402 Payment Required`
+  - `git pull --rebase` in private repo: `remote: payment required for read access`
+
+### UX outcome
+- Actionable under <30s: users now get explicit paid access metadata for non-auth/private repositories and discoverability is clearer.
+- Remaining gap: x402 grant verification is still one-way path for DB grants; paid grant validation remains outside scope for this pass.

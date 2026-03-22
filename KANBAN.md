@@ -233,3 +233,22 @@ HTTP + on-chain resolvers with caching. Alchemy proxy.
   - Detached HEAD + no-upstream guidance returned explicit, actionable git instructions.
   - Lockout guard returned explicit `BLOCK` + recovery hint.
 - No code changes required in CLI logic for this run; no regressions found in tested path.
+### x402 private-repo discoverability + read bypass (adversarial)
+- **Date:** 2026-03-22
+- **Agent:** repobox-qa-pipeline
+- **Status:** ✅ Completed
+- Story: private repo paid access / x402 preview discovery flow with founder-agent-unknown identity matrix.
+- Findings:
+  - Read checks previously used `target: None`, causing private rules to be effectively bypassed by branch context and poor unauthorized UX.
+  - No-identity and non-grant identities returned inconsistent/misleading access errors.
+- Fix:
+  - `repobox-server/src/routes.rs`:
+    - enforce read checks with `Some(">*")` for smart-http read path,
+    - return `402 Payment Required + X-Payment` when `.repobox/x402.yml` exists and read is denied,
+    - honor paid access records via `db::has_x402_access` before falling back to config deny.
+- Validation:
+  - `cargo test -p repobox-server x402`
+  - manual clone/pull command checks:
+    - unauth clone -> 402 payment required,
+    - founder read -> 200,
+    - unauthorized signed identities -> 402 with payment metadata.

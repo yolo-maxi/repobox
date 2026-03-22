@@ -1,18 +1,18 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::Router;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
+use crate::AppState;
 use crate::db;
 use crate::git::{self, BackendRequest, RepoPath};
 use crate::resolve;
-use crate::AppState;
 
 pub(crate) fn router() -> Router<Arc<AppState>> {
     Router::new()
@@ -21,20 +21,38 @@ pub(crate) fn router() -> Router<Arc<AppState>> {
         .route("/{repo}/git-upload-pack", post(addressless_upload_pack))
         .route("/{repo}/git-receive-pack", post(addressless_receive_pack))
         .route("/{repo}/HEAD", get(addressless_head))
-        .route("/{repo}/.well-known/virtuals.json", get(addressless_virtuals_discovery))
+        .route(
+            "/{repo}/.well-known/virtuals.json",
+            get(addressless_virtuals_discovery),
+        )
         // Regular two-segment routes (existing functionality)
         .route("/{address}/{repo}/info/refs", get(info_refs))
         .route("/{address}/{repo}/git-upload-pack", post(upload_pack))
         .route("/{address}/{repo}/git-receive-pack", post(receive_pack))
         .route("/{address}/{repo}/HEAD", get(head))
         .route("/{address}/{repo}/x402/grant-access", post(grant_access))
-        .route("/{address}/{repo}/.well-known/virtuals.json", get(virtuals_discovery))
-        .route("/{address}/{repo}/virtuals/claims", post(create_bounty_claim))
-        .route("/{address}/{repo}/virtuals/claims/{claim_id}", get(get_bounty_claim))
-        .route("/{address}/{repo}/virtuals/claims/{claim_id}/process", post(process_bounty_payment))
+        .route(
+            "/{address}/{repo}/.well-known/virtuals.json",
+            get(virtuals_discovery),
+        )
+        .route(
+            "/{address}/{repo}/virtuals/claims",
+            post(create_bounty_claim),
+        )
+        .route(
+            "/{address}/{repo}/virtuals/claims/{claim_id}",
+            get(get_bounty_claim),
+        )
+        .route(
+            "/{address}/{repo}/virtuals/claims/{claim_id}/process",
+            post(process_bounty_payment),
+        )
         .route("/{address}/{repo}/issues", get(list_issues))
         .route("/{address}/{repo}/issues/{issue_id}", get(get_issue))
-        .route("/{address}/{repo}/issues/{issue_id}/assign", post(assign_issue))
+        .route(
+            "/{address}/{repo}/issues/{issue_id}/assign",
+            post(assign_issue),
+        )
         // Name resolution route
         .route("/{name}/resolve", get(resolve_name))
 }
@@ -172,7 +190,7 @@ async fn receive_pack(
                 Some(&commit_info.hash),
                 Some(&commit_info.message),
             );
-            
+
             tracing::info!(
                 repo = %format!("{}/{}", repo.address, repo.name),
                 pusher = ?commit_info.pusher_address,
@@ -194,7 +212,12 @@ async fn receive_pack(
             // Extract the signer of the HEAD commit (the latest pushed commit).
             if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo) {
                 if !matches!(
-                    git::check_push_authorized(&state.data_dir, &repo, &pusher, &record.owner_address),
+                    git::check_push_authorized(
+                        &state.data_dir,
+                        &repo,
+                        &pusher,
+                        &record.owner_address
+                    ),
                     Ok(true)
                 ) {
                     // Unauthorized — revert would be ideal but for now just log.
@@ -227,10 +250,14 @@ async fn receive_pack(
         );
         match git::extract_owner_from_first_commit(&state.data_dir, &repo) {
             Ok(Some(signer)) => {
-                let _ = db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
+                let _ =
+                    db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
 
                 // Auto-assign alias if this is the first push for this address
-                if db::get_alias_for_address(&state.db_path, &signer).unwrap_or(None).is_none() {
+                if db::get_alias_for_address(&state.db_path, &signer)
+                    .unwrap_or(None)
+                    .is_none()
+                {
                     if let Ok(alias) = db::assign_random_alias(&state.db_path, &signer) {
                         tracing::info!(
                             address = %signer,
@@ -298,7 +325,9 @@ async fn head(
             );
             response
         }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => StatusCode::NOT_FOUND.into_response(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            StatusCode::NOT_FOUND.into_response()
+        }
         Err(error) => internal_error(error),
     }
 }
@@ -314,7 +343,11 @@ fn backend_post(
         &state.data_dir,
         BackendRequest {
             method: "POST",
-            path_info: format!("/{}/{repo_name}.git{suffix}", repo.address, repo_name = repo.name),
+            path_info: format!(
+                "/{}/{repo_name}.git{suffix}",
+                repo.address,
+                repo_name = repo.name
+            ),
             query_string: None,
             content_type,
             body,
@@ -354,7 +387,10 @@ async fn resolve_name_to_address(state: &AppState, name: &str) -> Result<String,
             }
         }
     } else {
-        tracing::debug!("No Alchemy API key configured, cannot resolve ENS name: {}", name);
+        tracing::debug!(
+            "No Alchemy API key configured, cannot resolve ENS name: {}",
+            name
+        );
         Err(StatusCode::BAD_REQUEST)
     }
 }
@@ -383,26 +419,37 @@ fn check_read_access(
         Err(_) => return Ok(()), // Invalid config = don't block reads
     };
 
+    // Optional x402 config used for paid-read gating when read checks fail.
+    let x402_config = read_x402_from_repo(&repo_dir)
+        .and_then(|content| repobox::parser::parse_x402(&content).ok());
+
     // Check if any read rules exist
-    let has_read_rules = config.permissions.rules.iter().any(|r| r.verb == repobox::config::Verb::Read);
+    let has_read_rules = config
+        .permissions
+        .rules
+        .iter()
+        .any(|r| r.verb == repobox::config::Verb::Read);
     if !has_read_rules {
-        // No read rules → use default policy
         return if config.permissions.default == repobox::config::DefaultPolicy::Allow {
             Ok(())
         } else {
-            // default: deny with no read rules → need auth
             let repo_path_str = format!("{}/{}", repo.address, repo.name);
             match crate::auth::extract_identity(headers, &repo_path_str) {
                 Ok(Some(_)) => {
-                    // Authenticated but no read rules and default deny → denied
-                    Err((StatusCode::FORBIDDEN, "read access denied").into_response())
+                    if let Some(ref x402) = x402_config {
+                        Err(payment_required_response(repo, x402))
+                    } else {
+                        Err((StatusCode::FORBIDDEN, "read access denied").into_response())
+                    }
                 }
                 Ok(None) => {
-                    Err(unauthorized_response("authentication required"))
+                    if let Some(ref x402) = x402_config {
+                        Err(payment_required_response(repo, x402))
+                    } else {
+                        Err(unauthorized_response("authentication required"))
+                    }
                 }
-                Err(e) => {
-                    Err(unauthorized_response(&format!("auth error: {e}")))
-                }
+                Err(e) => Err(unauthorized_response(&format!("auth error: {e}"))),
             }
         };
     }
@@ -424,79 +471,104 @@ fn check_read_access(
     let identity = match crate::auth::extract_identity(headers, &repo_path_str) {
         Ok(Some(id)) => id,
         Ok(None) => {
-            return Err(unauthorized_response("authentication required for this repo"));
+            if let Some(ref x402) = x402_config {
+                return Err(payment_required_response(repo, x402));
+            }
+            return Err(unauthorized_response(
+                "authentication required for this repo",
+            ));
         }
         Err(e) => {
             return Err(unauthorized_response(&format!("auth error: {e}")));
         }
     };
 
-    // Check read permission
-    tracing::debug!(
-        identity = %identity,
-        config_groups = %config.groups.len(),
-        config_rules = %config.permissions.rules.len(),
-        "checking read permission"
-    );
-
-    // Debug the parsed rules
-    for (i, rule) in config.permissions.rules.iter().enumerate() {
-        tracing::debug!(rule_index = i, rule = ?rule, "parsed rule");
-    }
-
-    // Debug engine call parameters
-    tracing::debug!(
-        engine_identity = ?identity,
-        engine_verb = ?repobox::config::Verb::Read,
-        engine_branch = ?Option::<&str>::None,
-        engine_file = ?Option::<&str>::None,
-        "calling engine::check"
-    );
-
-    let result = repobox::engine::check(&config, &identity, repobox::config::Verb::Read, None, None);
-    if result.is_allowed() {
-        tracing::debug!(identity = %identity, "read access granted");
-        Ok(())
-    } else {
-        tracing::warn!(identity = %identity, result = ?result, "read access denied");
-
-        // Check if x402 payment is configured (read from separate .repobox/x402.yml)
-        if let Some(x402_content) = read_x402_from_repo(&repo_dir) {
-            if let Ok(x402_config) = repobox::parser::parse_x402(&x402_content) {
-                // Return 402 Payment Required with x402 payment headers
-                let payment_json = serde_json::json!({
-                    "scheme": "exact",
-                    "network": x402_config.network,
-                    "currency": "USDC",
-                    "amount": parse_usdc_amount(&x402_config.read_price).unwrap_or_else(|| "1000000".to_string()),
-                    "recipient": x402_config.recipient,
-                    "memo": format!("read:{}", repo.name)
-                });
-
-                let mut response = (StatusCode::PAYMENT_REQUIRED, "payment required for read access").into_response();
-                response.headers_mut().insert(
-                    "X-Payment",
-                    HeaderValue::from_str(&payment_json.to_string()).unwrap(),
-                );
-                tracing::info!(
-                    identity = %identity,
+    // Paid readers bypass rule checks if they have granted access.
+    if let Some(ref x402) = x402_config {
+        if let Ok(has_access) =
+            db::has_x402_access(&state.db_path, &repo.address, &repo.name, &identity.address)
+        {
+            if has_access {
+                tracing::debug!(
                     repo = %format!("{}/{}", repo.address, repo.name),
-                    price = %x402_config.read_price,
-                    "returning 402 payment required"
+                    payer = %identity.address,
+                    "x402 paid access granted"
                 );
-                return Err(response);
+                return Ok(());
             }
         }
 
-        Err((StatusCode::FORBIDDEN, format!("read access denied for {}", identity)).into_response())
+        let check_result = repobox::engine::check(
+            &config,
+            &identity,
+            repobox::config::Verb::Read,
+            Some(">*"),
+            None,
+        );
+        if check_result.is_allowed() {
+            tracing::debug!(identity = %identity, "read access granted");
+            return Ok(());
+        }
+
+        tracing::warn!(identity = %identity, result = ?check_result, "read access denied");
+        return Err(payment_required_response(repo, x402));
     }
+
+    let check_result = repobox::engine::check(
+        &config,
+        &identity,
+        repobox::config::Verb::Read,
+        Some(">*"),
+        None,
+    );
+    if check_result.is_allowed() {
+        tracing::debug!(identity = %identity, "read access granted");
+        Ok(())
+    } else {
+        tracing::warn!(identity = %identity, result = ?check_result, "read access denied");
+        Err((
+            StatusCode::FORBIDDEN,
+            format!("read access denied for {}", identity),
+        )
+            .into_response())
+    }
+}
+
+fn payment_required_response(
+    repo: &RepoPath,
+    x402_config: &repobox::config::X402Config,
+) -> Response {
+    let payment_json = serde_json::json!({
+        "scheme": "exact",
+        "network": x402_config.network,
+        "currency": "USDC",
+        "amount": parse_usdc_amount(&x402_config.read_price).unwrap_or_else(|| "1000000".to_string()),
+        "recipient": x402_config.recipient,
+        "memo": format!("read:{}", repo.name)
+    });
+
+    let mut response = (
+        StatusCode::PAYMENT_REQUIRED,
+        "payment required for read access",
+    )
+        .into_response();
+    response.headers_mut().insert(
+        "X-Payment",
+        HeaderValue::from_str(&payment_json.to_string()).unwrap(),
+    );
+    tracing::info!(
+        repo = %format!("{}/{}", repo.address, repo.name),
+        price = %x402_config.read_price,
+        "returning 402 payment required"
+    );
+    response
 }
 
 /// Read .repobox/config.yml from a bare git repo.
 /// Uses the first available branch (not HEAD, which may point to a non-existent branch).
 pub(crate) fn read_config_from_repo(repo_dir: &std::path::Path) -> Option<String> {
     tracing::debug!(repo_dir = ?repo_dir, "reading config from repo");
-    
+
     // First try HEAD
     let output = std::process::Command::new("git")
         .args(["show", "HEAD:.repobox/config.yml"])
@@ -509,7 +581,7 @@ pub(crate) fn read_config_from_repo(repo_dir: &std::path::Path) -> Option<String
         tracing::debug!(config_len = config.len(), "read config via HEAD");
         return Some(config);
     }
-    
+
     tracing::debug!("HEAD failed, trying first branch fallback");
 
     // HEAD failed (probably points to non-existent default branch) — find first available ref
@@ -523,7 +595,7 @@ pub(crate) fn read_config_from_repo(repo_dir: &std::path::Path) -> Option<String
         .lines()
         .next()?
         .to_string();
-    
+
     tracing::debug!(first_branch = %first_branch, "trying config from first branch");
 
     let output = std::process::Command::new("git")
@@ -644,7 +716,7 @@ async fn addressless_info_refs(
             name: repo_name,
         };
         let qs = "service=git-receive-pack";
-        
+
         match git::run_backend(
             &state.data_dir,
             BackendRequest {
@@ -711,7 +783,7 @@ async fn addressless_receive_pack(
             address: existing.address,
             name: repo_name,
         };
-        
+
         let response = backend_post(
             &state,
             &repo_path,
@@ -723,15 +795,22 @@ async fn addressless_receive_pack(
         // Check ownership and authorization for addressless pushes to existing repos
         if response.status() == StatusCode::OK {
             let existing_owner = db::get_repo(&state.db_path, &repo_path.address, &repo_path.name);
-            
+
             if let Ok(Some(record)) = &existing_owner {
                 // Check if repository has opted into permission enforcement
                 let repo_dir = git::repo_dir(&state.data_dir, &repo_path);
                 if read_config_from_repo(&repo_dir).is_some() {
                     // Has config = permission enforcement enabled
-                    if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo_path) {
+                    if let Ok(Some(pusher)) =
+                        git::extract_pusher_from_head(&state.data_dir, &repo_path)
+                    {
                         if !matches!(
-                            git::check_push_authorized(&state.data_dir, &repo_path, &pusher, &record.owner_address),
+                            git::check_push_authorized(
+                                &state.data_dir,
+                                &repo_path,
+                                &pusher,
+                                &record.owner_address
+                            ),
                             Ok(true)
                         ) {
                             tracing::warn!(
@@ -744,7 +823,9 @@ async fn addressless_receive_pack(
                     }
                 } else {
                     // No config = no permission enforcement
-                    if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo_path) {
+                    if let Ok(Some(pusher)) =
+                        git::extract_pusher_from_head(&state.data_dir, &repo_path)
+                    {
                         tracing::debug!(
                             repo = %format!("{}/{}", repo_path.address, repo_path.name),
                             pusher = %pusher,
@@ -753,9 +834,11 @@ async fn addressless_receive_pack(
                     }
                 }
             }
-            
+
             // Log the push event for existing repos accessed via addressless route
-            if let Ok(Some(commit_info)) = git::extract_latest_commit_info(&state.data_dir, &repo_path) {
+            if let Ok(Some(commit_info)) =
+                git::extract_latest_commit_info(&state.data_dir, &repo_path)
+            {
                 let _ = db::insert_push_log(
                     &state.db_path,
                     &repo_path.address,
@@ -764,7 +847,7 @@ async fn addressless_receive_pack(
                     Some(&commit_info.hash),
                     Some(&commit_info.message),
                 );
-                
+
                 tracing::info!(
                     repo = %format!("{}/{}", repo_path.address, repo_path.name),
                     pusher = ?commit_info.pusher_address,
@@ -800,16 +883,21 @@ async fn addressless_receive_pack(
         match git::extract_owner_from_staging_repo(&state.data_dir, &repo_name) {
             Ok(Some(signer)) => {
                 // Move from staging to final location
-                if let Err(error) = git::move_repo_from_staging(&state.data_dir, &repo_name, &signer) {
+                if let Err(error) =
+                    git::move_repo_from_staging(&state.data_dir, &repo_name, &signer)
+                {
                     let _ = git::clean_staging_repo(&state.data_dir, &repo_name);
                     return internal_error(error);
                 }
-                
+
                 // Record ownership in database
                 let _ = db::insert_repo_if_missing(&state.db_path, &signer, &repo_name, &signer);
 
                 // Auto-assign alias if this is the first push for this address
-                if db::get_alias_for_address(&state.db_path, &signer).unwrap_or(None).is_none() {
+                if db::get_alias_for_address(&state.db_path, &signer)
+                    .unwrap_or(None)
+                    .is_none()
+                {
                     if let Ok(alias) = db::assign_random_alias(&state.db_path, &signer) {
                         tracing::info!(
                             address = %signer,
@@ -831,7 +919,9 @@ async fn addressless_receive_pack(
                     name: repo_name.clone(),
                 };
                 if response.status() == StatusCode::OK {
-                    if let Ok(Some(commit_info)) = git::extract_latest_commit_info(&state.data_dir, &repo_path) {
+                    if let Ok(Some(commit_info)) =
+                        git::extract_latest_commit_info(&state.data_dir, &repo_path)
+                    {
                         let _ = db::insert_push_log(
                             &state.db_path,
                             &signer,
@@ -840,7 +930,7 @@ async fn addressless_receive_pack(
                             Some(&commit_info.hash),
                             Some(&commit_info.message),
                         );
-                        
+
                         tracing::info!(
                             repo = %format!("{}/{}", signer, repo_name),
                             pusher = ?commit_info.pusher_address,
@@ -889,7 +979,9 @@ async fn addressless_head(
                 );
                 response
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => StatusCode::NOT_FOUND.into_response(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                StatusCode::NOT_FOUND.into_response()
+            }
             Err(error) => internal_error(error),
         }
     } else {
@@ -971,7 +1063,10 @@ fn parse_usdc_amount(price_str: &str) -> Option<String> {
 
 /// Write updated config back to the repository.
 /// For MVP, this updates the config in the current HEAD branch.
-fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Config) -> Result<(), std::io::Error> {
+fn write_config_to_repo(
+    repo_dir: &std::path::Path,
+    config: &repobox::config::Config,
+) -> Result<(), std::io::Error> {
     // For MVP, we'll create a simple YAML representation
     // In production, you'd want to preserve the original YAML structure/comments
     let mut yaml_content = String::new();
@@ -1023,7 +1118,10 @@ fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Co
         } else {
             "*".to_string()
         };
-        yaml_content.push_str(&format!("    - \"{} {}{} {}\"\n", subject_str, deny_str, rule.verb, target_str));
+        yaml_content.push_str(&format!(
+            "    - \"{} {}{} {}\"\n",
+            subject_str, deny_str, rule.verb, target_str
+        ));
     }
 
     // Write to a temporary file and then commit it
@@ -1040,7 +1138,7 @@ fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Co
     if !output.status.success() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
-            "failed to hash config object"
+            "failed to hash config object",
         ));
     }
 
@@ -1048,14 +1146,21 @@ fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Co
 
     // Update the index
     let output = std::process::Command::new("git")
-        .args(["update-index", "--add", "--cacheinfo", "100644", &config_hash, ".repobox/config.yml"])
+        .args([
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            "100644",
+            &config_hash,
+            ".repobox/config.yml",
+        ])
         .current_dir(repo_dir)
         .output()?;
 
     if !output.status.success() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
-            "failed to update index"
+            "failed to update index",
         ));
     }
 
@@ -1068,11 +1173,13 @@ fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Co
     if !tree_output.status.success() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
-            "failed to write tree"
+            "failed to write tree",
         ));
     }
 
-    let tree_hash = String::from_utf8_lossy(&tree_output.stdout).trim().to_string();
+    let tree_hash = String::from_utf8_lossy(&tree_output.stdout)
+        .trim()
+        .to_string();
 
     // Get current HEAD
     let head_output = std::process::Command::new("git")
@@ -1081,14 +1188,21 @@ fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Co
         .output()?;
 
     let parent_arg = if head_output.status.success() {
-        let head_hash = String::from_utf8_lossy(&head_output.stdout).trim().to_string();
+        let head_hash = String::from_utf8_lossy(&head_output.stdout)
+            .trim()
+            .to_string();
         vec!["-p".to_string(), head_hash]
     } else {
         vec![]
     };
 
     // Create commit
-    let mut commit_args = vec!["commit-tree".to_string(), tree_hash, "-m".to_string(), "x402: grant paid read access".to_string()];
+    let mut commit_args = vec![
+        "commit-tree".to_string(),
+        tree_hash,
+        "-m".to_string(),
+        "x402: grant paid read access".to_string(),
+    ];
     commit_args.extend(parent_arg);
 
     let commit_output = std::process::Command::new("git")
@@ -1099,11 +1213,13 @@ fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Co
     if !commit_output.status.success() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
-            "failed to create commit"
+            "failed to create commit",
         ));
     }
 
-    let commit_hash = String::from_utf8_lossy(&commit_output.stdout).trim().to_string();
+    let commit_hash = String::from_utf8_lossy(&commit_output.stdout)
+        .trim()
+        .to_string();
 
     // Update HEAD
     std::process::Command::new("git")
@@ -1117,17 +1233,17 @@ fn write_config_to_repo(repo_dir: &std::path::Path, config: &repobox::config::Co
     Ok(())
 }
 
-async fn resolve_name(
-    State(state): State<Arc<AppState>>,
-    Path(name): Path<String>,
-) -> Response {
+async fn resolve_name(State(state): State<Arc<AppState>>, Path(name): Path<String>) -> Response {
     #[derive(Serialize)]
     struct ResolveResponse {
         address: String,
         source: String,
     }
 
-    let (address, source) = if name.starts_with("0x") && name.len() == 42 && name[2..].chars().all(|c| c.is_ascii_hexdigit()) {
+    let (address, source) = if name.starts_with("0x")
+        && name.len() == 42
+        && name[2..].chars().all(|c| c.is_ascii_hexdigit())
+    {
         // Direct address
         (name.to_lowercase(), "direct".to_string())
     } else if let Ok(Some(addr)) = db::resolve_alias(&state.db_path, &name) {
@@ -1141,15 +1257,17 @@ async fn resolve_name(
                 Err(e) => {
                     return (
                         StatusCode::BAD_REQUEST,
-                        format!("Failed to resolve name '{}': {}", name, e)
-                    ).into_response();
+                        format!("Failed to resolve name '{}': {}", name, e),
+                    )
+                        .into_response();
                 }
             }
         } else {
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
-                "No Alchemy API key configured for ENS resolution".to_string()
-            ).into_response();
+                "No Alchemy API key configured for ENS resolution".to_string(),
+            )
+                .into_response();
         }
     };
 
@@ -1190,18 +1308,26 @@ async fn handle_virtuals_discovery(state: &AppState, repo: &RepoPath) -> Respons
     }
 
     // Load repository configuration
-    let config_path = git::repo_dir(&state.data_dir, repo).join(".repobox").join("config.yml");
+    let config_path = git::repo_dir(&state.data_dir, repo)
+        .join(".repobox")
+        .join("config.yml");
     let config = if config_path.exists() {
         match std::fs::read_to_string(&config_path) {
             Ok(yaml) => match repobox::parser::parse(&yaml) {
                 Ok(config) => config,
                 Err(e) => {
-                    eprintln!("Failed to parse config for {}/{}: {}", repo.address, repo.name, e);
+                    eprintln!(
+                        "Failed to parse config for {}/{}: {}",
+                        repo.address, repo.name, e
+                    );
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
             },
             Err(e) => {
-                eprintln!("Failed to read config for {}/{}: {}", repo.address, repo.name, e);
+                eprintln!(
+                    "Failed to read config for {}/{}: {}",
+                    repo.address, repo.name, e
+                );
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
         }
@@ -1221,7 +1347,9 @@ async fn handle_virtuals_discovery(state: &AppState, repo: &RepoPath) -> Respons
     issue_storage.create_sample_issues().unwrap_or_default();
     let open_issues = {
         use repobox::issues::IssueStorage;
-        issue_storage.list_issues(Some(repobox::issues::IssueStatus::Open)).unwrap_or_default()
+        issue_storage
+            .list_issues(Some(repobox::issues::IssueStatus::Open))
+            .unwrap_or_default()
     };
 
     let active_virtuals_issues: Vec<VirtualsIssue> = open_issues
@@ -1271,18 +1399,22 @@ async fn handle_virtuals_discovery(state: &AppState, repo: &RepoPath) -> Respons
             required_tests: virtuals_config.agent_requirements.required_tests,
             review_required: virtuals_config.agent_requirements.human_review_required,
         },
-        payment: virtuals_config.payments.as_ref().map(|p| VirtualsPaymentInfo {
-            network: p.network.clone(),
-            token: p.token.clone(),
-            treasury: p.treasury.clone(),
-        }),
+        payment: virtuals_config
+            .payments
+            .as_ref()
+            .map(|p| VirtualsPaymentInfo {
+                network: p.network.clone(),
+                token: p.token.clone(),
+                treasury: p.treasury.clone(),
+            }),
     };
 
     (
         StatusCode::OK,
         [(axum::http::header::CONTENT_TYPE, "application/json")],
         serde_json::to_string(&discovery_response).unwrap(),
-    ).into_response()
+    )
+        .into_response()
 }
 
 #[derive(Serialize)]
@@ -1377,15 +1509,18 @@ async fn create_bounty_claim(
     // Ensure payment config is available
     let payment_config = match virtuals_config.payments {
         Some(ref config) => config,
-        None => return (
-            StatusCode::BAD_REQUEST,
-            "Payment configuration not available".to_string(),
-        ).into_response(),
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "Payment configuration not available".to_string(),
+            )
+                .into_response();
+        }
     };
 
     // Create payment processor and bounty claim
     let processor = repobox::payment::PaymentProcessor::new(payment_config.clone());
-    
+
     let claim = match processor.create_bounty_claim(
         virtuals_config,
         &request.agent_address,
@@ -1396,10 +1531,13 @@ async fn create_bounty_claim(
         request.pr_number,
     ) {
         Ok(claim) => claim,
-        Err(e) => return (
-            StatusCode::BAD_REQUEST,
-            format!("Failed to create claim: {}", e),
-        ).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("Failed to create claim: {}", e),
+            )
+                .into_response();
+        }
     };
 
     // TODO: Store claim in persistent storage
@@ -1409,7 +1547,8 @@ async fn create_bounty_claim(
         StatusCode::CREATED,
         [(axum::http::header::CONTENT_TYPE, "application/json")],
         serde_json::to_string(&claim).unwrap(),
-    ).into_response()
+    )
+        .into_response()
 }
 
 async fn get_bounty_claim(
@@ -1433,7 +1572,8 @@ async fn get_bounty_claim(
     (
         StatusCode::NOT_IMPLEMENTED,
         format!("Claim retrieval not implemented for claim_id: {}", claim_id),
-    ).into_response()
+    )
+        .into_response()
 }
 
 async fn process_bounty_payment(
@@ -1466,21 +1606,24 @@ async fn process_bounty_payment(
     // Ensure payment config is available
     let payment_config = match virtuals_config.payments {
         Some(ref config) => config,
-        None => return (
-            StatusCode::BAD_REQUEST,
-            "Payment configuration not available".to_string(),
-        ).into_response(),
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "Payment configuration not available".to_string(),
+            )
+                .into_response();
+        }
     };
 
     // Create payment processor
     let processor = repobox::payment::PaymentProcessor::new(payment_config.clone());
-    
+
     // In a real implementation, this would:
     // 1. Load the claim from storage
     // 2. Validate the claim is in "pending" status
     // 3. Execute the x402 payment transaction
     // 4. Update the claim status to "completed" or "failed"
-    
+
     // For this demo implementation, we'll simulate the process
     let payment_result = PaymentProcessingResult {
         claim_id: claim_id.clone(),
@@ -1497,7 +1640,8 @@ async fn process_bounty_payment(
         StatusCode::OK,
         [(axum::http::header::CONTENT_TYPE, "application/json")],
         serde_json::to_string(&payment_result).unwrap(),
-    ).into_response()
+    )
+        .into_response()
 }
 
 #[derive(Serialize)]
@@ -1512,18 +1656,22 @@ struct PaymentProcessingResult {
     message: String,
 }
 
-fn load_repo_config(state: &AppState, repo: &RepoPath) -> Result<repobox::config::Config, StatusCode> {
-    let config_path = git::repo_dir(&state.data_dir, repo).join(".repobox").join("config.yml");
-    
+fn load_repo_config(
+    state: &AppState,
+    repo: &RepoPath,
+) -> Result<repobox::config::Config, StatusCode> {
+    let config_path = git::repo_dir(&state.data_dir, repo)
+        .join(".repobox")
+        .join("config.yml");
+
     if !config_path.exists() {
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let config_content = std::fs::read_to_string(&config_path)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let config_content =
+        std::fs::read_to_string(&config_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    repobox::parser::parse(&config_content)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+    repobox::parser::parse(&config_content).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 // ========== Issue Management Handlers ==========
@@ -1549,15 +1697,13 @@ async fn list_issues(
     issue_storage.create_sample_issues().unwrap_or_default();
 
     // Parse status filter if provided
-    let status_filter = query.get("status").and_then(|s: &String| {
-        match s.as_str() {
-            "open" => Some(repobox::issues::IssueStatus::Open),
-            "in_progress" => Some(repobox::issues::IssueStatus::InProgress),
-            "pending_review" => Some(repobox::issues::IssueStatus::PendingReview),
-            "closed" => Some(repobox::issues::IssueStatus::Closed),
-            "rejected" => Some(repobox::issues::IssueStatus::Rejected),
-            _ => None,
-        }
+    let status_filter = query.get("status").and_then(|s: &String| match s.as_str() {
+        "open" => Some(repobox::issues::IssueStatus::Open),
+        "in_progress" => Some(repobox::issues::IssueStatus::InProgress),
+        "pending_review" => Some(repobox::issues::IssueStatus::PendingReview),
+        "closed" => Some(repobox::issues::IssueStatus::Closed),
+        "rejected" => Some(repobox::issues::IssueStatus::Rejected),
+        _ => None,
     });
 
     let issues = {
@@ -1566,17 +1712,21 @@ async fn list_issues(
     };
     let issues = match issues {
         Ok(issues) => issues,
-        Err(e) => return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to list issues: {}", e),
-        ).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to list issues: {}", e),
+            )
+                .into_response();
+        }
     };
 
     (
         StatusCode::OK,
         [(axum::http::header::CONTENT_TYPE, "application/json")],
         serde_json::to_string(&issues).unwrap(),
-    ).into_response()
+    )
+        .into_response()
 }
 
 async fn get_issue(
@@ -1603,10 +1753,13 @@ async fn get_issue(
         match issue_storage.get_issue(&issue_id) {
             Ok(Some(issue)) => issue,
             Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-            Err(e) => return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to get issue: {}", e),
-            ).into_response(),
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to get issue: {}", e),
+                )
+                    .into_response();
+            }
         }
     };
 
@@ -1623,16 +1776,14 @@ async fn get_issue(
         comments: Vec<repobox::issues::IssueComment>,
     }
 
-    let response = IssueWithComments {
-        issue,
-        comments,
-    };
+    let response = IssueWithComments { issue, comments };
 
     (
         StatusCode::OK,
         [(axum::http::header::CONTENT_TYPE, "application/json")],
         serde_json::to_string(&response).unwrap(),
-    ).into_response()
+    )
+        .into_response()
 }
 
 #[derive(Deserialize)]
@@ -1674,7 +1825,8 @@ async fn assign_issue(
             return (
                 StatusCode::BAD_REQUEST,
                 format!("Failed to assign issue: {}", e),
-            ).into_response();
+            )
+                .into_response();
         }
     }
 
@@ -1686,7 +1838,8 @@ async fn assign_issue(
                 StatusCode::OK,
                 [(axum::http::header::CONTENT_TYPE, "application/json")],
                 serde_json::to_string(&issue).unwrap(),
-            ).into_response(),
+            )
+                .into_response(),
             _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
     }
