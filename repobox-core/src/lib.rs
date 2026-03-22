@@ -4,6 +4,7 @@ pub mod engine;
 pub mod identity;
 pub mod lint;
 pub mod parser;
+pub mod prompt;
 pub mod resolver;
 pub mod shim;
 pub mod signing;

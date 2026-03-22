@@ -24,11 +24,6 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### Playground refresh — visual, accuracy, speed
-- **Priority**: P1
-- **Tags**: playground, ui, ai
-Visual refresh, load system prompt from canonical source so it never drifts (currently missing `own`, `read`, `branch`), switch to faster Venice model, test both English→Config and Config→English modes.
-
 ### Virtuals integration — bug report to payment flow
 - **Priority**: P1
 - **Tags**: feature, x402, virtuals, docs
@@ -51,6 +46,10 @@ Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented
 
 ## 🔨 In Progress
 
+### Playground refresh — visual, accuracy, speed
+- **Priority**: P1
+- **Tags**: playground, ui, ai
+Visual refresh, load system prompt from canonical source so it never drifts (currently missing `own`, `read`, `branch`), switch to faster Venice model, test both English→Config and Config→English modes.
 
 ## 🚧 Blocked
 

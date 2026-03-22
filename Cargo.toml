@@ -1,3 +1,10 @@
 [workspace]
 members = ["repobox-core", "repobox-cli", "repobox-server"]
 resolver = "3"
+
+[[bin]]
+name = "generate-prompt"
+path = "scripts/generate-prompt.rs"
+
+[dependencies]
+repobox-core = { path = "repobox-core" }
