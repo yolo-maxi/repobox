@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress, copyToClipboard } from '@/lib/utils';
-import AddressDisplay from '@/components/AddressDisplay';
 import { resolveNameToAddress, resolveAddressDisplay } from '@/lib/addressResolver';
 import EmptyState from '@/components/EmptyState';
 import { EmptyRepository, AddressNotFound } from '@/components/illustrations';
@@ -298,14 +297,16 @@ export default function AddressPage() {
   const totalRepoCount = repos.length + contributorRepos.length;
   const totalCommits = repos.reduce((sum, r) => sum + r.commit_count, 0);
   
-  // Determine title: use resolved name if available, otherwise "Developer"
-  const profileTitle = displayName || "Developer";
-  
-  // Show full address if arrived via name resolution
-  const showFullAddress = addressOrName !== resolvedAddress && !!displayName;
+  // Determine title: use resolved name if available, otherwise deterministic readable alias
+  const profileTitle = displayName || formatAddress(resolvedAddress || '') || 'Developer';
 
-  // Avoid duplicate identity line when title already shows the same human name
-  const showIdentityBadge = !showFullAddress && !displayName;
+  // Show tiny namespace-style handle under the title
+  const profileHandle = displayName
+    ? (displayName.includes('.') ? displayName : `${displayName}.repobox.eth`)
+    : null;
+
+  // Always show canonical full address on profile
+  const showFullAddress = !!resolvedAddress;
   
   // Format member since date
   const formatMemberSince = (timestamp: number | null): string => {
@@ -345,45 +346,23 @@ export default function AddressPage() {
             <div className="explore-profile-details">
               <h1 className="explore-profile-title">{profileTitle}</h1>
               
-              {showFullAddress && (
-                <>
-                  <div className="explore-profile-full-address">
-                    <code>{resolvedAddress}</code>
-                    <button 
-                      onClick={handleCopyAddress}
-                      className="explore-profile-copy-btn"
-                      title="Copy address"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                      </svg>
-                    </button>
-                  </div>
-                  
-                  {addressOrName.includes('.') && (
-                    <div className="explore-profile-ens-source" title="Resolved via repobox.eth CCIP-Read">
-                      {addressOrName}
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="m9 12 2 2 4-4"/>
-                        <circle cx="21" cy="12" r="3"/>
-                        <path d="m21 9-9 9-5-5"/>
-                      </svg>
-                    </div>
-                  )}
-                </>
+              {profileHandle && (
+                <div className="explore-profile-handle">{profileHandle}</div>
               )}
-              
-              {showIdentityBadge && (
-                <div className="explore-profile-address">
-                  <AddressDisplay
-                    address={resolvedAddress || ''}
-                    displayName={addressOrName !== resolvedAddress ? addressOrName : undefined}
-                    size="lg"
-                    linkable={false}
-                    showCopy={true}
-                    showTooltip={true}
-                  />
+
+              {showFullAddress && (
+                <div className="explore-profile-full-address">
+                  <code>{resolvedAddress}</code>
+                  <button
+                    onClick={handleCopyAddress}
+                    className="explore-profile-copy-btn"
+                    title="Copy address"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  </button>
                 </div>
               )}
 
