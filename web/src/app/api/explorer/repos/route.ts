@@ -12,6 +12,8 @@ interface RepoWithMetadata extends Repo {
 
 interface ContributorRepo extends RepoWithMetadata {
   permissions: string[];
+  contributions_count: number;
+  latest_contribution_at: string | null;
 }
 
 function enrichRepo(repo: Repo): RepoWithMetadata {
@@ -73,40 +75,54 @@ export async function GET(request: NextRequest) {
 
       const ownedWithMeta = ownedRepos.map(enrichRepo);
 
-      // 2. Get repos where this address has explicit permissions or wildcard access
+      // 2. Repos this identity actually contributed commits to (authorship from push_log)
+      const ownedSet = new Set(ownedRepos.map(r => `${r.address}/${r.name}`.toLowerCase()));
+      const contributionRows = runQuery<{
+        address: string;
+        name: string;
+        contributions_count: number;
+        latest_contribution_at: string;
+      }>(
+        `SELECT address, name, COUNT(*) AS contributions_count, MAX(CAST(pushed_at AS INTEGER)) AS latest_contribution_at
+         FROM push_log
+         WHERE LOWER(pusher_address) = LOWER(?)
+         GROUP BY address, name
+         ORDER BY CAST(latest_contribution_at AS INTEGER) DESC`,
+        [owner]
+      );
+
+      // Optional permissions map (for badges only)
       const evmIdentity = `evm:${owner}`;
       const permEntries = runQuery<RepoPermission>(
         `SELECT * FROM repo_permissions WHERE LOWER(identity) = LOWER(?) OR identity = '*'`,
         [evmIdentity]
       );
-
-      // Build a map of repo -> permissions, excluding repos already owned
-      const ownedSet = new Set(ownedRepos.map(r => `${r.address}/${r.name}`.toLowerCase()));
-      const contributorMap = new Map<string, Set<string>>();
-
+      const permissionMap = new Map<string, Set<string>>();
       for (const perm of permEntries) {
         const key = `${perm.repo_address}/${perm.repo_name}`.toLowerCase();
-        if (ownedSet.has(key)) continue;
-
-        if (!contributorMap.has(key)) {
-          contributorMap.set(key, new Set());
-        }
-        contributorMap.get(key)!.add(perm.verb);
+        if (!permissionMap.has(key)) permissionMap.set(key, new Set());
+        permissionMap.get(key)!.add(perm.verb);
       }
 
-      // Fetch repo details for contributor repos
+      // Fetch repo details for contribution repos
       const contributorRepos: ContributorRepo[] = [];
-      for (const [key, verbs] of contributorMap) {
-        const [address, name] = key.split('/');
+      for (const row of contributionRows) {
+        const key = `${row.address}/${row.name}`.toLowerCase();
+        if (ownedSet.has(key)) continue;
+
         const repoRows = runQuery<Repo>(
           'SELECT * FROM repos WHERE LOWER(address) = LOWER(?) AND LOWER(name) = LOWER(?)',
-          [address, name]
+          [row.address, row.name]
         );
         if (repoRows.length > 0) {
           const enriched = enrichRepo(repoRows[0]);
           contributorRepos.push({
             ...enriched,
-            permissions: Array.from(verbs)
+            permissions: Array.from(permissionMap.get(key) || []),
+            contributions_count: Number(row.contributions_count || 0),
+            latest_contribution_at: row.latest_contribution_at
+              ? new Date(Number(row.latest_contribution_at) * 1000).toISOString()
+              : null,
           });
         }
       }

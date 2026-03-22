@@ -23,6 +23,8 @@ interface Repo {
 
 interface ContributorRepo extends Repo {
   permissions: string[];
+  contributions_count: number;
+  latest_contribution_at: string | null;
 }
 
 interface ActivityDay {
@@ -96,7 +98,7 @@ function RepoCard({ repo, formatCommitCount }: { repo: Repo; formatCommitCount: 
   );
 }
 
-function ContributorRepoCard({ repo, formatCommitCount }: { repo: ContributorRepo; formatCommitCount: (n: number) => string }) {
+function ContributorRepoCard({ repo }: { repo: ContributorRepo }) {
   const language = detectLanguage(repo.name);
   const isRecentlyActive = repo.last_commit_date &&
     new Date(repo.last_commit_date).getTime() > Date.now() - (7 * 24 * 60 * 60 * 1000);
@@ -119,13 +121,15 @@ function ContributorRepoCard({ repo, formatCommitCount }: { repo: ContributorRep
         {formatAddress(repo.owner_address)}
       </div>
 
-      <div className="explore-repo-item-badges">
-        {repo.permissions.map((perm) => (
-          <span key={perm} className="explore-permission-badge">
-            {perm}
-          </span>
-        ))}
-      </div>
+      {repo.permissions.length > 0 && (
+        <div className="explore-repo-item-badges">
+          {repo.permissions.map((perm) => (
+            <span key={perm} className="explore-permission-badge">
+              {perm}
+            </span>
+          ))}
+        </div>
+      )}
 
       {repo.description && (
         <p className="explore-repo-item-description">
@@ -138,15 +142,15 @@ function ContributorRepoCard({ repo, formatCommitCount }: { repo: ContributorRep
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M20 6L9 17l-5-5"></path>
           </svg>
-          {formatCommitCount(repo.commit_count)}
+          {repo.contributions_count === 1 ? '1 contribution' : `${repo.contributions_count} contributions`}
         </span>
-        {repo.last_commit_date && (
+        {repo.latest_contribution_at && (
           <span className="explore-repo-item-meta-item">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10"></circle>
               <polyline points="12,6 12,12 16,14"></polyline>
             </svg>
-            Updated {formatTimeAgo(repo.last_commit_date)}
+            Latest contribution {formatTimeAgo(repo.latest_contribution_at)}
           </span>
         )}
       </div>
@@ -295,7 +299,9 @@ export default function AddressPage() {
   }
 
   const totalRepoCount = repos.length + contributorRepos.length;
-  const totalCommits = repos.reduce((sum, r) => sum + r.commit_count, 0);
+  const ownedCommits = repos.reduce((sum, r) => sum + r.commit_count, 0);
+  const contributedCommits = contributorRepos.reduce((sum, r) => sum + (r.contributions_count || 0), 0);
+  const totalCommits = ownedCommits + contributedCommits;
   
   // Determine title: use resolved name if available, otherwise deterministic readable alias
   const profileTitle = displayName || formatAddress(resolvedAddress || '') || 'Developer';
@@ -455,7 +461,7 @@ export default function AddressPage() {
         {!loading && contributorRepos.length > 0 && (
           <div className="explore-content-section">
             <div className="explore-section-header">
-              <h2 className="explore-section-title">Can access</h2>
+              <h2 className="explore-section-title">Latest contributions</h2>
             </div>
 
             <div className="explore-repo-grid">
@@ -463,7 +469,6 @@ export default function AddressPage() {
                 <ContributorRepoCard
                   key={`contrib-${repo.address}/${repo.name}`}
                   repo={repo}
-                  formatCommitCount={formatCommitCount}
                 />
               ))}
             </div>
