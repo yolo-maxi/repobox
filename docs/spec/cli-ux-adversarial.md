@@ -286,3 +286,73 @@ Self-lockout prevention on config edits while exercising founder, agent, and mis
   - private repos show payment intent by 402 + metadata,
   - granted identities can read without config edits,
   - denied identities are not silently blocked by auth-only errors.
+
+## 2026-03-22 — No-identity + no-upstream lifecycle and malformed-config edge-case run
+
+### Story selected
+`no identity configured + commit/push/pull` (matrix rotate), with linter self-lockout and malformed config checks in the same run.
+
+### Environment
+- Primary DO host (`xiko@167.71.5.215`) had no `/home/xiko/repobox` tree for this run.
+- Executed locally with shim at `~/repobox/target/debug/repobox` via:
+  - `PATH=/home/xiko/.repobox/bin:$PATH`
+- Working dir: `/tmp/repobox-qa-noid-20260322-run`
+- Real git shim path used for all repo operations.
+
+### Fixture setup
+- founder identity: `0xa66Dd332Da3A5b4E65D510E764Dd51d056c3f696`
+- agent identity: `0xec641852DEF97f9d8BE8d89828a65037F82E7d77`
+- Bare remote: `/tmp/repobox-qa-noid-20260322-run/remote/qa-noid.git`
+
+### Commands run (highlights)
+- Bootstrap:
+  - `git init`
+  - `git repobox init`
+  - `git repobox keys generate --alias founder`
+  - `git repobox use founder`
+  - `git repobox alias add founder-alias ...`
+  - seed commit on public `main` (default allow config)
+  - tightened rules and pushed:
+    - founder `own`/`push` baseline
+    - agent `branch/edit/push` on `>feature/**` only
+    - explicit deny on `agents not edit ./.repobox/config.yml`
+- Agent onboarding:
+  - clone from bare remote
+  - `git repobox whoami` (before identity)
+  - identity generation/selection and `git repobox alias list`
+  - `git repobox check agent push main` (denied)
+  - `git repobox check agent edit README.md >main` (denied)
+- Lifecycle:
+  - agent push on main denied (`permission denied`)
+  - agent branch creation denied until branch rule added
+  - founder updated config with `agents branch >feature/**`
+  - agent branch created `feature/qa`, committed, and pushed
+  - founder-side `git fetch` + fast-forward checks
+  - agent branch `feature/no-upstream` pull with no upstream mapping
+    (`There is no tracking information for the current branch...`)
+  - `git pull --rebase` after setting upstream to `origin/feature/qa` succeeded
+- Unknown/no-identity path:
+  - separate clone with `HOME` pointing to clean key store
+  - `git repobox whoami` failed with explicit no-identity guidance
+  - `git commit` failed with same message before identity selection
+- Self-lockout guard:
+  - founder attempted config change removing founder edit access
+  - commit blocked with explicit recovery sentence in CLI output.
+- Malformed/partial config checks:
+  - `default:` empty
+  - invalid group entry under list
+  - truncated flat rule (`- agents push`)
+  - all surfaced via `git repobox lint`.
+
+### Pass/fail notes
+- Self-lockout guard: ✅ explicit block + immediate recovery guidance.
+- No-identity workflow: ✅ clear first-step recovery (`Run: git repobox identity set <private-key>`).
+- malformed config UX: ✅ errors are specific and include actionable hints to fix `default`, YAML structure, and rule syntax.
+- No-upstream UX: ✅ actionable standard git guidance.
+- Lint quality issue observed:
+  - `git repobox check` for file permission checks requires branch in target (`file >branch`) to evaluate branch-scoped rules; without it users see implicit deny.
+  - This is known behavior; not changed in this run.
+
+### Fixes
+- No code changes for this run.
+- Outcome recorded as “behavioral clarity pass” for this scenario.

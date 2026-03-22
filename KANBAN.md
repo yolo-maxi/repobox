@@ -264,3 +264,17 @@ HTTP + on-chain resolvers with caching. Alchemy proxy.
   - unsigned/unknown identity still 402
   - grant-access endpoint creates db entry and immediately bypasses read gate for granted identity
 - Follow-up: remove duplicated wording in older KANBAN docs entries that described the pre-fix state as already solved if/where present.
+
+### No-identity/no-upstream + malformed-config adversarial pass
+- **Date:** 2026-03-22 | **Agent:** repobox-qa-pipeline
+- Executed end-to-end fixture using real git shim:
+  - founder bootstrap + identity setup
+  - agent onboarding checks
+  - unknown/no identity commit denial
+  - branch-creation + feature branch push via configured rules
+  - no-upstream pull diagnostics + rebase success after upstream set
+  - malformed config lint probes (`default:`, invalid group YAML, bad rule syntax)
+  - explicit self-lockout commit prevention
+- UX outcome: no functional gaps found requiring code changes this run.
+- Notes:
+  - `git repobox check` branch-scoped file permissions require explicit `target >branch` in target argument to reflect branch context.
