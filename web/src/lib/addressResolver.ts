@@ -44,8 +44,60 @@ function setCache(result: ResolvedIdentity): void {
   cache.set(result.address.toLowerCase(), { result, ts: Date.now() });
 }
 
+const ADJECTIVES = [
+  'amazing', 'awesome', 'bright', 'brilliant', 'calm', 'cheerful', 'clever', 'creative', 'curious', 'dazzling',
+  'delightful', 'dynamic', 'eager', 'elegant', 'energetic', 'excellent', 'exciting', 'fabulous', 'fantastic', 'fearless',
+  'friendly', 'gentle', 'glorious', 'graceful', 'happy', 'harmonious', 'helpful', 'honest', 'hopeful', 'humble',
+  'incredible', 'inspiring', 'intelligent', 'joyful', 'keen', 'kind', 'lovely', 'lucky', 'magical', 'marvelous',
+  'mighty', 'noble', 'optimistic', 'peaceful', 'perfect', 'playful', 'pleasant', 'positive', 'powerful', 'precious',
+  'quick', 'radiant', 'remarkable', 'resilient', 'serene', 'shining', 'smooth', 'sparkling', 'special', 'splendid',
+  'steady', 'strong', 'stunning', 'successful', 'sunny', 'super', 'swift', 'talented', 'thoughtful', 'thriving',
+  'tranquil', 'tremendous', 'triumphant', 'trustworthy', 'unique', 'vibrant', 'victorious', 'warm', 'wise', 'wonderful'
+] as const;
+
+const COLORS = [
+  'amber', 'azure', 'beige', 'black', 'blue', 'brown', 'coral', 'crimson', 'cyan', 'emerald',
+  'gold', 'gray', 'green', 'indigo', 'ivory', 'jade', 'lavender', 'lime', 'magenta', 'maroon',
+  'navy', 'olive', 'orange', 'pink', 'purple', 'red', 'ruby', 'silver', 'teal', 'white'
+] as const;
+
+const NOUNS = [
+  'ant', 'bear', 'bird', 'butterfly', 'cat', 'deer', 'dog', 'dolphin', 'eagle', 'elephant',
+  'fish', 'fox', 'frog', 'giraffe', 'hawk', 'horse', 'kangaroo', 'lion', 'monkey', 'owl',
+  'panda', 'rabbit', 'shark', 'tiger', 'turtle', 'whale', 'wolf', 'zebra', 'bee', 'duck',
+  'canyon', 'cliff', 'cloud', 'creek', 'field', 'forest', 'garden', 'hill', 'island', 'lake',
+  'meadow', 'mountain', 'ocean', 'peak', 'river', 'stone', 'stream', 'tree', 'valley', 'wave',
+  'anchor', 'arrow', 'bell', 'bridge', 'castle', 'crown', 'diamond', 'feather', 'flame', 'flower',
+  'gem', 'hammer', 'key', 'lamp', 'mirror', 'pearl', 'prism', 'ring', 'shield', 'star',
+  'sword', 'tower', 'wheel', 'wing', 'book', 'coin', 'crystal', 'drum', 'flute', 'globe'
+] as const;
+
+function hash32(input: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function generateAutoAlias(address: string): string {
+  const seed = hash32(address.toLowerCase());
+  const adj = ADJECTIVES[seed % ADJECTIVES.length];
+  const color = COLORS[(seed >>> 8) % COLORS.length];
+  const noun = NOUNS[(seed >>> 16) % NOUNS.length];
+  return `${adj}-${color}-${noun}`;
+}
+
 function makeAddressFallback(address: string): ResolvedIdentity {
-  return { address, displayName: null, tier: 'address', slug: address };
+  return {
+    address,
+    // Important: show deterministic alias instead of raw 0x for unknown addresses.
+    displayName: generateAutoAlias(address),
+    tier: 'auto-alias',
+    // Keep slug as address so links always resolve even for synthetic aliases.
+    slug: address,
+  };
 }
 
 /**

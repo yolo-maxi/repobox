@@ -21,7 +21,7 @@ interface RepoDetails {
   file_tree: Array<{ type: 'blob' | 'tree'; name: string; size?: number; path: string }>;
   readme_content: string | null;
 }
-interface Commit { hash: string; author: string; email: string; timestamp: number; message: string }
+interface Commit { hash: string; author: string; email: string; timestamp: number; message: string; signer?: string | null }
 interface FileContent { path: string; content: string }
 interface RepoConfig { exists: boolean; content: string }
 interface Branch { name: string; is_default: boolean; last_commit: { hash: string; timestamp: number; message: string } }
@@ -79,6 +79,12 @@ function highlightYaml(code: string): string {
 }
 function escHtml(s: string): string {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function commitSignerAddress(commit: Commit): string | null {
+  if (commit.signer && /^0x[a-fA-F0-9]{40}$/.test(commit.signer)) return commit.signer;
+  if (/^0x[a-fA-F0-9]{40}$/.test(commit.author)) return commit.author;
+  return null;
 }
 
 // Contributor card with ENS
@@ -343,12 +349,16 @@ export default function RepoPage() {
                       {c.message.split('\n')[0]}
                     </Link>
                     <div className="rd-commit-meta">
-                      <AddressDisplay 
-                        address={repo?.owner_address || resolvedAddress || ''} 
-                        size="sm" 
-                        showCopy={false} 
-                        linkable={true}
-                      />
+                      {commitSignerAddress(c) ? (
+                        <AddressDisplay
+                          address={commitSignerAddress(c)!}
+                          size="sm"
+                          showCopy={false}
+                          linkable={true}
+                        />
+                      ) : (
+                        <code className="rd-commit-author">unsigned-commit</code>
+                      )}
                       <span className="rd-dim">committed {formatTimeAgo(new Date(c.timestamp * 1000).toISOString())}</span>
                     </div>
                   </div>

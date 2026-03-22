@@ -11,15 +11,34 @@ import { execSync } from "child_process";
 
 function getRecentPushes() {
   try {
+    const sql = [
+      "SELECT substr(commit_hash, 1, 7) AS hash,",
+      "COALESCE(NULLIF(pusher_address, ''), address) AS signer,",
+      "commit_message, pushed_at",
+      "FROM push_log",
+      "WHERE name='wall'",
+      "ORDER BY pushed_at DESC",
+      "LIMIT 5;",
+    ].join(' ');
+
     const raw = execSync(
-      'cd /home/xiko/wall && git log --format=\'{"hash":"%h","author":"0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048","message":"%s","time":"%ci"}\' -5',
+      `sqlite3 -separator '|' /var/lib/repobox/repos/repobox.db \"${sql}\"`,
       { timeout: 3000, encoding: "utf8" }
     );
+
     return raw
       .trim()
       .split("\n")
       .filter(Boolean)
-      .map((line) => JSON.parse(line));
+      .map((line) => {
+        const [hash, author, message, pushedAt] = line.split('|');
+        return {
+          hash,
+          author,
+          message,
+          time: new Date(Number(pushedAt) * 1000).toISOString(),
+        };
+      });
   } catch {
     return [];
   }

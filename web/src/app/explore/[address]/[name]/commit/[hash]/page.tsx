@@ -12,6 +12,13 @@ import { SiteNav } from '@/components/SiteNav';
 interface CommitDetails {
   hash: string; author: string; email: string;
   timestamp: number; message: string;
+  signer?: string | null;
+}
+
+function commitSignerAddress(commit: CommitDetails): string | null {
+  if (commit.signer && /^0x[a-fA-F0-9]{40}$/.test(commit.signer)) return commit.signer;
+  if (/^0x[a-fA-F0-9]{40}$/.test(commit.author)) return commit.author;
+  return null;
 }
 
 export default function CommitPage() {
@@ -73,7 +80,11 @@ export default function CommitPage() {
               )}
               <div style={{ display: 'flex', gap: 16, marginTop: 16, fontSize: 12, color: 'var(--bp-dim)', flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <AddressDisplay address={address} size="sm" showCopy={false} linkable={true} />
+                  {commitSignerAddress(commit) ? (
+                    <AddressDisplay address={commitSignerAddress(commit)!} size="sm" showCopy={false} linkable={true} />
+                  ) : (
+                    <code style={{ color: 'var(--bp-gold)' }}>unsigned-commit</code>
+                  )}
                   <span>committed</span>
                 </span>
                 <span>{formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}</span>

@@ -23,6 +23,13 @@ interface Commit {
   email: string;
   timestamp: number;
   message: string;
+  signer?: string | null;
+}
+
+function commitSignerAddress(commit: Commit): string | null {
+  if (commit.signer && /^0x[a-fA-F0-9]{40}$/.test(commit.signer)) return commit.signer;
+  if (/^0x[a-fA-F0-9]{40}$/.test(commit.author)) return commit.author;
+  return null;
 }
 
 export default function CommitsPage() {
@@ -205,12 +212,16 @@ export default function CommitsPage() {
                         </Link>
                       </div>
                       <div className="explore-commit-meta">
-                        <AddressDisplay
-                          address={repo.owner_address}
-                          size="sm"
-                          showCopy={false}
-                          linkable={true}
-                        />
+                        {commitSignerAddress(commit) ? (
+                          <AddressDisplay
+                            address={commitSignerAddress(commit)!}
+                            size="sm"
+                            showCopy={false}
+                            linkable={true}
+                          />
+                        ) : (
+                          <code className="explore-commit-author">unsigned-commit</code>
+                        )}
                         <span className="explore-commit-time">
                           {formatTimeAgo(new Date(commit.timestamp * 1000).toISOString())}
                         </span>
