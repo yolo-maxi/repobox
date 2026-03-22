@@ -193,6 +193,7 @@ export default function BlobPage() {
                 {parentPath && (
                   <Link href={repoUrls.tree(address, name, branch, parentPath)} className="blob-action-btn">↑ Parent</Link>
                 )}
+                <Link href={repoUrls.commits(address, name, branch)} className="blob-action-btn">History</Link>
                 <Link href={repoUrls.home(address, name)} className="blob-action-btn">Repository</Link>
               </div>
             </div>
@@ -215,8 +216,11 @@ export default function BlobPage() {
                       {blameLines.map((line) => (
                         <div key={`${line.lineNumber}-${line.commitHash}`} className="blob-blame-row">
                           <div className="blob-blame-meta" title={line.summary || line.author}>
-                            <code className="blob-blame-hash">{line.commitHash.slice(0, 8)}</code>
+                            <Link href={repoUrls.commit(address, name, line.commitHash)} className="blob-blame-hash-link">
+                              <code className="blob-blame-hash">{line.commitHash.slice(0, 8)}</code>
+                            </Link>
                             <span className="blob-blame-author">{line.signer ? formatAddress(line.signer) : line.author}</span>
+                            <span className="blob-blame-time">{formatTimeAgo(new Date(line.authorTime * 1000).toISOString())}</span>
                           </div>
                           <span className="blob-blame-lno">{line.lineNumber}</span>
                           <code className="blob-blame-code">{line.content || ' '}</code>
@@ -380,13 +384,20 @@ export default function BlobPage() {
           min-width: 0;
           color: var(--bp-dim);
         }
+        .blob-blame-hash-link { text-decoration: none; }
         .blob-blame-hash { color: var(--bp-accent); font-size: 11px; }
+        .blob-blame-hash-link:hover .blob-blame-hash { text-decoration: underline; }
         .blob-blame-author {
           color: var(--bp-gold);
           font-size: 11px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+        }
+        .blob-blame-time {
+          color: rgba(143,176,200,0.7);
+          font-size: 10px;
+          white-space: nowrap;
         }
         .blob-blame-lno {
           color: rgba(122, 154, 180, 0.5);
