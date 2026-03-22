@@ -289,7 +289,7 @@ fn test_x402_payment_integration() {
     let virtuals_config = VirtualsConfig {
         enabled: true,
         bug_bounties: BugBountyConfig {
-            critical: "100.00".to_string(),
+            critical: "50.00".to_string(),
             high: "50.00".to_string(),
             medium: "25.00".to_string(),
             low: "10.00".to_string(),
