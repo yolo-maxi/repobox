@@ -283,7 +283,9 @@ export default function RepoPage() {
             </div>
           </div>
           <div className="rd-owner-row">
-            <code className="rd-owner-addr">{repo.owner_address}</code>
+            <span className="rd-owner-addr">
+              <AddressDisplay address={repo.owner_address} size="sm" showCopy={false} linkable={false} />
+            </span>
             <button onClick={handleCopyAddr} className="rd-copy-btn" title="Copy address">
               {addrCopied ? '✓' : '⎘'}
             </button>

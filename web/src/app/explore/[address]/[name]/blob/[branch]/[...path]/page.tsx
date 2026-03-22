@@ -18,6 +18,16 @@ interface FileContent {
   path: string; content: string; size: number;
 }
 
+interface BlameLine {
+  lineNumber: number;
+  content: string;
+  commitHash: string;
+  summary: string;
+  author: string;
+  authorTime: number;
+  signer: string | null;
+}
+
 function getFileLanguage(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() || '';
   const map: Record<string, string> = {
@@ -46,6 +56,10 @@ export default function BlobPage() {
   const [repoName, setRepoName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showBlame, setShowBlame] = useState(false);
+  const [blameLoading, setBlameLoading] = useState(false);
+  const [blameError, setBlameError] = useState<string | null>(null);
+  const [blameLines, setBlameLines] = useState<BlameLine[] | null>(null);
 
   const address = Array.isArray(params.address) ? params.address[0] : params.address;
   const name = Array.isArray(params.name) ? params.name[0] : params.name;
@@ -55,6 +69,9 @@ export default function BlobPage() {
 
   useEffect(() => {
     if (!address || !name || !branch || !filePath) return;
+    setShowBlame(false);
+    setBlameLines(null);
+    setBlameError(null);
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -81,6 +98,25 @@ export default function BlobPage() {
 
   const fileName = filePath.split('/').pop() || '';
   const parentPath = pathSegments.slice(0, -1).join('/');
+
+  const loadBlame = async () => {
+    if (!address || !name || !branch || !filePath) return;
+    try {
+      setBlameLoading(true);
+      setBlameError(null);
+      const res = await fetch(`/api/explorer/repos/${address}/${name}/blame/${filePath}?branch=${branch}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to load blame');
+      }
+      const data = await res.json();
+      setBlameLines(data.lines || []);
+    } catch (e) {
+      setBlameError(e instanceof Error ? e.message : 'Failed to load blame');
+    } finally {
+      setBlameLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -142,6 +178,18 @@ export default function BlobPage() {
                 {fileContent.size > 0 && <span className="blob-file-size">{formatBytes(fileContent.size)}</span>}
               </div>
               <div className="blob-file-actions">
+                {!isBinary(filePath) && (
+                  <button
+                    className="blob-action-btn"
+                    onClick={async () => {
+                      const next = !showBlame;
+                      setShowBlame(next);
+                      if (next && !blameLines && !blameLoading) await loadBlame();
+                    }}
+                  >
+                    {showBlame ? 'Code view' : 'Blame view'}
+                  </button>
+                )}
                 {parentPath && (
                   <Link href={repoUrls.tree(address, name, branch, parentPath)} className="blob-action-btn">↑ Parent</Link>
                 )}
@@ -153,6 +201,29 @@ export default function BlobPage() {
               {isBinary(filePath) ? (
                 <div className="blob-binary">
                   <p>Binary file — {formatBytes(fileContent.size)}</p>
+                </div>
+              ) : showBlame ? (
+                <div className="blob-blame-wrap">
+                  {blameLoading ? (
+                    <div className="blob-dim" style={{ padding: '16px 20px' }}>Loading blame…</div>
+                  ) : blameError ? (
+                    <div className="blob-dim" style={{ padding: '16px 20px' }}>{blameError}</div>
+                  ) : !blameLines || blameLines.length === 0 ? (
+                    <div className="blob-dim" style={{ padding: '16px 20px' }}>No blame data</div>
+                  ) : (
+                    <div className="blob-blame-table">
+                      {blameLines.map((line) => (
+                        <div key={`${line.lineNumber}-${line.commitHash}`} className="blob-blame-row">
+                          <div className="blob-blame-meta" title={line.summary || line.author}>
+                            <code className="blob-blame-hash">{line.commitHash.slice(0, 8)}</code>
+                            <span className="blob-blame-author">{line.signer ? formatAddress(line.signer) : line.author}</span>
+                          </div>
+                          <span className="blob-blame-lno">{line.lineNumber}</span>
+                          <code className="blob-blame-code">{line.content || ' '}</code>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : isMarkdown(filePath) ? (
                 <div className="blob-markdown">
@@ -288,6 +359,47 @@ export default function BlobPage() {
           color: var(--bp-dim);
         }
 
+        /* Blame view */
+        .blob-blame-wrap { overflow: auto; }
+        .blob-blame-table {
+          min-width: 720px;
+          font-size: 12px;
+        }
+        .blob-blame-row {
+          display: grid;
+          grid-template-columns: 220px 56px 1fr;
+          gap: 10px;
+          align-items: baseline;
+          padding: 2px 10px;
+          border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .blob-blame-meta {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+          color: var(--bp-dim);
+        }
+        .blob-blame-hash { color: var(--bp-accent); font-size: 11px; }
+        .blob-blame-author {
+          color: var(--bp-gold);
+          font-size: 11px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .blob-blame-lno {
+          color: rgba(122, 154, 180, 0.5);
+          text-align: right;
+          user-select: none;
+          font-size: 11px;
+        }
+        .blob-blame-code {
+          white-space: pre;
+          color: var(--bp-text);
+          font-family: var(--font-mono, 'JetBrains Mono', monospace);
+        }
+
         /* Sidebar */
         .blob-sidebar { }
         .blob-sidebar-card {
@@ -322,6 +434,7 @@ export default function BlobPage() {
           .blob-main { order: 1; }
           .blob-sidebar { order: 2; }
           .blob-header { padding: 12px 16px; }
+          .blob-blame-row { grid-template-columns: 180px 44px 1fr; }
         }
       `}</style>
     </div>
