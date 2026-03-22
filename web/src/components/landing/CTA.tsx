@@ -177,6 +177,21 @@ export function LandingCTA() {
             <span style={{ fontSize: 15 }}>▶</span> Try in Playground
           </a>
           <a
+            href="/explore"
+            style={{
+              fontFamily: "var(--font-mono), monospace",
+              fontSize: 13,
+              color: "var(--bp-accent)",
+              textDecoration: "none",
+              transition: "opacity 0.2s",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span style={{ fontSize: 15 }}>🔍</span> Explore repos
+          </a>
+          <a
             href="/SKILL.md"
             style={{
               fontFamily: "var(--font-mono), monospace",
