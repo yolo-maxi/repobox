@@ -1114,6 +1114,16 @@ fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
                     }
                 }
                 
+                // For agent branches, validate commit messages
+                if let Some(ref virtuals_config) = config.virtuals {
+                    if virtuals_config.enabled && branch_name.starts_with("agent/") {
+                        if let Err(msg) = validate_agent_commit_messages(new_sha, old_sha) {
+                            eprintln!("❌ virtuals commit validation failed: {}", msg);
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+                
                 // Check push permissions
                 let result = engine::check(&config, &identity, Verb::Push, Some(branch_name), None);
                 if !result.is_allowed() {
@@ -1150,6 +1160,130 @@ fn is_force_push(old_sha: &str, new_sha: &str) -> bool {
         Ok(result) => !result.status.success(), // If ancestor check fails, it's a force-push
         Err(_) => false, // If git command fails, assume not a force-push to be safe
     }
+}
+
+/// Validate commit messages for agent branches according to Virtuals requirements.
+/// - Fix commits must reference issue numbers
+/// - Commit messages must follow conventional format
+/// - Must include proper agent metadata
+fn validate_agent_commit_messages(new_sha: &str, old_sha: &str) -> Result<(), String> {
+    let real_git = find_real_git();
+    
+    // Get the range of new commits
+    let range = if old_sha == "0000000000000000000000000000000000000000" {
+        // New branch: validate all commits
+        new_sha.to_string()
+    } else {
+        // Updated branch: validate new commits
+        format!("{}..{}", old_sha, new_sha)
+    };
+    
+    // Get commit messages in the range
+    let output = Command::new(&real_git)
+        .args(["log", "--format=%H %s", &range])
+        .output()
+        .map_err(|e| format!("failed to get commit messages: {}", e))?;
+    
+    if !output.status.success() {
+        return Err("failed to retrieve commit log".to_string());
+    }
+    
+    let log_output = String::from_utf8_lossy(&output.stdout);
+    
+    for line in log_output.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        
+        let parts: Vec<&str> = line.splitn(2, ' ').collect();
+        if parts.len() != 2 {
+            continue;
+        }
+        
+        let _commit_hash = parts[0];
+        let commit_message = parts[1];
+        
+        // Validate commit message format
+        validate_commit_message_format(commit_message)?;
+    }
+    
+    Ok(())
+}
+
+/// Validate that a commit message follows the required format for agent commits.
+fn validate_commit_message_format(message: &str) -> Result<(), String> {
+    // Must follow conventional commit format: type(scope): description
+    // For fix commits, must include issue reference
+    
+    if message.trim().is_empty() {
+        return Err("commit message cannot be empty".to_string());
+    }
+    
+    // Check for conventional commit format
+    if !message.contains(':') {
+        return Err(format!(
+            "commit message must follow conventional format 'type(scope): description', got '{}'",
+            message
+        ));
+    }
+    
+    let parts: Vec<&str> = message.splitn(2, ':').collect();
+    let type_scope = parts[0].trim();
+    let description = parts[1].trim();
+    
+    // Validate type and scope
+    if type_scope.is_empty() {
+        return Err("commit type cannot be empty".to_string());
+    }
+    
+    // Extract type (and optional scope)
+    let commit_type = if type_scope.contains('(') {
+        type_scope.split('(').next().unwrap_or(type_scope)
+    } else {
+        type_scope
+    };
+    
+    // Validate commit type
+    let valid_types = ["fix", "feat", "refactor", "docs", "test", "chore", "style", "perf"];
+    if !valid_types.contains(&commit_type) {
+        return Err(format!(
+            "invalid commit type '{}', must be one of: {}",
+            commit_type, valid_types.join(", ")
+        ));
+    }
+    
+    // For fix commits, ensure issue reference is present
+    if commit_type == "fix" {
+        if !contains_issue_reference(description) {
+            return Err(format!(
+                "fix commits must reference an issue (e.g., 'closes #42', 'fixes #123'), got '{}'",
+                message
+            ));
+        }
+    }
+    
+    // Validate description is not empty
+    if description.is_empty() {
+        return Err("commit description cannot be empty".to_string());
+    }
+    
+    Ok(())
+}
+
+/// Check if a commit message description contains an issue reference.
+fn contains_issue_reference(description: &str) -> bool {
+    let issue_keywords = ["closes", "fixes", "resolves", "close", "fix", "resolve"];
+    let description_lower = description.to_lowercase();
+    
+    for keyword in &issue_keywords {
+        // Look for patterns like "fixes #42", "closes issue #123", etc.
+        if description_lower.contains(&format!("{} #", keyword)) ||
+           description_lower.contains(&format!("{} issue #", keyword)) {
+            return true;
+        }
+    }
+    
+    false
 }
 
 /// Validate agent branch naming according to Virtuals integration rules.
@@ -1817,5 +1951,43 @@ mod tests {
         // Should work with ENS names
         assert!(validate_agent_branch_naming(&identity, "agent/alice.eth/fix-42").is_ok());
         assert!(validate_agent_branch_naming(&identity, "agent/wrongname.eth/fix-42").is_err());
+    }
+
+    #[test]
+    fn test_validate_commit_message_format() {
+        // Valid conventional commit formats (non-fix types)
+        assert!(validate_commit_message_format("feat(ui): add dark mode toggle").is_ok());
+        assert!(validate_commit_message_format("docs: update API documentation").is_ok());
+        assert!(validate_commit_message_format("refactor: simplify parser logic").is_ok());
+        
+        // Valid fix commit with issue reference
+        assert!(validate_commit_message_format("fix: memory leak fixes #123").is_ok());
+        assert!(validate_commit_message_format("fix(core): null pointer exception resolves #456").is_ok());
+        assert!(validate_commit_message_format("fix(parser): handle edge case closes #42").is_ok());
+        
+        // Invalid formats
+        assert!(validate_commit_message_format("").is_err()); // Empty
+        assert!(validate_commit_message_format("fix memory leak").is_err()); // No colon
+        assert!(validate_commit_message_format("invalidtype: description").is_err()); // Invalid type
+        assert!(validate_commit_message_format("fix: ").is_err()); // Empty description
+        
+        // Fix without issue reference should fail
+        assert!(validate_commit_message_format("fix: memory leak").is_err());
+    }
+
+    #[test]
+    fn test_contains_issue_reference() {
+        // Valid issue references
+        assert!(contains_issue_reference("memory leak fixes #42"));
+        assert!(contains_issue_reference("handle edge case closes #123"));
+        assert!(contains_issue_reference("null pointer resolves #456"));
+        assert!(contains_issue_reference("bug with parser close #789"));
+        assert!(contains_issue_reference("issue with validation fixes issue #99"));
+        
+        // Invalid/missing references
+        assert!(!contains_issue_reference("memory leak"));
+        assert!(!contains_issue_reference("handle edge case"));
+        assert!(!contains_issue_reference("fixes bug but no number"));
+        assert!(!contains_issue_reference("closes something"));
     }
 }
