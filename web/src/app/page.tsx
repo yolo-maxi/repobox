@@ -12,7 +12,7 @@ import { execSync } from "child_process";
 function getRecentPushes() {
   try {
     const raw = execSync(
-      'cd /home/xiko/wall && git log --format=\'{"hash":"%h","author":"%an","message":"%s","time":"%ci"}\' -5',
+      'cd /home/xiko/wall && git log --format=\'{"hash":"%h","author":"0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048","message":"%s","time":"%ci"}\' -5',
       { timeout: 3000, encoding: "utf8" }
     );
     return raw

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
+import AddressDisplay from "@/components/AddressDisplay";
 
 interface FeedEntry {
   hash: string;
@@ -130,19 +131,22 @@ export function LiveFeed({ entries }: { entries: FeedEntry[] }) {
             >
               {entry.hash}
             </Link>
-            <Link
-              href={`/explore/${entry.author}`}
+            <div
               style={{
                 color: "var(--bp-gold)",
                 fontWeight: 500,
                 flexShrink: 0,
                 minWidth: 80,
                 fontSize: 12,
-                textDecoration: "none",
               }}
             >
-              {truncateAddr(entry.author)}
-            </Link>
+              <AddressDisplay
+                address={entry.author}
+                size="sm"
+                showCopy={false}
+                linkable={true}
+              />
+            </div>
             <Link
               href="/explore/0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048/wall"
               style={{
