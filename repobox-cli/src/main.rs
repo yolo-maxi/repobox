@@ -264,19 +264,23 @@ fn cmd_init(force: bool) -> ExitCode {
 
     let config_dir = Path::new(".repobox");
     let config_path = config_dir.join("config.yml");
-    if config_path.exists() && !force {
-        eprintln!("error: .repobox/config.yml already exists. Use --force to overwrite");
-        return ExitCode::FAILURE;
-    }
 
     if let Err(e) = std::fs::create_dir_all(config_dir) {
         eprintln!("error: failed to create .repobox/ directory: {e}");
         return ExitCode::FAILURE;
     }
 
-    if let Err(e) = std::fs::write(&config_path, CONFIG_TEMPLATE) {
-        eprintln!("error: failed to write .repobox/config.yml: {e}");
-        return ExitCode::FAILURE;
+    let mut config_status = "using existing .repobox/config.yml";
+    if !config_path.exists() || force {
+        if let Err(e) = std::fs::write(&config_path, CONFIG_TEMPLATE) {
+            eprintln!("error: failed to write .repobox/config.yml: {e}");
+            return ExitCode::FAILURE;
+        }
+        config_status = if force {
+            "overwrote .repobox/config.yml (--force)"
+        } else {
+            "created .repobox/config.yml"
+        };
     }
 
     // Run shim setup if not already done (once per machine)
@@ -313,14 +317,14 @@ fn cmd_init(force: bool) -> ExitCode {
                 .args(["config", "--local", "user.signingkey", &identity_str])
                 .output();
             println!("✅ Initialized repo.box");
-            println!("   Created .repobox/config.yml (edit to add groups and rules)");
+            println!("   {config_status}");
             println!("   Configured git to sign commits with repobox (gpg.program)");
             println!("   Signing key set to {identity_str}");
             println!("   Every `git commit` will now be EVM-signed automatically.");
         }
         _ => {
             println!("✅ Initialized repo.box");
-            println!("   Created .repobox/config.yml (edit to add groups and rules)");
+            println!("   {config_status}");
             println!("   Configured git to sign commits with repobox (gpg.program)");
             println!("   No identity found. Run: git repobox keys generate");
         }
