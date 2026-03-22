@@ -1,4 +1,4 @@
-# Enforce .repobox-config Opt-in on Server
+# Enforce .repobox/config.yml Opt-in on Server
 
 **Specification ID**: `SPEC-CFGOPT-001`  
 **Priority**: P2  

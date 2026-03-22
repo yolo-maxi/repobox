@@ -217,11 +217,11 @@ pub enum Verb {
     Branch,
     Delete,
     ForcePush,
-    // File verbs
+    // File verbs (hierarchy: edit > insert > append > upload)
     Edit,
-    Write,
+    Insert,
     Append,
-    Create,
+    Upload,
 }
 
 impl Verb {
@@ -231,12 +231,20 @@ impl Verb {
             "push" => Ok(Verb::Push),
             "merge" => Ok(Verb::Merge),
             "branch" => Ok(Verb::Branch),
-            "create" => Ok(Verb::Create),
+            "upload" => Ok(Verb::Upload),
+            "insert" => Ok(Verb::Insert),
             "delete" => Ok(Verb::Delete),
             "force-push" => Ok(Verb::ForcePush),
             "edit" => Ok(Verb::Edit),
-            "write" => Ok(Verb::Write),
             "append" => Ok(Verb::Append),
+            // Deprecated aliases — parse but warn
+            "write" | "create" => {
+                eprintln!(
+                    "repo.box: '{}' is deprecated, use 'upload' instead (for new files) or 'insert' (for adding lines)",
+                    s
+                );
+                Ok(Verb::Upload)
+            }
             _ => Err(ConfigError::InvalidVerb(s.to_string())),
         }
     }
@@ -249,7 +257,7 @@ impl Verb {
     }
 
     pub fn is_file_verb(self) -> bool {
-        matches!(self, Verb::Edit | Verb::Write | Verb::Append | Verb::Create)
+        matches!(self, Verb::Edit | Verb::Insert | Verb::Append | Verb::Upload)
     }
 
     pub fn is_access_verb(self) -> bool {
@@ -264,11 +272,11 @@ impl std::fmt::Display for Verb {
             Verb::Push => write!(f, "push"),
             Verb::Merge => write!(f, "merge"),
             Verb::Branch => write!(f, "branch"),
-            Verb::Create => write!(f, "create"),
+            Verb::Upload => write!(f, "upload"),
+            Verb::Insert => write!(f, "insert"),
             Verb::Delete => write!(f, "delete"),
             Verb::ForcePush => write!(f, "force-push"),
             Verb::Edit => write!(f, "edit"),
-            Verb::Write => write!(f, "write"),
             Verb::Append => write!(f, "append"),
         }
     }

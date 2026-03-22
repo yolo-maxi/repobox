@@ -24,18 +24,19 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### Full knowledge sweep — all docs/skills/landing/llms.txt must be final
-- **Priority**: P0
-- **Tags**: docs, hackathon, demo-ready
-Comprehensive sweep across ALL knowledge surfaces to ensure everything is accurate, consistent, and demo-ready. Fran needs to use a final version locally for the demo. Check and update each:
-1. **llms.txt** (`web/public/llms.txt`) — accurate feature list, current verbs, real capabilities only
-2. **skill.md** (`web/public/skill.md`) — matches actual CLI behavior and config format
-3. **Landing page** — hero copy, feature sections, case studies all reflect what actually works
-4. **Docs pages** (`/docs`) — all sections current, no stale examples, "Coming Soon" for unfinished
-5. **AGENTS.md** in the repo root — accurate for agents consuming the repo
-6. **README.md** — clean, no stale self-hosting instructions, matches current architecture
-7. **Playground system prompt** — knows all current verbs and syntax
-Cross-reference everything against the actual Rust parser (`repobox-core/src/parser.rs`) and config types (`repobox-core/src/config.rs`) as source of truth. No contradictions between surfaces. This is the final polish before demo — nothing can be wrong or outdated.
+### Test ENS resolution end-to-end
+- **Priority**: P1
+- **Tags**: testing, ens, permissions, explorer
+Verify ENS resolution works across all surfaces with real names:
+1. **Real ENS name** (e.g. `vitalik.eth`) — resolves to address in explorer URLs, permission rules, and UI display
+2. **repobox.eth paid subdomain** (e.g. `ocean.repobox.eth`) — resolves correctly through our subdomain NFT system
+3. **Our own random subdomains/aliases** — repo.box aliases resolve in explorer and permissions
+Test each in: (a) Explorer URL routing (`/explore/vitalik.eth/`), (b) `<AddressDisplay>` component resolution, (c) Permission rules in `.repobox/config.yml` (e.g. `vitalik.eth push >main`), (d) Clone URLs. Document any failures and fix them. This must work flawlessly for the demo.
+
+### Virtuals integration — bug report to payment flow
+- **Priority**: P1
+- **Tags**: feature, x402, virtuals, docs
+Ensure the full "virtuals" flow is implemented end-to-end: agent files bug report → creates branch → pushes fix → PR reviewed → merged → x402 payment triggered. Verify each step works with real EVM-signed commits and actual x402 micropayments. Then document it prominently: landing page case study, docs section, llms.txt, playground example. This is a key hackathon demo story — autonomous agent work with crypto-native payments. Make sure it's not just specced but actually functional and well-presented.
 
 ### Accurate llms.txt — critical for agent judges
 - **Priority**: P1
@@ -54,10 +55,18 @@ Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented
 
 ## 🔨 In Progress
 
-### Virtuals integration — bug report to payment flow
-- **Priority**: P1
-- **Tags**: feature, x402, virtuals, docs
-Ensure the full "virtuals" flow is implemented end-to-end: agent files bug report → creates branch → pushes fix → PR reviewed → merged → x402 payment triggered. Verify each step works with real EVM-signed commits and actual x402 micropayments. Then document it prominently: landing page case study, docs section, llms.txt, playground example. This is a key hackathon demo story — autonomous agent work with crypto-native payments. Make sure it's not just specced but actually functional and well-presented.
+### Full knowledge sweep — all docs/skills/landing/llms.txt must be final
+- **Priority**: P0
+- **Tags**: docs, hackathon, demo-ready
+Comprehensive sweep across ALL knowledge surfaces. Fran needs final version locally for demo. Update each:
+1. **llms.txt** — accurate features, current verbs, real capabilities only
+2. **skill.md** — matches actual CLI behavior and config format
+3. **Landing page** — hero copy, features, case studies reflect what works
+4. **Docs** — all current, no stale examples, "Coming Soon" for unfinished
+5. **AGENTS.md** — accurate for agents consuming the repo
+6. **README.md** — clean, no stale instructions
+7. **Playground prompt** — knows all current verbs and syntax
+Cross-reference against Rust parser + config types as source of truth. No contradictions. Final polish before demo.
 
 ### Playground refresh — visual, accuracy, speed
 - **Priority**: P1

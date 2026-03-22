@@ -136,15 +136,17 @@ Supported chains: Ethereum, Base, Optimism, Arbitrum, Polygon, and [40+ more](ht
 
 | Verb | What it controls |
 |------|-----------------|
+| `read` | Clone repo, view files, fetch branches |
 | `push` | Push to a branch |
 | `merge` | Merge into a branch |
-| `create` | Create a new branch |
+| `branch` | Create a new branch |
+| `create` | Create new files (alias for write) |
 | `delete` | Delete a branch |
 | `force-push` | Force-push to a branch |
 | `edit` | Modify any file (superset of write/append) |
 | `write` | Create new files |
 | `append` | Append to existing files (no deletions) |
-| `own` | All of the above (expands to 8 rules) |
+| `own` | All of the above (expands to all rules) |
 
 The shim inspects git diffs at commit time to classify changes: new files need `write`, append-only changes need `append`, and modifications need `edit`. Having `edit` permission covers both `write` and `append`.
 

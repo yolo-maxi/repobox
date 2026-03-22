@@ -281,7 +281,7 @@ fn check_branch_rules_no_file_rules_with_default_deny(config: &Config, warnings:
             warnings.push(LintWarning {
                 severity: Severity::Info,
                 message: format!(
-                    "'{name}' has branch rules (push/merge/create) but no file rules (edit/write/append)"
+                    "'{name}' has branch rules (push/merge/branch) but no file rules (edit/insert/append/upload)"
                 ),
                 hint: format!("With default: deny, {name} can push but can't modify any files. Add file rules or switch to default: allow."),
             });

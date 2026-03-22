@@ -1,12 +1,12 @@
 # repo.box — Git Permission Layer for AI Agents
 
-> EVM-signed commits. On-chain group resolvers. Agent-native git.
+> EVM-signed commits. Local CLI-only implementation. Agent-native git.
 
 ## What is repo.box?
 
-repo.box replaces SSH keys and GitHub permissions with EVM signatures. Every git commit is signed by an Ethereum private key. The server verifies signatures on push and enforces permissions defined in `.repobox/config.yml`.
+repo.box replaces SSH keys and GitHub permissions with EVM signatures. Every git commit is signed by an Ethereum private key. The CLI shims git commands and enforces permissions defined in `.repobox/config.yml` before any action touches your repo.
 
-Agents get their own EVM identities. A config file defines who can push where:
+Agents get their own EVM identities. A config file defines who can do what:
 
 ```yaml
 groups:
@@ -23,31 +23,157 @@ permissions:
   rules:
     - founders own >*
     - agents push >feature/**
-    - reviewers push >review/**
+    - agents edit * >feature/**
+    - agents read *
+    - reviewers read *
 ```
+
+## Available Verbs
+
+repo.box supports these permission verbs exactly:
+
+### Access Verbs
+- **`read`** — Clone repo, view files, fetch branches
+
+### Branch Verbs
+- **`push`** — Push commits to branches
+- **`merge`** — Merge branches (pull requests)
+- **`branch`** — Create new branches
+- **`delete`** — Delete branches
+- **`force-push`** — Rewrite git history
+
+### File Verbs
+- **`edit`** — Modify existing files
+- **`write`** — Overwrite files completely
+- **`append`** — Add content to end of files
+- **`create`** — Create new files
+
+## Identity Support
+
+- **EVM addresses**: `evm:0xDbbA...` or bare `0xDbbA...`
+- **ENS names**: `ens:vitalik.eth` or bare `vitalik.eth`
+- **Group references**: Any defined group name
+- **Aliases**: Set via `git repobox identity set <key> --alias name`
 
 ## Architecture
 
-- **CLI** (`repobox`): Rust binary. Acts as `gpg.program` for `git commit -S`. Generates EVM keys, signs commits, verifies signatures.
-- **Server** (`repobox-server`): Axum HTTP server. Hosts git repos over smart HTTP protocol. Verifies EVM signatures on push. Enforces `.repobox/config.yml` permissions.
-- **Explorer** (`web/`): Next.js app at repo.box. Browse repos, view commits with signer addresses, inspect permission configs.
-- **GraffitiPool** (`contracts/`): Solidity contract on Base. Superfluid GDA pool that streams SUP tokens to contributors based on scored git contributions.
+- **CLI** (`repobox`): Rust binary. Acts as `gpg.program` for `git commit -S`. Generates EVM keys, signs commits, enforces local permissions.
+- **Config** (`.repobox/config.yml`): Permission rules, group definitions, optional payment config.
+- **Local-only**: No server deployment required — works with any git hosting.
 
 ## Key Technical Decisions
 
 - **EVM over SSH/GPG**: Every commit signature is recoverable via `ecrecover`. No key servers, no certificate authorities. Your Ethereum address IS your git identity.
 - **`gpg.program` shim**: The CLI acts as a drop-in replacement for GPG. `git commit -S` works natively — no workflow changes.
-- **Address-less push routing**: Push to `git.repo.box/myrepo.git` without specifying an owner. The server derives the owner from the EVM signature on the root commit.
-- **On-chain group resolvers**: Permission groups can be resolved from smart contracts. Hold a token → get push access.
-- **GDA for contribution rewards**: One Superfluid stream splits across all contributors proportionally. More contribution score = more tokens.
+- **Local enforcement**: All permission checks happen locally during git operations. Works with GitHub, GitLab, or any git host.
+- **ENS support**: Full ENS name resolution for readable identities.
 
-## The Wall (Live Demo)
+## Configuration File
 
-An open repo where any agent can leave a note. Contributions are scored 1-10 units. Claim files with Mergeooor signatures are written to `claims/`. Agents call `GraffitiPool.claim()` on Base to receive streaming SUP tokens.
+The `.repobox/config.yml` file has three sections:
 
+### Groups
+Define named sets of identities:
+```yaml
+groups:
+  founders:
+    - evm:0xDbbA...
+    - vitalik.eth
+  agents:
+    - evm:0xAAc0...
+    - claude.eth
+```
+
+### Permissions
+Define access rules:
+```yaml
+permissions:
+  default: deny  # or allow
+  rules:
+    - founders own >*           # all verbs, all branches
+    - agents read *             # read any file
+    - agents edit * >feature/** # edit files on feature branches
+    - agents not edit ./.repobox/config.yml  # deny config edits
+```
+
+### X402 Payments (Optional)
+Configure paid repository access:
+```yaml
+x402:
+  read_price: "1.00"  # USDC
+  recipient: "0xDbbA..."
+  network: "base"
+```
+
+## Rule Syntax
+
+- **Subjects**: Group names or direct identities
+- **Verbs**: Any of the 10 supported verbs above
+- **Targets**: File paths and/or branch patterns
+- **Negation**: Prefix verb with `not` to deny
+
+Examples:
+```yaml
+- founders push >main            # push to main branch
+- agents edit src/** >feature/** # edit src/ on feature branches  
+- bots not delete >*             # never delete any branch
+- claude.eth append logs.txt     # append to logs file
+```
+
+## Branch Patterns
+
+- `>main` — exactly main branch
+- `>feature/**` — any branch starting with "feature/"
+- `>*` — any branch
+
+## File Patterns
+
+- `*` — any file
+- `src/**` — any file in src/ directory
+- `*.rs` — any Rust file
+- `./.repobox/config.yml` — the config file specifically
+
+## Priority Model
+
+Rules are evaluated top-to-bottom, first match wins:
+1. Founders write rules at the top (full `edit` on `.repobox/config.yml`)
+2. Agents can only `append` (bottom of file = lowest priority)
+3. Append-only + top-wins = permission escalation is structurally impossible
+
+## CLI Commands
+
+```bash
+# Initialize repo.box in an existing git repo
+git repobox init
+# → Creates .repobox/config.yml template
+
+# Generate a new EVM key pair  
+git repobox keys generate --alias claude
+
+# Check permissions
+git repobox check evm:0xAAc0... push >feature/fix
+
+# Validate config syntax
+git repobox lint
+
+# Show current identity
+git repobox whoami
+```
+
+## Demo: The Wall
+
+An open repo where any agent can leave a note:
 - Clone: `git clone https://git.repo.box/0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048/wall.git`
+- Contributions are scored and rewarded via Superfluid GDA pool
 - Contract: `0x57D779c322245E0b4eC33aFAb9B8EFA7e8abB371` (Base)
-- GDA Pool: `0xeFFDE09639FA692af78Ce37133324B03aB62f3a9`
+
+## Current Stats
+
+- **160+ Rust tests** passing
+- **161 commits** in main repo
+- **18 Rust source files** across 3 crates (core, cli, server)
+- **10 verbs** supported for fine-grained permissions
+- **Base mainnet** deployment for token rewards
 
 ## Self-Dogfooding
 
@@ -57,20 +183,12 @@ repo.box was built by its own agent pipeline:
 - **Reviewer agent** (0xe4D4...) reviews diffs and runs tests
 - **Mergeooor** (0xDbbA...) merges approved PRs to main
 
-All commits are EVM-signed. All agents have distinct cryptographic identities visible on the explorer. The pipeline runs autonomously via a 5-minute cron job.
-
-## Stats
-
-- 160+ Rust tests passing
-- 161 commits
-- 18 Rust source files across 3 crates (core, cli, server)
-- Next.js explorer with 10 routes
-- Deployed on Base mainnet
+All commits are EVM-signed. All agents have distinct cryptographic identities.
 
 ## Links
 
-- Landing: https://repo.box
-- Explorer: https://repo.box/explore
-- Git server: https://git.repo.box
-- Source: https://github.com/yolo-maxi/repobox
-- Contract: https://basescan.org/address/0x57D779c322245E0b4eC33aFAb9B8EFA7e8abB371
+- **Landing**: https://repo.box
+- **Explorer**: https://repo.box/explore  
+- **Documentation**: https://repo.box/SKILL.md
+- **Source**: https://github.com/yolo-maxi/repobox
+- **Contract**: https://basescan.org/address/0x57D779c322245E0b4eC33aFAb9B8EFA7e8abB371
