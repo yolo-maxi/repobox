@@ -43,7 +43,8 @@ Use whichever feels natural. All three parse identically.
 
 SUBJECTS in rules: bare group names (founders, agents) or evm:0x... addresses. NO prefix (no %, no @).
 
-BRANCH VERBS: push, merge, create, delete, force-push
+ACCESS VERBS: read (clone, view files, fetch)
+BRANCH VERBS: push, merge, branch, create, delete, force-push  
 FILE VERBS: edit (full modify), write (add-only), append (end-only)
 DENY: "groupname not verb target"
 
