@@ -4,6 +4,8 @@ import React from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { DiffHunk, DiffLine } from '@/lib/git';
+import EmptyState from '@/components/EmptyState';
+import { NoDiff } from '@/components/illustrations';
 
 interface DiffViewerProps {
   hunks: DiffHunk[];
@@ -102,17 +104,15 @@ export default function DiffViewer({ hunks, filePath }: DiffViewerProps) {
     // Check if this might be a large file that was skipped
     const fileName = filePath.split('/').pop() || filePath;
     return (
-      <div className="diff-empty">
-        <p>
-          {fileName.includes('.') ? 
-            'Binary file, large file, or no diff available' : 
-            'No diff available for this file'
-          }
-        </p>
-        <p className="diff-empty-hint">
-          File may be binary, too large (&gt;2000 lines), or newly created empty file.
-        </p>
-      </div>
+      <EmptyState
+        illustration={NoDiff}
+        title={fileName.includes('.') ? 
+          'Binary file, large file, or no diff available' : 
+          'No diff available for this file'
+        }
+        description="File may be binary, too large (>2000 lines), or newly created empty file."
+        size="md"
+      />
     );
   }
 

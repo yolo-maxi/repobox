@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatTimeAgo } from '@/lib/utils';
+import EmptyState from '@/components/EmptyState';
+import { QuietActivity } from '@/components/illustrations';
 
 interface Stats {
   totalRepos: number;
@@ -124,7 +126,11 @@ export default function ExploreSidebar({
       <div className="explore-sidebar-section">
         <h3 className="explore-sidebar-title">Recent Activity</h3>
         {activity.length === 0 ? (
-          <p className="explore-sidebar-empty">No recent activity</p>
+          <EmptyState
+            illustration={QuietActivity}
+            title="No recent activity"
+            size="sm"
+          />
         ) : (
           <div className="explore-sidebar-activity">
             {activity.map(item => (

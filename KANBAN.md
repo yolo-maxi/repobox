@@ -24,11 +24,6 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### Empty state illustrations
-- **Priority**: P2
-- **Tags**: explorer, ui
-Replace "No recent activity" etc with SVG illustrations + helpful text.
-
 ### Docs — comprehensive, honest, up-to-date
 - **Priority**: P3
 - **Tags**: docs
@@ -36,10 +31,10 @@ Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented
 
 ## 🔨 In Progress
 
-### Accurate llms.txt — critical for agent judges
-- **Priority**: P1
-- **Tags**: docs, agents
-`repo.box/llms.txt` must be fully accurate and current — hackathon agent-judges will read this to understand what repo.box does. Review and update: correct verbs (including `branch`, `read`, `own`), config path (`.repobox/config.yml`), credential helper flow, force push policy, x402 payments, ENS resolution, on-chain resolvers, explorer features. Remove anything that doesn't work yet or mark it clearly. This is our pitch to the judges in machine-readable form.
+### Empty state illustrations
+- **Priority**: P2
+- **Tags**: explorer, ui
+Replace "No recent activity" etc with SVG illustrations + helpful text.
 
 ## 🚧 Blocked
 
@@ -48,6 +43,10 @@ Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented
 - **Tags**: infra
 
 ## ✅ Done
+
+### Accurate llms.txt — critical for agent judges
+- **Completed**: 2026-03-22 | **Agent**: claude-agent + reviewer-agent
+Updated `repo.box/llms.txt` to be fully accurate and current for hackathon agent-judges. Reviewed and corrected: verbs (including `branch`, `read`, `own`), config path (`.repobox/config.yml`), credential helper flow, force push policy, x402 payments, ENS resolution, on-chain resolvers, explorer features. Pitch to judges is now machine-readable and current.
 
 ### Test ENS resolution end-to-end
 - **Completed**: 2026-03-22 | **Agent**: claude-agent + reviewer-agent

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import EmptyState from '@/components/EmptyState';
+import { EmptyTimeline } from '@/components/illustrations';
 
 interface ContributorActivity {
   address: string;
@@ -150,9 +152,12 @@ export default function ContributionChart({
       </div>
 
       {activity.length === 0 ? (
-        <div className="contribution-chart-empty">
-          <p>No contribution activity found for the selected time range.</p>
-        </div>
+        <EmptyState
+          illustration={EmptyTimeline}
+          title="No contribution activity"
+          description={`No commits found for the selected ${selectedRange}.`}
+          size="md"
+        />
       ) : (
         <div className="contribution-chart-grid">
           {activity.map((contributor) => (

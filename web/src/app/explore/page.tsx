@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
 import AddressDisplay from '@/components/AddressDisplay';
+import EmptyState from '@/components/EmptyState';
+import { EmptyRepository, NoSearchResults, QuietActivity } from '@/components/illustrations';
 
 function truncateMessage(message: string, maxLength: number = 80): string {
   if (message.length <= maxLength) return message;
@@ -239,7 +241,11 @@ export default function ExplorePage() {
               Recent Activity
             </h3>
             {activity.length === 0 ? (
-              <p style={{ color: '#484f58', fontSize: 13 }}>No recent activity</p>
+              <EmptyState
+                illustration={QuietActivity}
+                title="No recent activity"
+                size="sm"
+              />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {activity.slice(0, 8).map(item => (
@@ -298,22 +304,14 @@ export default function ExplorePage() {
               </div>
 
               {filteredRepos.length === 0 ? (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '48px 24px',
-                  color: '#8b949e',
-                }}>
-                  <div style={{ fontSize: 48, marginBottom: 16 }}>📦</div>
-                  <h3 style={{ color: '#e6edf3', marginBottom: 8 }}>
-                    {searchTerm ? 'No matching repositories' : 'No repositories yet'}
-                  </h3>
-                  <p style={{ fontSize: 14, maxWidth: 400, margin: '0 auto' }}>
-                    {searchTerm
-                      ? 'Try a different search term'
-                      : 'Push your first signed commit to get started'
-                    }
-                  </p>
-                </div>
+                <EmptyState
+                  illustration={searchTerm ? NoSearchResults : EmptyRepository}
+                  title={searchTerm ? 'No matching repositories' : 'No repositories yet'}
+                  description={searchTerm 
+                    ? 'Try a different search term or browse all repositories' 
+                    : 'Push your first signed commit to get started'}
+                  size="lg"
+                />
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {filteredRepos.map((repo, idx) => (
