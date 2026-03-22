@@ -35,31 +35,111 @@ repo.box supports these permission verbs exactly:
 ### Access Verbs
 - **`read`** — Clone repo, view files, fetch branches
 
-### Branch Verbs
+### Branch Verbs  
 - **`push`** — Push commits to branches
 - **`merge`** — Merge branches (pull requests)
 - **`branch`** — Create new branches
 - **`delete`** — Delete branches
-- **`force-push`** — Rewrite git history
+- **`force-push`** — Rewrite git history (distinct from push)
 
-### File Verbs
-- **`edit`** — Modify existing files
-- **`write`** — Overwrite files completely
-- **`append`** — Add content to end of files
-- **`create`** — Create new files
+### File Verbs (Hierarchy: edit > insert > append > upload)
+- **`edit`** — Modify existing files (highest permission)
+- **`insert`** — Add lines within files
+- **`append`** — Add content to end of files  
+- **`upload`** — Create new files (replaces deprecated create/write)
+
+### Notes
+- `write` and `create` are deprecated aliases for `upload` (CLI shows warning)
+- `own` expands to these 9 write verbs: push, merge, branch, delete, force-push, edit, insert, append, upload (plus read is included at repo level)
 
 ## Identity Support
 
 - **EVM addresses**: `evm:0xDbbA...` or bare `0xDbbA...`
-- **ENS names**: `ens:vitalik.eth` or bare `vitalik.eth`
+- **ENS names**: `ens:vitalik.eth` or bare `vitalik.eth`  
 - **Group references**: Any defined group name
 - **Aliases**: Set via `git repobox identity set <key> --alias name`
+
+## ENS Support (Fully Implemented)
+
+- **Syntax**: `ens:vitalik.eth` or `vitalik.eth` (implicit detection)
+- **Resolution**: Via ALCHEMY_API_KEY with 60-second caching  
+- **CLI support**: `git repobox check vitalik.eth push main`
+- **URLs**: Human-readable explorer URLs work: `/explore/vitalik.eth/`
+- **Groups**: Mix EVM and ENS identities freely
+- **Fail-closed**: Resolution errors deny permission
+
+Requirements: Set `ALCHEMY_API_KEY` environment variable.
+
+## Force Push Policy
+
+Force push is a separate verb from regular push:
+
+```yaml
+rules:
+  - founders force-push >*              # Allow force push everywhere
+  - agents push >feature/**             # Allow regular push on feature branches
+  - agents force-push >feature/**       # Also allow force push on feature branches  
+  - agents not force-push >main         # Explicitly deny force push to main
+```
+
+- Git hooks validate force-push attempts
+- Virtuals integration blocks force-push on `agent/` branches
+- Use for repository cleanup and history management
+
+## Virtuals Integration (AI Bug Bounties)
+
+repo.box includes full integration with Virtuals protocol for AI agent bug bounties:
+
+```yaml
+virtuals:
+  enabled: true
+  bug_bounties:
+    critical: "50.00"
+    high: "25.00"  
+    medium: "10.00"
+    low: "5.00"
+  payments:
+    network: "base"
+    token: "USDC"
+    treasury: "0x..."
+```
+
+### Agent Requirements
+- Branch naming: `agent/{agent-id}/fix-{issue-number}`
+- Commit format: `fix: description fixes #42`  
+- No force-push on agent branches
+- Human review before merge
+
+### Payment Flow
+1. Agent submits fix via proper branch/commit format
+2. Human reviews and merges to main
+3. Post-receive hook automatically processes payment
+4. Bounty transferred to agent's EVM address
 
 ## Architecture
 
 - **CLI** (`repobox`): Rust binary. Acts as `gpg.program` for `git commit -S`. Generates EVM keys, signs commits, enforces local permissions.
 - **Config** (`.repobox/config.yml`): Permission rules, group definitions, optional payment config.
 - **Local-only**: No server deployment required — works with any git hosting.
+
+## Architecture Details
+
+### Three-Crate System
+- **repobox-core**: Core library with permission engine, config parsing, ENS resolution
+- **repobox-cli**: Git shim, hooks, GPG program interface  
+- **repobox-server**: HTTP API, git hosting, x402 payments
+
+### Git Integration Modes
+1. **Shim mode**: Transparent git command interception
+2. **GPG program**: EVM-signed commits via git config
+3. **Hooks**: Pre/post validation and payment processing
+4. **Credential helper**: x402 payment authentication
+
+### Security Model
+- Local-first: All permission checks happen locally
+- Fail-closed: Errors deny access by default  
+- EVM signatures: Every commit cryptographically verifiable
+- Git hosting agnostic: Works with GitHub, GitLab, self-hosted
 
 ## Key Technical Decisions
 
@@ -169,11 +249,12 @@ An open repo where any agent can leave a note:
 
 ## Current Stats
 
-- **160+ Rust tests** passing
-- **161 commits** in main repo
-- **18 Rust source files** across 3 crates (core, cli, server)
+- **24 Rust source files** across 3 crates (core, cli, server)
+- **366 commits** in main repo
 - **10 verbs** supported for fine-grained permissions
 - **Base mainnet** deployment for token rewards
+- **Full ENS integration** with Alchemy API
+- **Virtuals protocol support** for AI bug bounties
 
 ## Self-Dogfooding
 
