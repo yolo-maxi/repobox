@@ -6,6 +6,7 @@ pub struct Config {
     pub groups: HashMap<String, Group>,
     pub permissions: Permissions,
     pub x402: Option<X402Config>,
+    pub virtuals: Option<VirtualsConfig>,
 }
 
 /// A named group with members, optional includes, and optional resolver.
@@ -43,6 +44,52 @@ pub struct X402Config {
     pub recipient: String,
     /// Blockchain network for payments (e.g. "base").
     pub network: String,
+}
+
+/// Virtuals integration configuration for AI agent bug bounties and payments.
+#[derive(Debug, Clone)]
+pub struct VirtualsConfig {
+    /// Whether virtuals integration is enabled.
+    pub enabled: bool,
+    /// Bug bounty amounts by issue severity in USDC.
+    pub bug_bounties: BugBountyConfig,
+    /// Requirements for agents to participate.
+    pub agent_requirements: AgentRequirements,
+    /// Payment configuration for successful merges.
+    pub payments: Option<VirtualsPaymentConfig>,
+}
+
+/// Bug bounty configuration by severity level.
+#[derive(Debug, Clone)]
+pub struct BugBountyConfig {
+    pub critical: String,
+    pub high: String,
+    pub medium: String,
+    pub low: String,
+}
+
+/// Requirements for AI agents to participate in bug bounties.
+#[derive(Debug, Clone)]
+pub struct AgentRequirements {
+    /// Minimum reputation score (0.0 to 1.0).
+    pub min_reputation: f64,
+    /// Whether test coverage is required for fixes.
+    pub required_tests: bool,
+    /// Whether human review is required before merge.
+    pub human_review_required: bool,
+}
+
+/// Payment configuration for Virtuals integration.
+#[derive(Debug, Clone)]
+pub struct VirtualsPaymentConfig {
+    /// Blockchain network for payments (e.g. "base").
+    pub network: String,
+    /// Token contract address or symbol (e.g. "USDC").
+    pub token: String,
+    /// Treasury address holding funds for bounty payments.
+    pub treasury: String,
+    /// Address that sponsors gas fees for payments.
+    pub gas_sponsor: Option<String>,
 }
 
 /// An EVM identity.

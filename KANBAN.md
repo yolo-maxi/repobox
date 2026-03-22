@@ -24,11 +24,6 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-### Virtuals integration — bug report to payment flow
-- **Priority**: P1
-- **Tags**: feature, x402, virtuals, docs
-Ensure the full "virtuals" flow is implemented end-to-end: agent files bug report → creates branch → pushes fix → PR reviewed → merged → x402 payment triggered. Verify each step works with real EVM-signed commits and actual x402 micropayments. Then document it prominently: landing page case study, docs section, llms.txt, playground example. This is a key hackathon demo story — autonomous agent work with crypto-native payments. Make sure it's not just specced but actually functional and well-presented.
-
 ### Accurate llms.txt — critical for agent judges
 - **Priority**: P1
 - **Tags**: docs, agents
@@ -45,6 +40,11 @@ Replace "No recent activity" etc with SVG illustrations + helpful text.
 Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented features as "Coming Soon" / "Roadmap". Only run when no P0/P1/P2 tasks remain.
 
 ## 🔨 In Progress
+
+### Virtuals integration — bug report to payment flow
+- **Priority**: P1
+- **Tags**: feature, x402, virtuals, docs
+Ensure the full "virtuals" flow is implemented end-to-end: agent files bug report → creates branch → pushes fix → PR reviewed → merged → x402 payment triggered. Verify each step works with real EVM-signed commits and actual x402 micropayments. Then document it prominently: landing page case study, docs section, llms.txt, playground example. This is a key hackathon demo story — autonomous agent work with crypto-native payments. Make sure it's not just specced but actually functional and well-presented.
 
 ### Playground refresh — visual, accuracy, speed
 - **Priority**: P1
