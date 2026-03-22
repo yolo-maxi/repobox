@@ -2269,27 +2269,26 @@ html {
 
 /* Clone URL Widget */
 .clone-url-widget {
-  background: var(--explore-surface);
-  border: 1px solid var(--explore-border);
+  background: rgba(20, 40, 65, 0.6);
+  border: 1px solid rgba(60, 120, 180, 0.2);
   border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 24px;
+  padding: 16px;
 }
 
 .clone-url-widget-title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--explore-text);
-  margin-bottom: 16px;
+  color: var(--bp-heading);
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .clone-url-widget-title svg {
-  width: 20px;
-  height: 20px;
-  color: var(--explore-accent);
+  width: 18px;
+  height: 18px;
+  color: var(--bp-accent);
 }
 
 .clone-url-group {
@@ -2297,34 +2296,34 @@ html {
 }
 
 .clone-url-group:last-of-type {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .clone-url-label {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--explore-text);
+  color: var(--bp-dim);
   margin-bottom: 6px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.1em;
 }
 
 .clone-url-input-container {
   display: flex;
-  border: 1px solid var(--explore-border);
+  border: 1px solid var(--bp-border);
   border-radius: 6px;
   overflow: hidden;
-  background: var(--explore-bg);
+  background: var(--bp-bg);
 }
 
 .clone-url-input {
   flex: 1;
   background: transparent;
   border: none;
-  padding: 10px 12px;
-  color: var(--explore-text);
+  padding: 8px 12px;
+  color: var(--bp-text);
   font-family: var(--font-mono), monospace;
-  font-size: 14px;
+  font-size: 12px;
   min-width: 0;
 }
 
@@ -2333,27 +2332,25 @@ html {
 }
 
 .clone-url-copy-btn {
-  background: var(--explore-surface-hover);
+  background: transparent;
   border: none;
-  border-left: 1px solid var(--explore-border);
-  color: var(--explore-text-secondary);
-  padding: 10px 14px;
+  border-left: 1px solid var(--bp-border);
+  color: var(--bp-dim);
+  padding: 8px 12px;
   cursor: pointer;
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px; /* Touch-friendly */
+  min-width: 40px;
 }
 
 .clone-url-copy-btn:hover {
-  background: var(--explore-border);
-  color: var(--explore-text);
+  color: var(--bp-accent);
 }
 
 .clone-url-copy-btn.copied {
-  color: var(--explore-accent);
-  background: rgba(35, 134, 54, 0.1);
+  color: var(--bp-accent);
 }
 
 .clone-help-toggle {
