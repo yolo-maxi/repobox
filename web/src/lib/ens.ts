@@ -46,8 +46,38 @@ export async function reverseResolveENS(address: string): Promise<string | null>
     return cached.name || null;
   }
 
-  // Reverse resolution requires an API call we don't have server-side yet.
-  // Cache null for now — forward resolution is the priority.
+  // Try reverse resolution via ethers with fallback RPCs
+  const ETH_RPCS = [
+    'https://eth.drpc.org',
+    'https://ethereum-rpc.publicnode.com',
+    'https://rpc.mevblocker.io',
+  ];
+
+  try {
+    const { ethers } = await import('ethers');
+    for (const rpc of ETH_RPCS) {
+      try {
+        const provider = new ethers.JsonRpcProvider(rpc);
+        const name = await Promise.race([
+          provider.lookupAddress(address),
+          new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+        ]);
+        if (name) {
+          ensCache.set(`reverse:${address.toLowerCase()}`, {
+            address: address.toLowerCase(),
+            name,
+            timestamp: Date.now()
+          });
+          return name;
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch (e) {
+    console.error('Reverse ENS error:', e);
+  }
+
   ensCache.set(`reverse:${address.toLowerCase()}`, {
     address: address.toLowerCase(),
     name: undefined,
