@@ -140,6 +140,7 @@ enum KeysAction {
     /// Import an existing private key
     Import {
         /// Hex-encoded private key
+        #[arg(allow_hyphen_values = true)]
         key: String,
         #[arg(long)]
         alias: Option<String>,
@@ -153,6 +154,7 @@ enum IdentityAction {
     /// Set your active identity
     Set {
         /// Hex-encoded private key
+        #[arg(allow_hyphen_values = true)]
         key: String,
         #[arg(long)]
         alias: Option<String>,
@@ -1343,9 +1345,15 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
         }
         ShimAction::RepoboxCommand => {
             // Re-parse as repobox subcommand
-            let cli = Cli::parse_from(
+            let cli = match Cli::try_parse_from(
                 std::iter::once("repobox".to_string()).chain(args[1..].iter().cloned()),
-            );
+            ) {
+                Ok(cli) => cli,
+                Err(e) => {
+                    eprint!("{e}");
+                    return ExitCode::from(2);
+                }
+            };
             let home = home_dir();
             match cli.command {
                 Some(Commands::Init { force }) => cmd_init(force),
