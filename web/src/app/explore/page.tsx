@@ -6,6 +6,7 @@ import { formatTimeAgo, formatAddress } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
 import { EmptyRepository, NoSearchResults, QuietActivity } from '@/components/illustrations';
 import { SiteNav } from '@/components/SiteNav';
+import AddressDisplay from '@/components/AddressDisplay';
 
 function truncateMsg(msg: string, max = 60): string {
   if (msg.length <= max) return msg;
@@ -184,7 +185,7 @@ export default function ExplorePage() {
                     <div className="explore-repo-info">
                       <div className="explore-repo-name-row">
                         <span className="explore-repo-name">{repo.name}</span>
-                        <span className="explore-repo-addr">{formatAddress(repo.owner_address)}</span>
+                        <AddressDisplay address={repo.owner_address} size="sm" showCopy={false} linkable={false} />
                       </div>
                       {repo.description && (
                         <p className="explore-repo-desc">{repo.description.replace(/\n/g, ' ').trim()}</p>
