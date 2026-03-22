@@ -3777,39 +3777,37 @@ html {
   font-size: 1rem;
 }
 
-/* State variants (legacy) */
+/* State variants (legacy) — deprecated, tier styles take precedence */
 .address-display--resolved .address-display__text {
-  color: var(--bp-heading);
   font-weight: 500;
 }
 
 .address-display--truncated .address-display__text {
-  color: var(--bp-text);
+  /* color inherited from tier */
 }
 
-/* Identity tier styles */
-/* Tier 1: ENS — full name, standard weight, subtle blue accent */
+/* Identity tier styles — all gold for user identities */
+.address-display--tier-ens .address-display__text,
+.address-display--tier-purchased .address-display__text,
+.address-display--tier-auto-alias .address-display__text,
+.address-display--tier-address .address-display__text {
+  color: var(--bp-gold) !important;
+}
+
 .address-display--tier-ens .address-display__text {
-  color: var(--bp-gold);
   font-weight: 500;
 }
 
-/* Tier 2: Purchased repobox.eth subdomain — gold, no .repobox.eth suffix */
 .address-display--tier-purchased .address-display__text {
-  color: var(--bp-gold);
   font-weight: 600;
 }
 
-/* Tier 3: Auto-assigned alias — gold, italic to show it's generated */
 .address-display--tier-auto-alias .address-display__text {
-  color: var(--bp-gold);
   font-style: italic;
   font-weight: 400;
 }
 
-/* Fallback: raw address — gold */
 .address-display--tier-address .address-display__text {
-  color: var(--bp-gold);
   font-family: var(--font-mono), monospace;
 }
 
