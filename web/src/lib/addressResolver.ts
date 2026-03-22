@@ -211,7 +211,36 @@ export async function resolveIdentities(addresses: string[]): Promise<Map<string
 /**
  * Forward resolve: name → address
  */
+export function isReservedIdentitySlug(name: string): boolean {
+  const reserved = new Set([
+    'api',
+    'api-docs',
+    'app',
+    'assets',
+    'beta',
+    'docs',
+    'explore',
+    'faq',
+    'help',
+    'home',
+    'playground',
+    'status',
+    'static',
+    'www',
+  ]);
+  const clean = name.toLowerCase().replace(/\.repobox\.eth$/, '');
+  return reserved.has(clean);
+}
+
 export async function resolveNameToAddress(name: string): Promise<string | null> {
+  const normalizedInput = name.toLowerCase().endsWith('.repobox.eth')
+    ? name.slice(0, -'.repobox.eth'.length)
+    : name;
+
+  if (!/^0x[a-fA-F0-9]{40}$/i.test(name) && isReservedIdentitySlug(normalizedInput)) {
+    return null;
+  }
+
   // Check cache reverse
   for (const [, entry] of cache) {
     if (entry.result.displayName?.toLowerCase() === name.toLowerCase() && Date.now() - entry.ts < CACHE_TTL) {

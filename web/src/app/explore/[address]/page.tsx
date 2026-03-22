@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress, copyToClipboard } from '@/lib/utils';
-import { resolveNameToAddress, resolveAddressDisplay } from '@/lib/addressResolver';
+import { resolveNameToAddress, resolveAddressDisplay, isReservedIdentitySlug } from '@/lib/addressResolver';
 import EmptyState from '@/components/EmptyState';
 import { EmptyRepository, AddressNotFound } from '@/components/illustrations';
 import Jazzicon from '@/components/Jazzicon';
@@ -179,6 +179,12 @@ export default function AddressPage() {
   useEffect(() => {
     const resolveAddress = async () => {
       if (!addressOrName) return;
+
+      if (!/^0x[a-fA-F0-9]{40}$/i.test(addressOrName) && isReservedIdentitySlug(addressOrName)) {
+        setNotFound(true);
+        setResolving(false);
+        return;
+      }
 
       if (/^0x[a-fA-F0-9]{40}$/i.test(addressOrName)) {
         setResolvedAddress(addressOrName);

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress, formatBytes, getFileIcon } from '@/lib/utils';
-import { resolveNameToAddress } from '@/lib/addressResolver';
+import { resolveNameToAddress, isReservedIdentitySlug } from '@/lib/addressResolver';
 import { repoUrls, generateBreadcrumbs } from '@/lib/repoUrls';
 import MarkdownRenderer from '@/components/markdown/MarkdownRenderer';
 import BranchSelector from '@/components/BranchSelector';
@@ -138,6 +138,11 @@ export default function RepoPage() {
   useEffect(() => {
     const resolveAddress = async () => {
       if (!addressOrName) return;
+      if (!/^0x[a-fA-F0-9]{40}$/i.test(addressOrName) && isReservedIdentitySlug(addressOrName)) {
+        setNotFound(true);
+        setResolving(false);
+        return;
+      }
       if (/^0x[a-fA-F0-9]{40}$/i.test(addressOrName)) {
         setResolvedAddress(addressOrName);
         setResolving(false);
