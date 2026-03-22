@@ -1669,9 +1669,21 @@ html {
 .explore-profile-title {
   font-size: 20px;
   font-weight: 600;
-  color: var(--bp-gold);
+  color: var(--bp-heading);
   margin: 0;
   font-family: var(--font-mono), monospace;
+}
+
+.explore-profile-title.is-premium {
+  color: var(--bp-gold);
+  text-shadow: 0 0 12px rgba(240, 184, 96, 0.18);
+}
+
+.explore-profile-handle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
 }
 
 .explore-profile-handle {
@@ -1679,7 +1691,18 @@ html {
   font-size: 11px;
   color: var(--bp-dim);
   opacity: 0.75;
-  margin-top: 2px;
+}
+
+.explore-profile-premium-badge {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bp-gold);
+  border: 1px solid rgba(240, 184, 96, 0.38);
+  background: rgba(240, 184, 96, 0.10);
+  border-radius: 999px;
+  padding: 2px 8px;
 }
 
 .explore-profile-address {
@@ -3794,28 +3817,37 @@ html {
   /* color inherited from tier */
 }
 
-/* Identity tier styles — all gold for user identities */
-.address-display--tier-ens .address-display__text,
-.address-display--tier-purchased .address-display__text,
-.address-display--tier-auto-alias .address-display__text,
-.address-display--tier-address .address-display__text {
-  color: var(--bp-gold) !important;
-}
-
+/* Identity tier styles */
 .address-display--tier-ens .address-display__text {
+  color: var(--bp-accent2);
   font-weight: 500;
 }
 
+.address-display--tier-purchased {
+  border-color: rgba(240, 184, 96, 0.35);
+  background: rgba(240, 184, 96, 0.06);
+}
+
 .address-display--tier-purchased .address-display__text {
-  font-weight: 600;
+  color: var(--bp-gold);
+  font-weight: 650;
+  text-shadow: 0 0 8px rgba(240, 184, 96, 0.15);
+}
+
+.address-display--tier-purchased:hover {
+  border-color: rgba(240, 184, 96, 0.55);
+  background: rgba(240, 184, 96, 0.10);
 }
 
 .address-display--tier-auto-alias .address-display__text {
+  color: var(--bp-dim);
   font-style: italic;
   font-weight: 400;
 }
 
 .address-display--tier-address .address-display__text {
+  color: var(--bp-dim);
+  opacity: 0.9;
   font-family: var(--font-mono), monospace;
 }
 

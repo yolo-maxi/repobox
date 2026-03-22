@@ -168,6 +168,7 @@ export default function AddressPage() {
   const [resolving, setResolving] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [identityTier, setIdentityTier] = useState<'purchased' | 'ens' | 'auto-alias' | 'address'>('address');
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
 
@@ -216,13 +217,32 @@ export default function AddressPage() {
     resolveAddress();
   }, [addressOrName, router]);
 
-  // Resolve display name
+  // Resolve display name + tier
   useEffect(() => {
     if (!resolvedAddress) return;
     const resolveDisplay = async () => {
       try {
+        // Prefer gateway reverse so we get tier information (purchased vs auto alias)
+        const reverseRes = await fetch(`/api/explorer/identity/reverse/${encodeURIComponent(resolvedAddress)}`);
+        if (reverseRes.ok) {
+          const data = await reverseRes.json();
+          if (data?.alias) {
+            setDisplayName(data.alias);
+            setIdentityTier(data.tier === 'purchased' ? 'purchased' : 'auto-alias');
+            return;
+          }
+        }
+
+        // Fallback to generic display resolver (ENS / deterministic)
         const name = await resolveAddressDisplay(resolvedAddress);
         setDisplayName(name);
+        if (name && name.endsWith('.eth')) {
+          setIdentityTier('ens');
+        } else if (name) {
+          setIdentityTier('auto-alias');
+        } else {
+          setIdentityTier('address');
+        }
       } catch (error) {
         console.error('Display name resolution failed:', error);
       }
@@ -364,10 +384,15 @@ export default function AddressPage() {
               <Jazzicon address={resolvedAddress || ''} size={80} />
             </div>
             <div className="explore-profile-details">
-              <h1 className="explore-profile-title">{profileTitle}</h1>
+              <h1 className={`explore-profile-title ${identityTier === 'purchased' ? 'is-premium' : ''}`}>{profileTitle}</h1>
               
               {profileHandle && (
-                <div className="explore-profile-handle">{profileHandle}</div>
+                <div className="explore-profile-handle-row">
+                  <div className="explore-profile-handle">{profileHandle}</div>
+                  {identityTier === 'purchased' && (
+                    <span className="explore-profile-premium-badge">supporter</span>
+                  )}
+                </div>
               )}
 
               {showFullAddress && (
