@@ -12,8 +12,11 @@ export async function GET(
 ) {
   try {
     const { name } = await context.params;
-    
-    if (!name) {
+    const normalized = name.toLowerCase().endsWith('.repobox.eth')
+      ? name.slice(0, -'.repobox.eth'.length)
+      : name;
+
+    if (!normalized) {
       return NextResponse.json(
         { error: 'Name is required' },
         { status: 400 }
@@ -21,7 +24,7 @@ export async function GET(
     }
     
     // Forward resolve via ENS gateway
-    const res = await fetch(`${ENS_GATEWAY}/resolve/${encodeURIComponent(name)}`, {
+    const res = await fetch(`${ENS_GATEWAY}/resolve/${encodeURIComponent(normalized)}`, {
       signal: AbortSignal.timeout(5000),
       next: { revalidate: 300 } // Cache for 5 min
     });

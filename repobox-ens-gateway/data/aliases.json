@@ -33,5 +33,10 @@
     "alias": "repobox",
     "address": "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048",
     "tier": "auto-alias"
+  },
+  {
+    "alias": "stone-cobalt-whale",
+    "address": "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048",
+    "tier": "auto-alias"
   }
 ]

@@ -220,8 +220,12 @@ export async function resolveNameToAddress(name: string): Promise<string | null>
   }
 
   try {
-    // Try subdomain resolution first (handles both purchased and auto-alias)
-    const response = await fetch(`/api/explorer/subdomains/${encodeURIComponent(name)}`);
+    const normalized = name.toLowerCase().endsWith('.repobox.eth')
+      ? name.slice(0, -'.repobox.eth'.length)
+      : name;
+
+    // Try subdomain resolution first (handles purchased and auto-alias)
+    const response = await fetch(`/api/explorer/subdomains/${encodeURIComponent(normalized)}`);
     if (response.ok) {
       const data = await response.json();
       if (data.address) return data.address;
