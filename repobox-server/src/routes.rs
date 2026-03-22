@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::body::Bytes;
@@ -6,7 +7,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 use crate::db;
 use crate::git::{self, BackendRequest, RepoPath};
@@ -28,6 +29,12 @@ pub(crate) fn router() -> Router<Arc<AppState>> {
         .route("/{address}/{repo}/HEAD", get(head))
         .route("/{address}/{repo}/x402/grant-access", post(grant_access))
         .route("/{address}/{repo}/.well-known/virtuals.json", get(virtuals_discovery))
+        .route("/{address}/{repo}/virtuals/claims", post(create_bounty_claim))
+        .route("/{address}/{repo}/virtuals/claims/{claim_id}", get(get_bounty_claim))
+        .route("/{address}/{repo}/virtuals/claims/{claim_id}/process", post(process_bounty_payment))
+        .route("/{address}/{repo}/issues", get(list_issues))
+        .route("/{address}/{repo}/issues/{issue_id}", get(get_issue))
+        .route("/{address}/{repo}/issues/{issue_id}/assign", post(assign_issue))
         // Name resolution route
         .route("/{name}/resolve", get(resolve_name))
 }
@@ -1185,8 +1192,46 @@ async fn handle_virtuals_discovery(state: &AppState, repo: &RepoPath) -> Respons
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
 
-    // For now, return a simple discovery response
-    // In a real implementation, this would query GitHub issues or similar
+    // Load issues from storage and convert to virtuals format
+    let mut issue_storage = repobox::issues::MemoryIssueStorage::new();
+    issue_storage.create_sample_issues().unwrap_or_default();
+    let open_issues = {
+        use repobox::issues::IssueStorage;
+        issue_storage.list_issues(Some(repobox::issues::IssueStatus::Open)).unwrap_or_default()
+    };
+
+    let active_virtuals_issues: Vec<VirtualsIssue> = open_issues
+        .into_iter()
+        .map(|issue| {
+            let severity = match issue.priority {
+                repobox::issues::IssuePriority::Critical => "critical",
+                repobox::issues::IssuePriority::High => "high",
+                repobox::issues::IssuePriority::Medium => "medium",
+                repobox::issues::IssuePriority::Low => "low",
+            };
+
+            let bounty_amount = match severity {
+                "critical" => &virtuals_config.bug_bounties.critical,
+                "high" => &virtuals_config.bug_bounties.high,
+                "medium" => &virtuals_config.bug_bounties.medium,
+                "low" => &virtuals_config.bug_bounties.low,
+                _ => &virtuals_config.bug_bounties.low,
+            };
+
+            VirtualsIssue {
+                id: issue.id,
+                title: issue.title,
+                severity: severity.to_string(),
+                bounty_usdc: bounty_amount.clone(),
+                claimed: issue.claimed_by.is_some(),
+                created_at: issue.created_at,
+                labels: issue.labels,
+                description: issue.description,
+                reproduction_steps: issue.reproduction_steps,
+            }
+        })
+        .collect();
+
     let discovery_response = VirtualsDiscoveryResponse {
         version: "1.0".to_string(),
         repository: VirtualsRepositoryInfo {
@@ -1195,20 +1240,7 @@ async fn handle_virtuals_discovery(state: &AppState, repo: &RepoPath) -> Respons
             virtuals_enabled: true,
         },
         bug_bounties: VirtualsBugBounties {
-            active_issues: vec![
-                // This would be populated from actual issue tracking
-                VirtualsIssue {
-                    id: "example".to_string(),
-                    title: "Example bug bounty issue".to_string(),
-                    severity: "medium".to_string(),
-                    bounty_usdc: virtuals_config.bug_bounties.medium.clone(),
-                    claimed: false,
-                    created_at: chrono::Utc::now(),
-                    labels: vec!["bug".to_string(), "virtuals".to_string()],
-                    description: "This is an example issue for testing virtuals integration".to_string(),
-                    reproduction_steps: "Steps would be provided here".to_string(),
-                }
-            ],
+            active_issues: active_virtuals_issues,
         },
         requirements: VirtualsRequirements {
             min_reputation: virtuals_config.agent_requirements.min_reputation,
@@ -1276,6 +1308,312 @@ struct VirtualsPaymentInfo {
     network: String,
     token: String,
     treasury: String,
+}
+
+// ========== Payment Integration Handlers ==========
+
+#[derive(Deserialize)]
+struct CreateBountyClaimRequest {
+    agent_address: String,
+    issue_id: String,
+    severity: String,
+    commit_hash: String,
+    branch_name: String,
+    pr_number: Option<u32>,
+}
+
+async fn create_bounty_claim(
+    State(state): State<Arc<AppState>>,
+    Path((name, repo)): Path<(String, String)>,
+    axum::Json(request): axum::Json<CreateBountyClaimRequest>,
+) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
+    let repo_path = match repo_path(address, repo) {
+        Ok(repo) => repo,
+        Err(status) => return status.into_response(),
+    };
+
+    // Load repository configuration
+    let config = match load_repo_config(&state, &repo_path) {
+        Ok(config) => config,
+        Err(status) => return status.into_response(),
+    };
+
+    // Check if virtuals is enabled
+    let virtuals_config = match config.virtuals {
+        Some(ref config) if config.enabled => config,
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+
+    // Ensure payment config is available
+    let payment_config = match virtuals_config.payments {
+        Some(ref config) => config,
+        None => return (
+            StatusCode::BAD_REQUEST,
+            "Payment configuration not available".to_string(),
+        ).into_response(),
+    };
+
+    // Create payment processor and bounty claim
+    let processor = repobox::payment::PaymentProcessor::new(payment_config.clone());
+    
+    let claim = match processor.create_bounty_claim(
+        virtuals_config,
+        &request.agent_address,
+        &request.issue_id,
+        &request.severity,
+        &request.commit_hash,
+        &request.branch_name,
+        request.pr_number,
+    ) {
+        Ok(claim) => claim,
+        Err(e) => return (
+            StatusCode::BAD_REQUEST,
+            format!("Failed to create claim: {}", e),
+        ).into_response(),
+    };
+
+    // TODO: Store claim in persistent storage
+    // For now, just return the claim
+
+    (
+        StatusCode::CREATED,
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&claim).unwrap(),
+    ).into_response()
+}
+
+async fn get_bounty_claim(
+    State(state): State<Arc<AppState>>,
+    Path((name, repo, claim_id)): Path<(String, String, String)>,
+) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
+    let _repo_path = match repo_path(address, repo) {
+        Ok(repo) => repo,
+        Err(status) => return status.into_response(),
+    };
+
+    // TODO: Retrieve claim from persistent storage
+    // For now, return not implemented
+
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        format!("Claim retrieval not implemented for claim_id: {}", claim_id),
+    ).into_response()
+}
+
+async fn process_bounty_payment(
+    State(state): State<Arc<AppState>>,
+    Path((name, repo, claim_id)): Path<(String, String, String)>,
+) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
+    let _repo_path = match repo_path(address, repo) {
+        Ok(repo) => repo,
+        Err(status) => return status.into_response(),
+    };
+
+    // TODO: Process payment for the claim
+    // For now, return not implemented
+
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        format!("Payment processing not implemented for claim_id: {}", claim_id),
+    ).into_response()
+}
+
+fn load_repo_config(state: &AppState, repo: &RepoPath) -> Result<repobox::config::Config, StatusCode> {
+    let config_path = git::repo_dir(&state.data_dir, repo).join(".repobox").join("config.yml");
+    
+    if !config_path.exists() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let config_content = std::fs::read_to_string(&config_path)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    repobox::parser::parse(&config_content)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+// ========== Issue Management Handlers ==========
+
+async fn list_issues(
+    State(state): State<Arc<AppState>>,
+    Path((name, repo)): Path<(String, String)>,
+    Query(query): Query<HashMap<String, String>>,
+) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
+    let _repo_path = match repo_path(address, repo) {
+        Ok(repo) => repo,
+        Err(status) => return status.into_response(),
+    };
+
+    // Create issue storage with sample data
+    let mut issue_storage = repobox::issues::MemoryIssueStorage::new();
+    issue_storage.create_sample_issues().unwrap_or_default();
+
+    // Parse status filter if provided
+    let status_filter = query.get("status").and_then(|s: &String| {
+        match s.as_str() {
+            "open" => Some(repobox::issues::IssueStatus::Open),
+            "in_progress" => Some(repobox::issues::IssueStatus::InProgress),
+            "pending_review" => Some(repobox::issues::IssueStatus::PendingReview),
+            "closed" => Some(repobox::issues::IssueStatus::Closed),
+            "rejected" => Some(repobox::issues::IssueStatus::Rejected),
+            _ => None,
+        }
+    });
+
+    let issues = {
+        use repobox::issues::IssueStorage;
+        issue_storage.list_issues(status_filter)
+    };
+    let issues = match issues {
+        Ok(issues) => issues,
+        Err(e) => return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list issues: {}", e),
+        ).into_response(),
+    };
+
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&issues).unwrap(),
+    ).into_response()
+}
+
+async fn get_issue(
+    State(state): State<Arc<AppState>>,
+    Path((name, repo, issue_id)): Path<(String, String, String)>,
+) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
+    let _repo_path = match repo_path(address, repo) {
+        Ok(repo) => repo,
+        Err(status) => return status.into_response(),
+    };
+
+    // Create issue storage with sample data
+    let mut issue_storage = repobox::issues::MemoryIssueStorage::new();
+    issue_storage.create_sample_issues().unwrap_or_default();
+
+    let issue = {
+        use repobox::issues::IssueStorage;
+        match issue_storage.get_issue(&issue_id) {
+            Ok(Some(issue)) => issue,
+            Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+            Err(e) => return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get issue: {}", e),
+            ).into_response(),
+        }
+    };
+
+    // Also get comments for the issue
+    let comments = {
+        use repobox::issues::IssueStorage;
+        issue_storage.get_comments(&issue_id).unwrap_or_default()
+    };
+
+    #[derive(Serialize)]
+    struct IssueWithComments {
+        #[serde(flatten)]
+        issue: repobox::issues::Issue,
+        comments: Vec<repobox::issues::IssueComment>,
+    }
+
+    let response = IssueWithComments {
+        issue,
+        comments,
+    };
+
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&response).unwrap(),
+    ).into_response()
+}
+
+#[derive(Deserialize)]
+struct AssignIssueRequest {
+    agent_address: String,
+    branch_name: String,
+}
+
+async fn assign_issue(
+    State(state): State<Arc<AppState>>,
+    Path((name, repo, issue_id)): Path<(String, String, String)>,
+    axum::Json(request): axum::Json<AssignIssueRequest>,
+) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
+    let _repo_path = match repo_path(address, repo) {
+        Ok(repo) => repo,
+        Err(status) => return status.into_response(),
+    };
+
+    // Create issue storage with sample data
+    let mut issue_storage = repobox::issues::MemoryIssueStorage::new();
+    issue_storage.create_sample_issues().unwrap_or_default();
+
+    // Create assignment
+    let assignment = repobox::issues::create_issue_assignment(
+        &issue_id,
+        &request.agent_address,
+        &request.branch_name,
+    );
+
+    {
+        use repobox::issues::IssueStorage;
+        if let Err(e) = issue_storage.assign_issue(assignment) {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("Failed to assign issue: {}", e),
+            ).into_response();
+        }
+    }
+
+    // Return updated issue
+    {
+        use repobox::issues::IssueStorage;
+        match issue_storage.get_issue(&issue_id) {
+            Ok(Some(issue)) => (
+                StatusCode::OK,
+                [(axum::http::header::CONTENT_TYPE, "application/json")],
+                serde_json::to_string(&issue).unwrap(),
+            ).into_response(),
+            _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
 }
 
 #[cfg(test)]
