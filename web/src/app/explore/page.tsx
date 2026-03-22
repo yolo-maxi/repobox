@@ -107,8 +107,9 @@ export default function ExplorePage() {
         zIndex: 100,
       }}>
         <div style={{
-          maxWidth: 1200,
+          maxWidth: 1400,
           margin: '0 auto',
+          padding: '0 8px',
           display: 'flex',
           alignItems: 'center',
           gap: 24,
@@ -157,15 +158,15 @@ export default function ExplorePage() {
 
       {/* Main layout */}
       <div style={{
-        maxWidth: 1200,
+        maxWidth: 1400,
         margin: '0 auto',
-        padding: '24px 24px',
+        padding: '24px 32px',
         display: 'grid',
-        gridTemplateColumns: '260px 1fr',
-        gap: 24,
+        gridTemplateColumns: '1fr 300px',
+        gap: 32,
       }}>
         {/* Sidebar */}
-        <aside style={{ fontSize: 14 }}>
+        <aside style={{ fontSize: 14, order: 2 }}>
           {/* Stats */}
           {stats && (
             <div style={{
@@ -272,7 +273,7 @@ export default function ExplorePage() {
         </aside>
 
         {/* Main content */}
-        <main>
+        <main style={{ order: 1 }}>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[1,2,3,4,5].map(i => (
