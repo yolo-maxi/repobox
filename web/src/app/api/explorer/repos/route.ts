@@ -14,9 +14,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const sort = searchParams.get('sort') || 'latest';
     const limit = parseInt(searchParams.get('limit') || '50');
+    const owner = searchParams.get('owner');
     
-    // Get all repos
-    const repos = await runQuery<Repo>('SELECT * FROM repos');
+    // Get repos, optionally filtered by owner
+    let repos: Repo[];
+    if (owner) {
+      repos = await runQuery<Repo>(
+        'SELECT * FROM repos WHERE LOWER(owner_address) = LOWER(?)',
+        [owner]
+      );
+    } else {
+      repos = await runQuery<Repo>('SELECT * FROM repos');
+    }
     
     // Enrich with metadata
     const reposWithMetadata: RepoWithMetadata[] = [];
