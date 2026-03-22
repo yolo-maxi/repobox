@@ -42,6 +42,12 @@ impl<'de> Deserialize<'de> for RawGroup {
         // Try as sequence first (simple form), then as mapping
         let value = serde_yaml::Value::deserialize(deserializer)?;
         match &value {
+            serde_yaml::Value::Null => {
+                // Allow empty group declarations like:
+                // groups:
+                //   maintainers:
+                Ok(RawGroup { members: vec![], includes: vec![], resolver: None })
+            }
             serde_yaml::Value::Sequence(seq) => {
                 let mut members = vec![];
                 let mut includes = vec![];
@@ -114,7 +120,7 @@ impl<'de> Deserialize<'de> for RawGroup {
                 }
             }
             _ => Err(de::Error::custom(
-                "group must be a list, a mapping with members, or a resolver config",
+                "invalid group format: use a list (`- evm:0x...`), a mapping with `members`/`includes`, or `resolver`; for an empty group use `[]`",
             )),
         }
     }
