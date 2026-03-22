@@ -58,3 +58,29 @@ export interface PushLog {
   commit_message?: string;
   pushed_at: string;
 }
+
+export interface RepoPermission {
+  repo_address: string;
+  repo_name: string;
+  identity: string;
+  verb: string;
+  target: string | null;
+}
+
+export function runExec(query: string, params: any[] = []): void {
+  try {
+    let sqliteCommand = query;
+    params.forEach((param) => {
+      const placeholder = '?';
+      const paramValue = typeof param === 'string' ? `'${param.replace(/'/g, "''")}'` : param === null ? 'NULL' : String(param);
+      sqliteCommand = sqliteCommand.replace(placeholder, paramValue);
+    });
+
+    execSync(`sqlite3 "${DB_PATH}" "${sqliteCommand}"`, {
+      encoding: 'utf8',
+      timeout: 5000
+    });
+  } catch (error: any) {
+    console.error('SQLite exec error:', error.message);
+  }
+}
