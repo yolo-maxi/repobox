@@ -144,6 +144,18 @@ fn check_commit(
             }
             eprintln!();
         }
+
+        // Safety check: prevent founders/maintainers from accidentally locking themselves out
+        // of policy edits (which would make future configuration recovery very hard).
+        if let Some(lockout_msg) = check_config_lockout(
+            config,
+            identity,
+            current_branch,
+            repo_root,
+            resolver,
+        ) {
+            return ShimAction::Block(lockout_msg);
+        }
     }
 
     // Check file permissions for each staged file.
@@ -212,6 +224,59 @@ fn check_commit(
     }
 
     ShimAction::Delegate
+}
+
+fn config_file_path() -> Vec<&'static str> {
+    vec![".repobox/config.yml", "./.repobox/config.yml"]
+}
+
+fn can_edit_config_file(
+    config: &Config,
+    identity: &Identity,
+    current_branch: Option<&str>,
+    resolver: Option<&RemoteResolver>,
+) -> bool {
+    config_file_path()
+        .into_iter()
+        .any(|path| engine::check_with_resolver(config, identity, Verb::Edit, current_branch, Some(path), resolver).is_allowed())
+}
+
+fn parse_config_at_ref(repo_root: &Path, rev: &str) -> Option<Config> {
+    let output = Command::new("git")
+        .args(["show", &format!("{rev}:.repobox/config.yml")])
+        .current_dir(repo_root)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let content = String::from_utf8(output.stdout).ok()?;
+    parser::parse(&content).ok()
+}
+
+fn check_config_lockout(
+    config: &Config,
+    identity: &Identity,
+    current_branch: Option<&str>,
+    repo_root: &Path,
+    resolver: Option<&RemoteResolver>,
+) -> Option<String> {
+    if !can_edit_config_file(config, identity, current_branch, resolver) {
+        let before = parse_config_at_ref(repo_root, "HEAD");
+        if let Some(before_config) = before {
+            if can_edit_config_file(&before_config, identity, current_branch, resolver) {
+                return Some(format!(
+                    "permission denied: {} cannot commit this change because it removes your edit access to ./.repobox/config.yml.\n\
+   Keep at least one identity/group with edit rights on ./.repobox/config.yml (for example: 'founders edit ./.repobox/config.yml') and try again.",
+                    identity
+                ));
+            }
+        }
+    }
+
+    None
 }
 
 /// Check permissions for git merge.
@@ -1233,6 +1298,49 @@ permissions:
         );
         assert!(matches!(action, ShimAction::Block(ref msg) if msg.contains("cannot")),
             "Agent should be blocked from modifying config, got: {:?}", action);
+    }
+
+    /// Remove founder's last edit-right to .repobox/config.yml is blocked with recovery guidance.
+    #[test]
+    fn test_founder_cannot_lock_themselves_out_of_config_edit() {
+        let config = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: allow
+  rules:
+    - founders edit ./.repobox/config.yml
+    - founders own >*
+"#;
+        let (_tmp, repo) = setup_repo_with_config(config);
+
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
+        Command::new("git").args(["commit", "-m", "init"]).current_dir(&repo).output().unwrap();
+
+        let risky_config = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+permissions:
+  default: deny
+  rules:
+    - founders push >*
+"#;
+        std::fs::write(repo.join(".repobox/config.yml"), risky_config).unwrap();
+        Command::new("git").args(["add", ".repobox/config.yml"]).current_dir(&repo).output().unwrap();
+
+        let founder = id("evm:0xAAA0000000000000000000000000000000000001");
+        let action = process_command(
+            &args("commit -m no-edit"),
+            Some(&repo),
+            Some(&founder),
+            Some("main"),
+        );
+
+        assert!(matches!(action, ShimAction::Block(ref msg)
+            if msg.contains("removes your edit access") && msg.contains("Keep at least one identity/group")),
+            "Founder's self-lockout must be blocked with recovery hint, got: {:?}", action);
     }
 
     /// Fran's actual config scenario: agents have `edit *` which includes config.

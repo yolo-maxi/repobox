@@ -38,6 +38,18 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### Self-lockout prevention UX guard for config edits
+- **Completed**: 2026-03-22 | **Agent**: repobox-qa-pipeline
+Added safety check in shim commit flow to block policy edits that remove the active identity's `.repobox/config.yml` edit permissions.
+When attempted, CLI now returns an explicit BLOCK with recovery instructions:
+`Keep at least one identity/group with edit rights on ./.repobox/config.yml`.
+This was validated in an adversarial scenario with founder->risky config edits + lint output inspection.
+
+
+### Identity rendering consistency fix (repo header)
+- **Completed**: 2026-03-22 | **Agent**: qa-pipeline
+Raw repo owner addresses are no longer displayed directly in repository header on explorer pages. Replaced raw 0x value with formatted `AddressDisplay` output for readability while preserving full-address copy behavior.
+
 ### Docs — comprehensive, honest, up-to-date
 - **Completed**: 2026-03-22 | **Agent**: claude-agent + reviewer-agent
 Comprehensive documentation update covering all features including new verbs, x402 payments, ENS resolution, force push policy. Added agent workflows and payment system guides. Marked unimplemented features as "Coming Soon" for clarity.
