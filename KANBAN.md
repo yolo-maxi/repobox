@@ -24,6 +24,19 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
+### Full knowledge sweep — all docs/skills/landing/llms.txt must be final
+- **Priority**: P0
+- **Tags**: docs, hackathon, demo-ready
+Comprehensive sweep across ALL knowledge surfaces to ensure everything is accurate, consistent, and demo-ready. Fran needs to use a final version locally for the demo. Check and update each:
+1. **llms.txt** (`web/public/llms.txt`) — accurate feature list, current verbs, real capabilities only
+2. **skill.md** (`web/public/skill.md`) — matches actual CLI behavior and config format
+3. **Landing page** — hero copy, feature sections, case studies all reflect what actually works
+4. **Docs pages** (`/docs`) — all sections current, no stale examples, "Coming Soon" for unfinished
+5. **AGENTS.md** in the repo root — accurate for agents consuming the repo
+6. **README.md** — clean, no stale self-hosting instructions, matches current architecture
+7. **Playground system prompt** — knows all current verbs and syntax
+Cross-reference everything against the actual Rust parser (`repobox-core/src/parser.rs`) and config types (`repobox-core/src/config.rs`) as source of truth. No contradictions between surfaces. This is the final polish before demo — nothing can be wrong or outdated.
+
 ### Accurate llms.txt — critical for agent judges
 - **Priority**: P1
 - **Tags**: docs, agents
