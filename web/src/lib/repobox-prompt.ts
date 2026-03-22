@@ -2,7 +2,7 @@
 export { REPOBOX_SYSTEM_PROMPT } from './generated-prompt';
 
 export const VENICE_ENDPOINT = "https://api.venice.ai/api/v1/chat/completions";
-export const VENICE_MODEL = "claude-sonnet-3.5-next"; // Optimized for faster response and better structured output
+export const VENICE_MODEL = "llama-3.3-70b"; // Fast on Venice, good at following repo.box YAML format
 
 export const EXPLAIN_EXAMPLES = [
   `groups:

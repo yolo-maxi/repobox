@@ -393,7 +393,7 @@ export function PlaygroundClient() {
               <span>Provider</span><strong>Venice.ai</strong>
             </div>
             <div className="pg-stat-row">
-              <span>Model</span><strong>Claude Haiku</strong>
+              <span>Model</span><strong>Llama 3.3 70B</strong>
             </div>
             <div className="pg-stat-row">
               <span>Temperature</span><strong>0.1</strong>
