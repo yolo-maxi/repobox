@@ -3539,6 +3539,71 @@ html {
   outline: 1px solid var(--explore-text-secondary);
 }
 
+.contribution-chart-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  color: var(--explore-text-secondary);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.contribution-chart-month-row {
+  margin-bottom: 2px;
+}
+
+.contribution-chart-months {
+  position: relative;
+  flex: 1;
+  height: 16px;
+}
+
+.contribution-chart-month-label {
+  position: absolute;
+  font-size: 10px;
+  color: var(--explore-text-secondary);
+  transform: translateX(0);
+  white-space: nowrap;
+}
+
+.contribution-chart-tooltip {
+  position: absolute;
+  background: var(--explore-text);
+  color: var(--explore-bg);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.contribution-chart-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 8px;
+  background: var(--explore-text);
+  rotate: 45deg;
+}
+
+.contribution-chart-tooltip strong {
+  font-size: 13px;
+}
+
+.contribution-chart-tooltip-addr {
+  font-size: 10px;
+  opacity: 0.7;
+  font-family: var(--font-mono, monospace);
+}
+
 .contribution-chart-legend {
   display: flex;
   align-items: center;
@@ -3547,6 +3612,10 @@ html {
   margin-top: 16px;
   font-size: 12px;
   color: var(--explore-text-secondary);
+}
+
+.contribution-chart-legend-label {
+  font-size: 11px;
 }
 
 .contribution-chart-legend-colors {
@@ -3558,6 +3627,7 @@ html {
   width: 10px;
   height: 10px;
   border-radius: 1px;
+  cursor: help;
 }
 
 /* Responsive adjustments for contribution chart */

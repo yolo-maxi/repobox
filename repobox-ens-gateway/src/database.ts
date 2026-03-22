@@ -1,41 +1,30 @@
-import sqlite3 from 'sqlite3';
-import { promisify } from 'util';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
-/**
- * Database wrapper for accessing repo.box alias data
- */
+interface AliasEntry {
+  alias: string;
+  address: string;
+}
+
 export class Database {
-    private db: sqlite3.Database;
+    private aliases: Map<string, string>;
 
     constructor(dbPath: string) {
-        this.db = new sqlite3.Database(dbPath);
+        this.aliases = new Map();
+        try {
+            const data = JSON.parse(readFileSync(dbPath, 'utf8')) as AliasEntry[];
+            for (const entry of data) {
+                this.aliases.set(entry.alias.toLowerCase(), entry.address);
+            }
+            console.log(`Loaded ${this.aliases.size} aliases`);
+        } catch (error) {
+            console.error(`Failed to load aliases from ${dbPath}:`, error);
+        }
     }
 
-    /**
-     * Resolve an alias to an Ethereum address
-     * @param alias The alias to resolve (e.g., "clever-green-canyon")
-     * @returns The Ethereum address or null if not found
-     */
     async resolveAlias(alias: string): Promise<string | null> {
-        return new Promise((resolve, reject) => {
-            this.db.get(
-                'SELECT address FROM aliases WHERE alias = ?',
-                [alias],
-                (err, row: any) => {
-                    if (err) {
-                        reject(err);
-                        return;
-                    }
-                    resolve(row ? row.address : null);
-                }
-            );
-        });
+        return this.aliases.get(alias.toLowerCase()) || null;
     }
 
-    /**
-     * Close the database connection
-     */
-    close(): void {
-        this.db.close();
-    }
+    close(): void {}
 }
