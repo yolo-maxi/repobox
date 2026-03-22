@@ -92,20 +92,10 @@ pub fn process_command_with_resolver(
         }
     };
 
-    // `git pull` is special: use remote (origin/<branch>) config when available
-    // so users are not blocked by stale local policy copies.
+    // `git pull` only updates local state; it should never be policy-blocked.
+    // (merge/push permissions are enforced on explicit merge/push operations)
     if cmd == "pull" {
-        let branch = match current_branch {
-            Some(b) => b,
-            None => return ShimAction::Delegate,
-        };
-
-        let cfg = match load_config_for_pull(repo_root.unwrap(), branch) {
-            Ok(c) => c,
-            Err(e) => return ShimAction::Block(e),
-        };
-
-        return check_pull(&cfg, identity, branch, resolver);
+        return ShimAction::Delegate;
     }
 
     // Parse local config for non-pull checked commands
@@ -131,46 +121,6 @@ pub fn process_command_with_resolver(
         "checkout" => check_checkout(args, &config, identity, resolver),
         "branch" => check_branch(args, &config, identity, resolver),
         _ => ShimAction::Passthrough,
-    }
-}
-
-fn load_config_for_pull(repo_root: &Path, branch: &str) -> Result<Config, String> {
-    // Prefer remote policy so pull can recover from stale local config.
-    let remote_spec = format!("origin/{branch}:.repobox/config.yml");
-    if let Ok(output) = Command::new("git")
-        .args(["show", &remote_spec])
-        .current_dir(repo_root)
-        .output()
-    {
-        if output.status.success() {
-            let content = String::from_utf8_lossy(&output.stdout).to_string();
-            if let Ok(cfg) = parser::parse(&content) {
-                return Ok(cfg);
-            }
-        }
-    }
-
-    // Fallback to local config.
-    let local_path = repo_root.join(".repobox/config.yml");
-    let content = std::fs::read_to_string(&local_path)
-        .map_err(|e| format!("failed to read .repobox/config.yml: {e}"))?;
-    parser::parse(&content).map_err(|e| format!(".repobox/config.yml error: {e}"))
-}
-
-fn check_pull(
-    config: &Config,
-    identity: &Identity,
-    branch: &str,
-    resolver: Option<&RemoteResolver>,
-) -> ShimAction {
-    let result = engine::check_with_resolver(config, identity, Verb::Merge, Some(branch), None, resolver);
-    if result.is_allowed() {
-        ShimAction::Delegate
-    } else {
-        ShimAction::Block(format!(
-            "permission denied: {} cannot merge into {branch}",
-            identity
-        ))
     }
 }
 
