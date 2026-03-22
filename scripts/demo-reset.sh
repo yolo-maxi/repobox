@@ -1,67 +1,54 @@
 #!/bin/bash
 set -euo pipefail
 
+# =============================================================================
 # repo.box Demo Reset Script
-# Removes demo repositories and cleans up temporary files
+# =============================================================================
+#
+# Cleans up demo repositories from the server and local temp directories.
 #
 # Usage:
-#   ./scripts/demo-reset.sh [options]
+#   ./scripts/demo-reset.sh --all                # Remove all demo-* repos
+#   ./scripts/demo-reset.sh --pattern 'demo-*'   # Remove matching pattern
+#   ./scripts/demo-reset.sh --dry-run --all       # Preview what would be deleted
 #
-# Options:
-#   --all       Remove all demo-* repositories
-#   --pattern   Remove repositories matching pattern (e.g., demo-hackathon-*)
-#   --dry-run   Show what would be deleted without actually deleting
+# =============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOBOX_DATA_DIR="${REPOBOX_DATA_DIR:-/tmp/repobox-data}"
 DRY_RUN=false
 PATTERN=""
-ALL_DEMOS=false
 
-# Colors for output
+# ── Colors ───────────────────────────────────────────────────────────────────
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-log() {
-  echo -e "${BLUE}ℹ️  $1${NC}"
-}
-
-success() {
-  echo -e "${GREEN}✅ $1${NC}"
-}
-
-warning() {
-  echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-error() {
-  echo -e "${RED}❌ $1${NC}" >&2
-  exit 1
-}
+log()     { echo -e "  ${BLUE}ℹ️  $1${NC}"; }
+success() { echo -e "  ${GREEN}✅ $1${NC}"; }
+warn()    { echo -e "  ${YELLOW}⚠️  $1${NC}"; }
+fail()    { echo -e "  ${RED}❌ $1${NC}" >&2; exit 1; }
 
 print_usage() {
   echo "Usage: $0 [options]"
   echo ""
   echo "Options:"
-  echo "  --all              Remove all demo-* repositories"
-  echo "  --pattern PATTERN  Remove repositories matching pattern"
+  echo "  --all              Remove all demo-* repositories and temp dirs"
+  echo "  --pattern PATTERN  Remove repos matching glob pattern (e.g. 'demo-hackathon-*')"
   echo "  --dry-run          Show what would be deleted without deleting"
-  echo "  --help            Show this help message"
+  echo "  --help             Show this help"
   echo ""
-  echo "Examples:"
-  echo "  $0 --all                           # Remove all demo repos"
-  echo "  $0 --pattern 'demo-hackathon-*'    # Remove specific pattern"
-  echo "  $0 --dry-run --all                 # See what would be removed"
+  echo "Environment:"
+  echo "  REPOBOX_DATA_DIR   Server data directory (default: /tmp/repobox-data)"
 }
 
-# Parse command line arguments
+# ── Argument Parsing ─────────────────────────────────────────────────────────
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     --all)
-      ALL_DEMOS=true
       PATTERN="demo-*"
       shift
       ;;
@@ -86,151 +73,107 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$PATTERN" ]]; then
-  echo "Error: Must specify --all or --pattern"
-  print_usage
-  exit 1
+  fail "Must specify --all or --pattern <glob>. Use --help for usage."
 fi
 
-log "repo.box Demo Reset Script"
-log "Data directory: $REPOBOX_DATA_DIR"
-log "Pattern: $PATTERN"
-
+echo ""
+echo -e "🧹 ${BLUE}repo.box Demo Reset${NC}"
+echo -e "   Pattern: ${PATTERN}"
+echo -e "   Data dir: ${REPOBOX_DATA_DIR}"
 if [[ "$DRY_RUN" == "true" ]]; then
-  warning "DRY RUN MODE - No files will be deleted"
+  warn "DRY RUN — nothing will be deleted"
 fi
+echo ""
 
-# Find repositories to remove
-declare -a repos_to_remove=()
+# ── Collect items to remove ──────────────────────────────────────────────────
 
+declare -a items=()
+
+# 1) Server-side bare repos: $REPOBOX_DATA_DIR/<address>/<repo>.git
 if [[ -d "$REPOBOX_DATA_DIR" ]]; then
-  log "Scanning for repositories matching pattern: $PATTERN"
-  
-  # Find all address directories
-  for addr_dir in "$REPOBOX_DATA_DIR"/*; do
-    if [[ -d "$addr_dir" && ! "$(basename "$addr_dir")" =~ ^(_staging|\..*) ]]; then
-      addr_name=$(basename "$addr_dir")
-      log "Checking address directory: $addr_name"
-      
-      # Check each repo in this address directory
-      for repo_dir in "$addr_dir"/*.git; do
-        if [[ -d "$repo_dir" ]]; then
-          repo_name=$(basename "$repo_dir" .git)
-          
-          # Check if repo matches pattern
-          if [[ "$repo_name" == $PATTERN ]]; then
-            repos_to_remove+=("$addr_name/$repo_name")
-            log "Found matching repository: $addr_name/$repo_name"
-          fi
-        fi
-      done
-    fi
+  for addr_dir in "$REPOBOX_DATA_DIR"/*/; do
+    [[ -d "$addr_dir" ]] || continue
+    for repo_dir in "$addr_dir"*.git; do
+      [[ -d "$repo_dir" ]] || continue
+      repo_name=$(basename "$repo_dir" .git)
+      # shellcheck disable=SC2053
+      if [[ "$repo_name" == $PATTERN ]]; then
+        items+=("repo:$repo_dir")
+        log "Server repo: $(basename "$addr_dir")/${repo_name}"
+      fi
+    done
   done
-  
+
   # Also check staging area
   if [[ -d "$REPOBOX_DATA_DIR/_staging" ]]; then
-    for staging_repo in "$REPOBOX_DATA_DIR/_staging"/*.git; do
-      if [[ -d "$staging_repo" ]]; then
-        repo_name=$(basename "$staging_repo" .git)
-        if [[ "$repo_name" == $PATTERN ]]; then
-          repos_to_remove+=("_staging/$repo_name")
-          log "Found matching staging repository: _staging/$repo_name"
-        fi
+    for repo_dir in "$REPOBOX_DATA_DIR/_staging"/*.git; do
+      [[ -d "$repo_dir" ]] || continue
+      repo_name=$(basename "$repo_dir" .git)
+      # shellcheck disable=SC2053
+      if [[ "$repo_name" == $PATTERN ]]; then
+        items+=("repo:$repo_dir")
+        log "Staging repo: _staging/${repo_name}"
       fi
     done
   fi
-else
-  warning "Data directory does not exist: $REPOBOX_DATA_DIR"
 fi
 
-# Remove temporary directories
-log "Scanning for temporary demo directories..."
-declare -a temp_dirs=()
-
-for temp_dir in /tmp/repobox-demo-*; do
-  if [[ -d "$temp_dir" ]]; then
-    temp_dirs+=("$temp_dir")
-    log "Found temporary directory: $temp_dir"
+# 2) Local temp directories: /tmp/repobox-demo-*
+for tmp in /tmp/repobox-demo-*; do
+  if [[ -d "$tmp" ]]; then
+    items+=("tmp:$tmp")
+    log "Temp dir: $tmp"
   fi
 done
 
-# Summary
-if [[ ${#repos_to_remove[@]} -eq 0 && ${#temp_dirs[@]} -eq 0 ]]; then
-  success "No matching repositories or temporary directories found"
+# ── Summary & Confirmation ───────────────────────────────────────────────────
+
+if [[ ${#items[@]} -eq 0 ]]; then
+  success "Nothing to clean up — no matching repos or temp dirs found"
   exit 0
 fi
 
 echo ""
-log "Summary of items to remove:"
-
-if [[ ${#repos_to_remove[@]} -gt 0 ]]; then
-  echo "Repositories:"
-  for repo in "${repos_to_remove[@]}"; do
-    echo "  - $repo"
-  done
-fi
-
-if [[ ${#temp_dirs[@]} -gt 0 ]]; then
-  echo "Temporary directories:"
-  for dir in "${temp_dirs[@]}"; do
-    echo "  - $dir"
-  done
-fi
+log "Found ${#items[@]} item(s) to remove"
 
 if [[ "$DRY_RUN" == "true" ]]; then
-  echo ""
-  warning "DRY RUN: Would remove ${#repos_to_remove[@]} repositories and ${#temp_dirs[@]} temp directories"
+  warn "DRY RUN complete — ${#items[@]} item(s) would be removed"
   exit 0
 fi
 
-echo ""
-read -p "Are you sure you want to remove these items? (y/N): " -r
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-  log "Aborted by user"
-  exit 0
+# Prompt for confirmation (skip if stdin is not a terminal)
+if [[ -t 0 ]]; then
+  read -rp "  Remove ${#items[@]} item(s)? (y/N): " confirm
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    log "Aborted"
+    exit 0
+  fi
 fi
 
-# Perform cleanup
-removed_count=0
+# ── Perform Cleanup ──────────────────────────────────────────────────────────
 
-# Remove repositories
-for repo in "${repos_to_remove[@]}"; do
-  if [[ "$repo" == _staging/* ]]; then
-    repo_path="$REPOBOX_DATA_DIR/$repo.git"
-  else
-    repo_path="$REPOBOX_DATA_DIR/$repo.git"
-  fi
-  
-  if [[ -d "$repo_path" ]]; then
-    log "Removing repository: $repo"
-    rm -rf "$repo_path"
-    ((removed_count++))
+removed=0
+for item in "${items[@]}"; do
+  path="${item#*:}"
+  if [[ -d "$path" ]]; then
+    rm -rf "$path"
+    (( removed++ ))
   fi
 done
 
-# Remove temporary directories
-for dir in "${temp_dirs[@]}"; do
-  if [[ -d "$dir" ]]; then
-    log "Removing temporary directory: $dir"
-    rm -rf "$dir"
-    ((removed_count++))
-  fi
-done
-
-# Clean up empty address directories
+# Remove empty address directories
 if [[ -d "$REPOBOX_DATA_DIR" ]]; then
-  for addr_dir in "$REPOBOX_DATA_DIR"/*; do
-    if [[ -d "$addr_dir" && ! "$(basename "$addr_dir")" =~ ^(_staging|\..*) ]]; then
-      if [[ -z "$(ls -A "$addr_dir" 2>/dev/null || true)" ]]; then
-        log "Removing empty address directory: $(basename "$addr_dir")"
-        rmdir "$addr_dir"
-      fi
+  for addr_dir in "$REPOBOX_DATA_DIR"/*/; do
+    [[ -d "$addr_dir" ]] || continue
+    basename_dir=$(basename "$addr_dir")
+    [[ "$basename_dir" == _staging ]] && continue
+    if [[ -z "$(ls -A "$addr_dir" 2>/dev/null)" ]]; then
+      rmdir "$addr_dir" 2>/dev/null || true
     fi
   done
 fi
 
-success "Cleanup completed! Removed $removed_count items"
-
 echo ""
-log "🎯 Next Steps:"
-echo "   • Run the demo again: ./scripts/demo-e2e.sh"
-echo "   • Check remaining repos: ls -la $REPOBOX_DATA_DIR"
+success "Removed ${removed} item(s)"
+echo ""
+echo -e "  ${BLUE}Next:${NC} run the demo again with ./scripts/demo-e2e.sh"

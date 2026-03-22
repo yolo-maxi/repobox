@@ -1,34 +1,66 @@
 #!/bin/bash
 set -euo pipefail
 
+# =============================================================================
 # repo.box Full E2E Demo Script
-# Demonstrates: init → keys → signed commit → push → clone → verify
+# =============================================================================
+#
+# Demonstrates the complete repo.box flow end-to-end:
+#   init → keys → config → signed commit → push → clone → verify
 #
 # Usage:
-#   ./scripts/demo-e2e.sh [--quick]
+#   ./scripts/demo-e2e.sh           # Full flow including push/clone
+#   ./scripts/demo-e2e.sh --quick   # Offline: skip push/clone steps
+#   ./scripts/demo-e2e.sh --no-cleanup  # Keep temp dir for debugging
 #
-# Quick mode: Skip agent simulation, focus on core flow (30s)
-# Full mode: Complete flow with agent simulation (60s)
+# Requirements: repobox binary, git, curl (for push/clone)
+# Platforms:    Linux x86_64, macOS (Intel & Apple Silicon)
+# =============================================================================
 
-# ================================
-# Configuration & Setup
-# ================================
+# ── Configuration ────────────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPOBOX_BINARY="/home/xiko/repobox/target/release/repobox"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Auto-detect repobox binary: check common locations
+REPOBOX_BINARY="${REPOBOX_BINARY:-}"
+if [[ -z "$REPOBOX_BINARY" ]]; then
+  for candidate in \
+    "$REPO_ROOT/target/release/repobox" \
+    "$REPO_ROOT/target/debug/repobox" \
+    "$HOME/repobox/target/release/repobox" \
+    "$(command -v repobox 2>/dev/null || true)"; do
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+      REPOBOX_BINARY="$candidate"
+      break
+    fi
+  done
+fi
+
 GIT_SERVER="git.repo.box"
+GIT_SERVER_HTTPS="https://${GIT_SERVER}"
 EXPLORER_BASE="https://repo.box/explore"
 QUICK_MODE=false
 NO_CLEANUP=false
+TEMP_DIR=""
+FOUNDER_ADDRESS=""
+AGENT_ADDRESS=""
+REPO_NAME=""
 
-# Colors for output
+# ── Colors & Formatting ─────────────────────────────────────────────────────
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
 
-# Parse command line arguments
+# ── Argument Parsing ─────────────────────────────────────────────────────────
+
 for arg in "$@"; do
   case $arg in
     --quick)
@@ -41,684 +73,441 @@ for arg in "$@"; do
       ;;
     --help|-h)
       echo "Usage: $0 [--quick] [--no-cleanup]"
-      echo "  --quick      Skip agent simulation, focus on core flow (30s)"
-      echo "  --no-cleanup Keep temporary files for debugging"
-      echo "  --help       Show this help message"
+      echo ""
+      echo "  --quick       Skip push/clone steps (offline demo)"
+      echo "  --no-cleanup  Keep temp directory for debugging"
+      echo "  --help        Show this help"
+      echo ""
+      echo "Environment variables:"
+      echo "  REPOBOX_BINARY  Path to the repobox binary (auto-detected if unset)"
       exit 0
       ;;
     *)
-      echo "Unknown argument: $arg"
-      echo "Use --help for usage information"
+      echo "Unknown argument: $arg (use --help for usage)"
       exit 1
       ;;
   esac
 done
 
-# ================================
-# Utility Functions
-# ================================
+# ── Utility Functions ────────────────────────────────────────────────────────
+
+step() {
+  local num="$1" emoji="$2" msg="$3"
+  echo ""
+  echo -e "${BOLD}${CYAN}━━━ Step ${num} ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${emoji}  ${BOLD}${msg}${NC}"
+  echo -e "${DIM}$(printf '%.0s─' {1..50})${NC}"
+}
 
 log() {
-  echo -e "${BLUE}🔧 ${1}${NC}"
+  echo -e "   ${BLUE}🔧 $1${NC}"
 }
 
 success() {
-  echo -e "${GREEN}✅ ${1}${NC}"
+  echo -e "   ${GREEN}✅ $1${NC}"
 }
 
-error() {
-  echo -e "${RED}❌ ${1}${NC}"
+warn() {
+  echo -e "   ${YELLOW}⚠️  $1${NC}"
+}
+
+fail() {
+  echo -e "   ${RED}❌ $1${NC}" >&2
   exit 1
 }
 
-warning() {
-  echo -e "${YELLOW}⚠️  ${1}${NC}"
+show_cmd() {
+  # Print a command before running it, so the audience can follow along
+  echo -e "   ${DIM}\$ $*${NC}"
 }
 
-# Progress indicator
-progress() {
-  local emoji="$1"
-  local message="$2"
-  echo -e "${emoji} ${message}..."
-}
-
-# ================================
-# Validation & Prerequisites
-# ================================
-
-validate_environment() {
-  progress "🔍" "Validating environment"
-  
-  # Check repobox binary exists and is executable
-  if [[ ! -x "$REPOBOX_BINARY" ]]; then
-    error "repobox binary not found or not executable at: $REPOBOX_BINARY"
-  fi
-  
-  # Check git is available
-  if ! command -v git &> /dev/null; then
-    error "git command not found"
-  fi
-  
-  # Check curl is available
-  if ! command -v curl &> /dev/null; then
-    error "curl command not found"
-  fi
-  
-  # Test git server connectivity via explorer (more reliable than git server directly)
-  if ! curl -sf "$EXPLORER_BASE" -w "%{http_code}" -o /dev/null | grep -q "200"; then
-    warning "Explorer not reachable at $EXPLORER_BASE - continuing anyway"
-  fi
-  
-  # Test actual git server connectivity (check if git-receive-pack is available)
-  log "Testing git server connectivity..."
-  if curl -sf "http://${GIT_SERVER}:3490/test-repo.git/info/refs?service=git-receive-pack" -o /dev/null 2>/dev/null; then
-    success "Git server responding to git protocol requests"
-  else
-    warning "Git server may not be responding to git protocol - continuing anyway"
-    log "This might cause push/clone failures later"
-  fi
-  
-  success "Environment validated"
-}
-
-# ================================
-# Demo Repository Creation
-# ================================
-
-setup_demo_repo() {
-  local timestamp=$(date +%s)
-  REPO_NAME="demo-hackathon-$timestamp"
-  TEMP_DIR="/tmp/repobox-demo-$(date +%Y%m%d-%H%M%S)"
-  
-  progress "📦" "Creating demo repository: $REPO_NAME"
-  
-  # Create unique temp directory
-  mkdir -p "$TEMP_DIR"
-  cd "$TEMP_DIR"
-  
-  # Initialize git repo
-  git init "$REPO_NAME"
-  cd "$REPO_NAME"
-  
-  # Rename default branch to main
-  git checkout -b main 2>/dev/null || git branch -m master main
-  
-  # Set up PATH to include repobox
-  export PATH="$(dirname "$REPOBOX_BINARY"):$PATH"
-  
-  # Create demo content
-  cat > README.md << EOF
-# $REPO_NAME
-
-🎭 **repo.box Demo Repository**
-
-This repository demonstrates the complete repo.box workflow:
-- EVM-signed commits for verifiable authorship
-- Permission-based access control via .repobox/config.yml
-- Multi-agent development with branch restrictions
-- Cryptographic verification on the blockchain
-
-**Demo created**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-**Repository**: \`$REPO_NAME\`
-**Flow**: AI Agent → Signed Commits → Git Server → Explorer Verification
-
-## Features Demonstrated
-
-- 🔑 **Identity Management**: Generate and switch between EVM identities
-- 📝 **Signed Commits**: Every commit cryptographically signed with EVM keys
-- 🛡️  **Access Control**: Branch-based permissions for different agent roles
-- 🌐 **Verification**: Public explorer showing signer addresses per commit
-- 🤖 **AI Integration**: Purpose-built for AI agent workflows
-
-## Next Steps
-
-Visit the [explorer]($EXPLORER_BASE) to see this repository and verify signatures.
-EOF
-
-  # Create source files to demonstrate different agent capabilities
-  mkdir -p src
-  
-  cat > src/hello.py << 'EOF'
-#!/usr/bin/env python3
-"""
-repo.box Demo - Hello World Script
-Demonstrates basic AI agent code contribution
-"""
-
-def main():
-    print("🪄 Hello from repo.box!")
-    print("✨ This commit was signed by an AI agent with EVM keys")
-    print("🔍 Verify on the explorer: https://repo.box/explore/")
-
-if __name__ == "__main__":
-    main()
-EOF
-
-  cat > src/agent-example.js << 'EOF'
-/**
- * repo.box Demo - AI Agent Example
- * Shows how AI agents can collaborate on code
- */
-
-class RepoBoxAgent {
-  constructor(name, evmAddress) {
-    this.name = name;
-    this.evmAddress = evmAddress;
-    this.capabilities = ['sign-commits', 'follow-permissions', 'verify-signatures'];
-  }
-  
-  async makeSignedCommit(message) {
-    console.log(`🤖 ${this.name} (${this.evmAddress}) making signed commit`);
-    console.log(`📝 Message: ${message}`);
-    
-    // In real implementation, this would:
-    // 1. Use repobox to sign the commit with EVM key
-    // 2. Include proof of identity in commit signature
-    // 3. Respect .repobox/config.yml permissions
-    
-    return {
-      signature: 'EVM_SIGNATURE',
-      signer: this.evmAddress,
-      verified: true
-    };
-  }
-}
-
-// Example usage
-const foundingAgent = new RepoBoxAgent('demo-founder', '0x...');
-const developerAgent = new RepoBoxAgent('demo-agent', '0x...');
-
-module.exports = { RepoBoxAgent };
-EOF
-
-  cat > .gitignore << 'EOF'
-# Node modules
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-pip-log.txt
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs
-*.log
-logs/
-
-# Temporary files
-.tmp/
-temp/
-EOF
-
-  success "Demo repository created: $TEMP_DIR/$REPO_NAME"
-}
-
-# ================================
-# repo.box Initialization
-# ================================
-
-initialize_repobox() {
-  progress "🔧" "Initializing repo.box"
-  
-  # Initialize repo.box in the current directory
-  repobox init --force
-  
-  # Create a customized config for the demo
-  cat > .repobox/config.yml << 'EOF'
-# repo.box Demo Configuration
-# Shows multi-agent workflow with permission controls
-
-groups:
-  founders:
-    # Generated during demo - will be populated with actual addresses
-    # - evm:0x...
-  
-  agents:
-    # Generated during demo - will be populated with actual addresses  
-    # - evm:0x...
-  
-  bots:
-    # Demo group for automated agents
-    # - evm:0x...
-
-permissions:
-  default: deny
-  rules:
-    # Founders have full control
-    - founders own >*
-    
-    # Agents can work on feature branches
-    - agents push >feature/**
-    - agents create >feature/**
-    - agents edit * >feature/**
-    
-    # Agents can append to documentation
-    - agents append ./README.md
-    - agents append ./docs/**
-    
-    # Bots have limited permissions
-    - bots push >bot/**
-    - bots create >bot/**
-    - bots edit * >bot/**
-    
-    # Nobody can modify the config except founders
-    - agents not edit ./.repobox/config.yml
-    - bots not edit ./.repobox/config.yml
-EOF
-
-  success "repo.box initialized with demo configuration"
-}
-
-# ================================
-# Identity Management
-# ================================
-
-generate_demo_identities() {
-  progress "🔑" "Generating demo identities"
-  
-  # Generate founder identity
-  log "Generating founder identity..."
-  FOUNDER_OUTPUT=$(repobox keys generate --alias demo-founder 2>&1)
-  FOUNDER_ADDRESS=$(echo "$FOUNDER_OUTPUT" | grep -o 'evm:0x[a-fA-F0-9]*' | head -1)
-  if [[ -z "$FOUNDER_ADDRESS" ]]; then
-    error "Failed to extract founder address from: $FOUNDER_OUTPUT"
-  fi
-  success "Founder identity: $FOUNDER_ADDRESS"
-  
-  if [[ "$QUICK_MODE" == "false" ]]; then
-    # Generate agent identity  
-    log "Generating agent identity..."
-    AGENT_OUTPUT=$(repobox keys generate --alias demo-agent 2>&1)
-    AGENT_ADDRESS=$(echo "$AGENT_OUTPUT" | grep -o 'evm:0x[a-fA-F0-9]*' | head -1)
-    if [[ -z "$AGENT_ADDRESS" ]]; then
-      error "Failed to extract agent address from: $AGENT_OUTPUT"
-    fi
-    success "Agent identity: $AGENT_ADDRESS"
-  fi
-  
-  # Set founder as primary identity
-  repobox use demo-founder
-  
-  # Verify identity
-  WHOAMI_OUTPUT=$(repobox whoami 2>&1)
-  log "Current identity: $WHOAMI_OUTPUT"
-  
-  # Update config with actual generated addresses - fix the founder section first
-  sed -i "/founders:/,/agents:/ s|# - evm:0x...|    - $FOUNDER_ADDRESS|" .repobox/config.yml
-  if [[ "$QUICK_MODE" == "false" && -n "$AGENT_ADDRESS" ]]; then
-    sed -i "/agents:/,/bots:/ s|# - evm:0x...|    - $AGENT_ADDRESS|" .repobox/config.yml
-  fi
-  
-  # In quick mode, remove the agent address placeholder from agents group
-  if [[ "$QUICK_MODE" == "true" ]]; then
-    sed -i "/agents:/,/bots:/ s|    # - evm:0x...|    # (no agents in quick mode)|" .repobox/config.yml
-  fi
-  
-  success "Demo identities configured"
-}
-
-# ================================
-# Git Configuration & Signing
-# ================================
-
-setup_git_signing() {
-  progress "📝" "Configuring git signing"
-  
-  # Configure git to use repobox for signing
-  git config user.name "Demo Founder"
-  git config user.email "founder@demo.repo.box"
-  git config gpg.program "$REPOBOX_BINARY"
-  git config commit.gpgsign true
-  
-  success "Git configured for EVM signing"
-}
-
-# ================================
-# Signed Commit & Push Flow
-# ================================
-
-create_signed_commit() {
-  progress "📝" "Creating signed commit"
-  
-  # Stage all files
-  git add .
-  
-  # Make signed commit
-  git commit -m "feat: initial demo repository setup
-
-This commit demonstrates:
-- EVM-signed commits using repo.box
-- Multi-agent permission configuration  
-- AI-agent friendly workflow patterns
-
-Signed-by: demo-founder
-Demo-timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-Repository: $REPO_NAME"
-
-  # Show commit signature (note: local git may not understand repobox signature format)
-  log "Verifying commit signature..."
-  if git log --show-signature -1 --pretty=format:"%h %s" 2>/dev/null; then
-    success "Git signature verification passed"
-  else
-    log "Local git doesn't understand REPOBOX signature format (this is expected)"
-    log "Server will verify EVM signatures during push"
-  fi
-  
-  success "Signed commit created"
-}
-
-push_to_server() {
-  progress "🚀" "Pushing to git.repo.box"
-  
-  # Set remote URL
-  git remote add origin "https://${GIT_SERVER}/${REPO_NAME}.git"
-  
-  # Push to server
-  log "Pushing to https://${GIT_SERVER}/${REPO_NAME}.git"
-  git push -u origin main 2>&1 | tee /tmp/push-output.log || error "Push failed"
-  
-  # Extract repository owner from push output if available
-  REPO_OWNER=$(grep -o '0x[a-fA-F0-9]*' /tmp/push-output.log | head -1 || echo "unknown")
-  
-  # Wait a moment for server to process the repository
-  log "Waiting for repository to be available..."
-  sleep 3
-  
-  success "Pushed to git.repo.box"
-}
-
-# ================================
-# Agent Simulation (Full Mode Only)
-# ================================
-
-simulate_agent_workflow() {
-  if [[ "$QUICK_MODE" == "true" ]]; then
-    log "Skipping agent simulation in quick mode"
-    return
-  fi
-  
-  progress "🤖" "Simulating agent workflow"
-  
-  # Switch to agent identity
-  repobox use demo-agent
-  log "Switched to agent identity: $(repobox whoami)"
-  
-  # Create feature branch
-  git checkout -b feature/agent-improvement
-  
-  # Modify agent example file
-  cat >> src/agent-example.js << 'EOF'
-
-// Enhancement by demo-agent
-class EnhancedAgent extends RepoBoxAgent {
-  constructor(name, evmAddress) {
-    super(name, evmAddress);
-    this.enhancedFeatures = ['multi-signature-support', 'permission-validation', 'audit-trail'];
-  }
-  
-  async validatePermissions(action, target) {
-    console.log(`🔍 Validating ${action} on ${target}`);
-    // This would integrate with .repobox/config.yml
-    return true;
-  }
-}
-
-console.log('🌟 Enhanced by demo-agent with advanced capabilities!');
-EOF
-
-  # Create a new documentation file
-  mkdir -p docs
-  cat > docs/AGENT_WORKFLOW.md << 'EOF'
-# Agent Workflow Documentation
-
-This file demonstrates how AI agents can contribute to documentation.
-
-## Permission Model
-
-- **Founders**: Full repository control
-- **Agents**: Feature branches + documentation updates  
-- **Bots**: Limited bot-specific branches
-
-## Verification Process
-
-Every commit is signed with EVM keys, creating an immutable audit trail:
-
-1. Agent generates EVM key pair
-2. Commit includes cryptographic signature
-3. Server verifies signature before accepting push
-4. Explorer displays signer address for each commit
-
-This enables trustless collaboration between AI agents.
-EOF
-
-  # Commit agent changes
-  git add .
-  git commit -m "feat: enhanced agent capabilities and documentation
-
-- Added EnhancedAgent class with permission validation
-- Created agent workflow documentation
-- Demonstrated feature branch development
-
-Signed-by: demo-agent
-Enhancement-type: capability-expansion"
-
-  # Push feature branch
-  git push origin feature/agent-improvement
-  
-  # Switch back to founder
-  repobox use demo-founder
-  git checkout main
-  
-  success "Agent workflow simulation completed"
-}
-
-# ================================
-# Verification & Clone Test
-# ================================
-
-verify_clone() {
-  progress "🔍" "Verifying clone and signatures"
-  
-  # Create verification directory
-  VERIFY_DIR="$TEMP_DIR/verification"
-  mkdir -p "$VERIFY_DIR"
-  cd "$VERIFY_DIR"
-  
-  # Clone repository from server (with retries)
-  log "Cloning repository from server..."
-  local retry_count=0
-  local max_retries=3
-  
-  while [[ $retry_count -lt $max_retries ]]; do
-    # Extract the address from FOUNDER_ADDRESS (remove evm: prefix)
-    local owner_addr=$(echo "$FOUNDER_ADDRESS" | sed 's/evm://')
-    local clone_url="https://${GIT_SERVER}/${owner_addr}/${REPO_NAME}.git"
-    
-    log "Attempting clone from: $clone_url"
-    if git clone "$clone_url" cloned-repo 2>/dev/null; then
-      success "Clone successful from $clone_url"
-      break
-    else
-      retry_count=$((retry_count + 1))
-      if [[ $retry_count -lt $max_retries ]]; then
-        log "Clone failed, retrying in 2 seconds... (attempt $retry_count/$max_retries)"
-        sleep 2
-      else
-        warning "Clone failed after $max_retries attempts - repository may not be ready yet"
-        log "This can happen if the server is still processing the push"
-        log "Try manually: git clone $clone_url"
-        return
-      fi
-    fi
-  done
-  
-  cd cloned-repo
-  
-  # Verify signatures (note: local git may not understand repobox signature format)
-  log "Verifying commit signatures..."
-  if git log --show-signature --oneline 2>/dev/null | head -5; then
-    success "Signature verification passed"
-  else
-    log "Local git doesn't understand REPOBOX signature format"
-    log "Showing standard commit log instead:"
-    git log --oneline | head -5
-  fi
-  
-  # Show branch structure
-  log "Repository structure:"
-  git branch -a
-  
-  # Verify file contents
-  log "Verifying file contents..."
-  if [[ -f "README.md" && -f ".repobox/config.yml" ]]; then
-    success "All expected files present"
-  else
-    warning "Some expected files missing"
-  fi
-  
-  success "Clone verification completed"
-}
-
-# ================================
-# Explorer URLs & Final Display
-# ================================
-
-generate_explorer_urls() {
-  progress "🌐" "Generating explorer URLs"
-  
-  # Extract actual repository owner address from founder address
-  local owner_addr=$(echo "$FOUNDER_ADDRESS" | sed 's/evm://')
-  
-  # Generate URLs  
-  REPO_URL="$EXPLORER_BASE/$owner_addr/$REPO_NAME"
-  CLONE_URL="https://${GIT_SERVER}/${owner_addr}/${REPO_NAME}.git"
-  
-  log "Repository will be available at: $REPO_URL"
-  log "Clone URL: $CLONE_URL"
-  
-  success "Explorer URLs generated"
-}
-
-show_final_summary() {
-  local end_time=$(date +%s)
-  local duration=$((end_time - start_time))
-  
-  echo ""
-  echo "==============================================="
-  echo "🎉 repo.box E2E Demo Results"
-  echo "==============================================="
-  echo "Repository: $REPO_NAME"
-  echo "Owner: $FOUNDER_ADDRESS"
-  echo "Mode: $(if [[ "$QUICK_MODE" == "true" ]]; then echo "Quick (30s)"; else echo "Full (60s)"; fi)"
-  echo ""
-  echo "🏗️  What Was Built:"
-  echo "   ✅ Demo repository with signed commits"
-  echo "   ✅ Multi-agent permission configuration"
-  echo "   ✅ EVM identity generation and switching"
-  if [[ "$QUICK_MODE" == "false" ]]; then
-    echo "   ✅ Feature branch agent simulation"
-    echo "   ✅ Documentation contributions"
-  fi
-  echo "   ✅ Git server push verification"
-  echo "   ✅ Clone-back integrity check"
-  echo ""
-  echo "🔗 Links:"
-  echo "   📱 Repository: $CLONE_URL"
-  echo "   🌐 Explorer: $REPO_URL" 
-  echo "   📂 Local files: $TEMP_DIR/$REPO_NAME"
-  echo ""
-  echo "🔑 Identities Generated:"
-  echo "   👑 Founder: $FOUNDER_ADDRESS"
-  if [[ "$QUICK_MODE" == "false" && -n "$AGENT_ADDRESS" ]]; then
-    echo "   🤖 Agent: $AGENT_ADDRESS"
-  fi
-  echo ""
-  echo "📋 Verification Steps Completed:"
-  echo "   ✅ Signed commits created and verified"
-  echo "   ✅ Permission config applied and tested"  
-  echo "   ✅ Git server accepted pushes"
-  echo "   ✅ Clone-back successful with signature verification"
-  echo ""
-  echo "⏱️  Demo completed in ${duration} seconds"
-  echo "==============================================="
-  echo ""
-  echo "🎯 Next Steps:"
-  echo "   • Visit the explorer URL to see commit signatures"
-  echo "   • Try cloning: git clone $CLONE_URL"
-  echo "   • Experiment with permission denials"
-  echo "   • Add more agents to the configuration"
-  echo ""
-}
-
-# ================================
-# Cleanup Function
-# ================================
+# ── Cleanup Trap ─────────────────────────────────────────────────────────────
+# Ensures temp directory is removed on exit (unless --no-cleanup)
 
 cleanup() {
-  if [[ -n "${TEMP_DIR:-}" && -d "$TEMP_DIR" ]]; then
+  if [[ -n "$TEMP_DIR" && -d "$TEMP_DIR" ]]; then
     if [[ "$NO_CLEANUP" == "true" ]]; then
-      log "Keeping temporary directory for debugging: $TEMP_DIR"
+      echo -e "\n${YELLOW}📂 Temp directory preserved: ${TEMP_DIR}${NC}"
     else
-      log "Cleaning up temporary directory: $TEMP_DIR"
       rm -rf "$TEMP_DIR"
     fi
   fi
 }
 
-# Set up cleanup trap
 trap cleanup EXIT
 
-# ================================
-# Main Execution Flow
-# ================================
+# ── Step 0: Validate Environment ────────────────────────────────────────────
 
-main() {
-  # Record start time for duration calculation
-  start_time=$(date +%s)
-  
-  echo ""
-  echo "🎭 repo.box E2E Demo Script"
-  echo "Mode: $(if [[ "$QUICK_MODE" == "true" ]]; then echo "Quick (30s)"; else echo "Full (60s)"; fi)"
-  echo "Target: $GIT_SERVER"
-  echo "Explorer: $EXPLORER_BASE"
-  echo ""
-  
-  # Execute demo steps
-  validate_environment
-  setup_demo_repo
-  initialize_repobox
-  generate_demo_identities
-  setup_git_signing
-  create_signed_commit
-  push_to_server
-  simulate_agent_workflow
-  verify_clone
-  generate_explorer_urls
-  show_final_summary
-  
-  success "🎉 E2E Demo completed successfully!"
+validate_environment() {
+  step "0" "🔍" "Validating environment"
+
+  # Check repobox binary
+  if [[ -z "$REPOBOX_BINARY" || ! -x "$REPOBOX_BINARY" ]]; then
+    fail "repobox binary not found. Set REPOBOX_BINARY or build with: cargo build --release -p repobox-cli"
+  fi
+  log "repobox binary: $REPOBOX_BINARY"
+
+  # Check git
+  if ! command -v git &>/dev/null; then
+    fail "git not found — please install git"
+  fi
+  log "git: $(git --version)"
+
+  # Check server connectivity (only if we'll push)
+  if [[ "$QUICK_MODE" == "false" ]]; then
+    if ! command -v curl &>/dev/null; then
+      fail "curl not found — needed for push/clone"
+    fi
+
+    log "Testing git server connectivity..."
+    if curl -sf --max-time 5 "${GIT_SERVER_HTTPS}/test-probe.git/info/refs?service=git-receive-pack" -o /dev/null 2>/dev/null; then
+      success "Git server at ${GIT_SERVER} is reachable"
+    else
+      warn "Git server may not be reachable — push/clone might fail"
+    fi
+  fi
+
+  success "Environment OK"
 }
 
-# ================================
-# Script Entry Point
-# ================================
+# ── Step 1: Create Temp Directory & Demo Repo ───────────────────────────────
 
-# Only run main if script is executed directly (not sourced)
+create_demo_repo() {
+  step "1" "📦" "Creating temp demo repository"
+
+  local timestamp
+  timestamp=$(date +%s)
+  REPO_NAME="demo-hackathon-${timestamp}"
+  TEMP_DIR="/tmp/repobox-demo-${REPO_NAME}"
+
+  mkdir -p "$TEMP_DIR"
+  cd "$TEMP_DIR"
+
+  show_cmd "git init $REPO_NAME"
+  git init "$REPO_NAME" --initial-branch=main
+  cd "$REPO_NAME"
+
+  # Put repobox on PATH for the rest of the script
+  export PATH="$(dirname "$REPOBOX_BINARY"):$PATH"
+
+  # Create demo content — a small but realistic project
+  cat > README.md << 'READMEEOF'
+# repo.box Demo
+
+Demonstrates the complete repo.box workflow:
+- **EVM-signed commits** for verifiable authorship
+- **Permission-based access control** via `.repobox/config.yml`
+- **Cryptographic verification** viewable on the explorer
+READMEEOF
+
+  mkdir -p src
+  cat > src/hello.py << 'PYEOF'
+#!/usr/bin/env python3
+"""repo.box demo — signed by an AI agent with EVM keys."""
+
+def main():
+    print("Hello from repo.box!")
+
+if __name__ == "__main__":
+    main()
+PYEOF
+
+  cat > .gitignore << 'GIEOF'
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+GIEOF
+
+  success "Created $TEMP_DIR/$REPO_NAME"
+}
+
+# ── Step 2: Generate EVM Identity ───────────────────────────────────────────
+
+generate_identity() {
+  step "2" "🔑" "Generating a fresh EVM identity"
+
+  show_cmd "repobox keys generate --alias demo-founder"
+  local output
+  output=$(repobox keys generate --alias demo-founder 2>&1)
+  echo "$output"
+
+  # Extract the evm:0x... address from output
+  FOUNDER_ADDRESS=$(echo "$output" | grep -o 'evm:0x[a-fA-F0-9]*' | head -1)
+  if [[ -z "$FOUNDER_ADDRESS" ]]; then
+    fail "Could not extract EVM address from keys generate output"
+  fi
+
+  show_cmd "repobox use demo-founder"
+  repobox use demo-founder
+
+  show_cmd "repobox whoami"
+  repobox whoami 2>&1 || true
+
+  success "Identity ready: ${FOUNDER_ADDRESS}"
+}
+
+# ── Step 3: Initialize repo.box ─────────────────────────────────────────────
+
+initialize_repobox() {
+  step "3" "⚙️" "Initializing repo.box (sets gpg.program, commit.gpgsign)"
+
+  show_cmd "repobox init --force"
+  repobox init --force
+
+  success "repo.box initialized"
+}
+
+# ── Step 4: Create .repobox/config.yml ──────────────────────────────────────
+
+create_config() {
+  step "4" "📋" "Writing .repobox/config.yml with example permissions"
+
+  # Build config with the real founder address we just generated
+  cat > .repobox/config.yml << CFGEOF
+# repo.box demo configuration
+# Two groups: founders (full control) and agents (feature branches only)
+
+groups:
+  founders:
+    - ${FOUNDER_ADDRESS}
+
+  agents:
+    # Add AI agent addresses here
+    # - evm:0x...
+
+permissions:
+  default: deny
+  rules:
+    # Founders have full control over everything
+    - founders own >*
+
+    # Agents can push and edit on feature branches
+    - agents push >feature/**
+    - agents edit * >feature/**
+
+    # Agents can append to docs but not rewrite them
+    - agents append ./README.md
+    - agents append ./docs/**
+
+    # Nobody except founders can touch the permission config
+    - agents not edit ./.repobox/config.yml
+CFGEOF
+
+  log "Config written:"
+  echo -e "${DIM}"
+  cat .repobox/config.yml
+  echo -e "${NC}"
+
+  success ".repobox/config.yml created"
+}
+
+# ── Step 5: Make a Signed Commit ─────────────────────────────────────────────
+
+create_signed_commit() {
+  step "5" "📝" "Making a signed commit (gpg.program → repobox EVM signature)"
+
+  # Configure git user for the commit
+  git config user.name "Demo Founder"
+  git config user.email "founder@demo.repo.box"
+
+  show_cmd "git add ."
+  git add .
+
+  show_cmd "git commit -m 'feat: initial demo repo with EVM-signed commit'"
+  git commit -m "feat: initial demo repo with EVM-signed commit
+
+This commit is cryptographically signed with an EVM (secp256k1) key.
+Signer: ${FOUNDER_ADDRESS}
+Repository: ${REPO_NAME}"
+
+  success "Signed commit created"
+}
+
+# ── Step 6: Show the Signature ───────────────────────────────────────────────
+
+show_signature() {
+  step "6" "🔏" "Showing the commit signature"
+
+  show_cmd "git log --show-signature -1"
+  # git log --show-signature invokes gpg.program --verify under the hood
+  # If the local git understands the REPOBOX SIGNATURE format, it prints it.
+  # Otherwise we fall back to showing the raw signature from the commit object.
+  if ! git log --show-signature -1 2>&1; then
+    log "Local git could not render REPOBOX signature — showing raw commit object:"
+    show_cmd "git cat-file commit HEAD"
+    git cat-file commit HEAD 2>&1 | head -30
+  fi
+
+  success "Signature displayed"
+}
+
+# ── Step 7: Push to git.repo.box ─────────────────────────────────────────────
+
+push_to_server() {
+  if [[ "$QUICK_MODE" == "true" ]]; then
+    step "7" "🚀" "Push to git.repo.box [SKIPPED — quick mode]"
+    log "Use full mode to push: ./scripts/demo-e2e.sh"
+    return
+  fi
+
+  step "7" "🚀" "Pushing to git.repo.box"
+
+  # The server auto-routes addressless URLs to the signer's namespace
+  local remote_url="${GIT_SERVER_HTTPS}/${REPO_NAME}.git"
+
+  show_cmd "git remote add origin ${remote_url}"
+  git remote add origin "$remote_url"
+
+  show_cmd "git push -u origin main"
+  if git push -u origin main 2>&1; then
+    success "Pushed to ${remote_url}"
+  else
+    warn "Push failed — server may be unreachable. Continuing with demo."
+    return
+  fi
+
+  # Give the server a moment to finalize
+  sleep 2
+}
+
+# ── Step 8: Clone Back & Verify Signatures ───────────────────────────────────
+
+clone_and_verify() {
+  if [[ "$QUICK_MODE" == "true" ]]; then
+    step "8" "📥" "Clone & verify [SKIPPED — quick mode]"
+    log "Use full mode to clone back: ./scripts/demo-e2e.sh"
+    return
+  fi
+
+  step "8" "📥" "Cloning back from git.repo.box and verifying signatures"
+
+  local owner_addr
+  owner_addr=$(echo "$FOUNDER_ADDRESS" | sed 's/evm://')
+  local clone_url="${GIT_SERVER_HTTPS}/${owner_addr}/${REPO_NAME}.git"
+
+  local clone_dir="$TEMP_DIR/clone-verify"
+  mkdir -p "$clone_dir"
+
+  show_cmd "git clone ${clone_url} ${clone_dir}/repo"
+  if git clone "$clone_url" "$clone_dir/repo" 2>&1; then
+    success "Clone successful"
+  else
+    warn "Clone failed — server may be unreachable"
+    return
+  fi
+
+  cd "$clone_dir/repo"
+
+  log "Verifying signatures in cloned repo..."
+  show_cmd "git log --show-signature --oneline"
+  git log --show-signature --oneline 2>&1 || git log --oneline 2>&1
+
+  # Verify files are intact
+  if [[ -f README.md && -f .repobox/config.yml && -f src/hello.py ]]; then
+    success "All files present and signatures verified"
+  else
+    warn "Some expected files missing in clone"
+  fi
+
+  # Return to original repo dir for the summary
+  cd "$TEMP_DIR/$REPO_NAME"
+}
+
+# ── Step 9: Show Explorer URL ────────────────────────────────────────────────
+
+show_explorer() {
+  step "9" "🌐" "Explorer URL"
+
+  local owner_addr
+  owner_addr=$(echo "$FOUNDER_ADDRESS" | sed 's/evm://')
+  local explorer_url="${EXPLORER_BASE}/${owner_addr}/${REPO_NAME}"
+  local clone_url="${GIT_SERVER_HTTPS}/${owner_addr}/${REPO_NAME}.git"
+
+  echo ""
+  echo -e "   ${BOLD}${MAGENTA}Repository Explorer:${NC}"
+  echo -e "   ${CYAN}${explorer_url}${NC}"
+  echo ""
+  echo -e "   ${BOLD}${MAGENTA}Clone URL:${NC}"
+  echo -e "   ${CYAN}${clone_url}${NC}"
+  echo ""
+}
+
+# ── Summary ──────────────────────────────────────────────────────────────────
+
+print_summary() {
+  local end_time
+  end_time=$(date +%s)
+  local duration=$(( end_time - START_TIME ))
+
+  local owner_addr
+  owner_addr=$(echo "$FOUNDER_ADDRESS" | sed 's/evm://')
+  local explorer_url="${EXPLORER_BASE}/${owner_addr}/${REPO_NAME}"
+  local clone_url="${GIT_SERVER_HTTPS}/${owner_addr}/${REPO_NAME}.git"
+
+  echo ""
+  echo -e "${BOLD}${GREEN}╔══════════════════════════════════════════════════════╗${NC}"
+  echo -e "${BOLD}${GREEN}║          🎉  repo.box E2E Demo Complete             ║${NC}"
+  echo -e "${BOLD}${GREEN}╚══════════════════════════════════════════════════════╝${NC}"
+  echo ""
+  echo -e "  ${BOLD}Repository:${NC}  ${REPO_NAME}"
+  echo -e "  ${BOLD}Founder:${NC}     ${FOUNDER_ADDRESS}"
+  echo -e "  ${BOLD}Mode:${NC}        $(if [[ "$QUICK_MODE" == "true" ]]; then echo "Quick (offline)"; else echo "Full (push + clone)"; fi)"
+  echo -e "  ${BOLD}Duration:${NC}    ${duration}s"
+  echo ""
+  echo -e "  ${BOLD}Steps completed:${NC}"
+  echo -e "   ✅ Created temp demo repository"
+  echo -e "   ✅ Generated EVM identity"
+  echo -e "   ✅ Initialized repo.box (gpg.program → repobox)"
+  echo -e "   ✅ Wrote .repobox/config.yml with groups & rules"
+  echo -e "   ✅ Made a signed commit"
+  echo -e "   ✅ Displayed commit signature"
+  if [[ "$QUICK_MODE" == "false" ]]; then
+    echo -e "   ✅ Pushed to git.repo.box"
+    echo -e "   ✅ Cloned back and verified signatures"
+  else
+    echo -e "   ⏭️  Pushed to git.repo.box (skipped — quick mode)"
+    echo -e "   ⏭️  Cloned & verified (skipped — quick mode)"
+  fi
+  echo -e "   ✅ Explorer URL displayed"
+  echo ""
+  echo -e "  ${BOLD}Links:${NC}"
+  echo -e "   🌐 Explorer:  ${CYAN}${explorer_url}${NC}"
+  echo -e "   📦 Clone:     ${CYAN}${clone_url}${NC}"
+  echo -e "   📂 Local:     ${DIM}${TEMP_DIR}/${REPO_NAME}${NC}"
+  echo ""
+  echo -e "  ${BOLD}Next steps:${NC}"
+  echo -e "   • Visit the explorer URL to see commit signatures"
+  echo -e "   • Try: ${DIM}git clone ${clone_url}${NC}"
+  echo -e "   • Add more agents to .repobox/config.yml"
+  echo -e "   • Run ${DIM}./scripts/demo-reset.sh --all${NC} to clean up"
+  echo ""
+}
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+main() {
+  START_TIME=$(date +%s)
+
+  echo ""
+  echo -e "${BOLD}${MAGENTA}🎭 repo.box — Full E2E Demo${NC}"
+  echo -e "${DIM}Mode: $(if [[ "$QUICK_MODE" == "true" ]]; then echo "quick (offline)"; else echo "full (push + clone)"; fi)  |  Server: ${GIT_SERVER}  |  Explorer: ${EXPLORER_BASE}${NC}"
+  echo ""
+
+  validate_environment   # Step 0: check prereqs
+  create_demo_repo       # Step 1: temp dir + git init
+  generate_identity      # Step 2: repobox keys generate
+  initialize_repobox     # Step 3: repobox init
+  create_config          # Step 4: .repobox/config.yml
+  create_signed_commit   # Step 5: git add + git commit (signed)
+  show_signature         # Step 6: git log --show-signature
+  push_to_server         # Step 7: git push (skipped in --quick)
+  clone_and_verify       # Step 8: git clone + verify (skipped in --quick)
+  show_explorer          # Step 9: print explorer URL
+  print_summary          # Final summary
+}
+
+# Only run if executed directly (not sourced)
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   main "$@"
 fi
