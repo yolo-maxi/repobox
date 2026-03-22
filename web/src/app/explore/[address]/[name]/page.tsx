@@ -684,7 +684,7 @@ export default function RepoPage() {
           display: flex; gap: 8px; align-items: center;
           margin-top: 4px; font-size: 11px;
         }
-        .rd-commit-author { color: var(--bp-dim); font-size: 11px; }
+        .rd-commit-author { color: var(--bp-gold); font-size: 11px; }
         .rd-commit-hash {
           font-size: 12px; color: var(--bp-accent);
           text-decoration: none; font-family: inherit;
@@ -718,7 +718,7 @@ export default function RepoPage() {
           font-size: 11px; font-weight: 700; color: var(--bp-accent);
           flex-shrink: 0;
         }
-        .rd-contributor-name { font-size: 13px; font-weight: 600; color: var(--bp-heading); }
+        .rd-contributor-name { font-size: 13px; font-weight: 600; color: var(--bp-gold); }
         .rd-contributor-addr { font-size: 10px; color: var(--bp-dim); opacity: 0.6; }
         .rd-contributor-stats {
           display: flex; justify-content: space-between;

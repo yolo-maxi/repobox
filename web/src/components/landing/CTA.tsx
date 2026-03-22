@@ -67,7 +67,7 @@ export function LandingCTA() {
               alignItems: "center",
               background: "rgba(79, 195, 247, 0.15)",
               color: "var(--bp-accent)",
-              border: "1px solid var(--bp-gold)",
+              border: "1px solid rgba(79, 195, 247, 0.25)",
               fontFamily: "var(--font-mono), monospace",
               fontSize: 14,
               fontWeight: 600,

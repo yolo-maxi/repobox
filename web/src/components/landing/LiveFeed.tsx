@@ -73,7 +73,7 @@ export function LiveFeed({ entries }: { entries: FeedEntry[] }) {
               width: 6,
               height: 6,
               borderRadius: "50%",
-              background: "#22c55e",
+              background: "var(--bp-accent)",
               animation: "pulse 2s infinite",
               flexShrink: 0,
             }}
@@ -133,7 +133,7 @@ export function LiveFeed({ entries }: { entries: FeedEntry[] }) {
             <Link
               href={`/explore/${entry.author}`}
               style={{
-                color: "var(--bp-accent)",
+                color: "var(--bp-gold)",
                 fontWeight: 500,
                 flexShrink: 0,
                 minWidth: 80,

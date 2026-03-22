@@ -3790,13 +3790,13 @@ html {
 /* Identity tier styles */
 /* Tier 1: ENS — full name, standard weight, subtle blue accent */
 .address-display--tier-ens .address-display__text {
-  color: var(--bp-heading, #e0e0e0);
+  color: var(--bp-gold);
   font-weight: 500;
 }
 
-/* Tier 2: Purchased repobox.eth subdomain — accent color, no .repobox.eth suffix */
+/* Tier 2: Purchased repobox.eth subdomain — gold, no .repobox.eth suffix */
 .address-display--tier-purchased .address-display__text {
-  color: #4fc3f7;
+  color: var(--bp-gold);
   font-weight: 600;
 }
 
