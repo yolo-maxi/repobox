@@ -231,23 +231,35 @@ fn main() -> ExitCode {
 // ── Init ──────────────────────────────────────────────────────────────
 
 fn cmd_init(force: bool) -> ExitCode {
-    // If not a git repo, run git init first
-    let git_check = Command::new(find_real_git())
-        .args(["rev-parse", "--git-dir"])
+    let real_git = find_real_git();
+
+    // Must be run at the root of an existing git repo.
+    let git_root_out = Command::new(&real_git)
+        .args(["rev-parse", "--show-toplevel"])
         .output();
 
-    let is_git_repo = matches!(&git_check, Ok(out) if out.status.success());
-    if !is_git_repo {
-        let status = Command::new(find_real_git())
-            .arg("init")
-            .status();
-        match status {
-            Ok(s) if s.success() => {}
-            _ => {
-                eprintln!("error: failed to initialize git repository");
-                return ExitCode::FAILURE;
-            }
+    let git_root = match git_root_out {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).trim().to_string(),
+        _ => {
+            eprintln!("error: you are not in the root folder of a git repo. Run git init first");
+            return ExitCode::FAILURE;
         }
+    };
+
+    let cwd = match std::env::current_dir() {
+        Ok(dir) => dir,
+        Err(_) => {
+            eprintln!("error: you are not in the root folder of a git repo. Run git init first");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let cwd_canon = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+    let root_canon = std::fs::canonicalize(PathBuf::from(git_root)).unwrap_or_else(|_| PathBuf::new());
+
+    if cwd_canon != root_canon {
+        eprintln!("error: you are not in the root folder of a git repo. Run git init first");
+        return ExitCode::FAILURE;
     }
 
     let config_dir = Path::new(".repobox");
