@@ -262,25 +262,7 @@ export default function AddressPage() {
   if (resolving) {
     return (
       <div className="explore-page">
-        <header className="explore-main-header">
-          <div className="explore-main-header-content">
-            <div className="explore-nav">
-              <Link href="/" className="explore-logo">
-                repo<span className="explore-logo-dot">.</span>box
-              </Link>
-              <nav className="explore-nav-links">
-                <Link href="/" className="explore-nav-link">Home</Link>
-                <Link href="/explore" className="explore-nav-link">Explore</Link>
-                <Link href="/docs" className="explore-nav-link">Docs</Link>
-              </nav>
-            </div>
-            <div className="explore-breadcrumb-nav">
-              <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
-              <span className="explore-breadcrumb-separator">/</span>
-              <span className="explore-breadcrumb-current">Resolving...</span>
-            </div>
-          </div>
-        </header>
+        <SiteNav />
 
         <div className="explore-main-content">
           <div className="explore-loading">
@@ -295,25 +277,7 @@ export default function AddressPage() {
   if (notFound) {
     return (
       <div className="explore-page">
-        <header className="explore-main-header">
-          <div className="explore-main-header-content">
-            <div className="explore-nav">
-              <Link href="/" className="explore-logo">
-                repo<span className="explore-logo-dot">.</span>box
-              </Link>
-              <nav className="explore-nav-links">
-                <Link href="/" className="explore-nav-link">Home</Link>
-                <Link href="/explore" className="explore-nav-link">Explore</Link>
-                <Link href="/docs" className="explore-nav-link">Docs</Link>
-              </nav>
-            </div>
-            <div className="explore-breadcrumb-nav">
-              <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
-              <span className="explore-breadcrumb-separator">/</span>
-              <span className="explore-breadcrumb-current">Not Found</span>
-            </div>
-          </div>
-        </header>
+        <SiteNav />
 
         <div className="explore-main-content">
           <EmptyState
@@ -366,25 +330,7 @@ export default function AddressPage() {
   return (
     <div className="explore-page">
       {/* Header */}
-      <header className="explore-main-header">
-        <div className="explore-main-header-content">
-          <div className="explore-nav">
-            <Link href="/" className="explore-logo">
-              repo<span className="explore-logo-dot">.</span>box
-            </Link>
-            <nav className="explore-nav-links">
-              <Link href="/" className="explore-nav-link">Home</Link>
-              <Link href="/explore" className="explore-nav-link">Explore</Link>
-              <Link href="/docs" className="explore-nav-link">Docs</Link>
-            </nav>
-          </div>
-          <div className="explore-breadcrumb-nav">
-            <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
-            <span className="explore-breadcrumb-separator">/</span>
-            <span className="explore-breadcrumb-current">Developer</span>
-          </div>
-        </div>
-      </header>
+      <SiteNav />
 
       <div className="explore-main-content">
         {/* Address Header */}
