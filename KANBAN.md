@@ -55,23 +55,14 @@ Cover all features (new verbs, x402, ENS, force push policy). Mark unimplemented
 
 ## 🔨 In Progress
 
-### Full knowledge sweep — all docs/skills/landing/llms.txt must be final
-- **Priority**: P0
-- **Tags**: docs, hackathon, demo-ready
-Comprehensive sweep across ALL knowledge surfaces. Fran needs final version locally for demo. Update each:
-1. **llms.txt** — accurate features, current verbs, real capabilities only
-2. **skill.md** — matches actual CLI behavior and config format
-3. **Landing page** — hero copy, features, case studies reflect what works
-4. **Docs** — all current, no stale examples, "Coming Soon" for unfinished
-5. **AGENTS.md** — accurate for agents consuming the repo
-6. **README.md** — clean, no stale instructions
-7. **Playground prompt** — knows all current verbs and syntax
-Cross-reference against Rust parser + config types as source of truth. No contradictions. Final polish before demo.
-
-### Playground refresh — visual, accuracy, speed
+### Test ENS resolution end-to-end
 - **Priority**: P1
-- **Tags**: playground, ui, ai
-Visual refresh, load system prompt from canonical source so it never drifts (currently missing `own`, `read`, `branch`), switch to faster Venice model, test both English→Config and Config→English modes.
+- **Tags**: testing, ens, permissions, explorer
+Verify ENS resolution works across all surfaces with real names:
+1. **Real ENS name** (e.g. `vitalik.eth`) — resolves to address in explorer URLs, permission rules, and UI display
+2. **repobox.eth paid subdomain** (e.g. `ocean.repobox.eth`) — resolves correctly through our subdomain NFT system
+3. **Our own random subdomains/aliases** — repo.box aliases resolve in explorer and permissions
+Test each in: (a) Explorer URL routing (`/explore/vitalik.eth/`), (b) `<AddressDisplay>` component resolution, (c) Permission rules in `.repobox/config.yml` (e.g. `vitalik.eth push >main`), (d) Clone URLs. Document any failures and fix them. This must work flawlessly for the demo.
 
 ## 🚧 Blocked
 
