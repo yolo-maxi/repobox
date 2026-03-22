@@ -10,8 +10,9 @@
   --bp-accent: #4fc3f7;
   --bp-accent2: #81d4fa;
   
-  --playground-surface-2: #0d1f35;
-  --playground-surface-3: #1a2d42;
+  /* Layout constants */
+  --layout-max-width: 1280px;
+  --sidebar-width: 280px;
 }
 
 *,
@@ -45,10 +46,6 @@ p, li, span, a, code, div, label, button, input, textarea, nav {
 }
 /* Don't apply to elements with explicit backgrounds */
 .project-card div,
-.playground-textarea,
-.playground-go-btn,
-.playground-chip,
-.playground-mode-btn,
 footer div,
 footer span,
 footer a,
@@ -233,12 +230,12 @@ div[style*="scroll-snap-type"]::-webkit-scrollbar {
 .docs-layout {
   display: flex;
   min-height: 100vh;
-  max-width: 1280px;
+  max-width: var(--layout-max-width);
   margin: 0 auto;
 }
 
 .docs-sidebar {
-  width: 280px;
+  width: var(--sidebar-width);
   flex-shrink: 0;
   padding: 32px 24px;
   border-right: 1px solid var(--bp-border);
@@ -460,7 +457,7 @@ div[style*="scroll-snap-type"]::-webkit-scrollbar {
     top: 0;
     left: 0;
     z-index: 90;
-    width: 280px;
+    width: var(--sidebar-width);
     background: var(--bp-bg);
     transform: translateX(-100%);
     transition: transform 0.2s ease;
