@@ -10,20 +10,28 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
             artifact: repobox-linux-x86_64
-          - target: aarch64-unknown-linux-gnu
+            use_cross: true
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
             artifact: repobox-linux-aarch64
-          - target: x86_64-apple-darwin
+            use_cross: true
+          - os: macos-13
+            target: x86_64-apple-darwin
             artifact: repobox-darwin-x86_64
-          - target: aarch64-apple-darwin
+            use_cross: false
+          - os: macos-latest
+            target: aarch64-apple-darwin
             artifact: repobox-darwin-aarch64
+            use_cross: false
 
     steps:
       - uses: actions/checkout@v4
@@ -34,10 +42,16 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install cross
+        if: matrix.use_cross
         run: cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Build
+      - name: Build (cross)
+        if: matrix.use_cross
         run: cross build --release --target ${{ matrix.target }} -p repobox-cli
+
+      - name: Build (native)
+        if: "!matrix.use_cross"
+        run: cargo build --release --target ${{ matrix.target }} -p repobox-cli
 
       - name: Rename binary
         run: cp target/${{ matrix.target }}/release/repobox ${{ matrix.artifact }}
