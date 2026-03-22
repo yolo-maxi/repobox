@@ -1881,9 +1881,50 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
 
     match action {
         ShimAction::Passthrough | ShimAction::Delegate => {
-            // Run real git with the original args
+            // For repos using repo.box, enforce signed commits automatically.
+            let mut effective_args: Vec<String> = args.to_vec();
+            if args.first().map(|s| s.as_str()) == Some("commit") {
+                if let Some(root) = &repo_root {
+                    let repobox_config = root.join(".repobox").join("config.yml");
+                    if repobox_config.exists() {
+                        // Disallow unsigned commits by removing explicit opt-out flags.
+                        effective_args.retain(|a| a != "--no-gpg-sign");
+
+                        let has_sign_flag = effective_args.iter().any(|a| {
+                            a == "-S" || a == "--gpg-sign" || a.starts_with("--gpg-sign=")
+                        });
+                        if !has_sign_flag {
+                            effective_args.push("-S".to_string());
+                        }
+
+                        // Ensure local git config uses repobox as the signer.
+                        let our_binary = std::env::current_exe()
+                            .unwrap_or_else(|_| PathBuf::from("repobox"));
+                        let our_binary_str = our_binary.to_string_lossy().to_string();
+
+                        let _ = Command::new(&real_git)
+                            .current_dir(root)
+                            .args(["config", "--local", "gpg.program", &our_binary_str])
+                            .output();
+                        let _ = Command::new(&real_git)
+                            .current_dir(root)
+                            .args(["config", "--local", "commit.gpgsign", "true"])
+                            .output();
+
+                        if let Some(id) = &identity {
+                            let identity_str = id.to_string();
+                            let _ = Command::new(&real_git)
+                                .current_dir(root)
+                                .args(["config", "--local", "user.signingkey", &identity_str])
+                                .output();
+                        }
+                    }
+                }
+            }
+
+            // Run real git with the effective args
             let status = Command::new(&real_git)
-                .args(args)
+                .args(&effective_args)
                 .status()
                 .unwrap_or_else(|e| {
                     eprintln!("error: failed to run git: {e}");
