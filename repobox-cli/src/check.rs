@@ -20,6 +20,7 @@ fn main() -> ExitCode {
             Ok(l) => l,
             Err(e) => {
                 eprintln!("Error reading stdin: {}", e);
+                reject_push = true;
                 continue;
             }
         };
@@ -27,6 +28,7 @@ fn main() -> ExitCode {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() != 3 {
             eprintln!("Invalid ref update format: {}", line);
+            reject_push = true;
             continue;
         }
 
@@ -34,43 +36,104 @@ fn main() -> ExitCode {
         let new_sha = parts[1];
         let ref_name = parts[2];
 
+        // Deletions don't introduce commits.
+        if new_sha == NULL_SHA {
+            continue;
+        }
+
         // Extract branch name for branch refs
         let branch_name = ref_name.strip_prefix("refs/heads/");
 
-        // Check if this is a force push
-        match is_force_push_update(Path::new("."), old_sha, new_sha, ref_name) {
-            Ok(true) => {
-                let branch = branch_name.unwrap_or("unknown");
-                eprintln!("🚨 Force push detected on branch: {}", branch);
+        // Collect all new commits introduced by this ref update.
+        let new_commits = match list_new_commits(Path::new("."), old_sha, new_sha) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("❌ Failed to inspect pushed commits: {}", e);
+                reject_push = true;
+                continue;
+            }
+        };
 
-                // Get pusher identity from environment or extract from commit
-                let pusher = get_pusher_identity(new_sha);
-                eprintln!("👤 Pusher: {}", pusher);
+        if new_commits.is_empty() {
+            // Fallback to tip commit if rev-list returned nothing unexpectedly.
+            if let Ok(Some(_)) = extract_signer_from_commit(new_sha) {
+                // ok
+            } else {
+                eprintln!("❌ Unsigned commit rejected: {}", &new_sha[..8.min(new_sha.len())]);
+                reject_push = true;
+                continue;
+            }
+        }
 
-                // Check if force push is authorized for this branch
-                match check_force_push_authorized(&pusher, branch) {
-                    Ok(true) => {
-                        eprintln!("✅ Force push authorized for {} on {}", pusher, branch);
-                    }
-                    Ok(false) => {
-                        eprintln!("❌ Force push denied for {} on {}", pusher, branch);
-                        eprintln!("To enable force pushes, add to .repobox/config.yml:");
-                        eprintln!("  permissions:");
-                        eprintln!("    rules:");
-                        eprintln!("      - {} force-push >{}", pusher, branch);
-                        reject_push = true;
-                    }
-                    Err(e) => {
-                        eprintln!("⚠️  Error checking force push permissions: {}", e);
-                        eprintln!("Allowing push due to permission check failure (fail-open)");
+        // Enforce signatures on every newly introduced commit.
+        let mut tip_pusher: Option<String> = None;
+        for sha in &new_commits {
+            match extract_signer_from_commit(sha) {
+                Ok(Some(address)) => {
+                    if sha == new_sha {
+                        tip_pusher = Some(format!("evm:{}", address));
                     }
                 }
+                Ok(None) => {
+                    eprintln!(
+                        "❌ Unsigned commit rejected: {} on {}",
+                        &sha[..8.min(sha.len())],
+                        ref_name
+                    );
+                    eprintln!("   All commits pushed to repo.box must be EVM-signed.");
+                    reject_push = true;
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to validate commit signature {}: {}", sha, e);
+                    reject_push = true;
+                }
             }
-            Ok(false) => {
-                // Not a force push, continue
+        }
+
+        let pusher = tip_pusher.unwrap_or_else(|| get_pusher_identity(new_sha));
+        if pusher == "unknown" {
+            eprintln!("❌ Could not determine pusher identity for {}", ref_name);
+            reject_push = true;
+            continue;
+        }
+
+        // Check push permission for config-enabled repos (branch-aware).
+        if let Some(branch) = branch_name {
+            match check_push_authorized(&pusher, branch) {
+                Ok(true) => {}
+                Ok(false) => {
+                    eprintln!("❌ Push denied for {} on branch {}", pusher, branch);
+                    reject_push = true;
+                }
+                Err(e) => {
+                    eprintln!("❌ Error checking push permissions: {}", e);
+                    reject_push = true;
+                }
             }
-            Err(e) => {
-                eprintln!("Error checking for force push: {}", e);
+
+            // Check force-push permission.
+            match is_force_push_update(Path::new("."), old_sha, new_sha, ref_name) {
+                Ok(true) => {
+                    eprintln!("🚨 Force push detected on branch: {}", branch);
+                    match check_force_push_authorized(&pusher, branch) {
+                        Ok(true) => {
+                            eprintln!("✅ Force push authorized for {} on {}", pusher, branch);
+                        }
+                        Ok(false) => {
+                            eprintln!("❌ Force push denied for {} on {}", pusher, branch);
+                            reject_push = true;
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Error checking force push permissions: {}", e);
+                            reject_push = true;
+                        }
+                    }
+                }
+                Ok(false) => {}
+                Err(e) => {
+                    eprintln!("❌ Error checking for force push: {}", e);
+                    reject_push = true;
+                }
             }
         }
     }
@@ -80,6 +143,36 @@ fn main() -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+/// List commits introduced by this ref update.
+fn list_new_commits(repo_dir: &Path, old_sha: &str, new_sha: &str) -> std::io::Result<Vec<String>> {
+    let output = if old_sha == NULL_SHA {
+        // New branch/tag: only commits not already reachable from any existing ref.
+        Command::new("git")
+            .current_dir(repo_dir)
+            .args(["rev-list", new_sha, "--not", "--all"])
+            .output()?
+    } else {
+        // Existing ref update.
+        let range = format!("{old_sha}..{new_sha}");
+        Command::new("git")
+            .current_dir(repo_dir)
+            .args(["rev-list", &range])
+            .output()?
+    };
+
+    if !output.status.success() {
+        return Err(std::io::Error::other("git rev-list failed"));
+    }
+
+    let commits = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    Ok(commits)
 }
 
 /// Check if a ref update represents a force push
@@ -234,6 +327,36 @@ fn strip_gpgsig(commit_text: &str) -> String {
     result
 }
 
+/// Check if push is authorized for the given pusher and branch.
+fn check_push_authorized(pusher: &str, branch_name: &str) -> std::io::Result<bool> {
+    let config_path = Path::new(".repobox/config.yml");
+    if !config_path.exists() {
+        // No config = allow (opt-in enforcement).
+        return Ok(true);
+    }
+
+    let config_content = std::fs::read_to_string(config_path)?;
+
+    // Fail closed on invalid config when enforcement is enabled.
+    let config = parser::parse(&config_content)
+        .map_err(|e| std::io::Error::other(format!("invalid .repobox/config.yml: {e}")))?;
+
+    let identity = match Identity::parse(pusher) {
+        Ok(id) => id,
+        Err(_) => return Ok(false),
+    };
+
+    let result = engine::check(
+        &config,
+        &identity,
+        Verb::Push,
+        Some(branch_name),
+        None,
+    );
+
+    Ok(result.is_allowed())
+}
+
 /// Check if force push is authorized for the given pusher and branch
 fn check_force_push_authorized(pusher: &str, branch_name: &str) -> std::io::Result<bool> {
     // Read .repobox/config.yml if it exists
@@ -245,14 +368,9 @@ fn check_force_push_authorized(pusher: &str, branch_name: &str) -> std::io::Resu
 
     let config_content = std::fs::read_to_string(config_path)?;
 
-    // Parse the configuration
-    let config = match parser::parse(&config_content) {
-        Ok(cfg) => cfg,
-        Err(_) => {
-            // Invalid config = allow (fail-open)
-            return Ok(true);
-        }
-    };
+    // Fail closed on invalid config when enforcement is enabled.
+    let config = parser::parse(&config_content)
+        .map_err(|e| std::io::Error::other(format!("invalid .repobox/config.yml: {e}")))?;
 
     // Parse the identity
     let identity = match Identity::parse(pusher) {

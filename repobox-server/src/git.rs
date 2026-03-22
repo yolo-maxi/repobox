@@ -86,6 +86,14 @@ pub(crate) fn ensure_repo_exists(data_dir: &Path, repo: &RepoPath) -> std::io::R
     Ok(true)
 }
 
+pub(crate) fn refresh_pre_receive_hook(data_dir: &Path, repo: &RepoPath) -> std::io::Result<()> {
+    let dir = repo_dir(data_dir, repo);
+    if dir.exists() {
+        install_pre_receive_hook(&dir)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn ensure_staging_repo_exists(data_dir: &Path, repo_name: &str) -> std::io::Result<bool> {
     let staging_dir = staging_repo_dir(data_dir, repo_name);
     if staging_dir.exists() {
@@ -558,7 +566,7 @@ fn split_cgi_response(output: &[u8]) -> std::io::Result<(&[u8], &[u8])> {
 
 fn install_pre_receive_hook(repo_dir: &Path) -> std::io::Result<()> {
     let hook_path = repo_dir.join("hooks").join("pre-receive");
-    let script = "#!/bin/sh\nif command -v repobox-check >/dev/null 2>&1; then\n    exec repobox-check \"$@\"\nfi\nexit 0\n";
+    let script = "#!/bin/sh\nCHECK_BIN=\"/usr/local/bin/repobox-check\"\nif [ -x \"$CHECK_BIN\" ]; then\n    exec \"$CHECK_BIN\" \"$@\"\nfi\nif command -v repobox-check >/dev/null 2>&1; then\n    exec repobox-check \"$@\"\nfi\necho \"repo.box: repobox-check is not installed; rejecting push for safety\" >&2\nexit 1\n";
     std::fs::write(&hook_path, script)?;
 
     #[cfg(unix)]

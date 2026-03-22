@@ -582,9 +582,13 @@ fn read_x402_from_repo(repo_dir: &std::path::Path) -> Option<String> {
 }
 
 fn ensure_repo_initialized(state: &AppState, repo: &RepoPath) -> std::io::Result<()> {
-    // Just ensure the bare repo exists — ownership is established
+    // Ensure bare repo exists — ownership is established
     // after push via the EVM signature on the first commit.
     let _created = git::ensure_repo_exists(&state.data_dir, repo)?;
+
+    // Always refresh pre-receive hook so existing repos get latest enforcement.
+    git::refresh_pre_receive_hook(&state.data_dir, repo)?;
+
     Ok(())
 }
 
