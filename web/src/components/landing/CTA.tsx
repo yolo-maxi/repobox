@@ -65,8 +65,9 @@ export function LandingCTA() {
             style={{
               display: "inline-flex",
               alignItems: "center",
-              background: "var(--bp-gold)",
-              color: "#0a0f1a",
+              background: "rgba(79, 195, 247, 0.15)",
+              color: "var(--bp-accent)",
+              border: "1px solid var(--bp-gold)",
               fontFamily: "var(--font-mono), monospace",
               fontSize: 14,
               fontWeight: 600,
@@ -176,21 +177,7 @@ export function LandingCTA() {
           >
             <span style={{ fontSize: 15 }}>▶</span> Try in Playground
           </a>
-          <a
-            href="/explore"
-            style={{
-              fontFamily: "var(--font-mono), monospace",
-              fontSize: 13,
-              color: "var(--bp-accent)",
-              textDecoration: "none",
-              transition: "opacity 0.2s",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <span style={{ fontSize: 15 }}>🔍</span> Explore repos
-          </a>
+
           <a
             href="/SKILL.md"
             style={{
