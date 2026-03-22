@@ -30,6 +30,21 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Forward lookup: alias -> address
+app.get('/resolve/:alias', async (req, res) => {
+    try {
+        const { alias } = req.params;
+        const address = await database.resolveAlias(alias);
+        if (address) {
+            res.json({ alias, address, tier: 'auto-alias' });
+        } else {
+            res.status(404).json({ error: 'Alias not found' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Reverse lookup: address -> alias  
 app.get('/reverse/:address', (req, res) => {
     try {

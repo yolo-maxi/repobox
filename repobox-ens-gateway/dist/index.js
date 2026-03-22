@@ -24,6 +24,21 @@ const gateway = new gateway_1.CCIPGateway(database, privateKey);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+app.get('/resolve/:alias', async (req, res) => {
+    try {
+        const { alias } = req.params;
+        const address = await database.resolveAlias(alias);
+        if (address) {
+            res.json({ alias, address, tier: 'auto-alias' });
+        }
+        else {
+            res.status(404).json({ error: 'Alias not found' });
+        }
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 app.get('/reverse/:address', (req, res) => {
     try {
         const { address } = req.params;

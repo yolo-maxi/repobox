@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const GIT_SERVER = process.env.GIT_SERVER_URL || 'http://127.0.0.1:3490';
+const ENS_GATEWAY = process.env.ENS_GATEWAY_URL || 'http://localhost:3491';
 
 interface RouteContext {
   params: Promise<{ name: string }>;
@@ -20,10 +20,10 @@ export async function GET(
       );
     }
     
-    // Proxy to the git server's /{name}/resolve endpoint
-    // This handles both aliases (deep-blue-kraken) and ENS names
-    const res = await fetch(`${GIT_SERVER}/${encodeURIComponent(name)}/resolve`, {
-      signal: AbortSignal.timeout(8000),
+    // Forward resolve via ENS gateway
+    const res = await fetch(`${ENS_GATEWAY}/resolve/${encodeURIComponent(name)}`, {
+      signal: AbortSignal.timeout(5000),
+      next: { revalidate: 300 } // Cache for 5 min
     });
     
     if (!res.ok) {
@@ -36,7 +36,7 @@ export async function GET(
     const data = await res.json();
     return NextResponse.json({
       address: data.address,
-      source: data.source || 'alias',
+      source: data.tier || 'auto-alias',
     });
   } catch (error) {
     console.error('Name resolution error:', error);

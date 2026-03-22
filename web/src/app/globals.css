@@ -13,8 +13,8 @@
   --bp-dim: #8fb0c8;
   --bp-accent: #4fc3f7;
   --bp-accent2: #81d4fa;
-  --bp-gold: #f0b860;
-  --bp-gold-dim: rgba(240, 184, 96, 0.15);
+  --bp-gold: #ffb8a3;
+  --bp-gold-dim: rgba(255, 184, 163, 0.15);
   
   /* Layout constants */
   --layout-max-width: 1280px;
