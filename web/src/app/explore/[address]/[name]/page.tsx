@@ -147,7 +147,20 @@ export default function RepoPage() {
         const resolved = await resolveNameToAddress(addressOrName);
         if (resolved) {
           setResolvedAddress(resolved);
-          router.replace(`/explore/${resolved}/${name}`);
+
+          // Canonicalize to purchased/onchain alias when available.
+          try {
+            const rev = await fetch(`/api/explorer/identity/reverse/${encodeURIComponent(resolved)}`);
+            if (rev.ok) {
+              const d = await rev.json();
+              const canonical = (d?.tier === 'purchased' && d?.alias) ? d.alias : resolved;
+              router.replace(`/explore/${canonical}/${name}`);
+            } else {
+              router.replace(`/explore/${resolved}/${name}`);
+            }
+          } catch {
+            router.replace(`/explore/${resolved}/${name}`);
+          }
         } else { setNotFound(true); }
       } catch { setNotFound(true); }
       finally { setResolving(false); }

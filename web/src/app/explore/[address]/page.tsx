@@ -188,6 +188,20 @@ export default function AddressPage() {
         const resolved = await resolveNameToAddress(addressOrName);
         if (resolved) {
           setResolvedAddress(resolved);
+
+          // Canonicalize to purchased/onchain alias when available.
+          try {
+            const rev = await fetch(`/api/explorer/identity/reverse/${encodeURIComponent(resolved)}`);
+            if (rev.ok) {
+              const d = await rev.json();
+              const canonical = (d?.tier === 'purchased' && d?.alias) ? d.alias : resolved;
+              if (canonical.toLowerCase() !== String(addressOrName).toLowerCase()) {
+                router.replace(`/explore/${canonical}`);
+              }
+            }
+          } catch {
+            // Ignore canonicalization errors; address is already resolved.
+          }
         } else {
           setNotFound(true);
         }
