@@ -3,40 +3,23 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
-import AddressDisplay from '@/components/AddressDisplay';
 import EmptyState from '@/components/EmptyState';
 import { EmptyRepository, NoSearchResults, QuietActivity } from '@/components/illustrations';
 
-function truncateMessage(message: string, maxLength: number = 80): string {
-  if (message.length <= maxLength) return message;
-  return message.substring(0, maxLength).trim() + '…';
+function truncateMsg(msg: string, max = 60): string {
+  if (msg.length <= max) return msg;
+  return msg.substring(0, max).trim() + '…';
 }
 
-interface Stats {
-  totalRepos: number;
-  totalOwners: number;
-  totalCommits: number;
-}
-
+interface Stats { totalRepos: number; totalOwners: number; totalCommits: number }
 interface Repo {
-  address: string;
-  name: string;
-  owner_address: string;
-  created_at: string;
-  commit_count: number;
-  contributor_count: number;
-  last_commit_date: string | null;
+  address: string; name: string; owner_address: string; created_at: string;
+  commit_count: number; contributor_count: number; last_commit_date: string | null;
   description: string | null;
 }
-
 interface Activity {
-  id: number;
-  address: string;
-  name: string;
-  pusher_address?: string;
-  commit_hash?: string;
-  commit_message?: string;
-  pushed_at: string;
+  id: number; address: string; name: string; pusher_address?: string;
+  commit_hash?: string; commit_message?: string; pushed_at: string;
 }
 
 export default function ExplorePage() {
@@ -57,402 +40,539 @@ export default function ExplorePage() {
           fetch('/api/explorer/activity?limit=15')
         ]);
         if (statsRes.ok) setStats(await statsRes.json());
-        if (reposRes.ok) {
-          const data = await reposRes.json();
-          setRepos(data.repos || []);
-        }
-        if (activityRes.ok) {
-          const data = await activityRes.json();
-          setActivity(data.activity || []);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
+        if (reposRes.ok) { const d = await reposRes.json(); setRepos(d.repos || []); }
+        if (activityRes.ok) { const d = await activityRes.json(); setActivity(d.activity || []); }
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
     };
     fetchData();
-
-    const interval = setInterval(() => {
+    const iv = setInterval(() => {
       fetch('/api/explorer/activity?limit=15')
-        .then(res => res.ok ? res.json() : null)
-        .then(data => { if (data?.activity) setActivity(data.activity); })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.activity) setActivity(d.activity); })
         .catch(() => {});
     }, 30000);
-    return () => clearInterval(interval);
+    return () => clearInterval(iv);
   }, [sortBy]);
 
   const realRepos = repos.filter(r => !r.name.startsWith('demo-hackathon-') && r.name !== 'private-test');
   const demoRepos = repos.filter(r => r.name.startsWith('demo-hackathon-') || r.name === 'private-test');
   const displayRepos = showDemo ? repos : realRepos;
-  const filteredRepos = displayRepos.filter(repo =>
-    repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    repo.address.toLowerCase().includes(searchTerm.toLowerCase())
+  const filtered = displayRepos.filter(r =>
+    r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Deduplicate activity by repo name (show latest per repo)
+  // Deduplicate activity by repo name
   const deduped = activity.reduce((acc, item) => {
     if (!acc.find(a => a.name === item.name)) acc.push(item);
     return acc;
   }, [] as Activity[]);
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#0d1117',
-      color: '#e6edf3',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif',
-    }}>
-      {/* Nav */}
-      <header style={{
-        borderBottom: '1px solid #21262d',
-        backgroundColor: '#010409',
-        padding: '12px 32px',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-      }}>
-        <div style={{
-          maxWidth: 1280,
-          margin: '0 auto',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 24,
-        }}>
-          <Link href="/" style={{
-            fontSize: 20,
-            fontWeight: 600,
-            color: '#e6edf3',
-            textDecoration: 'none',
-            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-            letterSpacing: '-0.5px',
-          }}>
-            repo<span style={{ color: '#58a6ff' }}>.</span>box
-          </Link>
-          <nav style={{ display: 'flex', gap: 16, fontSize: 14 }}>
-            <Link href="/" style={{ color: '#8b949e', textDecoration: 'none' }}>Home</Link>
-            <Link href="/explore" style={{ color: '#e6edf3', textDecoration: 'none', fontWeight: 500 }}>Explore</Link>
-            <Link href="/docs" style={{ color: '#8b949e', textDecoration: 'none' }}>Docs</Link>
-            <Link href="/playground" style={{ color: '#8b949e', textDecoration: 'none' }}>Playground</Link>
-          </nav>
+    <div className="explore-root">
+      {/* Top nav */}
+      <nav className="explore-nav">
+        <Link href="/" className="explore-logo">
+          repo<span style={{ color: 'var(--bp-accent)' }}>.</span>box
+        </Link>
+        <div className="explore-nav-links">
+          <Link href="/">home</Link>
+          <Link href="/explore" className="active">explorer</Link>
+          <Link href="/docs">docs</Link>
+          <Link href="/playground">playground</Link>
         </div>
-      </header>
+      </nav>
 
-      {/* Hero — full width */}
-      <div style={{
-        borderBottom: '1px solid #21262d',
-        padding: '48px 32px 40px',
-        background: 'linear-gradient(180deg, #0d1117 0%, #161b22 100%)',
-      }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <h1 style={{
-            fontSize: 32,
-            fontWeight: 700,
-            letterSpacing: '-0.5px',
-            marginBottom: 8,
-            lineHeight: 1.2,
-          }}>
-            Explore repositories
-          </h1>
-          <p style={{ fontSize: 16, color: '#8b949e', marginBottom: 28, maxWidth: 540 }}>
-            Every commit EVM-signed. Every push permission-checked on-chain.
-          </p>
-
-          {/* Stats row */}
+      {/* Layout: sidebar left, content right */}
+      <div className="explore-layout">
+        {/* Sidebar */}
+        <aside className="explore-sidebar">
+          {/* Stats */}
           {stats && (
-            <div style={{ display: 'flex', gap: 32 }}>
-              {[
-                { label: 'Repositories', value: stats.totalRepos, icon: '📦' },
-                { label: 'Developers', value: stats.totalOwners, icon: '👤' },
-                { label: 'Signed Commits', value: stats.totalCommits, icon: '⬡' },
-              ].map(s => (
-                <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 14 }}>{s.icon}</span>
-                  <span style={{ fontSize: 24, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{s.value}</span>
-                  <span style={{ fontSize: 13, color: '#8b949e' }}>{s.label}</span>
-                </div>
-              ))}
+            <div className="explore-card">
+              <div className="explore-card-label">Overview</div>
+              <div className="explore-stat-row">
+                <span>Repositories</span>
+                <span className="explore-stat-val">{stats.totalRepos}</span>
+              </div>
+              <div className="explore-stat-row">
+                <span>Developers</span>
+                <span className="explore-stat-val">{stats.totalOwners}</span>
+              </div>
+              <div className="explore-stat-row">
+                <span>Signed Commits</span>
+                <span className="explore-stat-val">{stats.totalCommits}</span>
+              </div>
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Content grid */}
-      <div style={{
-        maxWidth: 1280,
-        margin: '0 auto',
-        padding: '24px 32px 64px',
-        display: 'grid',
-        gridTemplateColumns: '1fr 320px',
-        gap: 32,
-        alignItems: 'start',
-      }}>
-        {/* Main — repo list */}
-        <main>
-          {/* Toolbar */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            marginBottom: 16,
-            paddingBottom: 16,
-            borderBottom: '1px solid #21262d',
-          }}>
-            {/* Search */}
-            <div style={{ position: 'relative', flex: 1 }}>
-              <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} width="16" height="16" viewBox="0 0 16 16" fill="#8b949e">
-                <path d="M10.68 11.74a6 6 0 0 1-7.92-8.98 6 6 0 0 1 8.98 7.92l3.81 3.81a.75.75 0 0 1-1.06 1.06l-3.81-3.81zM6.5 11a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z"/>
-              </svg>
-              <input
-                type="text"
-                placeholder="Find a repository…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px 8px 34px',
-                  backgroundColor: '#010409',
-                  border: '1px solid #30363d',
-                  borderRadius: 6,
-                  color: '#e6edf3',
-                  fontSize: 14,
-                  outline: 'none',
-                }}
-              />
-            </div>
-            {/* Sort tabs */}
-            <div style={{ display: 'flex', gap: 2, backgroundColor: '#21262d', borderRadius: 6, padding: 2 }}>
-              {(['latest', 'commits', 'name'] as const).map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => setSortBy(opt)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: 4,
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: 500,
-                    backgroundColor: sortBy === opt ? '#30363d' : 'transparent',
-                    color: sortBy === opt ? '#e6edf3' : '#8b949e',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {opt === 'latest' ? 'Recent' : opt === 'commits' ? 'Commits' : 'Name'}
-                </button>
-              ))}
-            </div>
+          {/* Sort */}
+          <div className="explore-card">
+            <div className="explore-card-label">Sort by</div>
+            {(['latest', 'commits', 'name'] as const).map(opt => (
+              <button
+                key={opt}
+                onClick={() => setSortBy(opt)}
+                className={`explore-sort-btn ${sortBy === opt ? 'active' : ''}`}
+              >
+                {opt === 'latest' ? 'Recently updated' : opt === 'commits' ? 'Most commits' : 'Name'}
+              </button>
+            ))}
           </div>
 
-          {/* Repo list */}
-          {loading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {[1,2,3,4,5].map(i => (
-                <div key={i} style={{
-                  height: 72,
-                  backgroundColor: '#161b22',
-                  borderBottom: '1px solid #21262d',
-                  animation: 'pulse 2s ease-in-out infinite',
-                }} />
-              ))}
-            </div>
-          ) : filteredRepos.length === 0 ? (
-            <EmptyState
-              illustration={searchTerm ? NoSearchResults : EmptyRepository}
-              title={searchTerm ? 'No matching repositories' : 'No repositories yet'}
-              description={searchTerm 
-                ? 'Try a different search term' 
-                : 'Push your first signed commit to get started'}
-              size="lg"
-            />
-          ) : (
-            <>
-              <div style={{
-                border: '1px solid #21262d',
-                borderRadius: 8,
-                overflow: 'hidden',
-                backgroundColor: '#0d1117',
-              }}>
-                {filteredRepos.map((repo, idx) => (
-                  <Link
-                    key={`${repo.address}/${repo.name}`}
-                    href={`/explore/${repo.address}/${repo.name}`}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '16px 20px',
-                      borderBottom: idx < filteredRepos.length - 1 ? '1px solid #21262d' : 'none',
-                      textDecoration: 'none',
-                      color: 'inherit',
-                      transition: 'background-color 0.12s ease',
-                      gap: 16,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#161b22')}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    {/* Repo icon */}
-                    <div style={{
-                      width: 32, height: 32,
-                      borderRadius: 6,
-                      backgroundColor: '#21262d',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
-                      fontSize: 14,
-                    }}>
-                      📦
-                    </div>
-
-                    {/* Name + desc */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2 }}>
-                        <span style={{ color: '#58a6ff', fontSize: 15, fontWeight: 600 }}>
-                          {repo.name}
-                        </span>
-                        <span style={{ color: '#484f58', fontSize: 12 }}>
-                          {formatAddress(repo.owner_address)}
-                        </span>
-                      </div>
-                      {repo.description && (
-                        <p style={{
-                          color: '#8b949e', fontSize: 13, margin: 0,
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>
-                          {repo.description.replace(/\n/g, ' ').trim()}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Stats pills */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, fontSize: 12, color: '#8b949e' }}>
-                      {repo.contributor_count > 0 && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ fontSize: 10 }}>👤</span> {repo.contributor_count}
-                        </span>
-                      )}
-                      <span style={{
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        color: repo.commit_count > 10 ? '#58a6ff' : '#8b949e',
-                      }}>
-                        ⬡ {repo.commit_count}
-                      </span>
-                      {repo.last_commit_date && (
-                        <span style={{ color: '#484f58', whiteSpace: 'nowrap' }}>
-                          {formatTimeAgo(repo.last_commit_date)}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-
-              {/* Show demo repos toggle */}
-              {demoRepos.length > 0 && (
-                <button
-                  onClick={() => setShowDemo(!showDemo)}
-                  style={{
-                    display: 'block',
-                    margin: '12px auto 0',
-                    padding: '6px 16px',
-                    backgroundColor: 'transparent',
-                    border: '1px solid #30363d',
-                    borderRadius: 20,
-                    color: '#8b949e',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {showDemo ? 'Hide demo repos' : `Show all (+${demoRepos.length} demo)`}
-                </button>
-              )}
-            </>
-          )}
-        </main>
-
-        {/* Sidebar — right */}
-        <aside style={{ fontSize: 14 }}>
-          {/* Recent Activity */}
-          <div style={{
-            padding: '16px',
-            backgroundColor: '#161b22',
-            border: '1px solid #21262d',
-            borderRadius: 8,
-            marginBottom: 16,
-          }}>
-            <h3 style={{
-              fontSize: 12, fontWeight: 600, color: '#8b949e',
-              textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12,
-            }}>
-              Recent Activity
-            </h3>
+          {/* Activity */}
+          <div className="explore-card">
+            <div className="explore-card-label">Recent Activity</div>
             {deduped.length === 0 ? (
-              <p style={{ color: '#484f58', fontSize: 13 }}>No recent activity</p>
+              <p className="explore-empty-text">No recent activity</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="explore-activity-list">
                 {deduped.slice(0, 8).map(item => (
-                  <div key={item.id} style={{ lineHeight: 1.4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{
-                        width: 6, height: 6, borderRadius: '50%',
-                        backgroundColor: '#3fb950', flexShrink: 0,
-                      }} />
-                      <Link
-                        href={`/explore/${item.address}/${item.name}`}
-                        style={{ color: '#58a6ff', textDecoration: 'none', fontWeight: 500, fontSize: 13 }}
-                      >
+                  <div key={item.id} className="explore-activity-item">
+                    <div className="explore-activity-dot" />
+                    <div>
+                      <Link href={`/explore/${item.address}/${item.name}`} className="explore-activity-name">
                         {item.name}
                       </Link>
+                      {item.commit_message && (
+                        <p className="explore-activity-msg">{truncateMsg(item.commit_message)}</p>
+                      )}
+                      <span className="explore-activity-time">{formatTimeAgo(item.pushed_at)}</span>
                     </div>
-                    {item.commit_message && (
-                      <p style={{ color: '#8b949e', margin: '2px 0 0 12px', fontSize: 12 }}>
-                        {truncateMessage(item.commit_message, 55)}
-                      </p>
-                    )}
-                    <span style={{ color: '#484f58', fontSize: 11, marginLeft: 12 }}>
-                      {formatTimeAgo(item.pushed_at)}
-                    </span>
                   </div>
                 ))}
               </div>
             )}
           </div>
+        </aside>
 
-          {/* About */}
-          <div style={{
-            padding: '16px',
-            backgroundColor: '#161b22',
-            border: '1px solid #21262d',
-            borderRadius: 8,
-          }}>
-            <h3 style={{
-              fontSize: 12, fontWeight: 600, color: '#8b949e',
-              textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12,
-            }}>
-              About repo.box
-            </h3>
-            <p style={{ color: '#8b949e', fontSize: 13, lineHeight: 1.5, margin: 0 }}>
-              Git hosting where every commit is EVM-signed and every push is permission-checked. 
-              Built for AI agents with on-chain identity.
-            </p>
-            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <Link href="/docs" style={{ color: '#58a6ff', textDecoration: 'none', fontSize: 13 }}>
-                → Documentation
-              </Link>
-              <Link href="/playground" style={{ color: '#58a6ff', textDecoration: 'none', fontSize: 13 }}>
-                → Try the playground
-              </Link>
+        {/* Main content */}
+        <main className="explore-main">
+          {/* Header bar */}
+          <div className="explore-main-header">
+            <h1 className="explore-title">Repositories</h1>
+            <div className="explore-search-wrap">
+              <svg className="explore-search-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M10.68 11.74a6 6 0 0 1-7.92-8.98 6 6 0 0 1 8.98 7.92l3.81 3.81a.75.75 0 0 1-1.06 1.06l-3.81-3.81zM6.5 11a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z"/>
+              </svg>
+              <input
+                type="text"
+                placeholder="Search…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="explore-search"
+              />
             </div>
           </div>
-        </aside>
+
+          {/* Repo list */}
+          <div className="explore-repo-list">
+            {loading ? (
+              <>
+                {[1,2,3,4,5].map(i => (
+                  <div key={i} className="explore-repo-skeleton" />
+                ))}
+              </>
+            ) : filtered.length === 0 ? (
+              <div className="explore-repo-empty">
+                <EmptyState
+                  illustration={searchTerm ? NoSearchResults : EmptyRepository}
+                  title={searchTerm ? 'No matching repositories' : 'No repositories yet'}
+                  description={searchTerm ? 'Try a different search term' : 'Push your first signed commit to get started'}
+                  size="lg"
+                />
+              </div>
+            ) : (
+              <>
+                {filtered.map((repo) => (
+                  <Link
+                    key={`${repo.address}/${repo.name}`}
+                    href={`/explore/${repo.address}/${repo.name}`}
+                    className="explore-repo-row"
+                  >
+                    <div className="explore-repo-info">
+                      <div className="explore-repo-name-row">
+                        <span className="explore-repo-name">{repo.name}</span>
+                        <span className="explore-repo-addr">{formatAddress(repo.owner_address)}</span>
+                      </div>
+                      {repo.description && (
+                        <p className="explore-repo-desc">{repo.description.replace(/\n/g, ' ').trim()}</p>
+                      )}
+                    </div>
+                    <div className="explore-repo-stats">
+                      {repo.contributor_count > 0 && (
+                        <span className="explore-repo-pill">
+                          <span style={{ fontSize: 10 }}>👤</span> {repo.contributor_count}
+                        </span>
+                      )}
+                      <span className={`explore-repo-pill ${repo.commit_count > 10 ? 'highlight' : ''}`}>
+                        ⬡ {repo.commit_count}
+                      </span>
+                      {repo.last_commit_date && (
+                        <span className="explore-repo-time">{formatTimeAgo(repo.last_commit_date)}</span>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </>
+            )}
+          </div>
+
+          {/* Demo toggle */}
+          {demoRepos.length > 0 && !searchTerm && (
+            <button onClick={() => setShowDemo(!showDemo)} className="explore-demo-toggle">
+              {showDemo ? 'Hide demo repos' : `Show all (+${demoRepos.length} demo)`}
+            </button>
+          )}
+        </main>
       </div>
 
       <style>{`
+        .explore-root {
+          min-height: 100vh;
+          background: var(--bp-bg);
+          color: var(--bp-text);
+          font-family: var(--font-mono, 'JetBrains Mono', 'Fira Code', monospace);
+          font-size: 13px;
+          line-height: 20px;
+        }
+
+        /* Nav */
+        .explore-nav {
+          display: flex;
+          align-items: center;
+          gap: 24px;
+          padding: 16px 32px;
+          border-bottom: 1px solid var(--bp-border);
+        }
+        .explore-logo {
+          font-size: 18px;
+          font-weight: 700;
+          color: var(--bp-heading);
+          text-decoration: none;
+          letter-spacing: -0.5px;
+        }
+        .explore-nav-links {
+          display: flex;
+          gap: 4px;
+        }
+        .explore-nav-links a {
+          color: var(--bp-dim);
+          text-decoration: none;
+          padding: 6px 12px;
+          border-radius: 4px;
+          font-size: 12px;
+          transition: color 0.15s, background 0.15s;
+        }
+        .explore-nav-links a:hover {
+          color: var(--bp-accent);
+          opacity: 1;
+        }
+        .explore-nav-links a.active {
+          color: var(--bp-accent);
+          background: rgba(79, 195, 247, 0.1);
+        }
+
+        /* Layout */
+        .explore-layout {
+          display: grid;
+          grid-template-columns: 280px 1fr;
+          gap: 0;
+          max-width: 1400px;
+          margin: 0 auto;
+          min-height: calc(100vh - 53px);
+        }
+
+        /* Sidebar */
+        .explore-sidebar {
+          padding: 24px 20px;
+          border-right: 1px solid var(--bp-border);
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .explore-card {
+          background: var(--bp-surface);
+          border: 1px solid var(--bp-border);
+          border-radius: 8px;
+          padding: 16px;
+        }
+        .explore-card-label {
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          color: var(--bp-dim);
+          margin-bottom: 12px;
+        }
+
+        .explore-stat-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 4px 0;
+          font-size: 12px;
+          color: var(--bp-dim);
+        }
+        .explore-stat-val {
+          font-weight: 700;
+          color: var(--bp-heading);
+          font-variant-numeric: tabular-nums;
+        }
+
+        .explore-sort-btn {
+          display: block;
+          width: 100%;
+          text-align: left;
+          padding: 6px 8px;
+          margin-bottom: 2px;
+          border-radius: 4px;
+          border: none;
+          cursor: pointer;
+          font-size: 12px;
+          font-family: inherit;
+          background: transparent;
+          color: var(--bp-dim);
+          transition: all 0.12s;
+        }
+        .explore-sort-btn:hover {
+          color: var(--bp-text);
+          background: rgba(79, 195, 247, 0.05);
+        }
+        .explore-sort-btn.active {
+          color: var(--bp-accent);
+          background: rgba(79, 195, 247, 0.1);
+          font-weight: 500;
+        }
+
+        .explore-activity-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .explore-activity-item {
+          display: flex;
+          gap: 8px;
+          align-items: flex-start;
+        }
+        .explore-activity-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--bp-accent);
+          flex-shrink: 0;
+          margin-top: 7px;
+          opacity: 0.7;
+        }
+        .explore-activity-name {
+          color: var(--bp-accent);
+          text-decoration: none;
+          font-weight: 500;
+          font-size: 12px;
+        }
+        .explore-activity-name:hover { opacity: 0.8; }
+        .explore-activity-msg {
+          color: var(--bp-dim);
+          margin: 2px 0 0;
+          font-size: 11px;
+          line-height: 1.4;
+        }
+        .explore-activity-time {
+          color: rgba(122, 154, 180, 0.5);
+          font-size: 10px;
+        }
+        .explore-empty-text {
+          color: var(--bp-dim);
+          font-size: 12px;
+          opacity: 0.6;
+        }
+
+        /* Main content */
+        .explore-main {
+          padding: 24px 32px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .explore-main-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+          padding-bottom: 16px;
+          border-bottom: 1px solid var(--bp-border);
+        }
+        .explore-title {
+          font-size: 16px;
+          font-weight: 600;
+          color: var(--bp-heading);
+          letter-spacing: -0.3px;
+        }
+        .explore-search-wrap {
+          position: relative;
+          width: 220px;
+        }
+        .explore-search-icon {
+          position: absolute;
+          left: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--bp-dim);
+          opacity: 0.5;
+        }
+        .explore-search {
+          width: 100%;
+          padding: 7px 12px 7px 30px;
+          background: var(--bp-bg);
+          border: 1px solid var(--bp-border);
+          border-radius: 6px;
+          color: var(--bp-text);
+          font-size: 12px;
+          font-family: inherit;
+          outline: none;
+          transition: border-color 0.15s;
+        }
+        .explore-search:focus {
+          border-color: rgba(79, 195, 247, 0.4);
+        }
+        .explore-search::placeholder {
+          color: var(--bp-dim);
+          opacity: 0.5;
+        }
+
+        /* Repo list */
+        .explore-repo-list {
+          background: var(--bp-surface);
+          border: 1px solid var(--bp-border);
+          border-radius: 8px;
+          overflow: hidden;
+          flex: 1;
+        }
+        .explore-repo-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px 20px;
+          text-decoration: none;
+          color: inherit;
+          border-bottom: 1px solid var(--bp-border);
+          transition: background 0.12s;
+          gap: 16px;
+        }
+        .explore-repo-row:last-child {
+          border-bottom: none;
+        }
+        .explore-repo-row:hover {
+          background: rgba(79, 195, 247, 0.03);
+        }
+
+        .explore-repo-info {
+          flex: 1;
+          min-width: 0;
+        }
+        .explore-repo-name-row {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+          margin-bottom: 2px;
+        }
+        .explore-repo-name {
+          color: var(--bp-accent);
+          font-size: 14px;
+          font-weight: 600;
+        }
+        .explore-repo-addr {
+          color: var(--bp-dim);
+          font-size: 11px;
+          opacity: 0.6;
+        }
+        .explore-repo-desc {
+          color: var(--bp-dim);
+          font-size: 12px;
+          margin: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          opacity: 0.8;
+        }
+
+        .explore-repo-stats {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-shrink: 0;
+          font-size: 11px;
+          color: var(--bp-dim);
+        }
+        .explore-repo-pill {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 8px;
+          background: rgba(50, 100, 160, 0.15);
+          border-radius: 10px;
+          font-weight: 500;
+        }
+        .explore-repo-pill.highlight {
+          color: var(--bp-accent);
+          background: rgba(79, 195, 247, 0.12);
+        }
+        .explore-repo-time {
+          color: var(--bp-dim);
+          opacity: 0.5;
+          white-space: nowrap;
+        }
+
+        .explore-repo-skeleton {
+          height: 52px;
+          border-bottom: 1px solid var(--bp-border);
+          animation: pulse 2s ease-in-out infinite;
+        }
+        .explore-repo-empty {
+          padding: 48px 20px;
+          text-align: center;
+        }
+
+        .explore-demo-toggle {
+          display: block;
+          margin: 16px auto 0;
+          padding: 6px 20px;
+          background: transparent;
+          border: 1px solid var(--bp-border);
+          border-radius: 20px;
+          color: var(--bp-dim);
+          font-size: 11px;
+          font-family: inherit;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .explore-demo-toggle:hover {
+          border-color: rgba(79, 195, 247, 0.3);
+          color: var(--bp-accent);
+        }
+
         @keyframes pulse {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
+          50% { opacity: 0.3; }
         }
+
         @media (max-width: 900px) {
-          /* Stack on mobile/tablet */
+          .explore-layout {
+            grid-template-columns: 1fr;
+          }
+          .explore-sidebar {
+            border-right: none;
+            border-bottom: 1px solid var(--bp-border);
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 12px;
+          }
+          .explore-sidebar .explore-card {
+            flex: 1;
+            min-width: 200px;
+          }
         }
       `}</style>
     </div>
