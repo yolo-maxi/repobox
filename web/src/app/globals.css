@@ -3427,6 +3427,7 @@ html {
 
 /* Contribution Chart Styles */
 .contribution-chart {
+  position: relative;
   margin-top: 24px;
   padding: 16px;
   background: var(--explore-surface);
@@ -3577,7 +3578,8 @@ html {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  transform: translateX(-50%);
+  transform: translate(-50%, -100%);
+  margin-top: -8px;
   white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
@@ -3587,11 +3589,10 @@ html {
   position: absolute;
   bottom: -4px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) rotate(45deg);
   width: 8px;
   height: 8px;
   background: var(--explore-text);
-  rotate: 45deg;
 }
 
 .contribution-chart-tooltip strong {

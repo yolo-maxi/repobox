@@ -149,6 +149,7 @@ export default function BrandPage() {
           <div className="brand-component-grid">
             <div className="brand-button-row">
               <button className="brand-demo-btn primary">Primary Action</button>
+              <button className="brand-demo-btn solid">Solid Accent</button>
               <button className="brand-demo-btn outline">Outline</button>
               <span className="brand-demo-pill">badge</span>
               <span className="brand-demo-pill highlight">⬡ 401</span>
@@ -478,6 +479,15 @@ export default function BrandPage() {
           transition: all 0.15s;
         }
         .brand-demo-btn.primary {
+          background: rgba(79, 195, 247, 0.15);
+          color: var(--bp-accent);
+          border: 1px solid rgba(79, 195, 247, 0.25);
+          font-weight: 600;
+        }
+        .brand-demo-btn.primary:hover {
+          background: rgba(79, 195, 247, 0.25);
+        }
+        .brand-demo-btn.solid {
           background: var(--bp-accent);
           color: #0a1628;
           border: none;

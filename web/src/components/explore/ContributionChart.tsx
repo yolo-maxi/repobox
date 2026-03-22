@@ -90,11 +90,16 @@ export default function ContributionChart({
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, date: '', count: 0, address: '' });
   const chartRef = useRef<HTMLDivElement>(null);
 
-  const handleDayHover = useCallback((e: React.MouseEvent, date: string, count: number, addr: string) => {
+  const handleDayHover = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
     const rect = chartRef.current?.getBoundingClientRect();
+    const cellRect = target.getBoundingClientRect();
     if (!rect) return;
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = cellRect.left + cellRect.width / 2 - rect.left;
+    const y = cellRect.top - rect.top;
+    const date = target.dataset.date || '';
+    const count = parseInt(target.dataset.count || '0', 10);
+    const addr = target.dataset.addr || '';
     setTooltip({ visible: true, x, y, date, count, address: addr });
   }, []);
 
@@ -243,7 +248,10 @@ export default function ContributionChart({
                       key={date}
                       className="contribution-chart-day"
                       style={{ backgroundColor }}
-                      onMouseEnter={(e) => handleDayHover(e, date, commitCount, contributor.address)}
+                      data-date={date}
+                      data-count={commitCount}
+                      data-addr={contributor.address}
+                      onMouseEnter={handleDayHover}
                       onMouseLeave={handleDayLeave}
                     />
                   );
@@ -260,7 +268,7 @@ export default function ContributionChart({
           className="contribution-chart-tooltip"
           style={{
             left: tooltip.x,
-            top: tooltip.y - 48,
+            top: tooltip.y,
           }}
         >
           <strong>{tooltip.count} commit{tooltip.count !== 1 ? 's' : ''}</strong>
