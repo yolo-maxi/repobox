@@ -3797,7 +3797,7 @@ html {
   font-size: 1rem;
 }
 
-/* State variants */
+/* State variants (legacy) */
 .address-display--resolved .address-display__text {
   color: var(--bp-heading);
   font-weight: 500;
@@ -3805,6 +3805,32 @@ html {
 
 .address-display--truncated .address-display__text {
   color: var(--bp-text);
+}
+
+/* Identity tier styles */
+/* Tier 1: ENS — full name, standard weight, subtle blue accent */
+.address-display--tier-ens .address-display__text {
+  color: var(--bp-heading, #e0e0e0);
+  font-weight: 500;
+}
+
+/* Tier 2: Purchased repobox.eth subdomain — accent color, no .repobox.eth suffix */
+.address-display--tier-purchased .address-display__text {
+  color: #4fc3f7;
+  font-weight: 600;
+}
+
+/* Tier 3: Auto-assigned alias — muted, italic */
+.address-display--tier-auto-alias .address-display__text {
+  color: var(--bp-dim, #8a8a8a);
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Fallback: raw address */
+.address-display--tier-address .address-display__text {
+  color: var(--bp-text, #b0b0b0);
+  font-family: var(--font-mono), monospace;
 }
 
 .address-display--clickable {

@@ -30,15 +30,45 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Reverse lookup: address -> alias  
+app.get('/reverse/:address', (req, res) => {
+    try {
+        const { address } = req.params;
+        const alias = database.reverseResolve(address);
+        if (alias) {
+            res.json({ alias, address, tier: 'auto-alias' });
+        } else {
+            res.status(404).json({ error: 'No alias found' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Bulk reverse: POST /reverse with { addresses: string[] }
+app.post('/reverse', (req, res) => {
+    try {
+        const { addresses } = req.body;
+        if (!Array.isArray(addresses)) {
+            return res.status(400).json({ error: 'addresses must be an array' });
+        }
+        const results: Record<string, { alias: string; tier: string } | null> = {};
+        for (const addr of addresses) {
+            const alias = database.reverseResolve(addr);
+            results[addr.toLowerCase()] = alias ? { alias, tier: 'auto-alias' } : null;
+        }
+        res.json(results);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Main CCIP gateway endpoint: /{sender}/{data}.json
 app.get('/:sender/:data.json', async (req, res) => {
     try {
         const { sender, data } = req.params;
-
         console.log(`CCIP request: sender=${sender}, data=${data}`);
-
         const response = await gateway.handleRequest(sender, data);
-
         res.json(response);
     } catch (error) {
         console.error('Gateway error:', error);

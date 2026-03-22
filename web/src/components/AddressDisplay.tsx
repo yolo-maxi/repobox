@@ -2,24 +2,24 @@
 
 import { useState, useEffect } from 'react';
 import { formatAddress, copyToClipboard } from '@/lib/utils';
-import { resolveAddressDisplay } from '@/lib/addressResolver';
+import { resolveIdentity, type ResolvedIdentity, type IdentityTier } from '@/lib/addressResolver';
 import Link from 'next/link';
 
 export interface AddressDisplayProps {
   address: string;
-  /** Override display name (e.g., from ENS resolution) */
+  /** Override display name */
   displayName?: string;
+  /** Override tier */
+  tier?: IdentityTier;
   /** Show copy button */
   showCopy?: boolean;
-  /** Enable click-to-copy */
-  clickToCopy?: boolean;
   /** Show hover tooltip with full address */
   showTooltip?: boolean;
   /** Custom CSS classes */
   className?: string;
   /** Size variant */
   size?: 'sm' | 'md' | 'lg';
-  /** Link to address page */
+  /** Link to address page (uses name slug when available) */
   linkable?: boolean;
   /** Custom link destination */
   href?: string;
@@ -27,37 +27,43 @@ export interface AddressDisplayProps {
 
 export default function AddressDisplay({
   address,
-  displayName,
+  displayName: overrideName,
+  tier: overrideTier,
   showCopy = true,
-  clickToCopy = true,
   showTooltip = true,
   className = '',
   size = 'md',
   linkable = true,
   href
 }: AddressDisplayProps) {
-  const [resolvedName, setResolvedName] = useState<string | null>(displayName || null);
+  const [identity, setIdentity] = useState<ResolvedIdentity | null>(
+    overrideName ? {
+      address,
+      displayName: overrideName,
+      tier: overrideTier || 'auto-alias',
+      slug: overrideName
+    } : null
+  );
   const [copied, setCopied] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!overrideName);
 
-  // Resolve display name (ENS or subdomain)
   useEffect(() => {
-    if (displayName) return; // Use provided displayName
+    if (overrideName) return;
     
-    const resolveDisplay = async () => {
-      setLoading(true);
-      try {
-        const resolved = await resolveAddressDisplay(address);
-        setResolvedName(resolved);
-      } catch (error) {
-        console.warn('Failed to resolve address display:', error);
-      } finally {
+    let cancelled = false;
+    setLoading(true);
+    
+    resolveIdentity(address).then(result => {
+      if (!cancelled) {
+        setIdentity(result);
         setLoading(false);
       }
-    };
-    
-    resolveDisplay();
-  }, [address, displayName]);
+    }).catch(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [address, overrideName]);
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -71,28 +77,22 @@ export default function AddressDisplay({
     }
   };
 
-  const handleClick = async (e: React.MouseEvent) => {
-    if (clickToCopy && !href && !linkable) {
-      await handleCopy(e);
-    }
-  };
-
-  // Display logic: resolved name > formatted address
-  const displayText = resolvedName || formatAddress(address);
-  const isResolved = !!resolvedName;
+  const displayText = identity?.displayName || formatAddress(address);
+  const tier = identity?.tier || 'address';
   
-  // Link logic
-  const linkHref = href || (linkable ? `/explore/${address}` : undefined);
+  // Link uses name slug when available, otherwise address
+  const slug = identity?.slug || address;
+  const linkHref = href || (linkable ? `/explore/${encodeURIComponent(slug)}` : undefined);
+
+  // Tier-specific CSS class
+  const tierClass = `address-display--tier-${tier}`;
 
   const addressElement = (
     <span
-      onClick={handleClick}
-      className={`address-display ${className} address-display--${size} ${
-        isResolved ? 'address-display--resolved' : 'address-display--truncated'
-      } ${clickToCopy && !linkable ? 'address-display--clickable' : ''} ${
+      className={`address-display ${className} address-display--${size} ${tierClass} ${
         loading ? 'address-display--loading' : ''
       }`}
-      title={showTooltip ? `${address}${isResolved ? ` (${displayText})` : ''}` : undefined}
+      title={showTooltip ? address : undefined}
     >
       <code className="address-display__text">
         {loading ? (
