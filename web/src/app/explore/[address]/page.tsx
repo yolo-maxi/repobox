@@ -19,22 +19,12 @@ interface Repo {
   description: string | null;
 }
 
-// Get language color from GitHub language colors
-function getLanguageColor(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase();
-  const languageColors: { [key: string]: string } = {
-    js: '#f1e05a', jsx: '#f1e05a', ts: '#3178c6', tsx: '#3178c6',
-    py: '#3572a5', go: '#00add8', rs: '#dea584', java: '#b07219',
-    c: '#555555', cpp: '#f34b7d', css: '#563d7c', html: '#e34c26',
-    vue: '#41b883', php: '#4f5d95', rb: '#701516', swift: '#fa7343',
-    kt: '#a97bff', scala: '#c22d40', sh: '#89e051', sql: '#e38c00'
-  };
-  return languageColors[ext || ''] || '#666666';
+interface ContributorRepo extends Repo {
+  permissions: string[];
 }
 
 // Detect primary language from file list (simplified)
 function detectLanguage(repoName: string): { name: string; color: string } {
-  // Simple heuristic - could be enhanced with actual file analysis
   const languages = [
     { name: 'TypeScript', color: '#3178c6' },
     { name: 'JavaScript', color: '#f1e05a' },
@@ -43,15 +33,119 @@ function detectLanguage(repoName: string): { name: string; color: string } {
     { name: 'Rust', color: '#dea584' },
     { name: 'Java', color: '#b07219' },
   ];
-  
-  // Random selection for demo - in real app would analyze files
+
   return languages[Math.floor(Math.random() * languages.length)];
+}
+
+function RepoCard({ repo, formatCommitCount }: { repo: Repo; formatCommitCount: (n: number) => string }) {
+  const language = detectLanguage(repo.name);
+  const isRecentlyActive = repo.last_commit_date &&
+    new Date(repo.last_commit_date).getTime() > Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+  return (
+    <Link
+      href={`/explore/${repo.address}/${repo.name}`}
+      className={`explore-repo-item ${isRecentlyActive ? 'recently-active' : ''}`}
+    >
+      <div className="explore-repo-item-header">
+        <h3 className="explore-repo-item-name">{repo.name}</h3>
+        <div
+          className="explore-repo-item-language"
+          style={{ backgroundColor: language.color }}
+          title={language.name}
+        ></div>
+      </div>
+
+      {repo.description && (
+        <p className="explore-repo-item-description">
+          {repo.description.replace(/\n/g, ' ').trim()}
+        </p>
+      )}
+
+      <div className="explore-repo-item-meta">
+        <span className="explore-repo-item-meta-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M20 6L9 17l-5-5"></path>
+          </svg>
+          {formatCommitCount(repo.commit_count)}
+        </span>
+        {repo.last_commit_date && (
+          <span className="explore-repo-item-meta-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12,6 12,12 16,14"></polyline>
+            </svg>
+            Updated {formatTimeAgo(repo.last_commit_date)}
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function ContributorRepoCard({ repo, formatCommitCount }: { repo: ContributorRepo; formatCommitCount: (n: number) => string }) {
+  const language = detectLanguage(repo.name);
+  const isRecentlyActive = repo.last_commit_date &&
+    new Date(repo.last_commit_date).getTime() > Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+  return (
+    <Link
+      href={`/explore/${repo.address}/${repo.name}`}
+      className={`explore-repo-item ${isRecentlyActive ? 'recently-active' : ''}`}
+    >
+      <div className="explore-repo-item-header">
+        <h3 className="explore-repo-item-name">{repo.name}</h3>
+        <div
+          className="explore-repo-item-language"
+          style={{ backgroundColor: language.color }}
+          title={language.name}
+        ></div>
+      </div>
+
+      <div className="explore-repo-item-owner-link">
+        {formatAddress(repo.owner_address)}
+      </div>
+
+      <div className="explore-repo-item-badges">
+        {repo.permissions.map((perm) => (
+          <span key={perm} className="explore-permission-badge">
+            {perm}
+          </span>
+        ))}
+      </div>
+
+      {repo.description && (
+        <p className="explore-repo-item-description">
+          {repo.description.replace(/\n/g, ' ').trim()}
+        </p>
+      )}
+
+      <div className="explore-repo-item-meta">
+        <span className="explore-repo-item-meta-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M20 6L9 17l-5-5"></path>
+          </svg>
+          {formatCommitCount(repo.commit_count)}
+        </span>
+        {repo.last_commit_date && (
+          <span className="explore-repo-item-meta-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12,6 12,12 16,14"></polyline>
+            </svg>
+            Updated {formatTimeAgo(repo.last_commit_date)}
+          </span>
+        )}
+      </div>
+    </Link>
+  );
 }
 
 export default function AddressPage() {
   const params = useParams();
   const router = useRouter();
   const [repos, setRepos] = useState<Repo[]>([]);
+  const [contributorRepos, setContributorRepos] = useState<ContributorRepo[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
   const [resolving, setResolving] = useState(true);
@@ -63,23 +157,18 @@ export default function AddressPage() {
   useEffect(() => {
     const resolveAddress = async () => {
       if (!addressOrName) return;
-      
-      // If it's already an address, use it directly
+
       if (/^0x[a-fA-F0-9]{40}$/i.test(addressOrName)) {
         setResolvedAddress(addressOrName);
         setResolving(false);
         return;
       }
-      
-      // Try to resolve name
+
       try {
         const resolved = await resolveNameToAddress(addressOrName);
         if (resolved) {
           setResolvedAddress(resolved);
-          // Update URL to canonical address form (optional - keeps human readable URL)
-          // router.replace(`/explore/${resolved}`);
         } else {
-          // Name not found
           setNotFound(true);
         }
       } catch (error) {
@@ -89,7 +178,7 @@ export default function AddressPage() {
         setResolving(false);
       }
     };
-    
+
     resolveAddress();
   }, [addressOrName, router]);
 
@@ -102,6 +191,7 @@ export default function AddressPage() {
         if (res.ok) {
           const data = await res.json();
           setRepos(data.repos || []);
+          setContributorRepos(data.contributor_repos || []);
         }
       } catch (error) {
         console.error('Error:', error);
@@ -112,9 +202,6 @@ export default function AddressPage() {
     fetchData();
   }, [resolvedAddress]);
 
-
-
-  // Format commit count properly
   const formatCommitCount = (count: number): string => {
     if (count === 1) return '1 commit';
     return `${count} commits`;
@@ -144,7 +231,7 @@ export default function AddressPage() {
             </div>
           </div>
         </header>
-        
+
         <div className="explore-main-content">
           <div className="explore-loading">
             <div className="explore-loading-spinner"></div>
@@ -177,14 +264,14 @@ export default function AddressPage() {
             </div>
           </div>
         </header>
-        
+
         <div className="explore-main-content">
           <EmptyState
             illustration={AddressNotFound}
             title="Address not found"
             description={`Could not resolve "${addressOrName}" to an address.`}
             action={{
-              label: "← Back to Explorer",
+              label: "\u2190 Back to Explorer",
               href: "/explore"
             }}
             size="lg"
@@ -193,6 +280,9 @@ export default function AddressPage() {
       </div>
     );
   }
+
+  const totalRepoCount = repos.length + contributorRepos.length;
+  const totalCommits = repos.reduce((sum, r) => sum + r.commit_count, 0);
 
   return (
     <div className="explore-page">
@@ -229,10 +319,10 @@ export default function AddressPage() {
             <div className="explore-profile-details">
               <h1 className="explore-profile-title">Developer</h1>
               <div className="explore-profile-address">
-                <AddressDisplay 
-                  address={resolvedAddress || ''} 
+                <AddressDisplay
+                  address={resolvedAddress || ''}
                   displayName={addressOrName !== resolvedAddress ? addressOrName : undefined}
-                  size="lg" 
+                  size="lg"
                   linkable={false}
                   showCopy={true}
                   showTooltip={true}
@@ -243,19 +333,19 @@ export default function AddressPage() {
 
           <div className="explore-profile-stats">
             <div className="explore-profile-stat">
-              <span className="explore-profile-stat-number">{repos.length}</span>
+              <span className="explore-profile-stat-number">{totalRepoCount}</span>
               <span className="explore-profile-stat-label">repositories</span>
             </div>
             <div className="explore-profile-stat">
               <span className="explore-profile-stat-number">
-                {repos.reduce((sum, r) => sum + r.commit_count, 0).toLocaleString()}
+                {totalCommits.toLocaleString()}
               </span>
               <span className="explore-profile-stat-label">commits</span>
             </div>
           </div>
         </div>
 
-        {/* Repositories */}
+        {/* Owned Repositories */}
         <div className="explore-content-section">
           <div className="explore-section-header">
             <h2 className="explore-section-title">Repositories</h2>
@@ -286,55 +376,35 @@ export default function AddressPage() {
             />
           ) : (
             <div className="explore-repo-grid">
-              {repos.map((repo) => {
-                const language = detectLanguage(repo.name);
-                const isRecentlyActive = repo.last_commit_date && 
-                  new Date(repo.last_commit_date).getTime() > Date.now() - (7 * 24 * 60 * 60 * 1000);
-                
-                return (
-                  <Link
-                    key={`${repo.address}/${repo.name}`}
-                    href={`/explore/${repo.address}/${repo.name}`}
-                    className={`explore-repo-item ${isRecentlyActive ? 'recently-active' : ''}`}
-                  >
-                    <div className="explore-repo-item-header">
-                      <h3 className="explore-repo-item-name">{repo.name}</h3>
-                      <div 
-                        className="explore-repo-item-language"
-                        style={{ backgroundColor: language.color }}
-                        title={language.name}
-                      ></div>
-                    </div>
-                    
-                    {repo.description && (
-                      <p className="explore-repo-item-description">
-                        {repo.description.replace(/\n/g, ' ').trim()}
-                      </p>
-                    )}
-                    
-                    <div className="explore-repo-item-meta">
-                      <span className="explore-repo-item-meta-item">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M20 6L9 17l-5-5"></path>
-                        </svg>
-                        {formatCommitCount(repo.commit_count)}
-                      </span>
-                      {repo.last_commit_date && (
-                        <span className="explore-repo-item-meta-item">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <polyline points="12,6 12,12 16,14"></polyline>
-                          </svg>
-                          Updated {formatTimeAgo(repo.last_commit_date)}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
+              {repos.map((repo) => (
+                <RepoCard
+                  key={`${repo.address}/${repo.name}`}
+                  repo={repo}
+                  formatCommitCount={formatCommitCount}
+                />
+              ))}
             </div>
           )}
         </div>
+
+        {/* Contributor Repos */}
+        {!loading && contributorRepos.length > 0 && (
+          <div className="explore-content-section">
+            <div className="explore-section-header">
+              <h2 className="explore-section-title">Can access</h2>
+            </div>
+
+            <div className="explore-repo-grid">
+              {contributorRepos.map((repo) => (
+                <ContributorRepoCard
+                  key={`contrib-${repo.address}/${repo.name}`}
+                  repo={repo}
+                  formatCommitCount={formatCommitCount}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
