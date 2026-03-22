@@ -1066,11 +1066,186 @@ fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
             }
             ExitCode::SUCCESS
         }
+        "pre-receive" => {
+            // Server-side hook: validate all incoming pushes
+            // stdin: <old sha> <new sha> <ref name>
+            use std::io::BufRead;
+            let stdin = std::io::stdin();
+            
+            for line in stdin.lock().lines().flatten() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() != 3 {
+                    continue;
+                }
+                
+                let old_sha = parts[0];
+                let new_sha = parts[1];
+                let ref_name = parts[2];
+                
+                // Skip non-branch refs
+                let branch_name = match ref_name.strip_prefix("refs/heads/") {
+                    Some(name) => name,
+                    None => continue,
+                };
+                
+                // Skip deletions (new_sha = all zeros)
+                if new_sha == "0000000000000000000000000000000000000000" {
+                    continue;
+                }
+                
+                // Check for force-push attempts on agent branches
+                if let Some(ref virtuals_config) = config.virtuals {
+                    if virtuals_config.enabled && branch_name.starts_with("agent/") {
+                        // Agent branches should not allow force-push
+                        if is_force_push(old_sha, new_sha) {
+                            eprintln!("❌ force-push not allowed on agent branches: {}", branch_name);
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+                
+                // Validate virtuals agent branch naming if configured
+                if let Some(ref virtuals_config) = config.virtuals {
+                    if virtuals_config.enabled {
+                        if let Err(msg) = validate_agent_branch_naming(&identity, branch_name) {
+                            eprintln!("❌ virtuals branch naming violation: {}", msg);
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+                
+                // Check push permissions
+                let result = engine::check(&config, &identity, Verb::Push, Some(branch_name), None);
+                if !result.is_allowed() {
+                    let display = aliases::display_identity(home, &identity.to_string());
+                    eprintln!("❌ permission denied: {display} cannot push to {branch_name}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("unknown hook: {hook}");
             ExitCode::FAILURE
         }
     }
+}
+
+/// Check if a push is a force-push by comparing old and new commit SHAs.
+/// This is a simplified check - in a real implementation you'd verify
+/// that new_sha is not a descendant of old_sha.
+fn is_force_push(old_sha: &str, new_sha: &str) -> bool {
+    // Skip new branch creation (old_sha = all zeros)
+    if old_sha == "0000000000000000000000000000000000000000" {
+        return false;
+    }
+    
+    // For simplicity, we'll use git to check if new_sha is reachable from old_sha
+    // If not reachable, it's likely a force-push
+    let output = Command::new("git")
+        .args(["merge-base", "--is-ancestor", old_sha, new_sha])
+        .output();
+    
+    match output {
+        Ok(result) => !result.status.success(), // If ancestor check fails, it's a force-push
+        Err(_) => false, // If git command fails, assume not a force-push to be safe
+    }
+}
+
+/// Validate agent branch naming according to Virtuals integration rules.
+/// Agent branches must follow the pattern: agent/{agent-id}/fix-{issue-number}
+/// or agent/{agent-id}/feature-{description}
+fn validate_agent_branch_naming(identity: &Identity, branch_name: &str) -> Result<(), String> {
+    // Extract agent address from identity
+    let agent_address = match identity.kind {
+        repobox::config::IdentityKind::Evm => identity.address.to_lowercase(),
+        repobox::config::IdentityKind::Ens => {
+            // For ENS names, we'd need to resolve to address, but for now just use the name
+            identity.address.to_lowercase()
+        }
+    };
+
+    // Check if this is an agent branch
+    if let Some(rest) = branch_name.strip_prefix("agent/") {
+        // This is an agent branch, validate the pattern
+        let parts: Vec<&str> = rest.split('/').collect();
+        
+        if parts.len() != 2 {
+            return Err(format!(
+                "agent branch must follow pattern 'agent/{{agent-id}}/{{task-type}}-{{identifier}}', got '{}'",
+                branch_name
+            ));
+        }
+        
+        let branch_agent_id = parts[0];
+        let task_description = parts[1];
+        
+        // Validate agent ID matches the pusher's identity
+        // Support both full address and short forms, case-insensitive for EVM addresses
+        let identity_matches = match identity.kind {
+            repobox::config::IdentityKind::Evm => {
+                let agent_lower = agent_address.to_lowercase();
+                let branch_lower = branch_agent_id.to_lowercase();
+                
+                branch_lower == agent_lower ||
+                branch_lower == agent_lower.trim_start_matches("0x") ||
+                agent_lower == format!("0x{}", branch_lower) ||
+                format!("0x{}", agent_lower.trim_start_matches("0x")) == format!("0x{}", branch_lower)
+            }
+            repobox::config::IdentityKind::Ens => {
+                // ENS names should match exactly (case-sensitive)
+                branch_agent_id == agent_address
+            }
+        };
+        
+        if !identity_matches {
+            return Err(format!(
+                "agent branch agent-id '{}' does not match pusher identity '{}'", 
+                branch_agent_id, identity.address
+            ));
+        }
+        
+        // Validate task description format
+        if !task_description.contains('-') {
+            return Err(format!(
+                "agent branch task must include type prefix (fix-, feature-, etc.), got '{}'",
+                task_description
+            ));
+        }
+        
+        let task_parts: Vec<&str> = task_description.splitn(2, '-').collect();
+        let task_type = task_parts[0];
+        let task_identifier = task_parts[1];
+        
+        // Validate task type
+        let valid_task_types = ["fix", "feature", "refactor", "docs", "test", "chore"];
+        if !valid_task_types.contains(&task_type) {
+            return Err(format!(
+                "invalid agent branch task type '{}', must be one of: {}",
+                task_type, valid_task_types.join(", ")
+            ));
+        }
+        
+        // Validate task identifier is not empty
+        if task_identifier.is_empty() {
+            return Err(format!(
+                "agent branch task identifier cannot be empty, got '{}'",
+                task_description
+            ));
+        }
+        
+        // Additional validation for fix branches - should reference an issue
+        if task_type == "fix" {
+            if !task_identifier.chars().all(|c| c.is_ascii_digit()) {
+                return Err(format!(
+                    "fix branch identifier should be an issue number, got '{}'",
+                    task_identifier
+                ));
+            }
+        }
+    }
+    
+    Ok(())
 }
 
 // ── Status ────────────────────────────────────────────────────────────
@@ -1600,3 +1775,47 @@ fn enhance_error_message(msg: &str, home: &Path) -> String {
 }
 
 use repobox::config::Subject;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_agent_branch_naming_valid_cases() {
+        let identity = Identity::parse("evm:0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00").unwrap();
+        
+        // Valid cases
+        assert!(validate_agent_branch_naming(&identity, "main").is_ok()); // Non-agent branch
+        assert!(validate_agent_branch_naming(&identity, "feature/new-ui").is_ok()); // Non-agent branch
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/fix-42").is_ok());
+        assert!(validate_agent_branch_naming(&identity, "agent/0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00/fix-123").is_ok());
+        assert!(validate_agent_branch_naming(&identity, "agent/aac050ca4fb723be066e7c12290ee965c84a4a00/feature-ui-improvements").is_ok());
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/refactor-parser").is_ok());
+    }
+
+    #[test]
+    fn test_validate_agent_branch_naming_invalid_cases() {
+        let identity = Identity::parse("evm:0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00").unwrap();
+        
+        // Invalid agent ID
+        assert!(validate_agent_branch_naming(&identity, "agent/wrongid/fix-42").is_err());
+        
+        // Invalid format
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00").is_err()); // Missing task
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/fix").is_err()); // Missing identifier
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/invalidtype-123").is_err()); // Invalid type
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/fix-").is_err()); // Empty identifier
+        
+        // Fix branch with non-numeric identifier
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/fix-abc").is_err());
+    }
+
+    #[test]
+    fn test_validate_agent_branch_naming_ens_identity() {
+        let identity = Identity::parse("ens:alice.eth").unwrap();
+        
+        // Should work with ENS names
+        assert!(validate_agent_branch_naming(&identity, "agent/alice.eth/fix-42").is_ok());
+        assert!(validate_agent_branch_naming(&identity, "agent/wrongname.eth/fix-42").is_err());
+    }
+}

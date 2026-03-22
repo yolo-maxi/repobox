@@ -20,12 +20,14 @@ pub(crate) fn router() -> Router<Arc<AppState>> {
         .route("/{repo}/git-upload-pack", post(addressless_upload_pack))
         .route("/{repo}/git-receive-pack", post(addressless_receive_pack))
         .route("/{repo}/HEAD", get(addressless_head))
+        .route("/{repo}/.well-known/virtuals.json", get(addressless_virtuals_discovery))
         // Regular two-segment routes (existing functionality)
         .route("/{address}/{repo}/info/refs", get(info_refs))
         .route("/{address}/{repo}/git-upload-pack", post(upload_pack))
         .route("/{address}/{repo}/git-receive-pack", post(receive_pack))
         .route("/{address}/{repo}/HEAD", get(head))
         .route("/{address}/{repo}/x402/grant-access", post(grant_access))
+        .route("/{address}/{repo}/.well-known/virtuals.json", get(virtuals_discovery))
         // Name resolution route
         .route("/{name}/resolve", get(resolve_name))
 }
@@ -1121,6 +1123,159 @@ async fn resolve_name(
     };
 
     axum::Json(ResolveResponse { address, source }).into_response()
+}
+
+async fn virtuals_discovery(
+    State(state): State<Arc<AppState>>,
+    Path((name, repo)): Path<(String, String)>,
+) -> Response {
+    // Resolve name to address
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
+    let repo_path = match repo_path(address, repo) {
+        Ok(repo) => repo,
+        Err(status) => return status.into_response(),
+    };
+
+    handle_virtuals_discovery(&state, &repo_path).await
+}
+
+async fn addressless_virtuals_discovery(
+    State(state): State<Arc<AppState>>,
+    Path(repo): Path<String>,
+) -> Response {
+    // This would need EVM signature resolution like other addressless routes
+    // For now, return a simple not found
+    StatusCode::NOT_FOUND.into_response()
+}
+
+async fn handle_virtuals_discovery(state: &AppState, repo: &RepoPath) -> Response {
+    // Check if repo exists
+    if !git::repo_dir(&state.data_dir, repo).exists() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    // Load repository configuration
+    let config_path = git::repo_dir(&state.data_dir, repo).join(".repobox").join("config.yml");
+    let config = if config_path.exists() {
+        match std::fs::read_to_string(&config_path) {
+            Ok(yaml) => match repobox::parser::parse(&yaml) {
+                Ok(config) => config,
+                Err(e) => {
+                    eprintln!("Failed to parse config for {}/{}: {}", repo.address, repo.name, e);
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+            },
+            Err(e) => {
+                eprintln!("Failed to read config for {}/{}: {}", repo.address, repo.name, e);
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+    } else {
+        // No config file, return minimal response
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    // Check if virtuals is configured and enabled
+    let virtuals_config = match config.virtuals {
+        Some(ref config) if config.enabled => config,
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+
+    // For now, return a simple discovery response
+    // In a real implementation, this would query GitHub issues or similar
+    let discovery_response = VirtualsDiscoveryResponse {
+        version: "1.0".to_string(),
+        repository: VirtualsRepositoryInfo {
+            name: repo.name.clone(),
+            address: repo.address.clone(),
+            virtuals_enabled: true,
+        },
+        bug_bounties: VirtualsBugBounties {
+            active_issues: vec![
+                // This would be populated from actual issue tracking
+                VirtualsIssue {
+                    id: "example".to_string(),
+                    title: "Example bug bounty issue".to_string(),
+                    severity: "medium".to_string(),
+                    bounty_usdc: virtuals_config.bug_bounties.medium.clone(),
+                    claimed: false,
+                    created_at: chrono::Utc::now(),
+                    labels: vec!["bug".to_string(), "virtuals".to_string()],
+                    description: "This is an example issue for testing virtuals integration".to_string(),
+                    reproduction_steps: "Steps would be provided here".to_string(),
+                }
+            ],
+        },
+        requirements: VirtualsRequirements {
+            min_reputation: virtuals_config.agent_requirements.min_reputation,
+            required_tests: virtuals_config.agent_requirements.required_tests,
+            review_required: virtuals_config.agent_requirements.human_review_required,
+        },
+        payment: virtuals_config.payments.as_ref().map(|p| VirtualsPaymentInfo {
+            network: p.network.clone(),
+            token: p.token.clone(),
+            treasury: p.treasury.clone(),
+        }),
+    };
+
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&discovery_response).unwrap(),
+    ).into_response()
+}
+
+#[derive(Serialize)]
+struct VirtualsDiscoveryResponse {
+    version: String,
+    repository: VirtualsRepositoryInfo,
+    bug_bounties: VirtualsBugBounties,
+    requirements: VirtualsRequirements,
+    payment: Option<VirtualsPaymentInfo>,
+}
+
+#[derive(Serialize)]
+struct VirtualsRepositoryInfo {
+    name: String,
+    address: String,
+    virtuals_enabled: bool,
+}
+
+#[derive(Serialize)]
+struct VirtualsBugBounties {
+    active_issues: Vec<VirtualsIssue>,
+}
+
+#[derive(Serialize)]
+struct VirtualsIssue {
+    id: String,
+    title: String,
+    severity: String,
+    bounty_usdc: String,
+    claimed: bool,
+    #[serde(with = "chrono::serde::ts_seconds")]
+    created_at: chrono::DateTime<chrono::Utc>,
+    labels: Vec<String>,
+    description: String,
+    reproduction_steps: String,
+}
+
+#[derive(Serialize)]
+struct VirtualsRequirements {
+    min_reputation: f64,
+    required_tests: bool,
+    review_required: bool,
+}
+
+#[derive(Serialize)]
+struct VirtualsPaymentInfo {
+    network: String,
+    token: String,
+    treasury: String,
 }
 
 #[cfg(test)]
