@@ -38,6 +38,15 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### Self-lockout + identity matrix adversarial matrix pass
+- **Date:** 2026-03-22 | **Agent:** repobox-qa-pipeline
+- Executed dedicated scenario covering founder/agent/unknown-signing states with real commit/push/pull/rebase flow:
+  - founder initializes and seeds repo
+  - agent blocked on `main`, allowed on `feature/**`
+  - founder rebase/merge checks against remote `feature/qa`
+  - explicit self-lockout check confirmed lockout BLOCK with recovery text
+- `git pull` guidance on no-upstream branch remains clear and actionable.
+
 ### Self-lockout prevention UX guard for config edits
 - **Completed**: 2026-03-22 | **Agent**: repobox-qa-pipeline
 Added safety check in shim commit flow to block policy edits that remove the active identity's `.repobox/config.yml` edit permissions.
