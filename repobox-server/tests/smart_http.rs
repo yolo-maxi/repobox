@@ -55,7 +55,10 @@ fn signed_push_and_clone_roundtrip() {
     let repo_name = "roundtrip";
     let remote = format!("http://{bind}/{address}/{repo_name}.git");
     git(&source_repo, &["remote", "add", "origin", &remote]);
-    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+    git(
+        &source_repo,
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
+    );
 
     let bare_repo = data_dir.join(address).join(format!("{repo_name}.git"));
     assert!(bare_repo.exists(), "expected bare repo to be created");
@@ -108,7 +111,10 @@ fn unsigned_push_is_rejected_and_cleaned_up() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(count, 0, "unsigned push should NOT create an ownership record");
+    assert_eq!(
+        count, 0,
+        "unsigned push should NOT create an ownership record"
+    );
 }
 
 #[test]
@@ -138,7 +144,10 @@ fn signed_push_establishes_ownership() {
     let repo_name = "signed-repo";
     let remote = format!("http://{bind}/{namespace}/{repo_name}.git");
     git(&source_repo, &["remote", "add", "origin", &remote]);
-    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+    git(
+        &source_repo,
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
+    );
 
     // Check ownership in SQLite
     let db = Connection::open(data_dir.join("repobox.db")).unwrap();
@@ -173,14 +182,22 @@ fn subsequent_pushes_work_after_ownership_established() {
     // First push: signed commit establishes ownership
     write_file(&source_repo.join("README.md"), "# v1\n");
     git(&source_repo, &["add", "README.md"]);
-    let commit1 = create_signed_commit(&source_repo, &repobox_home, expected_address, "first commit");
+    let commit1 = create_signed_commit(
+        &source_repo,
+        &repobox_home,
+        expected_address,
+        "first commit",
+    );
     git(&source_repo, &["update-ref", "HEAD", &commit1]);
 
     let namespace = "0xmulti";
     let repo_name = "incremental";
     let remote = format!("http://{bind}/{namespace}/{repo_name}.git");
     git(&source_repo, &["remote", "add", "origin", &remote]);
-    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+    git(
+        &source_repo,
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
+    );
 
     // Second push: regular unsigned commit (just a normal git workflow)
     write_file(&source_repo.join("README.md"), "# v2 — updated\n");
@@ -193,11 +210,17 @@ fn subsequent_pushes_work_after_ownership_established() {
     let clone_str = clone_dir.to_string_lossy().to_string();
     git_in(temp.path(), &["clone", &remote, &clone_str]);
     let readme = std::fs::read_to_string(clone_dir.join("README.md")).unwrap();
-    assert_eq!(readme, "# v2 — updated\n", "clone should have the latest pushed content");
+    assert_eq!(
+        readme, "# v2 — updated\n",
+        "clone should have the latest pushed content"
+    );
 
     // Verify git log has both commits
     let log = git_output(&clone_dir, &["log", "--oneline"]);
-    assert!(log.lines().count() >= 2, "should have at least 2 commits, got: {log}");
+    assert!(
+        log.lines().count() >= 2,
+        "should have at least 2 commits, got: {log}"
+    );
 }
 
 #[test]
@@ -226,11 +249,19 @@ fn addressless_push_with_signed_commit_creates_repo() {
     let repo_name = "addressless-repo";
     let remote = format!("http://{bind}/{repo_name}.git"); // No address prefix
     git(&source_repo, &["remote", "add", "origin", &remote]);
-    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+    git(
+        &source_repo,
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
+    );
 
     // Repo should be created under the signer's address
-    let final_repo = data_dir.join(expected_address).join(format!("{repo_name}.git"));
-    assert!(final_repo.exists(), "repo should be created under signer's address");
+    let final_repo = data_dir
+        .join(expected_address)
+        .join(format!("{repo_name}.git"));
+    assert!(
+        final_repo.exists(),
+        "repo should be created under signer's address"
+    );
 
     // Staging area should be cleaned up
     let staging_repo = data_dir.join("_staging").join(format!("{repo_name}.git"));
@@ -245,7 +276,7 @@ fn addressless_push_with_signed_commit_creates_repo() {
             |row| row.get(0),
         )
         .expect("ownership record should exist");
-    
+
     assert_eq!(
         owner.to_lowercase(),
         expected_address.to_lowercase(),
@@ -298,7 +329,10 @@ fn addressless_push_unsigned_is_rejected() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(count, 0, "unsigned address-less push should NOT create an ownership record");
+    assert_eq!(
+        count, 0,
+        "unsigned address-less push should NOT create an ownership record"
+    );
 }
 
 #[test]
@@ -311,19 +345,23 @@ fn addressless_clone_returns_404() {
     // First create a repo the normal way
     let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
     let expected_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-    
+
     let source_repo = init_working_repo(temp.path().join("source"));
     let repobox_home = setup_repobox_key(temp.path(), private_key, expected_address);
 
     write_file(&source_repo.join("README.md"), "# test repo\n");
     git(&source_repo, &["add", "README.md"]);
-    let commit_hash = create_signed_commit(&source_repo, &repobox_home, expected_address, "initial");
+    let commit_hash =
+        create_signed_commit(&source_repo, &repobox_home, expected_address, "initial");
     git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
 
     let repo_name = "clone-test";
     let full_remote = format!("http://{bind}/{expected_address}/{repo_name}.git");
     git(&source_repo, &["remote", "add", "origin", &full_remote]);
-    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+    git(
+        &source_repo,
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
+    );
 
     // Try to clone using address-less URL - should fail
     let addressless_remote = format!("http://{bind}/{repo_name}.git");
@@ -334,9 +372,12 @@ fn addressless_clone_returns_404() {
         .args(["clone", &addressless_remote, &clone_str])
         .output()
         .unwrap();
-    
+
     assert!(!output.status.success(), "address-less clone should fail");
-    assert!(!clone_dir.exists(), "clone directory should not exist after failed clone");
+    assert!(
+        !clone_dir.exists(),
+        "clone directory should not exist after failed clone"
+    );
 }
 
 #[test]
@@ -355,17 +396,33 @@ fn addressless_subsequent_push_to_existing_repo() {
     // First push: address-less signed commit
     write_file(&source_repo.join("README.md"), "# v1\n");
     git(&source_repo, &["add", "README.md"]);
-    let commit1 = create_signed_commit(&source_repo, &repobox_home, expected_address, "first commit");
+    let commit1 = create_signed_commit(
+        &source_repo,
+        &repobox_home,
+        expected_address,
+        "first commit",
+    );
     git(&source_repo, &["update-ref", "HEAD", &commit1]);
 
     let repo_name = "subsequent-test";
     let addressless_remote = format!("http://{bind}/{repo_name}.git");
-    git(&source_repo, &["remote", "add", "origin", &addressless_remote]);
-    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+    git(
+        &source_repo,
+        &["remote", "add", "origin", &addressless_remote],
+    );
+    git(
+        &source_repo,
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
+    );
 
     // Verify repo was created under signer's address
-    let final_repo = data_dir.join(expected_address).join(format!("{repo_name}.git"));
-    assert!(final_repo.exists(), "repo should exist under signer's address");
+    let final_repo = data_dir
+        .join(expected_address)
+        .join(format!("{repo_name}.git"));
+    assert!(
+        final_repo.exists(),
+        "repo should exist under signer's address"
+    );
 
     // Second push: address-less to the same repo name (should route to existing repo)
     write_file(&source_repo.join("README.md"), "# v2 updated\n");
@@ -379,7 +436,10 @@ fn addressless_subsequent_push_to_existing_repo() {
     let full_remote = format!("http://{bind}/{expected_address}/{repo_name}.git");
     git_in(temp.path(), &["clone", &full_remote, &clone_str]);
     let readme = std::fs::read_to_string(clone_dir.join("README.md")).unwrap();
-    assert_eq!(readme, "# v2 updated\n", "subsequent push should update the existing repo");
+    assert_eq!(
+        readme, "# v2 updated\n",
+        "subsequent push should update the existing repo"
+    );
 }
 
 fn setup_repobox_key(temp_dir: &Path, private_key: &str, address: &str) -> PathBuf {
@@ -393,12 +453,7 @@ fn setup_repobox_key(temp_dir: &Path, private_key: &str, address: &str) -> PathB
     repobox_home
 }
 
-fn create_signed_commit(
-    repo: &Path,
-    repobox_home: &Path,
-    address: &str,
-    message: &str,
-) -> String {
+fn create_signed_commit(repo: &Path, repobox_home: &Path, address: &str, message: &str) -> String {
     let tree_hash = git_output(repo, &["write-tree"]);
 
     let commit_content = format!(
@@ -422,13 +477,22 @@ fn create_signed_commit(
          {message}\n"
     );
 
-    git_output_stdin(repo, &["hash-object", "-t", "commit", "-w", "--stdin"], &signed_commit)
+    git_output_stdin(
+        repo,
+        &["hash-object", "-t", "commit", "-w", "--stdin"],
+        &signed_commit,
+    )
 }
 
 fn start_server(bind: SocketAddr, data_dir: &Path) -> ServerGuard {
     std::fs::create_dir_all(data_dir).unwrap();
     let child = Command::new(env!("CARGO_BIN_EXE_repobox-server"))
-        .args(["--bind", &bind.to_string(), "--data-dir", data_dir.to_string_lossy().as_ref()])
+        .args([
+            "--bind",
+            &bind.to_string(),
+            "--data-dir",
+            data_dir.to_string_lossy().as_ref(),
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
@@ -456,7 +520,11 @@ fn git(repo: &Path, args: &[&str]) {
 }
 
 fn git_in(cwd: &Path, args: &[&str]) {
-    let output = Command::new("git").current_dir(cwd).args(args).output().unwrap();
+    let output = Command::new("git")
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .unwrap();
     assert!(
         output.status.success(),
         "git {:?} failed\nstdout:\n{}\nstderr:\n{}",
@@ -467,7 +535,11 @@ fn git_in(cwd: &Path, args: &[&str]) {
 }
 
 fn git_output(repo: &Path, args: &[&str]) -> String {
-    let output = Command::new("git").current_dir(repo).args(args).output().unwrap();
+    let output = Command::new("git")
+        .current_dir(repo)
+        .args(args)
+        .output()
+        .unwrap();
     assert!(
         output.status.success(),
         "git {:?} failed: {}",
@@ -551,19 +623,30 @@ network: "base"
 "#;
 
     std::fs::create_dir_all(&source_repo.join(".repobox")).unwrap();
-    write_file(&source_repo.join(".repobox").join("config.yml"), config_content);
+    write_file(
+        &source_repo.join(".repobox").join("config.yml"),
+        config_content,
+    );
     write_file(&source_repo.join(".repobox").join("x402.yml"), x402_content);
     write_file(&source_repo.join("README.md"), "# paid repo\n");
 
     git(&source_repo, &["add", "."]);
-    let commit_hash = create_signed_commit(&source_repo, &repobox_home, owner_address, "initial commit with x402");
+    let commit_hash = create_signed_commit(
+        &source_repo,
+        &repobox_home,
+        owner_address,
+        "initial commit with x402",
+    );
     git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
 
     let namespace = owner_address;
     let repo_name = "paid-repo";
     let remote = format!("http://{bind}/{namespace}/{repo_name}.git");
     git(&source_repo, &["remote", "add", "origin", &remote]);
-    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+    git(
+        &source_repo,
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
+    );
 
     // Try to clone without payment - should get 402
     let clone_dir = temp.path().join("clone");
@@ -579,8 +662,11 @@ network: "base"
 
     // Check that git received a 402 response (this will be in stderr)
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("402") || stderr.contains("Payment Required"),
-           "should receive 402 Payment Required, got: {}", stderr);
+    assert!(
+        stderr.contains("402") || stderr.contains("Payment Required"),
+        "should receive 402 Payment Required, got: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -615,19 +701,33 @@ network: "base"
 "#;
 
     std::fs::create_dir_all(&source_repo.join(".repobox")).unwrap();
-    write_file(&source_repo.join(".repobox").join("config.yml"), config_content);
+    write_file(
+        &source_repo.join(".repobox").join("config.yml"),
+        config_content,
+    );
     write_file(&source_repo.join(".repobox").join("x402.yml"), x402_content);
-    write_file(&source_repo.join("README.md"), "# paid repo for grant test\n");
+    write_file(
+        &source_repo.join("README.md"),
+        "# paid repo for grant test\n",
+    );
 
     git(&source_repo, &["add", "."]);
-    let commit_hash = create_signed_commit(&source_repo, &repobox_home, owner_address, "initial commit with x402");
+    let commit_hash = create_signed_commit(
+        &source_repo,
+        &repobox_home,
+        owner_address,
+        "initial commit with x402",
+    );
     git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
 
     let namespace = owner_address;
     let repo_name = "grant-test-repo";
     let remote = format!("http://{bind}/{namespace}/{repo_name}.git");
     git(&source_repo, &["remote", "add", "origin", &remote]);
-    git(&source_repo, &["push", "-u", "origin", "HEAD:refs/heads/main"]);
+    git(
+        &source_repo,
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
+    );
 
     // Verify repo was created successfully
     let bare_repo = data_dir.join(namespace).join(format!("{repo_name}.git"));
@@ -641,16 +741,94 @@ network: "base"
         "tx_hash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
     });
 
-    let response = client.post(&grant_url)
-        .json(&payload)
-        .send()
-        .unwrap();
+    let response = client.post(&grant_url).json(&payload).send().unwrap();
 
     let status = response.status();
     let text = response.text().unwrap();
-    assert_eq!(status, 200, "grant-access should succeed, got {} with body: {}", status, text);
+    assert_eq!(
+        status, 200,
+        "grant-access should succeed, got {} with body: {}",
+        status, text
+    );
 
     // TODO: In a full implementation, we would verify that the payer_address
     // was added to the paid-readers group and can now access the repo
     // For MVP, we're just testing the endpoint responds correctly
+}
+
+#[test]
+fn x402_info_endpoint() {
+    let temp = TempDir::new("repobox-server-x402-info-test").unwrap();
+    let data_dir = temp.path().join("data");
+    let bind = free_addr();
+    let _server = start_server(bind, &data_dir);
+
+    let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    let owner_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+
+    let source_repo = init_working_repo(temp.path().join("source"));
+    let repobox_home = setup_repobox_key(temp.path(), private_key, owner_address);
+
+    let config_content = r#"
+groups:
+  paid-readers: []
+
+permissions:
+  default: deny
+  rules:
+    - paid-readers read >*
+"#;
+
+    let x402_content = r#"
+read_price: "2.50"
+recipient: "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048"
+network: "base"
+"#;
+
+    std::fs::create_dir_all(&source_repo.join(".repobox")).unwrap();
+    write_file(
+        &source_repo.join(".repobox").join("config.yml"),
+        config_content,
+    );
+    write_file(&source_repo.join(".repobox").join("x402.yml"), x402_content);
+    write_file(
+        &source_repo.join("README.md"),
+        "# paid repo for info test\n",
+    );
+
+    git(&source_repo, &["add", "."]);
+    let commit_hash = create_signed_commit(
+        &source_repo,
+        &repobox_home,
+        owner_address,
+        "initial commit with x402 info",
+    );
+    git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
+
+    let namespace = owner_address;
+    let repo_name = "info-test-repo";
+    let remote = format!("http://{bind}/{namespace}/{repo_name}.git");
+    git(&source_repo, &["remote", "add", "origin", &remote]);
+    git(
+        &source_repo,
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
+    );
+
+    // Public preview endpoint should expose pricing metadata without auth
+    let info_url = format!("http://{bind}/{namespace}/{repo_name}.git/x402/info");
+    let client = reqwest::blocking::Client::new();
+    let response = client.get(&info_url).send().unwrap();
+    assert_eq!(
+        response.status(),
+        200,
+        "x402 info endpoint should be reachable"
+    );
+
+    let body: serde_json::Value = response.json().unwrap();
+    assert_eq!(
+        body["repository"],
+        serde_json::json!(format!("{namespace}/{repo_name}"))
+    );
+    assert_eq!(body["read_price"], serde_json::json!("2.50"));
+    assert_eq!(body["for_sale"], serde_json::json!(true));
 }

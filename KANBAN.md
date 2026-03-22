@@ -38,6 +38,14 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### x402 preview endpoint + payment-required UX improvement
+- **Date:** 2026-03-22 | **Agent:** repobox-qa-pipeline
+- Added discoverability endpoint `/{address}/{repo}.git/x402/info` and expanded 402 response body with grant + preview URLs.
+- Added regression integration test `x402_info_endpoint` in `repobox-server/tests/smart_http.rs`.
+- Validated with focused server tests (`cargo test -p repobox-server x402_`) and manual curl checks.
+- Status: ✅ Completed
+- Commit: `9fb9492`
+
 ### Self-lockout + identity matrix adversarial matrix pass
 - **Date:** 2026-03-22 | **Agent:** repobox-qa-pipeline
 - Executed dedicated scenario covering founder/agent/unknown-signing states with real commit/push/pull/rebase flow:

@@ -31,6 +31,7 @@ pub(crate) fn router() -> Router<Arc<AppState>> {
         .route("/{address}/{repo}/git-receive-pack", post(receive_pack))
         .route("/{address}/{repo}/HEAD", get(head))
         .route("/{address}/{repo}/x402/grant-access", post(grant_access))
+        .route("/{address}/{repo}/x402/info", get(x402_info))
         .route(
             "/{address}/{repo}/.well-known/virtuals.json",
             get(virtuals_discovery),
@@ -575,11 +576,12 @@ fn payment_required_response(
         "memo": format!("read:{}", repo.name)
     });
 
-    let mut response = (
-        StatusCode::PAYMENT_REQUIRED,
-        "payment required for read access",
-    )
-        .into_response();
+    let response_body = format!(
+        "payment required for read access. Call /{}/{}.git/x402/grant-access with payment proof\nand visit /{}/{}.git/x402/info for pricing metadata",
+        repo.address, repo.name, repo.address, repo.name
+    );
+
+    let mut response = (StatusCode::PAYMENT_REQUIRED, response_body).into_response();
     response.headers_mut().insert(
         "X-Payment",
         HeaderValue::from_str(&payment_json.to_string()).unwrap(),
@@ -1015,6 +1017,49 @@ async fn addressless_head(
     } else {
         StatusCode::NOT_FOUND.into_response()
     }
+}
+
+async fn x402_info(
+    State(state): State<Arc<AppState>>,
+    Path((name, repo)): Path<(String, String)>,
+) -> Response {
+    let address = match resolve_name_to_address(&state, &name).await {
+        Ok(addr) => addr,
+        Err(status) => return status.into_response(),
+    };
+
+    let repo = match repo_path(address, repo) {
+        Ok(repo) => repo,
+        Err(status) => return status.into_response(),
+    };
+
+    let repo_dir = git::repo_dir(&state.data_dir, &repo);
+    let x402_content = match read_x402_from_repo(&repo_dir) {
+        Some(content) => content,
+        None => {
+            return (StatusCode::NOT_FOUND, "no x402 config found").into_response();
+        }
+    };
+
+    let x402_config = match repobox::parser::parse_x402(&x402_content) {
+        Ok(c) => c,
+        Err(_) => {
+            return (StatusCode::BAD_REQUEST, "invalid x402 config").into_response();
+        }
+    };
+
+    let response = serde_json::json!({
+        "repository": format!("{}/{}", repo.address, repo.name),
+        "read_price": x402_config.read_price,
+        "recipient": x402_config.recipient,
+        "network": x402_config.network,
+        "currency": "USDC",
+        "scheme": "exact",
+        "memo": format!("read:{}", repo.name),
+        "for_sale": true,
+    });
+
+    axum::Json(response).into_response()
 }
 
 async fn grant_access(

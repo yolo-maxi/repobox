@@ -1,3 +1,40 @@
+## 2026-03-22 — Private repo x402 preview + malformed auth UX pass
+
+### Scenario selected
+`x402 private repo paid-discovery flow`, including founder/agent/unknown identities and malformed auth token behavior.
+
+### Environment
+- Server: target/debug/repobox-server on 127.0.0.1:3566
+- Repo: 0xE2Bc1b8081a158E0F9Bd9cae90C1f0C1A1031955/private-x402-qa.git
+- Data dir: /tmp/repobox-qa-data
+
+### Key findings
+- `git clone` without identity still returns `402` for private x402 repos, but now includes actionable body text:
+  - `/{address}/{repo}.git/x402/grant-access`
+  - `/{address}/{repo}.git/x402/info`
+- Added public metadata preview endpoint so private repos expose pricing info before authentication:
+  - network, price, recipient, memo, scheme, `for_sale: true`
+- Manual unauthorized clone output now contains next-step URLs inline in body and continues to return `X-Payment`.
+- `git pull --rebase` lifecycle is still tested in fixture path; rebase succeeds after resolving one README conflict.
+
+### Fix applied
+- `repobox-server/src/routes.rs`:
+  - added `GET /{address}/{repo}.git/x402/info`
+  - extended 402 message body with direct preview and grant endpoints
+- `repobox-server/tests/smart_http.rs`:
+  - added `x402_info_endpoint` test asserting unauth metadata discoverability
+
+### Validation
+- `cargo test -p repobox-server x402_ -- --nocapture`
+  - passed: `x402_info_endpoint`, `x402_grant_access_endpoint`, `x402_payment_required_response`
+- Manual checks:
+  - `curl http://127.0.0.1:3566/{namespace}/{repo}.git/x402/info`
+  - `curl -i http://127.0.0.1:3566/{namespace}/{repo}.git/info/refs?service=git-upload-pack`
+
+### Fix status
+- Commit created in this run and pushed.
+- Follow-up remaining: add end-to-end paid-access clone success test once deterministic signature fixture is standardized.
+
 # CLI UX Adversarial QA Log
 
 ## 2026-03-22 — Identity matrix + self-lockout verification run
