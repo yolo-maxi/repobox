@@ -356,3 +356,78 @@ Self-lockout prevention on config edits while exercising founder, agent, and mis
 ### Fixes
 - No code changes for this run.
 - Outcome recorded as “behavioral clarity pass” for this scenario.
+
+## 2026-03-22 — Private repo paid-access / x402 flow (identity matrix + clone lifecycle)
+
+### Scenario selected
+`private repo paid access/x402 preview/discovery flow` with founder/agent/unknown identities, including init/push/pull/rebase and explicit grant flow.
+
+### Environment
+- Preferred DO host `xiko@167.71.5.215` was reachable for SSH checks, but `/home/xiko/repobox` was not available there.
+- Ran locally with real binaries:
+  - `repobox-server`: `/home/xiko/repobox/target/debug/repobox-server`
+  - `repobox` CLI: `/home/xiko/repobox/target/debug/repobox`
+  - server data: `/tmp/repobox-qa-data-fresh`
+- Real git shim was used via `PATH=$HOME/.repobox/bin:$PATH` in fixture home `/tmp/repobox-qa-run-home`.
+
+### Commands run (high-level)
+- Founder bootstrap with dedicated identities:
+  - `git init`
+  - `git repobox init`
+  - `git repobox keys generate --alias founder`
+  - `git repobox keys generate --alias agent`
+  - `git repobox identity set <founder-key>`
+  - `git repobox alias add founder <founder-eip191>`
+  - `git repobox alias add agent <agent-eip191>`
+  - signed commit + `git push -u origin HEAD:refs/heads/main`
+- Configured policy + x402:
+  - `.repobox/config.yml`: founder-only `own`, `branch`, `upload`, `edit`
+  - `.repobox/x402.yml`: `read_price: 3.25`, configured recipient/network
+  - committed and pushed
+- Identity checks:
+  - `git repobox check founder branch *` ✅
+  - `git repobox check agent branch *` ❌
+  - `git repobox check founder upload ./.repobox/config.yml` ✅
+  - `git repobox check agent upload ./.repobox/config.yml` ❌
+- Read-access UX checks:
+  - clone with no `Authorization` header (expected 402)
+  - clone as founder signature (expected success)
+  - clone as agent signature before grant (expected 402)
+  - clone as malformed signature (expected auth failure)
+  - `POST /{repo}.git/x402/grant-access`
+  - clone again as granted agent (expected success)
+- Git lifecycle checks:
+  - founder follow-up commit + `git push`
+  - `git pull --rebase origin main` in authenticated founder clone
+- Unknown/no-identity check:
+  - `HOME=/tmp/repobox-qa-empty git repobox whoami`
+- Extra self-lockout sanity:
+  - edited config to remove founder edit rights and re-attempted commit
+
+### Key outputs
+- branch checks:
+  - founder allowed on `branch *`
+  - agent denied on `branch *` (`implicit deny: rules exist for 'branch', no match for this identity`)
+- private read/clone behavior:
+  - no auth clone: `remote: payment required for read access` + `fatal ... returned error: 402`
+  - founder authorized clone: success
+  - agent before grant: `remote: payment required for read access` + `fatal ... returned error: 402`
+  - malformed auth clone: `could not read Username for 'http://127.0.0.1:3560': No such device or address`
+  - grant response: `access granted`
+  - agent after grant: success clone
+- pull/rebase lifecycle:
+  - founder clone updated with `git pull --rebase origin main` (fast-forward from `6f8f670` to `95448e9`)
+- self-lockout sanity:
+  - commit removing founder edit right blocked with explicit blocker text and recovery hint:
+    `cannot commit this change because it removes your edit access to ./.repobox/config.yml`
+- missing-identity path:
+  - `no identity configured. Run: git repobox identity set <private-key>`
+
+### Fix/fault status
+- No server/client code changes required in this run.
+- Outcome is mostly stable; one UX gap remains: malformed `Authorization` token from Git may surface as a generic git username lookup error, not the server `auth token must be signature:timestamp` payload.
+
+### UX judgment
+- ✅ `402 Payment Required` path is clear for both anonymous and unauthorized identities and makes private repos discoverable as paid-gated.
+- ✅ founder/agent role split plus authenticated clone flow works end-to-end (push + rebase lifecycle).
+- ⚠️ malformed auth tokens via Git produce a noisy client-side error (`could not read Username...`) even though server returns clear 401 text; not yet remediated.

@@ -278,3 +278,22 @@ HTTP + on-chain resolvers with caching. Alchemy proxy.
 - UX outcome: no functional gaps found requiring code changes this run.
 - Notes:
   - `git repobox check` branch-scoped file permissions require explicit `target >branch` in target argument to reflect branch context.
+
+
+### Private repo x402 discovery + identity matrix run (private clone lifecycle)
+- **Date:** 2026-03-22 | **Agent:** repobox-qa-pipeline
+- Ran dedicated one-path scenario:
+  - founder/agent/unknown identities,
+  - signed clone with auth headers,
+  - no-identity and unknown signature outcomes,
+  - malformed auth signal,
+  - x402 grant-access bypass flow,
+  - founder follow-up commit + pull/rebase lifecycle.
+- Results:
+  - no-identity and non-granted agent clones consistently return HTTP 402 payment UX and blocker copy.
+  - founder clone/pull and granted agent clone/pull work.
+  - `git repobox check` for founder/agent branch/file permissions matches policy.
+  - removing self config-edit rights still blocked by existing lockout text + recovery guidance.
+- Known follow-up:
+  - malformed `Authorization` in git clone still surfaces a generic git credential error in some clients despite clear server message (`auth token must be signature:timestamp`).
+  - consider improving client-facing auth-failure UX in next run.
