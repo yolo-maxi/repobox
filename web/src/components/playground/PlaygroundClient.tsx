@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import { SiteNav } from "@/components/SiteNav";
 import {
   REPOBOX_SYSTEM_PROMPT,
   VENICE_ENDPOINT,
@@ -206,6 +207,8 @@ export function PlaygroundClient() {
   );
 
   return (
+    <>
+    <SiteNav />
     <div
       className="max-w-[760px] mx-auto"
       style={{ padding: "40px 20px 100px" }}
@@ -213,31 +216,6 @@ export function PlaygroundClient() {
     >
       {/* Header */}
       <header style={{ marginBottom: 48 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            marginBottom: 24,
-          }}
-        >
-          <Link
-            href="/"
-            style={{ fontWeight: 700, fontSize: 24, lineHeight: 1.1 }}
-          >
-            repo<span className="logo-dot">.</span>box
-          </Link>
-          <span
-            style={{
-              fontSize: 12,
-              color: "var(--bp-dim)",
-              textTransform: "uppercase",
-              letterSpacing: "0.12em",
-            }}
-          >
-            playground
-          </span>
-        </div>
         <p
           style={{
             fontSize: 14,
@@ -416,5 +394,6 @@ export function PlaygroundClient() {
         <TestRunner onRunTest={runGeneration} />
       )}
     </div>
+    </>
   );
 }

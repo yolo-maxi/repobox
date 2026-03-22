@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
 import { EmptyRepository, NoSearchResults, QuietActivity } from '@/components/illustrations';
+import { SiteNav } from '@/components/SiteNav';
 
 function truncateMsg(msg: string, max = 60): string {
   if (msg.length <= max) return msg;
@@ -71,18 +72,7 @@ export default function ExplorePage() {
 
   return (
     <div className="explore-root">
-      {/* Top nav */}
-      <nav className="explore-nav">
-        <Link href="/" className="explore-logo">
-          repo<span style={{ color: 'var(--bp-accent)' }}>.</span>box
-        </Link>
-        <div className="explore-nav-links">
-          <Link href="/">home</Link>
-          <Link href="/explore" className="active">explorer</Link>
-          <Link href="/docs">docs</Link>
-          <Link href="/playground">playground</Link>
-        </div>
-      </nav>
+      <SiteNav />
 
       {/* Layout: sidebar left, content right */}
       <div className="explore-layout">
@@ -238,42 +228,6 @@ export default function ExplorePage() {
           line-height: 20px;
         }
 
-        /* Nav */
-        .explore-nav {
-          display: flex;
-          align-items: center;
-          gap: 24px;
-          padding: 16px 32px;
-          border-bottom: 1px solid var(--bp-border);
-        }
-        .explore-logo {
-          font-size: 18px;
-          font-weight: 700;
-          color: var(--bp-heading);
-          text-decoration: none;
-          letter-spacing: -0.5px;
-        }
-        .explore-nav-links {
-          display: flex;
-          gap: 4px;
-        }
-        .explore-nav-links a {
-          color: var(--bp-dim);
-          text-decoration: none;
-          padding: 6px 12px;
-          border-radius: 4px;
-          font-size: 12px;
-          transition: color 0.15s, background 0.15s;
-        }
-        .explore-nav-links a:hover {
-          color: var(--bp-accent);
-          opacity: 1;
-        }
-        .explore-nav-links a.active {
-          color: var(--bp-accent);
-          background: rgba(79, 195, 247, 0.1);
-        }
-
         /* Layout */
         .explore-layout {
           display: grid;
@@ -391,7 +345,7 @@ export default function ExplorePage() {
 
         /* Main content */
         .explore-main {
-          padding: 24px 32px;
+          padding: 28px 40px;
           display: flex;
           flex-direction: column;
         }
@@ -400,9 +354,7 @@ export default function ExplorePage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 20px;
-          padding-bottom: 16px;
-          border-bottom: 1px solid var(--bp-border);
+          margin-bottom: 24px;
         }
         .explore-title {
           font-size: 16px;

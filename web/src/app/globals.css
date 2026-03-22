@@ -3986,3 +3986,45 @@ html {
 
 /* Import empty state styles */
 @import '../styles/empty-state.css';
+
+/* ── Shared Site Nav ── */
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 32px;
+  border-bottom: 1px solid var(--bp-border);
+  background: var(--bp-bg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.site-nav-logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--bp-heading);
+  text-decoration: none;
+  letter-spacing: -0.5px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+.site-nav-links {
+  display: flex;
+  gap: 4px;
+}
+.site-nav-link {
+  color: var(--bp-dim);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  transition: color 0.15s, background 0.15s;
+}
+.site-nav-link:hover {
+  color: var(--bp-accent);
+  opacity: 1;
+}
+.site-nav-link.active {
+  color: var(--bp-accent);
+  background: rgba(79, 195, 247, 0.1);
+}

@@ -26,10 +26,7 @@ export function DocsSidebar({
 
       <nav className={`docs-sidebar ${mobileOpen ? "open" : ""}`}>
         <div className="docs-sidebar-header">
-          <Link href="/" className="docs-logo">
-            repo<span className="logo-dot">.</span>box
-          </Link>
-          <span className="docs-label">/ docs</span>
+          <span className="docs-label">Documentation</span>
         </div>
 
         {manifest.sections.map((section) => (

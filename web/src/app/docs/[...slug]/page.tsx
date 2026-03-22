@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getDocBySlug, getManifest, getAllSlugs } from "@/lib/docs";
 import { DocsSidebar } from "@/components/docs/sidebar";
 import { DocsContent } from "@/components/docs/content";
+import { SiteNav } from "@/components/SiteNav";
 import type { Metadata } from "next";
 
 interface Props {
@@ -34,6 +35,7 @@ export default async function DocsPage({ params }: Props) {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bp-bg)" }}>
+      <SiteNav />
       <div className="docs-layout">
         <DocsSidebar manifest={manifest} currentSlug={slugStr} />
         <DocsContent doc={doc} />
