@@ -13,6 +13,8 @@ struct RawConfig {
     permissions: Option<RawPermissions>,
     #[serde(default)]
     x402: Option<RawX402Config>,
+    #[serde(default)]
+    virtuals: Option<RawVirtualsConfig>,
 }
 
 /// A group can be:
@@ -141,6 +143,51 @@ struct RawX402Config {
     read_price: String,
     recipient: String,
     network: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawVirtualsConfig {
+    #[serde(default = "default_true")]
+    enabled: bool,
+    bug_bounties: RawBugBountyConfig,
+    #[serde(default)]
+    agent_requirements: Option<RawAgentRequirements>,
+    #[serde(default)]
+    payments: Option<RawVirtualsPaymentConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawBugBountyConfig {
+    critical: String,
+    high: String,
+    medium: String,
+    low: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawAgentRequirements {
+    #[serde(default = "default_min_reputation")]
+    min_reputation: f64,
+    #[serde(default = "default_true")]
+    required_tests: bool,
+    #[serde(default = "default_true")]
+    human_review_required: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawVirtualsPaymentConfig {
+    network: String,
+    token: String,
+    treasury: String,
+    gas_sponsor: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_min_reputation() -> f64 {
+    0.8
 }
 
 /// Parse a .repobox/config.yml YAML string into a validated Config.
@@ -383,10 +430,62 @@ pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
         network: raw_x402.network,
     });
 
+    // Parse virtuals config
+    let virtuals = if let Some(raw_virtuals) = raw.virtuals {
+        let agent_requirements = raw_virtuals.agent_requirements.unwrap_or(RawAgentRequirements {
+            min_reputation: default_min_reputation(),
+            required_tests: default_true(),
+            human_review_required: default_true(),
+        });
+
+        // Validate bounty amounts are valid decimals
+        validate_usdc_amount(&raw_virtuals.bug_bounties.critical, "critical")?;
+        validate_usdc_amount(&raw_virtuals.bug_bounties.high, "high")?;
+        validate_usdc_amount(&raw_virtuals.bug_bounties.medium, "medium")?;
+        validate_usdc_amount(&raw_virtuals.bug_bounties.low, "low")?;
+
+        // Validate min_reputation is between 0.0 and 1.0
+        if agent_requirements.min_reputation < 0.0 || agent_requirements.min_reputation > 1.0 {
+            return Err(ConfigError::InvalidRule(format!(
+                "agent min_reputation must be between 0.0 and 1.0, got: {}",
+                agent_requirements.min_reputation
+            )));
+        }
+
+        // Validate payment config if present
+        if let Some(ref payments) = raw_virtuals.payments {
+            validate_payment_config(payments)?;
+        }
+
+        Some(VirtualsConfig {
+            enabled: raw_virtuals.enabled,
+            bug_bounties: BugBountyConfig {
+                critical: raw_virtuals.bug_bounties.critical,
+                high: raw_virtuals.bug_bounties.high,
+                medium: raw_virtuals.bug_bounties.medium,
+                low: raw_virtuals.bug_bounties.low,
+            },
+            agent_requirements: AgentRequirements {
+                min_reputation: agent_requirements.min_reputation,
+                required_tests: agent_requirements.required_tests,
+                human_review_required: agent_requirements.human_review_required,
+            },
+            payments: raw_virtuals.payments.map(|p| VirtualsPaymentConfig {
+                network: p.network,
+                token: p.token,
+                treasury: p.treasury,
+                gas_sponsor: p.gas_sponsor,
+            }),
+        })
+    } else {
+        None
+    };
+
     Ok(Config {
         groups,
         permissions,
         x402,
+        virtuals,
     })
 }
 
@@ -709,6 +808,66 @@ fn resolve_members_inner(
 
     for inc in &group.includes {
         resolve_members_inner(inc, groups, result, visited, depth + 1)?;
+    }
+
+    Ok(())
+}
+
+/// Validate that a string represents a valid USDC amount.
+fn validate_usdc_amount(amount: &str, field_name: &str) -> Result<(), ConfigError> {
+    if amount.parse::<f64>().is_err() {
+        return Err(ConfigError::InvalidRule(format!(
+            "invalid {} bounty amount: '{}' (must be a valid decimal number)",
+            field_name, amount
+        )));
+    }
+
+    let parsed: f64 = amount.parse().unwrap();
+    if parsed < 0.0 {
+        return Err(ConfigError::InvalidRule(format!(
+            "{} bounty amount cannot be negative: '{}'",
+            field_name, amount
+        )));
+    }
+
+    if parsed > 10000.0 {
+        return Err(ConfigError::InvalidRule(format!(
+            "{} bounty amount seems too large: '{}' (max 10000 USDC)",
+            field_name, amount
+        )));
+    }
+
+    Ok(())
+}
+
+/// Validate payment configuration.
+fn validate_payment_config(payments: &RawVirtualsPaymentConfig) -> Result<(), ConfigError> {
+    // Validate network
+    let valid_networks = ["base", "ethereum", "polygon", "arbitrum", "optimism"];
+    if !valid_networks.contains(&payments.network.as_str()) {
+        return Err(ConfigError::InvalidRule(format!(
+            "unsupported payment network: '{}' (supported: {})",
+            payments.network,
+            valid_networks.join(", ")
+        )));
+    }
+
+    // Validate treasury address
+    if !payments.treasury.starts_with("0x") || payments.treasury.len() != 42 {
+        return Err(ConfigError::InvalidRule(format!(
+            "treasury must be a valid EVM address: '{}'",
+            payments.treasury
+        )));
+    }
+
+    // Validate gas_sponsor address if present
+    if let Some(ref gas_sponsor) = payments.gas_sponsor {
+        if !gas_sponsor.starts_with("0x") || gas_sponsor.len() != 42 {
+            return Err(ConfigError::InvalidRule(format!(
+                "gas_sponsor must be a valid EVM address: '{}'",
+                gas_sponsor
+            )));
+        }
     }
 
     Ok(())
@@ -1801,5 +1960,210 @@ permissions:
             }
             _ => panic!("Expected Group subject"),
         }
+    }
+
+    // ========== Virtuals Integration Tests ==========
+
+    #[test]
+    fn test_virtuals_config_basic() {
+        let yaml = r#"
+groups:
+  agents:
+    - evm:0xBBB0000000000000000000000000000000000002
+
+permissions:
+  default: allow
+  rules: []
+
+virtuals:
+  enabled: true
+  bug_bounties:
+    critical: "50.00"
+    high: "25.00"
+    medium: "10.00"
+    low: "5.00"
+  agent_requirements:
+    min_reputation: 0.8
+    required_tests: true
+    human_review_required: true
+  payments:
+    network: "base"
+    token: "USDC"
+    treasury: "0x1234567890123456789012345678901234567890"
+    gas_sponsor: "0x9876543210987654321098765432109876543210"
+"#;
+        let config = parse(yaml).unwrap();
+        
+        assert!(config.virtuals.is_some());
+        let virtuals = config.virtuals.unwrap();
+        
+        assert!(virtuals.enabled);
+        assert_eq!(virtuals.bug_bounties.critical, "50.00");
+        assert_eq!(virtuals.bug_bounties.high, "25.00");
+        assert_eq!(virtuals.bug_bounties.medium, "10.00");
+        assert_eq!(virtuals.bug_bounties.low, "5.00");
+        
+        assert_eq!(virtuals.agent_requirements.min_reputation, 0.8);
+        assert!(virtuals.agent_requirements.required_tests);
+        assert!(virtuals.agent_requirements.human_review_required);
+        
+        assert!(virtuals.payments.is_some());
+        let payments = virtuals.payments.unwrap();
+        assert_eq!(payments.network, "base");
+        assert_eq!(payments.token, "USDC");
+        assert_eq!(payments.treasury, "0x1234567890123456789012345678901234567890");
+        assert_eq!(payments.gas_sponsor.unwrap(), "0x9876543210987654321098765432109876543210");
+    }
+
+    #[test]
+    fn test_virtuals_config_minimal() {
+        let yaml = r#"
+virtuals:
+  enabled: false
+  bug_bounties:
+    critical: "10.00"
+    high: "5.00"
+    medium: "2.50"
+    low: "1.00"
+"#;
+        let config = parse(yaml).unwrap();
+        
+        assert!(config.virtuals.is_some());
+        let virtuals = config.virtuals.unwrap();
+        
+        assert!(!virtuals.enabled);
+        assert_eq!(virtuals.bug_bounties.critical, "10.00");
+        
+        // Should use defaults for agent_requirements
+        assert_eq!(virtuals.agent_requirements.min_reputation, 0.8);
+        assert!(virtuals.agent_requirements.required_tests);
+        assert!(virtuals.agent_requirements.human_review_required);
+        
+        // No payments config
+        assert!(virtuals.payments.is_none());
+    }
+
+    #[test]
+    fn test_virtuals_config_validation_errors() {
+        // Invalid bounty amount
+        let yaml = r#"
+virtuals:
+  enabled: true
+  bug_bounties:
+    critical: "invalid"
+    high: "25.00"
+    medium: "10.00"
+    low: "5.00"
+"#;
+        let result = parse(yaml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid critical bounty amount"));
+
+        // Negative bounty amount
+        let yaml = r#"
+virtuals:
+  enabled: true
+  bug_bounties:
+    critical: "-10.00"
+    high: "25.00"
+    medium: "10.00"
+    low: "5.00"
+"#;
+        let result = parse(yaml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cannot be negative"));
+
+        // Invalid min_reputation
+        let yaml = r#"
+virtuals:
+  enabled: true
+  bug_bounties:
+    critical: "50.00"
+    high: "25.00"
+    medium: "10.00"
+    low: "5.00"
+  agent_requirements:
+    min_reputation: 1.5
+"#;
+        let result = parse(yaml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("min_reputation must be between 0.0 and 1.0"));
+    }
+
+    #[test]
+    fn test_virtuals_payment_validation() {
+        // Invalid network
+        let yaml = r#"
+virtuals:
+  enabled: true
+  bug_bounties:
+    critical: "50.00"
+    high: "25.00"
+    medium: "10.00"
+    low: "5.00"
+  payments:
+    network: "solana"
+    token: "USDC"
+    treasury: "0x1234567890123456789012345678901234567890"
+"#;
+        let result = parse(yaml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("unsupported payment network"));
+
+        // Invalid treasury address
+        let yaml = r#"
+virtuals:
+  enabled: true
+  bug_bounties:
+    critical: "50.00"
+    high: "25.00"
+    medium: "10.00"
+    low: "5.00"
+  payments:
+    network: "base"
+    token: "USDC"
+    treasury: "invalid"
+"#;
+        let result = parse(yaml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("treasury must be a valid EVM address"));
+    }
+
+    #[test]
+    fn test_virtuals_config_defaults() {
+        let yaml = r#"
+virtuals:
+  bug_bounties:
+    critical: "50.00"
+    high: "25.00"
+    medium: "10.00"
+    low: "5.00"
+"#;
+        let config = parse(yaml).unwrap();
+        
+        let virtuals = config.virtuals.unwrap();
+        
+        // Should default to enabled: true
+        assert!(virtuals.enabled);
+        
+        // Should use all defaults for agent_requirements
+        assert_eq!(virtuals.agent_requirements.min_reputation, 0.8);
+        assert!(virtuals.agent_requirements.required_tests);
+        assert!(virtuals.agent_requirements.human_review_required);
+    }
+
+    #[test]
+    fn test_config_without_virtuals() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+
+permissions:
+  default: allow
+  rules: []
+"#;
+        let config = parse(yaml).unwrap();
+        assert!(config.virtuals.is_none());
     }
 }

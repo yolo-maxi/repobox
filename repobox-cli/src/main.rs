@@ -1084,11 +1084,573 @@ fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
             }
             ExitCode::SUCCESS
         }
+        "pre-receive" => {
+            // Server-side hook: validate all incoming pushes
+            // stdin: <old sha> <new sha> <ref name>
+            use std::io::BufRead;
+            let stdin = std::io::stdin();
+            
+            for line in stdin.lock().lines().flatten() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() != 3 {
+                    continue;
+                }
+                
+                let old_sha = parts[0];
+                let new_sha = parts[1];
+                let ref_name = parts[2];
+                
+                // Skip non-branch refs
+                let branch_name = match ref_name.strip_prefix("refs/heads/") {
+                    Some(name) => name,
+                    None => continue,
+                };
+                
+                // Skip deletions (new_sha = all zeros)
+                if new_sha == "0000000000000000000000000000000000000000" {
+                    continue;
+                }
+                
+                // Check for force-push attempts on agent branches
+                if let Some(ref virtuals_config) = config.virtuals {
+                    if virtuals_config.enabled && branch_name.starts_with("agent/") {
+                        // Agent branches should not allow force-push
+                        if is_force_push(old_sha, new_sha) {
+                            eprintln!("❌ force-push not allowed on agent branches: {}", branch_name);
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+                
+                // Validate virtuals agent branch naming if configured
+                if let Some(ref virtuals_config) = config.virtuals {
+                    if virtuals_config.enabled {
+                        if let Err(msg) = validate_agent_branch_naming(&identity, branch_name) {
+                            eprintln!("❌ virtuals branch naming violation: {}", msg);
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+                
+                // For agent branches, validate commit messages
+                if let Some(ref virtuals_config) = config.virtuals {
+                    if virtuals_config.enabled && branch_name.starts_with("agent/") {
+                        if let Err(msg) = validate_agent_commit_messages(new_sha, old_sha) {
+                            eprintln!("❌ virtuals commit validation failed: {}", msg);
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+                
+                // Check push permissions
+                let result = engine::check(&config, &identity, Verb::Push, Some(branch_name), None);
+                if !result.is_allowed() {
+                    let display = aliases::display_identity(home, &identity.to_string());
+                    eprintln!("❌ permission denied: {display} cannot push to {branch_name}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        "post-receive" => {
+            // Server-side hook: process successful pushes, trigger payments for merged agent PRs
+            // stdin: <old sha> <new sha> <ref name>
+            use std::io::BufRead;
+            let stdin = std::io::stdin();
+            
+            for line in stdin.lock().lines().flatten() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() != 3 {
+                    continue;
+                }
+                
+                let old_sha = parts[0];
+                let new_sha = parts[1];
+                let ref_name = parts[2];
+                
+                // Skip non-branch refs
+                let branch_name = match ref_name.strip_prefix("refs/heads/") {
+                    Some(name) => name,
+                    None => continue,
+                };
+                
+                // Skip deletions (new_sha = all zeros)
+                if new_sha == "0000000000000000000000000000000000000000" {
+                    continue;
+                }
+                
+                // Check if this is a merge to main with Virtuals enabled
+                if let Some(ref virtuals_config) = config.virtuals {
+                    if virtuals_config.enabled && branch_name == "main" {
+                        if let Err(e) = process_virtuals_merge_payment(&config, &identity, old_sha, new_sha) {
+                            eprintln!("⚠️ payment processing failed: {}", e);
+                            // Don't fail the push for payment errors, just log them
+                        }
+                    }
+                }
+            }
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("unknown hook: {hook}");
             ExitCode::FAILURE
         }
     }
+}
+
+/// Check if a push is a force-push by comparing old and new commit SHAs.
+/// This is a simplified check - in a real implementation you'd verify
+/// that new_sha is not a descendant of old_sha.
+fn is_force_push(old_sha: &str, new_sha: &str) -> bool {
+    // Skip new branch creation (old_sha = all zeros)
+    if old_sha == "0000000000000000000000000000000000000000" {
+        return false;
+    }
+    
+    // For simplicity, we'll use git to check if new_sha is reachable from old_sha
+    // If not reachable, it's likely a force-push
+    let output = Command::new("git")
+        .args(["merge-base", "--is-ancestor", old_sha, new_sha])
+        .output();
+    
+    match output {
+        Ok(result) => !result.status.success(), // If ancestor check fails, it's a force-push
+        Err(_) => false, // If git command fails, assume not a force-push to be safe
+    }
+}
+
+/// Validate commit messages for agent branches according to Virtuals requirements.
+/// - Fix commits must reference issue numbers
+/// - Commit messages must follow conventional format
+/// - Must include proper agent metadata
+fn validate_agent_commit_messages(new_sha: &str, old_sha: &str) -> Result<(), String> {
+    let real_git = find_real_git();
+    
+    // Get the range of new commits
+    let range = if old_sha == "0000000000000000000000000000000000000000" {
+        // New branch: validate all commits
+        new_sha.to_string()
+    } else {
+        // Updated branch: validate new commits
+        format!("{}..{}", old_sha, new_sha)
+    };
+    
+    // Get commit messages in the range
+    let output = Command::new(&real_git)
+        .args(["log", "--format=%H %s", &range])
+        .output()
+        .map_err(|e| format!("failed to get commit messages: {}", e))?;
+    
+    if !output.status.success() {
+        return Err("failed to retrieve commit log".to_string());
+    }
+    
+    let log_output = String::from_utf8_lossy(&output.stdout);
+    
+    for line in log_output.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        
+        let parts: Vec<&str> = line.splitn(2, ' ').collect();
+        if parts.len() != 2 {
+            continue;
+        }
+        
+        let _commit_hash = parts[0];
+        let commit_message = parts[1];
+        
+        // Validate commit message format
+        validate_commit_message_format(commit_message)?;
+    }
+    
+    Ok(())
+}
+
+/// Validate that a commit message follows the required format for agent commits.
+fn validate_commit_message_format(message: &str) -> Result<(), String> {
+    // Must follow conventional commit format: type(scope): description
+    // For fix commits, must include issue reference
+    
+    if message.trim().is_empty() {
+        return Err("commit message cannot be empty".to_string());
+    }
+    
+    // Check for conventional commit format
+    if !message.contains(':') {
+        return Err(format!(
+            "commit message must follow conventional format 'type(scope): description', got '{}'",
+            message
+        ));
+    }
+    
+    let parts: Vec<&str> = message.splitn(2, ':').collect();
+    let type_scope = parts[0].trim();
+    let description = parts[1].trim();
+    
+    // Validate type and scope
+    if type_scope.is_empty() {
+        return Err("commit type cannot be empty".to_string());
+    }
+    
+    // Extract type (and optional scope)
+    let commit_type = if type_scope.contains('(') {
+        type_scope.split('(').next().unwrap_or(type_scope)
+    } else {
+        type_scope
+    };
+    
+    // Validate commit type
+    let valid_types = ["fix", "feat", "refactor", "docs", "test", "chore", "style", "perf"];
+    if !valid_types.contains(&commit_type) {
+        return Err(format!(
+            "invalid commit type '{}', must be one of: {}",
+            commit_type, valid_types.join(", ")
+        ));
+    }
+    
+    // For fix commits, ensure issue reference is present
+    if commit_type == "fix" {
+        if !contains_issue_reference(description) {
+            return Err(format!(
+                "fix commits must reference an issue (e.g., 'closes #42', 'fixes #123'), got '{}'",
+                message
+            ));
+        }
+    }
+    
+    // Validate description is not empty
+    if description.is_empty() {
+        return Err("commit description cannot be empty".to_string());
+    }
+    
+    Ok(())
+}
+
+/// Check if a commit message description contains an issue reference.
+fn contains_issue_reference(description: &str) -> bool {
+    let issue_keywords = ["closes", "fixes", "resolves", "close", "fix", "resolve"];
+    let description_lower = description.to_lowercase();
+    
+    for keyword in &issue_keywords {
+        // Look for patterns like "fixes #42", "closes issue #123", etc.
+        if description_lower.contains(&format!("{} #", keyword)) ||
+           description_lower.contains(&format!("{} issue #", keyword)) {
+            return true;
+        }
+    }
+    
+    false
+}
+
+/// Validate agent branch naming according to Virtuals integration rules.
+/// Agent branches must follow the pattern: agent/{agent-id}/fix-{issue-number}
+/// or agent/{agent-id}/feature-{description}
+fn validate_agent_branch_naming(identity: &Identity, branch_name: &str) -> Result<(), String> {
+    // Extract agent address from identity
+    let agent_address = match identity.kind {
+        repobox::config::IdentityKind::Evm => identity.address.to_lowercase(),
+        repobox::config::IdentityKind::Ens => {
+            // For ENS names, we'd need to resolve to address, but for now just use the name
+            identity.address.to_lowercase()
+        }
+    };
+
+    // Check if this is an agent branch
+    if let Some(rest) = branch_name.strip_prefix("agent/") {
+        // This is an agent branch, validate the pattern
+        let parts: Vec<&str> = rest.split('/').collect();
+        
+        if parts.len() != 2 {
+            return Err(format!(
+                "agent branch must follow pattern 'agent/{{agent-id}}/{{task-type}}-{{identifier}}', got '{}'",
+                branch_name
+            ));
+        }
+        
+        let branch_agent_id = parts[0];
+        let task_description = parts[1];
+        
+        // Validate agent ID matches the pusher's identity
+        // Support both full address and short forms, case-insensitive for EVM addresses
+        let identity_matches = match identity.kind {
+            repobox::config::IdentityKind::Evm => {
+                let agent_lower = agent_address.to_lowercase();
+                let branch_lower = branch_agent_id.to_lowercase();
+                
+                branch_lower == agent_lower ||
+                branch_lower == agent_lower.trim_start_matches("0x") ||
+                agent_lower == format!("0x{}", branch_lower) ||
+                format!("0x{}", agent_lower.trim_start_matches("0x")) == format!("0x{}", branch_lower)
+            }
+            repobox::config::IdentityKind::Ens => {
+                // ENS names should match exactly (case-sensitive)
+                branch_agent_id == agent_address
+            }
+        };
+        
+        if !identity_matches {
+            return Err(format!(
+                "agent branch agent-id '{}' does not match pusher identity '{}'", 
+                branch_agent_id, identity.address
+            ));
+        }
+        
+        // Validate task description format
+        if !task_description.contains('-') {
+            return Err(format!(
+                "agent branch task must include type prefix (fix-, feature-, etc.), got '{}'",
+                task_description
+            ));
+        }
+        
+        let task_parts: Vec<&str> = task_description.splitn(2, '-').collect();
+        let task_type = task_parts[0];
+        let task_identifier = task_parts[1];
+        
+        // Validate task type
+        let valid_task_types = ["fix", "feature", "refactor", "docs", "test", "chore"];
+        if !valid_task_types.contains(&task_type) {
+            return Err(format!(
+                "invalid agent branch task type '{}', must be one of: {}",
+                task_type, valid_task_types.join(", ")
+            ));
+        }
+        
+        // Validate task identifier is not empty
+        if task_identifier.is_empty() {
+            return Err(format!(
+                "agent branch task identifier cannot be empty, got '{}'",
+                task_description
+            ));
+        }
+        
+        // Additional validation for fix branches - should reference an issue
+        if task_type == "fix" {
+            if !task_identifier.chars().all(|c| c.is_ascii_digit()) {
+                return Err(format!(
+                    "fix branch identifier should be an issue number, got '{}'",
+                    task_identifier
+                ));
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Process Virtuals payment for agent PR merges to main branch.
+/// This function is called by the post-receive hook when an agent's fix
+/// is merged into the main branch.
+fn process_virtuals_merge_payment(
+    config: &repobox::config::Config,
+    _identity: &repobox::config::Identity,
+    old_sha: &str,
+    new_sha: &str,
+) -> Result<(), String> {
+    let virtuals_config = match config.virtuals.as_ref() {
+        Some(config) if config.enabled => config,
+        _ => return Ok(()), // Virtuals not enabled
+    };
+    
+    let payment_config = match virtuals_config.payments.as_ref() {
+        Some(config) => config,
+        None => {
+            eprintln!("⚠️ virtuals payment configuration not found");
+            return Ok(()); // No payment config, skip
+        }
+    };
+    
+    // Get commits that were merged
+    let real_git = find_real_git();
+    let range = if old_sha == "0000000000000000000000000000000000000000" {
+        // New branch case
+        new_sha.to_string()
+    } else {
+        format!("{}..{}", old_sha, new_sha)
+    };
+    
+    // Find agent commits in the merge
+    let output = Command::new(&real_git)
+        .args(["log", "--format=%H|%an|%s|%B", &range, "--grep=Agent:"])
+        .output()
+        .map_err(|e| format!("failed to get merge commits: {}", e))?;
+    
+    if !output.status.success() {
+        return Err("failed to retrieve commit log".to_string());
+    }
+    
+    let log_output = String::from_utf8_lossy(&output.stdout);
+    
+    for entry in log_output.split("\n\n") {
+        if entry.trim().is_empty() {
+            continue;
+        }
+        
+        let lines: Vec<&str> = entry.lines().collect();
+        if lines.is_empty() {
+            continue;
+        }
+        
+        let first_line = lines[0];
+        let parts: Vec<&str> = first_line.split('|').collect();
+        if parts.len() < 4 {
+            continue;
+        }
+        
+        let commit_hash = parts[0];
+        let _author = parts[1];
+        let subject = parts[2];
+        let full_message = &lines[3..].join("\n");
+        
+        // Extract agent information from commit message
+        if let Some(agent_info) = extract_agent_payment_info(subject, full_message) {
+            println!(
+                "💰 Processing payment for agent {} - Issue #{} - {} USDC",
+                agent_info.agent_address, agent_info.issue_id, agent_info.bounty_amount
+            );
+            
+            // In a real implementation, this would trigger the actual payment
+            // For now, we'll log the payment details and create a claim record
+            if let Err(e) = create_payment_claim(&agent_info, commit_hash, payment_config) {
+                eprintln!("⚠️ failed to create payment claim: {}", e);
+            } else {
+                println!("✅ Payment claim created for agent {}", agent_info.agent_address);
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Information extracted from agent commit messages for payment processing.
+#[derive(Debug)]
+struct AgentPaymentInfo {
+    agent_address: String,
+    issue_id: String,
+    bounty_amount: String,
+    severity: String,
+}
+
+/// Extract agent payment information from commit message.
+/// Expected format includes lines like:
+/// Agent: 0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00
+/// Bounty: 25.00 USDC
+/// Issue: #42 (severity: high)
+fn extract_agent_payment_info(subject: &str, full_message: &str) -> Option<AgentPaymentInfo> {
+    let mut agent_address = None;
+    let mut issue_id = None;
+    let mut bounty_amount = None;
+    let mut severity = "medium".to_string(); // default
+    
+    // Parse full commit message for agent metadata
+    for line in full_message.lines() {
+        let line = line.trim();
+        
+        if let Some(addr) = line.strip_prefix("Agent:") {
+            agent_address = Some(addr.trim().to_string());
+        } else if let Some(bounty) = line.strip_prefix("Bounty:") {
+            // Parse "25.00 USDC" -> "25.00"
+            bounty_amount = Some(bounty.trim().replace(" USDC", ""));
+        } else if let Some(issue_info) = line.strip_prefix("Issue:") {
+            // Parse "#42 (severity: high)" or just "#42"
+            if let Some(issue_num) = issue_info.trim().strip_prefix('#') {
+                let issue_part = issue_num.split_whitespace().next().unwrap_or(issue_num);
+                issue_id = Some(issue_part.to_string());
+                
+                // Extract severity if present
+                if issue_info.contains("severity:") {
+                    if let Some(sev_part) = issue_info.split("severity:").nth(1) {
+                        let sev = sev_part.trim().trim_end_matches(')').trim();
+                        severity = sev.to_string();
+                    }
+                }
+            }
+        }
+    }
+    
+    // Also try to extract issue from subject line (fallback)
+    if issue_id.is_none() {
+        if let Some(issue) = extract_issue_from_subject(subject) {
+            issue_id = Some(issue);
+        }
+    }
+    
+    // Construct payment info if all required fields are present
+    match (agent_address, issue_id, bounty_amount) {
+        (Some(agent), Some(issue), Some(bounty)) => Some(AgentPaymentInfo {
+            agent_address: agent,
+            issue_id: issue,
+            bounty_amount: bounty,
+            severity,
+        }),
+        _ => None,
+    }
+}
+
+/// Extract issue number from commit subject line.
+/// Looks for patterns like "fix #42", "closes issue #123", etc.
+fn extract_issue_from_subject(subject: &str) -> Option<String> {
+    let issue_patterns = [
+        r"#(\d+)",
+        r"issue #(\d+)",
+        r"closes #(\d+)",
+        r"fixes #(\d+)",
+        r"resolves #(\d+)",
+    ];
+    
+    for pattern in &issue_patterns {
+        if let Ok(re) = regex::Regex::new(pattern) {
+            if let Some(captures) = re.captures(subject) {
+                if let Some(issue_match) = captures.get(1) {
+                    return Some(issue_match.as_str().to_string());
+                }
+            }
+        }
+    }
+    
+    None
+}
+
+/// Create a payment claim record for the agent.
+/// In a real implementation, this would store the claim in a database
+/// and trigger the actual x402 payment process.
+fn create_payment_claim(
+    agent_info: &AgentPaymentInfo,
+    commit_hash: &str,
+    payment_config: &repobox::config::VirtualsPaymentConfig,
+) -> Result<(), String> {
+    // For this implementation, we'll write claim details to a local file
+    // In production, this would integrate with the payment API
+    
+    let claim_data = format!(
+        "AGENT_PAYMENT_CLAIM\n\
+         Agent: {}\n\
+         Issue: #{}\n\
+         Amount: {} USDC\n\
+         Severity: {}\n\
+         Commit: {}\n\
+         Network: {}\n\
+         Treasury: {}\n\
+         Timestamp: {}\n\
+         Status: pending\n\n",
+        agent_info.agent_address,
+        agent_info.issue_id,
+        agent_info.bounty_amount,
+        agent_info.severity,
+        commit_hash,
+        payment_config.network,
+        payment_config.treasury,
+        chrono::Utc::now().to_rfc3339()
+    );
+    
+    // Write to payment claims log
+    let claims_file = ".repobox/payment_claims.log";
+    std::fs::write(claims_file, claim_data)
+        .map_err(|e| format!("failed to write payment claim: {}", e))?;
+    
+    println!("💾 Payment claim logged to {}", claims_file);
+    Ok(())
 }
 
 // ── Status ────────────────────────────────────────────────────────────
@@ -1624,3 +2186,85 @@ fn enhance_error_message(msg: &str, home: &Path) -> String {
 }
 
 use repobox::config::Subject;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_agent_branch_naming_valid_cases() {
+        let identity = Identity::parse("evm:0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00").unwrap();
+        
+        // Valid cases
+        assert!(validate_agent_branch_naming(&identity, "main").is_ok()); // Non-agent branch
+        assert!(validate_agent_branch_naming(&identity, "feature/new-ui").is_ok()); // Non-agent branch
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/fix-42").is_ok());
+        assert!(validate_agent_branch_naming(&identity, "agent/0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00/fix-123").is_ok());
+        assert!(validate_agent_branch_naming(&identity, "agent/aac050ca4fb723be066e7c12290ee965c84a4a00/feature-ui-improvements").is_ok());
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/refactor-parser").is_ok());
+    }
+
+    #[test]
+    fn test_validate_agent_branch_naming_invalid_cases() {
+        let identity = Identity::parse("evm:0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00").unwrap();
+        
+        // Invalid agent ID
+        assert!(validate_agent_branch_naming(&identity, "agent/wrongid/fix-42").is_err());
+        
+        // Invalid format
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00").is_err()); // Missing task
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/fix").is_err()); // Missing identifier
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/invalidtype-123").is_err()); // Invalid type
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/fix-").is_err()); // Empty identifier
+        
+        // Fix branch with non-numeric identifier
+        assert!(validate_agent_branch_naming(&identity, "agent/AAc050Ca4FB723bE066E7C12290EE965C84a4a00/fix-abc").is_err());
+    }
+
+    #[test]
+    fn test_validate_agent_branch_naming_ens_identity() {
+        let identity = Identity::parse("ens:alice.eth").unwrap();
+        
+        // Should work with ENS names
+        assert!(validate_agent_branch_naming(&identity, "agent/alice.eth/fix-42").is_ok());
+        assert!(validate_agent_branch_naming(&identity, "agent/wrongname.eth/fix-42").is_err());
+    }
+
+    #[test]
+    fn test_validate_commit_message_format() {
+        // Valid conventional commit formats (non-fix types)
+        assert!(validate_commit_message_format("feat(ui): add dark mode toggle").is_ok());
+        assert!(validate_commit_message_format("docs: update API documentation").is_ok());
+        assert!(validate_commit_message_format("refactor: simplify parser logic").is_ok());
+        
+        // Valid fix commit with issue reference
+        assert!(validate_commit_message_format("fix: memory leak fixes #123").is_ok());
+        assert!(validate_commit_message_format("fix(core): null pointer exception resolves #456").is_ok());
+        assert!(validate_commit_message_format("fix(parser): handle edge case closes #42").is_ok());
+        
+        // Invalid formats
+        assert!(validate_commit_message_format("").is_err()); // Empty
+        assert!(validate_commit_message_format("fix memory leak").is_err()); // No colon
+        assert!(validate_commit_message_format("invalidtype: description").is_err()); // Invalid type
+        assert!(validate_commit_message_format("fix: ").is_err()); // Empty description
+        
+        // Fix without issue reference should fail
+        assert!(validate_commit_message_format("fix: memory leak").is_err());
+    }
+
+    #[test]
+    fn test_contains_issue_reference() {
+        // Valid issue references
+        assert!(contains_issue_reference("memory leak fixes #42"));
+        assert!(contains_issue_reference("handle edge case closes #123"));
+        assert!(contains_issue_reference("null pointer resolves #456"));
+        assert!(contains_issue_reference("bug with parser close #789"));
+        assert!(contains_issue_reference("issue with validation fixes issue #99"));
+        
+        // Invalid/missing references
+        assert!(!contains_issue_reference("memory leak"));
+        assert!(!contains_issue_reference("handle edge case"));
+        assert!(!contains_issue_reference("fixes bug but no number"));
+        assert!(!contains_issue_reference("closes something"));
+    }
+}

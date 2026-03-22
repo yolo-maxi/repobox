@@ -1,0 +1,31 @@
+groups:
+  agents:
+    - evm:0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00
+
+permissions:
+  default: allow
+  rules:
+    - agents push >agent/**
+    - agents not force-push >main
+
+virtuals:
+  enabled: true
+  bug_bounties:
+    critical: "50.00"
+    high: "25.00"
+    medium: "10.00"
+    low: "5.00"
+  agent_requirements:
+    min_reputation: 0.8
+    required_tests: true
+    human_review_required: true
+  payments:
+    network: "base"
+    token: "USDC"
+    treasury: "0x1234567890123456789012345678901234567890"
+    gas_sponsor: "0x9876543210987654321098765432109876543210"
+
+x402:
+  read_price: "1.00"
+  recipient: "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048"
+  network: "base"

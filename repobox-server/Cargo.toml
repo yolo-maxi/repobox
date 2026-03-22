@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 axum = "0.8"
 base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 hex = "0.4"
 http = "1"
@@ -26,6 +27,7 @@ sha3 = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 lazy_static = "1.4"
+rand = "0.8"
 
 [dev-dependencies]
 hex = "0.4"
