@@ -367,13 +367,13 @@ export function PlaygroundClient() {
           {/* Links */}
           <div className="pg-sidebar-card">
             <div className="pg-sidebar-label">Documentation</div>
-            <Link href="/docs/config" className="pg-sidebar-link">
+            <Link href="/docs/config" className="pg-sidebar-link" style={{ display: 'block', marginBottom: 6 }}>
               Config Reference
             </Link>
-            <Link href="/docs/permissions" className="pg-sidebar-link">
+            <Link href="/docs/permissions" className="pg-sidebar-link" style={{ display: 'block', marginBottom: 6 }}>
               Permission Rules
             </Link>
-            <Link href="/docs/examples" className="pg-sidebar-link">
+            <Link href="/docs/examples" className="pg-sidebar-link" style={{ display: 'block' }}>
               Example Configs
             </Link>
           </div>

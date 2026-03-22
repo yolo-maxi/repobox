@@ -10,6 +10,7 @@ import EmptyState from '@/components/EmptyState';
 import { EmptyRepository, AddressNotFound } from '@/components/illustrations';
 import Jazzicon from '@/components/Jazzicon';
 import ActivityHeatmap from '@/components/ActivityHeatmap';
+import { SiteNav } from '@/components/SiteNav';
 
 interface Repo {
   address: string;
