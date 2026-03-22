@@ -303,6 +303,9 @@ export default function AddressPage() {
   
   // Show full address if arrived via name resolution
   const showFullAddress = addressOrName !== resolvedAddress && !!displayName;
+
+  // Avoid duplicate identity line when title already shows the same human name
+  const showIdentityBadge = !showFullAddress && !displayName;
   
   // Format member since date
   const formatMemberSince = (timestamp: number | null): string => {
@@ -371,7 +374,7 @@ export default function AddressPage() {
                 </>
               )}
               
-              {!showFullAddress && (
+              {showIdentityBadge && (
                 <div className="explore-profile-address">
                   <AddressDisplay
                     address={resolvedAddress || ''}
