@@ -515,15 +515,53 @@ export default function ExplorePage() {
             grid-template-columns: 1fr;
           }
           .explore-sidebar {
+            order: 2;
             border-right: none;
-            border-bottom: 1px solid var(--bp-border);
-            flex-direction: row;
-            flex-wrap: wrap;
+            padding: 16px;
             gap: 12px;
           }
-          .explore-sidebar .explore-card {
+          .explore-main {
+            order: 1;
+            padding: 16px 16px;
+          }
+          .explore-main-header {
+            flex-direction: column;
+            gap: 10px;
+            align-items: flex-start;
+          }
+          .explore-search-wrap {
+            width: 100%;
+          }
+          /* Compact stats on mobile — inline */
+          .explore-sidebar .explore-card:first-child {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0;
+            padding: 12px 16px;
+          }
+          .explore-sidebar .explore-card:first-child .explore-card-label {
+            width: 100%;
+            margin-bottom: 8px;
+          }
+          .explore-sidebar .explore-card:first-child .explore-stat-row {
             flex: 1;
-            min-width: 200px;
+            min-width: 100px;
+            flex-direction: column;
+            text-align: center;
+            gap: 2px;
+            padding: 4px 8px;
+          }
+          .explore-sidebar .explore-card:first-child .explore-stat-val {
+            font-size: 18px;
+          }
+          /* Hide sort + activity on mobile */
+          .explore-sidebar .explore-card:nth-child(2),
+          .explore-sidebar .explore-card:nth-child(3) {
+            display: none;
+          }
+          .explore-repo-stats {
+            flex-wrap: wrap;
+            gap: 6px;
           }
         }
       `}</style>
