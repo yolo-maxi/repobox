@@ -316,14 +316,14 @@ permissions:
         assert_eq!(alice_subdomain.kind, IdentityKind::Ens);
         
         // Test permissions (static check)
-        let ocean_admin = engine::check(&config, &ocean_subdomain, engine::Verb::Admin, Some("main"), None);
+        let ocean_admin = engine::check(&config, &ocean_subdomain, engine::Verb::Edit, Some("main"), None);
         let alice_push = engine::check(&config, &alice_subdomain, engine::Verb::Push, Some("main"), None);
         
         assert!(ocean_admin.is_allowed(), "ocean.repobox.eth should have admin access");
         assert!(alice_push.is_allowed(), "alice.repobox.eth should have push access to main");
         
         // Test denial
-        let alice_admin = engine::check(&config, &alice_subdomain, engine::Verb::Admin, Some("main"), None);
+        let alice_admin = engine::check(&config, &alice_subdomain, engine::Verb::Edit, Some("main"), None);
         assert!(!alice_admin.is_allowed(), "alice.repobox.eth should not have admin access");
         
         println!("✓ Subdomain permissions work correctly");
@@ -400,8 +400,8 @@ permissions:
         let ocean_sub = Identity::parse("ocean.repobox.eth").unwrap();
         
         // Test permissions
-        let vitalik_admin = engine::check(&config, &vitalik, engine::Verb::Admin, Some("main"), None);
-        let evm_admin = engine::check(&config, &evm_core, engine::Verb::Admin, Some("feature"), None);
+        let vitalik_admin = engine::check(&config, &vitalik, engine::Verb::Edit, Some("main"), None);
+        let evm_admin = engine::check(&config, &evm_core, engine::Verb::Edit, Some("feature"), None);
         let nick_edit = engine::check(&config, &nick, engine::Verb::Edit, None, Some("docs/api.md"));
         let ocean_push = engine::check(&config, &ocean_sub, engine::Verb::Push, Some("develop"), None);
         
@@ -429,7 +429,7 @@ permissions:
             let scenarios = vec![
                 (vitalik.clone(), engine::Verb::Push, Some("main"), None),
                 (vitalik.clone(), engine::Verb::Edit, None, Some("src/main.rs")),
-                (ocean.clone(), engine::Verb::Admin, Some("develop"), None),
+                (ocean.clone(), engine::Verb::Edit, Some("develop"), None),
                 (ocean.clone(), engine::Verb::Edit, None, Some("tests/integration.rs")),
             ];
             
@@ -684,7 +684,7 @@ permissions:
 "#, name);
         
         let group_config_parsed = parser::parse(&group_config).expect("Should parse group config");
-        let group_result = engine::check(&group_config_parsed, &identity, engine::Verb::Admin, Some("develop"), None);
+        let group_result = engine::check(&group_config_parsed, &identity, engine::Verb::Edit, Some("develop"), None);
         
         assert!(group_result.is_allowed(), "Group permission should be granted to {}", name);
         
@@ -724,9 +724,9 @@ permissions:
         let evm = Identity::parse("evm:0x1234567890123456789012345678901234567890").unwrap();
         
         // All should have group permissions
-        let vitalik_admin = engine::check(&config, &vitalik, engine::Verb::Admin, Some("feature"), None);
-        let subdomain_admin = engine::check(&config, &subdomain, engine::Verb::Admin, Some("feature"), None);
-        let evm_admin = engine::check(&config, &evm, engine::Verb::Admin, Some("feature"), None);
+        let vitalik_admin = engine::check(&config, &vitalik, engine::Verb::Edit, Some("feature"), None);
+        let subdomain_admin = engine::check(&config, &subdomain, engine::Verb::Edit, Some("feature"), None);
+        let evm_admin = engine::check(&config, &evm, engine::Verb::Edit, Some("feature"), None);
         
         assert!(vitalik_admin.is_allowed(), "ENS member should have admin via group");
         assert!(subdomain_admin.is_allowed(), "Subdomain member should have admin via group");
@@ -795,11 +795,11 @@ permissions:
         
         // Test specific permissions
         assert!(engine::check(&config, &vitalik, engine::Verb::Push, Some("main"), None).is_allowed());
-        assert!(engine::check(&config, &vitalik, engine::Verb::Admin, Some("feature"), None).is_allowed()); // via mixed group
+        assert!(engine::check(&config, &vitalik, engine::Verb::Edit, Some("feature"), None).is_allowed()); // via mixed group
         assert!(engine::check(&config, &vitalik, engine::Verb::Edit, None, Some("src/app.rs")).is_allowed()); // via real_ens group
         
         assert!(engine::check(&config, &ocean, engine::Verb::Push, Some("develop"), None).is_allowed());
-        assert!(engine::check(&config, &ocean, engine::Verb::Admin, Some("main"), None).is_allowed()); // via mixed group
+        assert!(engine::check(&config, &ocean, engine::Verb::Edit, Some("main"), None).is_allowed()); // via mixed group
         assert!(engine::check(&config, &ocean, engine::Verb::Edit, None, Some("tests/unit.rs")).is_allowed()); // via subdomains group
         
         assert!(engine::check(&config, &ens_org, engine::Verb::Edit, None, Some("src/config.rs")).is_allowed()); // via real_ens group
