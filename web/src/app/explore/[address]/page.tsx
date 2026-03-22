@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatTimeAgo, formatAddress, copyToClipboard } from '@/lib/utils';
+import { formatTimeAgo, formatAddress } from '@/lib/utils';
 import AddressDisplay from '@/components/AddressDisplay';
 import { resolveNameToAddress } from '@/lib/addressResolver';
 import EmptyState from '@/components/EmptyState';
@@ -19,35 +19,6 @@ interface Repo {
   description: string | null;
 }
 
-// Get language color from GitHub language colors
-function getLanguageColor(fileName: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase();
-  const languageColors: { [key: string]: string } = {
-    js: '#f1e05a', jsx: '#f1e05a', ts: '#3178c6', tsx: '#3178c6',
-    py: '#3572a5', go: '#00add8', rs: '#dea584', java: '#b07219',
-    c: '#555555', cpp: '#f34b7d', css: '#563d7c', html: '#e34c26',
-    vue: '#41b883', php: '#4f5d95', rb: '#701516', swift: '#fa7343',
-    kt: '#a97bff', scala: '#c22d40', sh: '#89e051', sql: '#e38c00'
-  };
-  return languageColors[ext || ''] || '#666666';
-}
-
-// Detect primary language from file list (simplified)
-function detectLanguage(repoName: string): { name: string; color: string } {
-  // Simple heuristic - could be enhanced with actual file analysis
-  const languages = [
-    { name: 'TypeScript', color: '#3178c6' },
-    { name: 'JavaScript', color: '#f1e05a' },
-    { name: 'Python', color: '#3572a5' },
-    { name: 'Go', color: '#00add8' },
-    { name: 'Rust', color: '#dea584' },
-    { name: 'Java', color: '#b07219' },
-  ];
-  
-  // Random selection for demo - in real app would analyze files
-  return languages[Math.floor(Math.random() * languages.length)];
-}
-
 export default function AddressPage() {
   const params = useParams();
   const router = useRouter();
@@ -59,27 +30,19 @@ export default function AddressPage() {
 
   const addressOrName = Array.isArray(params.address) ? params.address[0] : params.address;
 
-  // Resolve name to address if needed
   useEffect(() => {
     const resolveAddress = async () => {
       if (!addressOrName) return;
-      
-      // If it's already an address, use it directly
       if (/^0x[a-fA-F0-9]{40}$/i.test(addressOrName)) {
         setResolvedAddress(addressOrName);
         setResolving(false);
         return;
       }
-      
-      // Try to resolve name
       try {
         const resolved = await resolveNameToAddress(addressOrName);
         if (resolved) {
           setResolvedAddress(resolved);
-          // Update URL to canonical address form (optional - keeps human readable URL)
-          // router.replace(`/explore/${resolved}`);
         } else {
-          // Name not found
           setNotFound(true);
         }
       } catch (error) {
@@ -89,11 +52,9 @@ export default function AddressPage() {
         setResolving(false);
       }
     };
-    
     resolveAddress();
   }, [addressOrName, router]);
 
-  // Fetch repos data
   useEffect(() => {
     if (!resolvedAddress) return;
     const fetchData = async () => {
@@ -112,44 +73,24 @@ export default function AddressPage() {
     fetchData();
   }, [resolvedAddress]);
 
-
-
-  // Format commit count properly
-  const formatCommitCount = (count: number): string => {
-    if (count === 1) return '1 commit';
-    return `${count} commits`;
-  };
-
   if (!addressOrName) return null;
 
   if (resolving) {
     return (
-      <div className="explore-page">
-        <header className="explore-main-header">
-          <div className="explore-main-header-content">
-            <div className="explore-nav">
-              <Link href="/" className="explore-logo">
-                repo<span className="explore-logo-dot">.</span>box
-              </Link>
-              <nav className="explore-nav-links">
-                <Link href="/" className="explore-nav-link">Home</Link>
-                <Link href="/explore" className="explore-nav-link">Explore</Link>
-                <Link href="/docs" className="explore-nav-link">Docs</Link>
-              </nav>
-            </div>
-            <div className="explore-breadcrumb-nav">
-              <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
-              <span className="explore-breadcrumb-separator">/</span>
-              <span className="explore-breadcrumb-current">Resolving...</span>
-            </div>
+      <div className="rd-explore-page">
+        <header className="rd-header">
+          <div className="rd-header-inner">
+            <Link href="/" className="rd-logo">repo<span className="rd-logo-dot">.</span>box</Link>
+            <nav className="rd-nav">
+              <Link href="/" className="rd-nav-link">Home</Link>
+              <Link href="/explore" className="rd-nav-link rd-nav-link--active">Explore</Link>
+              <Link href="/docs" className="rd-nav-link">Docs</Link>
+            </nav>
           </div>
         </header>
-        
-        <div className="explore-main-content">
-          <div className="explore-loading">
-            <div className="explore-loading-spinner"></div>
-            <p>Resolving address...</p>
-          </div>
+        <div className="rd-detail-loading">
+          <div className="rd-spinner" />
+          <p>Resolving address...</p>
         </div>
       </div>
     );
@@ -157,36 +98,23 @@ export default function AddressPage() {
 
   if (notFound) {
     return (
-      <div className="explore-page">
-        <header className="explore-main-header">
-          <div className="explore-main-header-content">
-            <div className="explore-nav">
-              <Link href="/" className="explore-logo">
-                repo<span className="explore-logo-dot">.</span>box
-              </Link>
-              <nav className="explore-nav-links">
-                <Link href="/" className="explore-nav-link">Home</Link>
-                <Link href="/explore" className="explore-nav-link">Explore</Link>
-                <Link href="/docs" className="explore-nav-link">Docs</Link>
-              </nav>
-            </div>
-            <div className="explore-breadcrumb-nav">
-              <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
-              <span className="explore-breadcrumb-separator">/</span>
-              <span className="explore-breadcrumb-current">Not Found</span>
-            </div>
+      <div className="rd-explore-page">
+        <header className="rd-header">
+          <div className="rd-header-inner">
+            <Link href="/" className="rd-logo">repo<span className="rd-logo-dot">.</span>box</Link>
+            <nav className="rd-nav">
+              <Link href="/" className="rd-nav-link">Home</Link>
+              <Link href="/explore" className="rd-nav-link rd-nav-link--active">Explore</Link>
+              <Link href="/docs" className="rd-nav-link">Docs</Link>
+            </nav>
           </div>
         </header>
-        
-        <div className="explore-main-content">
+        <div className="rd-addr-content">
           <EmptyState
             illustration={AddressNotFound}
             title="Address not found"
             description={`Could not resolve "${addressOrName}" to an address.`}
-            action={{
-              label: "← Back to Explorer",
-              href: "/explore"
-            }}
+            action={{ label: "Back to Explorer", href: "/explore" }}
             size="lg"
           />
         </div>
@@ -195,86 +123,71 @@ export default function AddressPage() {
   }
 
   return (
-    <div className="explore-page">
-      {/* Header */}
-      <header className="explore-main-header">
-        <div className="explore-main-header-content">
-          <div className="explore-nav">
-            <Link href="/" className="explore-logo">
-              repo<span className="explore-logo-dot">.</span>box
-            </Link>
-            <nav className="explore-nav-links">
-              <Link href="/" className="explore-nav-link">Home</Link>
-              <Link href="/explore" className="explore-nav-link">Explore</Link>
-              <Link href="/docs" className="explore-nav-link">Docs</Link>
-            </nav>
-          </div>
-          <div className="explore-breadcrumb-nav">
-            <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
-            <span className="explore-breadcrumb-separator">/</span>
-            <span className="explore-breadcrumb-current">Developer</span>
-          </div>
+    <div className="rd-explore-page">
+      <header className="rd-header">
+        <div className="rd-header-inner">
+          <Link href="/" className="rd-logo">repo<span className="rd-logo-dot">.</span>box</Link>
+          <nav className="rd-nav">
+            <Link href="/" className="rd-nav-link">Home</Link>
+            <Link href="/explore" className="rd-nav-link rd-nav-link--active">Explore</Link>
+            <Link href="/docs" className="rd-nav-link">Docs</Link>
+            <Link href="/playground" className="rd-nav-link">Playground</Link>
+          </nav>
         </div>
       </header>
 
-      <div className="explore-main-content">
-        {/* Address Header */}
-        <div className="explore-profile-header">
-          <div className="explore-profile-info">
-            <div className="explore-profile-avatar">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+      {/* Breadcrumb */}
+      <div className="rd-breadcrumb-bar">
+        <div className="rd-breadcrumb-inner">
+          <Link href="/explore" className="rd-breadcrumb-link">Explore</Link>
+          <span className="rd-breadcrumb-sep">/</span>
+          <span className="rd-breadcrumb-current">Developer</span>
+        </div>
+      </div>
+
+      <div className="rd-addr-content">
+        {/* Profile header */}
+        <div className="rd-profile-header">
+          <div className="rd-profile-left">
+            <div className="rd-profile-avatar">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
                 <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
               </svg>
             </div>
-            <div className="explore-profile-details">
-              <h1 className="explore-profile-title">Developer</h1>
-              <div className="explore-profile-address">
-                <AddressDisplay 
-                  address={resolvedAddress || ''} 
-                  displayName={addressOrName !== resolvedAddress ? addressOrName : undefined}
-                  size="lg" 
-                  linkable={false}
-                  showCopy={true}
-                  showTooltip={true}
-                />
-              </div>
+            <div>
+              <h1 className="rd-profile-title">Developer</h1>
+              <AddressDisplay
+                address={resolvedAddress || ''}
+                displayName={addressOrName !== resolvedAddress ? addressOrName : undefined}
+                size="lg"
+                linkable={false}
+                showCopy={true}
+                showTooltip={true}
+              />
             </div>
           </div>
-
-          <div className="explore-profile-stats">
-            <div className="explore-profile-stat">
-              <span className="explore-profile-stat-number">{repos.length}</span>
-              <span className="explore-profile-stat-label">repositories</span>
+          <div className="rd-profile-stats">
+            <div className="rd-profile-stat">
+              <span className="rd-profile-stat-num">{repos.length}</span>
+              <span className="rd-profile-stat-label">repositories</span>
             </div>
-            <div className="explore-profile-stat">
-              <span className="explore-profile-stat-number">
+            <div className="rd-profile-stat">
+              <span className="rd-profile-stat-num">
                 {repos.reduce((sum, r) => sum + r.commit_count, 0).toLocaleString()}
               </span>
-              <span className="explore-profile-stat-label">commits</span>
+              <span className="rd-profile-stat-label">commits</span>
             </div>
           </div>
         </div>
 
-        {/* Repositories */}
-        <div className="explore-content-section">
-          <div className="explore-section-header">
-            <h2 className="explore-section-title">Repositories</h2>
-          </div>
+        {/* Repo grid */}
+        <div className="rd-addr-section">
+          <h2 className="rd-addr-section-title">Repositories</h2>
 
           {loading ? (
-            <div className="explore-repo-grid">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="explore-repo-item skeleton">
-                  <div className="explore-repo-item-header">
-                    <div className="explore-repo-item-name skeleton-line"></div>
-                    <div className="explore-repo-item-language skeleton-dot"></div>
-                  </div>
-                  <div className="explore-repo-item-description skeleton-line short"></div>
-                  <div className="explore-repo-item-meta">
-                    <span className="skeleton-line tiny"></span>
-                    <span className="skeleton-line tiny"></span>
-                  </div>
-                </div>
+            <div className="rd-addr-grid">
+              {[1,2,3,4].map(i => (
+                <div key={i} className="rd-addr-card rd-addr-card--skeleton" />
               ))}
             </div>
           ) : repos.length === 0 ? (
@@ -285,48 +198,36 @@ export default function AddressPage() {
               size="lg"
             />
           ) : (
-            <div className="explore-repo-grid">
+            <div className="rd-addr-grid">
               {repos.map((repo) => {
-                const language = detectLanguage(repo.name);
-                const isRecentlyActive = repo.last_commit_date && 
+                const isRecent = repo.last_commit_date &&
                   new Date(repo.last_commit_date).getTime() > Date.now() - (7 * 24 * 60 * 60 * 1000);
-                
                 return (
                   <Link
                     key={`${repo.address}/${repo.name}`}
                     href={`/explore/${repo.address}/${repo.name}`}
-                    className={`explore-repo-item ${isRecentlyActive ? 'recently-active' : ''}`}
+                    className={`rd-addr-card ${isRecent ? 'rd-addr-card--active' : ''}`}
                   >
-                    <div className="explore-repo-item-header">
-                      <h3 className="explore-repo-item-name">{repo.name}</h3>
-                      <div 
-                        className="explore-repo-item-language"
-                        style={{ backgroundColor: language.color }}
-                        title={language.name}
-                      ></div>
+                    <div className="rd-addr-card-top">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="rd-addr-card-icon">
+                        <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8Z"/>
+                      </svg>
+                      <h3 className="rd-addr-card-name">{repo.name}</h3>
                     </div>
-                    
                     {repo.description && (
-                      <p className="explore-repo-item-description">
+                      <p className="rd-addr-card-desc">
                         {repo.description.replace(/\n/g, ' ').trim()}
                       </p>
                     )}
-                    
-                    <div className="explore-repo-item-meta">
-                      <span className="explore-repo-item-meta-item">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M20 6L9 17l-5-5"></path>
+                    <div className="rd-addr-card-meta">
+                      <span>
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M11.93 8.5a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5Zm-1.43-.25a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0Z"/>
                         </svg>
-                        {formatCommitCount(repo.commit_count)}
+                        {repo.commit_count} {repo.commit_count === 1 ? 'commit' : 'commits'}
                       </span>
                       {repo.last_commit_date && (
-                        <span className="explore-repo-item-meta-item">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <polyline points="12,6 12,12 16,14"></polyline>
-                          </svg>
-                          Updated {formatTimeAgo(repo.last_commit_date)}
-                        </span>
+                        <span>Updated {formatTimeAgo(repo.last_commit_date)}</span>
                       )}
                     </div>
                   </Link>
