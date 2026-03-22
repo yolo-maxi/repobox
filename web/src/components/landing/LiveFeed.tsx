@@ -11,12 +11,6 @@ interface FeedEntry {
   time: string;
 }
 
-function truncateAddr(addr: string): string {
-  if (addr.startsWith("0x") && addr.length > 12) {
-    return addr.slice(0, 6) + "…" + addr.slice(-4);
-  }
-  return addr;
-}
 
 function timeAgo(dateStr: string): string {
   const now = Date.now();

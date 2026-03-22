@@ -86,7 +86,18 @@ export async function reverseResolveENS(address: string): Promise<string | null>
   return null;
 }
 
+const ALIAS_ADJ_1 = ['deep', 'wild', 'bright', 'silent', 'swift', 'lunar', 'solar', 'frost', 'ember', 'neon', 'misty', 'stone', 'velvet', 'cosmic', 'golden', 'azure'];
+const ALIAS_ADJ_2 = ['blue', 'green', 'coral', 'silver', 'crimson', 'violet', 'amber', 'teal', 'indigo', 'scarlet', 'cobalt', 'pearl', 'obsidian', 'jade', 'sunset', 'aqua'];
+const ALIAS_ANIMAL = ['kraken', 'otter', 'falcon', 'fox', 'wolf', 'lynx', 'orca', 'raven', 'viper', 'tiger', 'panda', 'eagle', 'whale', 'manta', 'gecko', 'badger'];
+
 export function formatAddress(address: string): string {
-  if (address.length <= 10) return address;
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  if (!address) return '';
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return address;
+
+  const hex = address.slice(2).toLowerCase();
+  const a = parseInt(hex.slice(0, 2), 16) % ALIAS_ADJ_1.length;
+  const b = parseInt(hex.slice(2, 4), 16) % ALIAS_ADJ_2.length;
+  const c = parseInt(hex.slice(4, 6), 16) % ALIAS_ANIMAL.length;
+
+  return `${ALIAS_ADJ_1[a]}-${ALIAS_ADJ_2[b]}-${ALIAS_ANIMAL[c]}`;
 }

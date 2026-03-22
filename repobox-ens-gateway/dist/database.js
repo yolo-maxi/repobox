@@ -11,10 +11,18 @@ class Database {
         try {
             const data = JSON.parse((0, fs_1.readFileSync)(dbPath, 'utf8'));
             for (const entry of data) {
-                this.aliases.set(entry.alias.toLowerCase(), entry.address);
+                const aliasData = {
+                    address: entry.address,
+                    tier: entry.tier || 'auto-alias'
+                };
+                this.aliases.set(entry.alias.toLowerCase(), aliasData);
                 const addrLower = entry.address.toLowerCase();
-                if (!this.reverseMap.has(addrLower)) {
-                    this.reverseMap.set(addrLower, entry.alias);
+                const existing = this.reverseMap.get(addrLower);
+                if (!existing || (entry.tier === 'purchased' && existing.tier !== 'purchased')) {
+                    this.reverseMap.set(addrLower, {
+                        alias: entry.alias,
+                        tier: entry.tier || 'auto-alias'
+                    });
                 }
             }
             console.log(`Loaded ${this.aliases.size} aliases`);
@@ -24,10 +32,15 @@ class Database {
         }
     }
     async resolveAlias(alias) {
-        return this.aliases.get(alias.toLowerCase()) || null;
+        const data = this.aliases.get(alias.toLowerCase());
+        return data ? data.address : null;
     }
     reverseResolve(address) {
         return this.reverseMap.get(address.toLowerCase()) || null;
+    }
+    getAliasWithTier(alias) {
+        const data = this.aliases.get(alias.toLowerCase());
+        return data || null;
     }
     close() { }
 }

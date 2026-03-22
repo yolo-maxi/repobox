@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import EmptyState from '@/components/EmptyState';
 import { EmptyTimeline } from '@/components/illustrations';
+import { formatAddress } from '@/lib/utils';
 
 interface ContributorActivity {
   address: string;
@@ -34,10 +35,6 @@ interface TooltipState {
   address: string;
 }
 
-function formatAddress(address: string): string {
-  if (address.length <= 10) return address;
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
 
 function formatDateLabel(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');

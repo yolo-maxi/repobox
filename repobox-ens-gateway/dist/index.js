@@ -13,7 +13,7 @@ const app = (0, express_1.default)();
 const port = process.env.PORT || 3001;
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
-const dbPath = process.env.DB_PATH || '../repobox-server/repobox.db';
+const dbPath = process.env.DB_PATH || './data/aliases.json';
 const privateKey = process.env.GATEWAY_PRIVATE_KEY;
 if (!privateKey) {
     console.error('GATEWAY_PRIVATE_KEY environment variable is required');
@@ -27,9 +27,9 @@ app.get('/health', (req, res) => {
 app.get('/resolve/:alias', async (req, res) => {
     try {
         const { alias } = req.params;
-        const address = await database.resolveAlias(alias);
-        if (address) {
-            res.json({ alias, address, tier: 'auto-alias' });
+        const result = database.getAliasWithTier(alias);
+        if (result) {
+            res.json({ alias, address: result.address, tier: result.tier });
         }
         else {
             res.status(404).json({ error: 'Alias not found' });
@@ -42,9 +42,9 @@ app.get('/resolve/:alias', async (req, res) => {
 app.get('/reverse/:address', (req, res) => {
     try {
         const { address } = req.params;
-        const alias = database.reverseResolve(address);
-        if (alias) {
-            res.json({ alias, address, tier: 'auto-alias' });
+        const result = database.reverseResolve(address);
+        if (result) {
+            res.json({ alias: result.alias, address, tier: result.tier });
         }
         else {
             res.status(404).json({ error: 'No alias found' });
@@ -62,8 +62,8 @@ app.post('/reverse', (req, res) => {
         }
         const results = {};
         for (const addr of addresses) {
-            const alias = database.reverseResolve(addr);
-            results[addr.toLowerCase()] = alias ? { alias, tier: 'auto-alias' } : null;
+            const result = database.reverseResolve(addr);
+            results[addr.toLowerCase()] = result ? { alias: result.alias, tier: result.tier } : null;
         }
         res.json(results);
     }

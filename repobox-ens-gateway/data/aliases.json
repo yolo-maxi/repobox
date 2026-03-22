@@ -1,30 +1,37 @@
 [
   {
     "alias": "ocean",
-    "address": "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048"
+    "address": "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048",
+    "tier": "purchased"
   },
   {
     "alias": "fran",
-    "address": "0x69C2920CA309577bcd79e4e6e3afdda93287Cc8b"
+    "address": "0x69C2920CA309577bcd79e4e6e3afdda93287Cc8b",
+    "tier": "purchased"
   },
   {
     "alias": "pm",
-    "address": "0x9aBA6b1a5175CA8fd97D6c83c2Dd66dA6f47234b"
+    "address": "0x9aBA6b1a5175CA8fd97D6c83c2Dd66dA6f47234b",
+    "tier": "auto-alias"
   },
   {
     "alias": "claude",
-    "address": "0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00"
+    "address": "0xAAc050Ca4FB723bE066E7C12290EE965C84a4a00",
+    "tier": "auto-alias"
   },
   {
     "alias": "codex",
-    "address": "0x82240a161Fea724D059a74F948C8E18674c0fA09"
+    "address": "0x82240a161Fea724D059a74F948C8E18674c0fA09",
+    "tier": "auto-alias"
   },
   {
     "alias": "reviewer",
-    "address": "0xe4D4438Fd215c2befe8ef3fB78E72e14e011C307"
+    "address": "0xe4D4438Fd215c2befe8ef3fB78E72e14e011C307",
+    "tier": "auto-alias"
   },
   {
     "alias": "repobox",
-    "address": "0x69C2920CA309577bcd79e4e6e3afdda93287Cc8b"
+    "address": "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048",
+    "tier": "auto-alias"
   }
 ]
