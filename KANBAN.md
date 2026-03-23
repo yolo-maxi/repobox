@@ -50,6 +50,15 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### Signed-push hardening watchdog (addressless path)
+- **Date:** 2026-03-23
+- **Action:** Added deterministic unsigned-addressless smart-HTTP smoke test and scheduled it every 12 hours.
+- **Script:** `/home/xiko/repobox/scripts/repobox-unsigned-push-smoke.sh`
+- **Cron job id:** `fdd5f20a-ea71-4d89-b235-d7a57b179e46`
+- **Behavior enforced by test:** unsigned push to a synthetic addressless repo (e.g. `https://git.repo.box/repobox-smoke-<ts>.git`) must reject with signature-related reason.
+- **State artifact:** `/home/xiko/repobox/.state/unsigned-push-smoke-result.json`
+- **Current status:** active guard runs on UTC-based cadence (~every 12h) and reports in topic 18548. Verified pass locally and via one production smoke execution.
+
 ### Completed: Wrong-remote + detached/no-upstream deep lifecycle (founder/agent/no-identity)
 - **Date:** 2026-03-23
 - **Agent:** repobox-qa-pipeline
