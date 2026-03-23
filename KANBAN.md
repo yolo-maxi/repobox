@@ -28,7 +28,16 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 🔨 In Progress
 
-*No tasks currently in progress*
+### P0: First-commit founder upload denial on new repos blocks onboarding
+- **Date:** 2026-03-23
+- **Agent:** repobox-qa-pipeline
+- **Environment:** DO SSH run (`xiko@167.71.5.215`) with real `/tmp/repobox` + `/tmp/repobox-server` binaries.
+- **Symptom:** first signed commit on fresh repo fails with:
+  - `permission denied: founder (...) cannot upload .repobox/config.yml`
+- **Impact:** blocks first push, prevents lockout and x402 private-flow validation from completing in clean setup.
+- **Priority:** P0
+- **Next action:** patch branch-context detection for unborn HEAD / first-commit permission evaluation, then re-run full private paid flow matrix on DO.
+
 
 ## 🚧 Blocked
 

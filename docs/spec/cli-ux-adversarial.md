@@ -851,3 +851,46 @@ Self-lockout prevention on config edits while exercising founder, agent, and mis
 - ✅ full founder/agent/unknown flow works end-to-end including signed/ungranted/granted reads.
 - ⚠️ none introduced in this run.
 
+
+## 2026-03-23 — DO deep run: half-written config + private x402 flow blocked by first-commit upload denial (P0)
+
+### Scenario selected
+`untouched/half-written config.yml (wrong rule syntax)` + `private repo paid access/x402 preview/discovery` on DigitalOcean.
+
+### Environment
+- Host: **DigitalOcean** (`xiko@167.71.5.215`) via SSH (preferred target).
+- Since `/home/xiko/repobox` and Rust toolchain are not present on DO, run used real copied binaries:
+  - `/tmp/repobox`
+  - `/tmp/repobox-server`
+- Fixture root: `/tmp/repobox-do-qa-final-1774235883` and follow-up `/tmp/repobox-do-qa-workaround-1774236005`
+- Server bind: `127.0.0.1:3855` and `127.0.0.1:3856`
+
+### Identities exercised
+- founder: `evm:0x4afBdea87eDc0Ed017bAe071E6C797923213434F`
+- agent: `evm:0x3067e54ff2D58b3a2DBf43Bb0C8cb29ab944Cb0B`
+- unknown: `evm:0xBE91b472E8aBC8ECad1B381438754260baf6A8b0`
+- no identity: separate HOME with plain git
+
+### Exact key outputs (verbatim)
+- Wrong rule syntax lint (expected):
+  - `repo.box: 'create' is deprecated, use 'upload' instead (for new files) or 'insert' (for adding lines)`
+  - `❌ invalid rule: 'upload' is for files only - use 'branch' for creating branches. Change 'upload >feature/**' to 'branch >feature/**'`
+  - `lint_bad_exit=1`
+- P0 blocker on first real commit (unexpected):
+  - `❌ permission denied: founder (evm:0x4afBdea87eDc0Ed017bAe071E6C797923213434F) cannot upload .repobox/config.yml`
+  - same symptom reproduced in follow-up fixture with different founder identity:
+    - `❌ permission denied: founder (evm:0x53E23E0A612e3e5aB403e74bF5Fb0d2679aafE6B) cannot upload .repobox/config.yml`
+
+### UX judgment
+- Wrong-rule lint UX is mostly actionable (<30s), but message still chains deprecated-verb rewrite into branch-only rejection, which is mildly confusing.
+- **P0:** first successful push path can self-deadlock for founders on brand-new repos. Even with founder identity configured and permissive founder rules, first commit is blocked on `.repobox/config.yml` upload.
+- This prevents reaching the rest of private paid flow in a clean first-time setup and blocks onboarding.
+
+### Mandatory focus coverage in this run
+- **Linter self-lockout prevention:** attempted; blocked before lockout phase by earlier P0 first-commit denial.
+- **Private repo flow on DO:** attempted on DO with real binaries/server; blocked before first push due P0.
+- **x402 monetization discoverability:** planned/test script prepared; blocked by same P0 before remote paid-flow steps.
+
+### Fix status
+- No code commit in this run (environment lacks Rust toolchain on DO and blocker reproduced before safe patch+validation cycle).
+- This entry records a reproducible **P0 onboarding blocker** for immediate triage.
