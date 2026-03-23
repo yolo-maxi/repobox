@@ -242,6 +242,7 @@ fn main() -> ExitCode {
 
 fn cmd_init(force: bool) -> ExitCode {
     let real_git = find_real_git();
+    let real_git = real_git.trim().to_string();
 
     // Must be run at the root of an existing git repo.
     let git_root_out = Command::new(&real_git)
@@ -319,6 +320,10 @@ fn cmd_init(force: bool) -> ExitCode {
         .args(["config", "--local", "commit.gpgsign", "true"])
         .output();
 
+    if let Err(e) = install_local_pre_push_hook(&real_git, Path::new(".")) {
+        eprintln!("warning: could not install local repobox pre-push hook: {e}");
+    }
+
     // Auto-set user.signingkey if an identity already exists
     match identity::get_identity(&home) {
         Ok(Some(id)) => {
@@ -341,6 +346,74 @@ fn cmd_init(force: bool) -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+fn install_local_pre_push_hook(real_git: &str, cwd: &Path) -> std::io::Result<()> {
+    // Best effort: install a local pre-push hook that runs repobox checks.
+    // This protects direct `git` invocations that bypass the `git` shim.
+    let git_dir_output = Command::new(real_git)
+        .current_dir(cwd)
+        .args(["rev-parse", "--git-dir"])
+        .output()?;
+
+    if !git_dir_output.status.success() {
+        return Ok(());
+    }
+
+    let git_dir_raw = String::from_utf8_lossy(&git_dir_output.stdout).trim().to_string();
+    let git_dir_path = if git_dir_raw.starts_with('/') {
+        Path::new(&git_dir_raw).to_path_buf()
+    } else {
+        cwd.join(git_dir_raw)
+    };
+
+    let hook_path = git_dir_path.join("hooks").join("pre-push");
+
+    std::fs::create_dir_all(hook_path.parent().unwrap_or_else(|| Path::new(".")))?;
+
+    if hook_path.exists() {
+        let existing = std::fs::read_to_string(&hook_path).unwrap_or_default();
+        if existing.contains("repobox local pre-push hook") {
+            return Ok(());
+        }
+
+        if !existing.trim().is_empty() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "existing pre-push hook detected; aborting repobox auto-installation",
+            ));
+        }
+    }
+
+    let script = "#!/usr/bin/env sh\n\
+# repobox local pre-push hook\n\
+set -e\n\
+\
+if command -v repobox-check >/dev/null 2>&1; then\n\
+  repobox-check\n\
+  exit $?\n\
+fi\n\
+\
+if command -v git >/dev/null 2>&1; then\n\
+  if command -v repobox >/dev/null 2>&1; then\n\
+    git repobox hook pre-push \"$@\"\n\
+    exit $?\n\
+  fi\n\
+fi\n\
+\
+exit 0\n";
+
+    std::fs::write(&hook_path, script)?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&hook_path)?.permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&hook_path, perms)?;
+    }
+
+    Ok(())
 }
 
 // ── Keys ──────────────────────────────────────────────────────────────
