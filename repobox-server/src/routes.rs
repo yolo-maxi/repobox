@@ -182,41 +182,52 @@ async fn receive_pack(
 
     // Log the push event after successful processing
     if response.status() == StatusCode::OK {
-        if let Ok(Some(commit_info)) = git::extract_latest_commit_info(&state.data_dir, &repo) {
-            let _ = db::insert_push_log(
-                &state.db_path,
-                &repo.address,
-                &repo.name,
-                commit_info.pusher_address.as_deref(),
-                Some(&commit_info.hash),
-                Some(&commit_info.message),
-            );
+        let commit_info = match git::extract_latest_commit_info(&state.data_dir, &repo) {
+            Ok(Some(info)) => info,
+            Ok(None) => {
+                tracing::warn!(
+                    repo = %format!("{}/{}", repo.address, repo.name),
+                    "addressed push rejected: could not inspect latest commit"
+                );
+                return (StatusCode::BAD_REQUEST, "could not inspect push result").into_response();
+            }
+            Err(_) => {
+                tracing::warn!(
+                    repo = %format!("{}/{}", repo.address, repo.name),
+                    "addressed push rejected: could not inspect latest commit"
+                );
+                return (StatusCode::BAD_REQUEST, "could not inspect push result").into_response();
+            }
+        };
 
-            tracing::info!(
+        if commit_info.pusher_address.is_none() {
+            tracing::warn!(
                 repo = %format!("{}/{}", repo.address, repo.name),
-                pusher = ?commit_info.pusher_address,
-                commit = %commit_info.hash.get(..8).unwrap_or(&commit_info.hash),
-                "push logged to activity feed"
+                "addressed push rejected: unsigned commit"
             );
+            return (StatusCode::FORBIDDEN, "unsigned commits are not allowed").into_response();
         }
-    }
 
-    // Check ownership and authorization.
-    let existing_owner = db::get_repo(&state.db_path, &repo.address, &repo.name);
+        let pusher = commit_info
+            .pusher_address
+            .as_ref()
+            .expect("signed commit must have a pusher");
 
-    if let Ok(Some(record)) = &existing_owner {
-        // Check if repository has opted into permission enforcement
-        let repo_dir = git::repo_dir(&state.data_dir, &repo);
-        if read_config_from_repo(&repo_dir).is_some() {
-            // Has config = permission enforcement enabled
-            // Existing repo — check if the pusher is authorized.
-            // Extract the signer of the HEAD commit (the latest pushed commit).
-            if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo) {
+        // Check ownership and authorization.
+        let existing_owner = db::get_repo(&state.db_path, &repo.address, &repo.name);
+
+        if let Ok(Some(record)) = &existing_owner {
+            // Check if repository has opted into permission enforcement
+            let repo_dir = git::repo_dir(&state.data_dir, &repo);
+            if read_config_from_repo(&repo_dir).is_some() {
+                // Has config = permission enforcement enabled
+                // Existing repo — check if the pusher is authorized.
+                // Extract the signer of the HEAD commit (the latest pushed commit).
                 if !matches!(
                     git::check_push_authorized(
                         &state.data_dir,
                         &repo,
-                        &pusher,
+                        pusher,
                         &record.owner_address
                     ),
                     Ok(true)
@@ -229,11 +240,10 @@ async fn receive_pack(
                         owner = %record.owner_address,
                         "push denied: pusher not authorized (config-enabled repo)"
                     );
+                    return (StatusCode::FORBIDDEN, "pusher not authorized").into_response();
                 }
-            }
-        } else {
-            // No config = no permission enforcement
-            if let Ok(Some(pusher)) = git::extract_pusher_from_head(&state.data_dir, &repo) {
+            } else {
+                // No config = no permission enforcement
                 tracing::debug!(
                     repo = %format!("{}/{}", repo.address, repo.name),
                     pusher = %pusher,
@@ -241,6 +251,23 @@ async fn receive_pack(
                 );
             }
         }
+
+        let _ = db::insert_push_log(
+            &state.db_path,
+            &repo.address,
+            &repo.name,
+            Some(pusher.as_str()),
+            Some(&commit_info.hash),
+            Some(&commit_info.message),
+        );
+
+        tracing::info!(
+            repo = %format!("{}/{}", repo.address, repo.name),
+            pusher = %pusher,
+            commit = %commit_info.hash.get(..8).unwrap_or(&commit_info.hash),
+            "push logged to activity feed"
+        );
+    }
         // If HEAD commit is unsigned, the implicit owner-only rule still applies
         // through the pre-receive hook (when repobox-check is installed).
     } else {
@@ -842,66 +869,83 @@ async fn addressless_receive_pack(
             body,
         );
 
-        // Check ownership and authorization for addressless pushes to existing repos
         if response.status() == StatusCode::OK {
-            let existing_owner = db::get_repo(&state.db_path, &repo_path.address, &repo_path.name);
+            let mut rejected: Option<(StatusCode, &'static str)> = None;
 
-            if let Ok(Some(record)) = &existing_owner {
-                // Check if repository has opted into permission enforcement
+            // Always enforce signed commits for addressless pushes.
+            let commit_info = match git::extract_latest_commit_info(&state.data_dir, &repo_path) {
+                Ok(Some(info)) => info,
+                Ok(None) => {
+                    rejected = Some((
+                        StatusCode::BAD_REQUEST,
+                        "could not inspect push result",
+                    ));
+                    None
+                }
+                Err(_) => {
+                    rejected = Some((StatusCode::BAD_REQUEST, "could not inspect push result"));
+                    None
+                }
+            };
+
+            if let Some(info) = &commit_info {
+                if info.pusher_address.is_none() {
+                    rejected = Some((
+                        StatusCode::FORBIDDEN,
+                        "unsigned commits are not allowed on repo pushes",
+                    ));
+                }
+            }
+
+            let pusher = commit_info
+                .as_ref()
+                .and_then(|info| info.pusher_address.clone())
+                .unwrap_or_default();
+
+            if let Some((code, message)) = rejected {
+                if let Some(info) = commit_info {
+                    tracing::warn!(
+                        repo = %format!("{}/{}", repo_path.address, repo_path.name),
+                        pusher = %info.pusher_address.as_deref().unwrap_or("<none>"),
+                        "addressless push rejected by server policy"
+                    );
+                }
+                return (code, message).into_response();
+            }
+
+            if let Ok(Some(record)) = db::get_repo(&state.db_path, &repo_path.address, &repo_path.name) {
+                // Check if repository has opted into permission enforcement.
                 let repo_dir = git::repo_dir(&state.data_dir, &repo_path);
-                if read_config_from_repo(&repo_dir).is_some() {
-                    // Has config = permission enforcement enabled
-                    if let Ok(Some(pusher)) =
-                        git::extract_pusher_from_head(&state.data_dir, &repo_path)
-                    {
-                        if !matches!(
-                            git::check_push_authorized(
-                                &state.data_dir,
-                                &repo_path,
-                                &pusher,
-                                &record.owner_address
-                            ),
-                            Ok(true)
-                        ) {
-                            tracing::warn!(
-                                repo = %format!("{}/{}", repo_path.address, repo_path.name),
-                                pusher = %pusher,
-                                owner = %record.owner_address,
-                                "addressless push denied: pusher not authorized (config-enabled repo)"
-                            );
-                        }
-                    }
-                } else {
-                    // No config = no permission enforcement
-                    if let Ok(Some(pusher)) =
-                        git::extract_pusher_from_head(&state.data_dir, &repo_path)
-                    {
-                        tracing::debug!(
+                if read_config_from_repo(&repo_dir).is_some() && !pusher.is_empty() {
+                    if !matches!(
+                        git::check_push_authorized(&state.data_dir, &repo_path, &pusher, &record.owner_address),
+                        Ok(true)
+                    ) {
+                        tracing::warn!(
                             repo = %format!("{}/{}", repo_path.address, repo_path.name),
                             pusher = %pusher,
-                            "addressless push allowed: no .repobox/config.yml (permission enforcement disabled)"
+                            owner = %record.owner_address,
+                            "addressless push denied: pusher not authorized (config-enabled repo)"
                         );
+                        return (StatusCode::FORBIDDEN, "pusher not authorized").into_response();
                     }
                 }
             }
 
-            // Log the push event for existing repos accessed via addressless route
-            if let Ok(Some(commit_info)) =
-                git::extract_latest_commit_info(&state.data_dir, &repo_path)
-            {
+            if let Some(info) = commit_info {
                 let _ = db::insert_push_log(
                     &state.db_path,
                     &repo_path.address,
                     &repo_path.name,
-                    commit_info.pusher_address.as_deref(),
-                    Some(&commit_info.hash),
-                    Some(&commit_info.message),
+                    info.pusher_address.as_deref(),
+                    Some(&info.hash),
+                    Some(&info.message),
                 );
 
                 tracing::info!(
                     repo = %format!("{}/{}", repo_path.address, repo_path.name),
-                    pusher = ?commit_info.pusher_address,
-                    commit = %commit_info.hash.get(..8).unwrap_or(&commit_info.hash),
+                    pusher = ?info.pusher_address,
+                    commit = %info.hash.get(..8).unwrap_or(&info.hash),
                     "addressless push to existing repo logged to activity feed"
                 );
             }
