@@ -434,7 +434,14 @@ fn check_read_access(
 
     let config = match repobox::parser::parse(&config_content) {
         Ok(c) => c,
-        Err(_) => return Ok(()), // Invalid config = don't block reads
+        Err(e) => {
+            tracing::warn!(
+                repo = %format!("{}/{}", repo.address, repo.name),
+                error = %e,
+                "invalid .repobox/config.yml while checking read access; failing closed"
+            );
+            return Err((StatusCode::FORBIDDEN, "invalid .repobox/config.yml").into_response());
+        }
     };
 
     // Optional x402 config used for paid-read gating when read checks fail.
@@ -568,7 +575,7 @@ fn check_read_access(
             &config,
             &identity,
             repobox::config::Verb::Read,
-            Some(">*"),
+            Some("*"),
             None,
         );
         if check_result.is_allowed() {
@@ -584,7 +591,7 @@ fn check_read_access(
         &config,
         &identity,
         repobox::config::Verb::Read,
-        Some(">*"),
+        Some("*"),
         None,
     );
     if check_result.is_allowed() {
@@ -1042,6 +1049,7 @@ async fn addressless_receive_pack(
 async fn addressless_head(
     State(state): State<Arc<AppState>>,
     Path(repo): Path<String>,
+    headers: HeaderMap,
 ) -> Response {
     let repo_name = match git::parse_repo(&repo) {
         Ok(name) => name,
@@ -1054,6 +1062,12 @@ async fn addressless_head(
             address: existing.address,
             name: repo_name,
         };
+
+        // Enforce read access on addressless HEAD too (parity with addressed HEAD).
+        if let Err(denied) = check_read_access(&state, &repo_path, &headers) {
+            return denied;
+        }
+
         match git::read_head(&state.data_dir, &repo_path) {
             Ok(head) => {
                 let mut response = head.into_response();
@@ -1809,6 +1823,7 @@ async fn list_issues(
     State(state): State<Arc<AppState>>,
     Path((name, repo)): Path<(String, String)>,
     Query(query): Query<HashMap<String, String>>,
+    headers: HeaderMap,
 ) -> Response {
     // Resolve name to address
     let address = match resolve_name_to_address(&state, &name).await {
@@ -1816,10 +1831,14 @@ async fn list_issues(
         Err(status) => return status.into_response(),
     };
 
-    let _repo_path = match repo_path(address, repo) {
+    let repo_path = match repo_path(address, repo) {
         Ok(repo) => repo,
         Err(status) => return status.into_response(),
     };
+
+    if let Err(denied) = check_read_access(&state, &repo_path, &headers) {
+        return denied;
+    }
 
     // Create issue storage with sample data
     let mut issue_storage = repobox::issues::MemoryIssueStorage::new();
@@ -1861,6 +1880,7 @@ async fn list_issues(
 async fn get_issue(
     State(state): State<Arc<AppState>>,
     Path((name, repo, issue_id)): Path<(String, String, String)>,
+    headers: HeaderMap,
 ) -> Response {
     // Resolve name to address
     let address = match resolve_name_to_address(&state, &name).await {
@@ -1868,10 +1888,14 @@ async fn get_issue(
         Err(status) => return status.into_response(),
     };
 
-    let _repo_path = match repo_path(address, repo) {
+    let repo_path = match repo_path(address, repo) {
         Ok(repo) => repo,
         Err(status) => return status.into_response(),
     };
+
+    if let Err(denied) = check_read_access(&state, &repo_path, &headers) {
+        return denied;
+    }
 
     // Create issue storage with sample data
     let mut issue_storage = repobox::issues::MemoryIssueStorage::new();
