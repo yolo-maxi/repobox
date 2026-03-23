@@ -194,7 +194,7 @@ async fn receive_pack(
             Err(_) => {
                 tracing::warn!(
                     repo = %format!("{}/{}", repo.address, repo.name),
-                    "addressed push rejected: could not inspect latest commit"
+                    "addressed push rejected: could not inspect push result"
                 );
                 return (StatusCode::BAD_REQUEST, "could not inspect push result").into_response();
             }
@@ -221,8 +221,6 @@ async fn receive_pack(
             let repo_dir = git::repo_dir(&state.data_dir, &repo);
             if read_config_from_repo(&repo_dir).is_some() {
                 // Has config = permission enforcement enabled
-                // Existing repo — check if the pusher is authorized.
-                // Extract the signer of the HEAD commit (the latest pushed commit).
                 if !matches!(
                     git::check_push_authorized(
                         &state.data_dir,
@@ -232,8 +230,6 @@ async fn receive_pack(
                     ),
                     Ok(true)
                 ) {
-                    // Unauthorized — revert would be ideal but for now just log.
-                    // TODO: pre-receive hook integration for proper rejection.
                     tracing::warn!(
                         repo = %format!("{}/{}", repo.address, repo.name),
                         pusher = %pusher,
@@ -249,6 +245,51 @@ async fn receive_pack(
                     pusher = %pusher,
                     "push allowed: no .repobox/config.yml (permission enforcement disabled)"
                 );
+            }
+        } else {
+            // New repo — first push. Verify the first commit is EVM-signed.
+            tracing::debug!(
+                repo = %format!("{}/{}", repo.address, repo.name),
+                "checking first commit signature for new repo"
+            );
+            match git::extract_owner_from_first_commit(&state.data_dir, &repo) {
+                Ok(Some(signer)) => {
+                    let _ =
+                        db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
+
+                    if db::get_alias_for_address(&state.db_path, &signer)
+                        .unwrap_or(None)
+                        .is_none()
+                    {
+                        if let Ok(alias) = db::assign_random_alias(&state.db_path, &signer) {
+                            tracing::info!(
+                                address = %signer,
+                                alias = %alias,
+                                "auto-assigned alias for first push"
+                            );
+                        }
+                    }
+
+                    tracing::info!(
+                        repo = %format!("{}/{}", repo.address, repo.name),
+                        owner = %signer,
+                        "ownership established via signed commit"
+                    );
+                }
+                _ => {
+                    let repo_dir = git::repo_dir(&state.data_dir, &repo);
+                    if let Err(e) = std::fs::remove_dir_all(&repo_dir) {
+                        tracing::error!(
+                            repo = %format!("{}/{}", repo.address, repo.name),
+                            error = %e,
+                            "failed to clean up unsigned repo"
+                        );
+                    }
+                    tracing::warn!(
+                        repo = %format!("{}/{}", repo.address, repo.name),
+                        "rejected: first commit must be EVM-signed — repo deleted"
+                    );
+                }
             }
         }
 
@@ -267,57 +308,6 @@ async fn receive_pack(
             commit = %commit_info.hash.get(..8).unwrap_or(&commit_info.hash),
             "push logged to activity feed"
         );
-    }
-        // If HEAD commit is unsigned, the implicit owner-only rule still applies
-        // through the pre-receive hook (when repobox-check is installed).
-    } else {
-        // New repo — first push. Verify the first commit is EVM-signed.
-        tracing::debug!(
-            repo = %format!("{}/{}", repo.address, repo.name),
-            "checking first commit signature for new repo"
-        );
-        match git::extract_owner_from_first_commit(&state.data_dir, &repo) {
-            Ok(Some(signer)) => {
-                let _ =
-                    db::insert_repo_if_missing(&state.db_path, &repo.address, &repo.name, &signer);
-
-                // Auto-assign alias if this is the first push for this address
-                if db::get_alias_for_address(&state.db_path, &signer)
-                    .unwrap_or(None)
-                    .is_none()
-                {
-                    if let Ok(alias) = db::assign_random_alias(&state.db_path, &signer) {
-                        tracing::info!(
-                            address = %signer,
-                            alias = %alias,
-                            "auto-assigned alias for first push"
-                        );
-                    }
-                }
-
-                tracing::info!(
-                    repo = %format!("{}/{}", repo.address, repo.name),
-                    owner = %signer,
-                    "ownership established via signed commit"
-                );
-            }
-            _ => {
-                // No valid signature — delete the repo
-                // TEMP: Skip deletion for debugging
-                let repo_dir = git::repo_dir(&state.data_dir, &repo);
-                if let Err(e) = std::fs::remove_dir_all(&repo_dir) {
-                    tracing::error!(
-                        repo = %format!("{}/{}", repo.address, repo.name),
-                        error = %e,
-                        "failed to clean up unsigned repo"
-                    );
-                }
-                tracing::warn!(
-                    repo = %format!("{}/{}", repo.address, repo.name),
-                    "rejected: first commit must be EVM-signed — repo deleted"
-                );
-            }
-        }
     }
 
     response
@@ -874,7 +864,7 @@ async fn addressless_receive_pack(
 
             // Always enforce signed commits for addressless pushes.
             let commit_info = match git::extract_latest_commit_info(&state.data_dir, &repo_path) {
-                Ok(Some(info)) => info,
+                Ok(Some(info)) => Some(info),
                 Ok(None) => {
                     rejected = Some((
                         StatusCode::BAD_REQUEST,

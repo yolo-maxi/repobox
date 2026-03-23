@@ -89,20 +89,23 @@ fn unsigned_push_is_rejected_and_cleaned_up() {
     let remote = format!("http://{bind}/{address}/{repo_name}.git");
     git(&source_repo, &["remote", "add", "origin", &remote]);
 
-    // Push will "succeed" from git's perspective (objects transferred),
-    // but the server should clean up the repo afterwards
+    // Unsigned push must be rejected by the pre-receive hook.
     let output = Command::new("git")
         .current_dir(&source_repo)
         .args(["push", "-u", "origin", "HEAD:refs/heads/main"])
         .output()
         .unwrap();
-    let _ = output;
 
-    // Bare repo should NOT exist — server cleaned it up
-    let bare_repo = data_dir.join(address).join(format!("{repo_name}.git"));
-    assert!(!bare_repo.exists(), "unsigned repo should be deleted");
+    assert!(!output.status.success(), "unsigned push must be rejected");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Unsigned commit rejected")
+            || stderr.contains("remote rejected")
+            || stderr.contains("400"),
+        "unexpected push stderr: {stderr}"
+    );
 
-    // No ownership record either
+    // No ownership record should exist
     let db = Connection::open(data_dir.join("repobox.db")).unwrap();
     let count: i64 = db
         .query_row(
@@ -199,10 +202,17 @@ fn subsequent_pushes_work_after_ownership_established() {
         &["push", "-u", "origin", "HEAD:refs/heads/main"],
     );
 
-    // Second push: regular unsigned commit (just a normal git workflow)
+    // Second push: must also be EVM-signed and fast-forwardable.
     write_file(&source_repo.join("README.md"), "# v2 — updated\n");
     git(&source_repo, &["add", "README.md"]);
-    git(&source_repo, &["commit", "-m", "second commit (unsigned)"]);
+    let commit2 = create_signed_commit_with_parent(
+        &source_repo,
+        &repobox_home,
+        expected_address,
+        "second commit",
+        Some(&commit1),
+    );
+    git(&source_repo, &["update-ref", "HEAD", &commit2]);
     git(&source_repo, &["push", "origin", "HEAD:refs/heads/main"]);
 
     // Clone and verify we get the latest content
@@ -424,10 +434,39 @@ fn addressless_subsequent_push_to_existing_repo() {
         "repo should exist under signer's address"
     );
 
-    // Second push: address-less to the same repo name (should route to existing repo)
+    // Ensure unsigned push is rejected on subsequent address-less updates.
+    git(&source_repo, &["checkout", "-b", "unsigned-attempt"]);
+    write_file(&source_repo.join("README.md"), "# v2 unsigned\n");
+    git(&source_repo, &["add", "README.md"]);
+    git(&source_repo, &["commit", "-m", "second commit (unsigned)"]);
+    let output = Command::new("git")
+        .current_dir(&source_repo)
+        .args(["push", "origin", "HEAD:refs/heads/main"])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "unsigned subsequent address-less push must be rejected"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Unsigned commit rejected")
+            || String::from_utf8_lossy(&output.stderr).contains("remote rejected"),
+        "unexpected push stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Return to signed branch and push signed update.
+    git(&source_repo, &["checkout", "-"]);
     write_file(&source_repo.join("README.md"), "# v2 updated\n");
     git(&source_repo, &["add", "README.md"]);
-    git(&source_repo, &["commit", "-m", "second commit"]);
+    let commit2 = create_signed_commit_with_parent(
+        &source_repo,
+        &repobox_home,
+        expected_address,
+        "second commit (signed)",
+        Some(&commit1),
+    );
+    git(&source_repo, &["update-ref", "HEAD", &commit2]);
     git(&source_repo, &["push", "origin", "HEAD:refs/heads/main"]);
 
     // Clone from full path and verify content
@@ -468,28 +507,37 @@ fn build_read_auth_header(
 }
 
 fn create_signed_commit(repo: &Path, repobox_home: &Path, address: &str, message: &str) -> String {
-    let tree_hash = git_output(repo, &["write-tree"]);
+    create_signed_commit_with_parent(repo, repobox_home, address, message, None)
+}
 
-    let commit_content = format!(
-        "tree {tree_hash}\n\
-         author Test <test@test.com> 1234567890 +0000\n\
-         committer Test <test@test.com> 1234567890 +0000\n\
-         \n\
-         {message}\n"
-    );
+fn create_signed_commit_with_parent(
+    repo: &Path,
+    repobox_home: &Path,
+    address: &str,
+    message: &str,
+    parent: Option<&str>,
+) -> String {
+    let tree_hash = git_output(repo, &["write-tree"]);
+    let parent_line = parent
+        .filter(|p| !p.is_empty())
+        .map(|p| format!("parent {p}\n"))
+        .unwrap_or_default();
+
+    let mut commit_content = format!("tree {tree_hash}\n");
+    commit_content.push_str(&parent_line);
+    commit_content.push_str("author Test <test@test.com> 1234567890 +0000\n");
+    commit_content.push_str("committer Test <test@test.com> 1234567890 +0000\n\n");
+    commit_content.push_str(&format!("{message}\n"));
 
     let sig = repobox::signing::sign(repobox_home, address, commit_content.as_bytes())
         .expect("signing should succeed");
     let sig_hex = hex::encode(&sig);
 
-    let signed_commit = format!(
-        "tree {tree_hash}\n\
-         author Test <test@test.com> 1234567890 +0000\n\
-         committer Test <test@test.com> 1234567890 +0000\n\
-         gpgsig {sig_hex}\n\
-         \n\
-         {message}\n"
-    );
+    let mut signed_commit = format!("tree {tree_hash}\n");
+    signed_commit.push_str(&parent_line);
+    signed_commit.push_str("author Test <test@test.com> 1234567890 +0000\n");
+    signed_commit.push_str("committer Test <test@test.com> 1234567890 +0000\n");
+    signed_commit.push_str(&format!("gpgsig {sig_hex}\n\n{message}\n"));
 
     git_output_stdin(
         repo,
