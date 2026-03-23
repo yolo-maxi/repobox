@@ -478,7 +478,18 @@ fn check_read_access(
                         Err(unauthorized_response("authentication required"))
                     }
                 }
-                Err(e) => Err(unauthorized_response(&format!("auth error: {e}"))),
+                Err(e) => {
+                    if let Some(x402) = x402_config.as_ref() {
+                        tracing::warn!(
+                            repo = %format!("{}/{}", repo.address, repo.name),
+                            error = %e,
+                            "auth header malformed or invalid; returning payment required guidance"
+                        );
+                        return Err(payment_required_response(repo, x402));
+                    }
+
+                    Err(unauthorized_response(&format!("auth error: {e}")))
+                }
             }
         };
     }
@@ -508,6 +519,15 @@ fn check_read_access(
             ));
         }
         Err(e) => {
+            if let Some(x402) = x402_config.as_ref() {
+                tracing::warn!(
+                    repo = %format!("{}/{}", repo.address, repo.name),
+                    error = %e,
+                    "auth header malformed or invalid; returning payment required guidance"
+                );
+                return Err(payment_required_response(repo, x402));
+            }
+
             return Err(unauthorized_response(&format!("auth error: {e}")));
         }
     };

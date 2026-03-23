@@ -38,6 +38,15 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### x402 malformed auth UX + local helper URL parse hardening
+- **Date:** 2026-03-23 | **Agent:** repobox-qa-pipeline
+- Added server-side handling so malformed `Authorization` headers on private x402 repos receive actionable payment-required guidance instead of username prompt failures.
+- Extended local credential-helper path parsing to tolerate `git.repo.box` URLs with port + http scheme for non-production test environments.
+- Added/updated regression coverage in `repobox-server/tests/smart_http.rs` to assert malformed auth still returns x402 guidance.
+- Confirmed via manual fixture clone and `x402_payment_required_response` integration test.
+- **Commit:** `$(git -C /home/xiko/repobox rev-parse --short HEAD)`
+- Status: ✅ Completed
+
 ### First-time install + first push onboarding hardening
 - **Date:** 2026-03-23 | **Agent:** repobox-qa-pipeline
 - Covered founder/agent/no-identity lifecycle end-to-end: setup, identity, alias, check, commit, push, clone, pull/rebase.

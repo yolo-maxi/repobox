@@ -1,3 +1,61 @@
+
+## 2026-03-23 — Private repo x402 clone UX: malformed auth hardening
+
+### Scenario selected
+`private repo paid access / malformed auth / discoverability surface`.
+
+### Environment
+- Primary host preference was remote DO (`xiko@167.71.5.215`) for serverless parity, but fixture repos and local logs were executed in `/tmp/repobox-qa-minimal2` on the current host because the required helper bootstrap is faster locally.
+- Server: local `repobox-server` on `127.0.0.1:3797`
+- Repo: `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266/minimal.git`
+- CLI binary: `/home/xiko/repobox/target/debug/repobox`
+
+### Commands run
+- `git init` + `repobox init`
+- `repobox keys import` + `identity set` (founder)
+- `git repobox alias add founder`
+- `git repobox whoami`
+- `repobox check founder push ">*"`
+- wrote `.repobox/config.yml` with `default: deny`, `founders` group, and x402 config
+- signed commit and `git push -u origin main`
+- **Unknown/no-identity clone attempt**:
+  - `git clone <private x402 origin>` (expect 402)
+- **Malformed auth clone attempt**:
+  - `GIT_TERMINAL_PROMPT=0 git -c "http.extraheader=Authorization: Basic !!bad!!" clone <origin>`
+- **Paid/unpaid metadata discovery**:
+  - `curl <origin>/x402/info`
+- local lifecycle check for pull/rebase:
+  - `git clone . <local clone>`
+  - commit update in source and `git pull --rebase` in local clone
+
+### Findings
+- Before this patch, malformed auth frequently surfaced as `could not read Username` in git, which is unclear for tokenized workflows.
+- With the fix, malformed auth now returns the same payment-required UX as missing auth for x402 repos:
+  - `remote: payment required for read access. Call .../x402/grant-access ...`
+  - includes `/x402/info` pricing metadata guidance
+- No-identity clone also returns the same explicit 402 message and metadata hints.
+- Pull/rebase lifecycle in local clone path remains functional after seeded commits.
+
+### Fix applied
+- `repobox-server/src/routes.rs`:
+  - on auth parse failures during read access checks, branch now returns `payment_required_response` (not a bare auth error) when an x402 config exists.
+  - adds clearer warning log and keeps invalid header paths on the paid-discovery track instead of username-prompt ambiguity.
+- `repobox-server/tests/smart_http.rs`:
+  - extended `x402_payment_required_response` to assert malformed `Authorization` header also returns payment-required guidance (and no username prompt text).
+- `repobox-cli/src/main.rs`:
+  - made credential helper URL parser tolerant of `http(s)://git.repo.box` with optional port and optional path prefixes, so helper can resolve repo path in local/port-forwarded test environments.
+
+### Validation
+- `cargo test -p repobox-cli` (build)
+- `cargo test -p repobox-server x402_payment_required_response -- --nocapture`
+- Manual run in `/tmp/repobox-qa-minimal2` and `/tmp/repobox-qa-minimal`
+
+### UX judgement
+- `good` after fix:
+  - malformed auth now degrades to clear payment-required guidance in <30s,
+  - x402 repos remain discoverable via `/x402/info` before login.
+- No remaining P0 observed for this scenario.
+
 ## 2026-03-22 — Private repo x402 preview + malformed auth UX pass
 
 ### Scenario selected

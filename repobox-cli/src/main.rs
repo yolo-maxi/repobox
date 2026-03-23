@@ -990,14 +990,22 @@ fn get_repo_path_from_git() -> Option<String> {
     let url = String::from_utf8(output.stdout).ok()?;
     let url = url.trim();
 
-    // Parse repo.box URLs: https://git.repo.box/address/repo.git
-    if let Some(path_part) = url.strip_prefix("https://git.repo.box/") {
-        // Strip .git suffix
-        let repo_path = path_part.strip_suffix(".git").unwrap_or(path_part);
-        Some(repo_path.to_string())
-    } else {
-        None
+    const PREFIXES: [&str; 2] = ["https://git.repo.box", "http://git.repo.box"];
+    for prefix in PREFIXES {
+        if let Some(rest) = url.strip_prefix(prefix) {
+            // Drop optional `:PORT` (if present) and any leading separator before path.
+            let repo_path = match rest.split_once('/') {
+                Some((_, path)) => path,
+                None => return None,
+            };
+
+            // Strip .git suffix
+            let repo_path = repo_path.strip_suffix(".git").unwrap_or(repo_path);
+            return Some(repo_path.to_string());
+        }
     }
+
+    None
 }
 
 /// Find the system git binary (not our shim).
