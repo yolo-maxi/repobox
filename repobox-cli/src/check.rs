@@ -36,13 +36,35 @@ fn main() -> ExitCode {
         let new_sha = parts[1];
         let ref_name = parts[2];
 
-        // Deletions don't introduce commits.
-        if new_sha == NULL_SHA {
-            continue;
-        }
-
         // Extract branch name for branch refs
         let branch_name = ref_name.strip_prefix("refs/heads/");
+
+        // Branch deletion enforcement
+        if new_sha == NULL_SHA {
+            if let Some(branch) = branch_name {
+                let pusher = get_pusher_identity_for_update(old_sha, new_sha);
+                if pusher == "unknown" {
+                    eprintln!("❌ Could not determine pusher identity for delete on {}", ref_name);
+                    reject_push = true;
+                    continue;
+                }
+
+                match check_delete_authorized(&pusher, branch) {
+                    Ok(true) => {
+                        // allowed
+                    }
+                    Ok(false) => {
+                        eprintln!("❌ Delete denied for {} on branch {}", pusher, branch);
+                        reject_push = true;
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Error checking delete permissions: {}", e);
+                        reject_push = true;
+                    }
+                }
+            }
+            continue;
+        }
 
         // Collect all new commits introduced by this ref update.
         let new_commits = match list_new_commits(Path::new("."), old_sha, new_sha) {
@@ -103,6 +125,21 @@ fn main() -> ExitCode {
 
         // Check push permission for config-enabled repos (branch-aware).
         if let Some(branch) = branch_name {
+            // New branch creation requires branch permission in addition to push.
+            if old_sha == NULL_SHA {
+                match check_branch_create_authorized(&pusher, branch) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        eprintln!("❌ Branch create denied for {} on branch {}", pusher, branch);
+                        reject_push = true;
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Error checking branch-create permissions: {}", e);
+                        reject_push = true;
+                    }
+                }
+            }
+
             match check_push_authorized(&pusher, branch) {
                 Ok(true) => {}
                 Ok(false) => {
@@ -237,6 +274,26 @@ fn get_pusher_identity(new_sha: &str) -> String {
     }
 }
 
+fn get_pusher_identity_for_update(old_sha: &str, new_sha: &str) -> String {
+    // Prefer env variables first.
+    if let Ok(pusher) = std::env::var("GL_USERNAME") {
+        return pusher;
+    }
+    if let Ok(pusher) = std::env::var("PUSHER") {
+        return pusher;
+    }
+    if let Ok(pusher) = std::env::var("GIT_PUSHER") {
+        return pusher;
+    }
+
+    // For deletions, fallback to old tip signer; otherwise use new tip signer.
+    let sha = if new_sha == NULL_SHA { old_sha } else { new_sha };
+    match extract_signer_from_commit(sha) {
+        Ok(Some(address)) => format!("evm:{}", address),
+        _ => "unknown".to_string(),
+    }
+}
+
 /// Extract EVM signer address from a commit
 fn extract_signer_from_commit(commit_sha: &str) -> std::io::Result<Option<String>> {
     let output = Command::new("git")
@@ -368,6 +425,33 @@ fn check_push_authorized(pusher: &str, branch_name: &str) -> std::io::Result<boo
     );
 
     Ok(result.is_allowed())
+}
+
+fn check_branch_verb_authorized(pusher: &str, branch_name: &str, verb: Verb) -> std::io::Result<bool> {
+    let config_path = Path::new(".repobox/config.yml");
+    if !config_path.exists() {
+        return Ok(true);
+    }
+
+    let config_content = std::fs::read_to_string(config_path)?;
+    let config = parser::parse(&config_content)
+        .map_err(|e| std::io::Error::other(format!("invalid .repobox/config.yml: {e}")))?;
+
+    let identity = match Identity::parse(pusher) {
+        Ok(id) => id,
+        Err(_) => return Ok(false),
+    };
+
+    let result = engine::check(&config, &identity, verb, Some(branch_name), None);
+    Ok(result.is_allowed())
+}
+
+fn check_branch_create_authorized(pusher: &str, branch_name: &str) -> std::io::Result<bool> {
+    check_branch_verb_authorized(pusher, branch_name, Verb::Branch)
+}
+
+fn check_delete_authorized(pusher: &str, branch_name: &str) -> std::io::Result<bool> {
+    check_branch_verb_authorized(pusher, branch_name, Verb::Delete)
 }
 
 /// Check if force push is authorized for the given pusher and branch
