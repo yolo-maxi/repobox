@@ -1,3 +1,69 @@
+## 2026-03-23 — No-identity lifecycle + branch-policy matrix
+
+### Scenario selected
+`no identity configured + commit/push/pull` deep path with founder/agent/no-identity identities.
+
+### Environment
+- DO SSH preference checked: `xiko@167.71.5.215` reachable, but repo source not available there; ran locally.
+- Server: local `repobox-server` on `127.0.0.1:3821` with fixture under `/tmp/repobox-qa-idmatrix`.
+- CLI/shim path: `/home/xiko/repobox/target/debug/repobox` and temp `PATH=$HOME/.repobox/bin:$PATH` in each identity sandbox.
+
+### Commands run
+- Founder bootstrap:
+  - `git init`, `git repobox init`, `git checkout -b main`
+  - `git repobox keys generate --alias founder`
+  - `git repobox alias add founder <founder_addr>`
+  - `git repobox whoami`
+  - `git repobox check <founder> own ">*"`
+- Agent bootstrap:
+  - `git repobox keys generate --alias agent`
+  - `git repobox alias add agent <agent_addr>`
+  - `git repobox whoami`
+- Policy setup in `.repobox/config.yml`:
+  - `default: deny`
+  - wildcard read: `* read >*`
+  - founder controls: `founders own >*`, `founders edit ./*`
+  - agent branch scope: `agents push >feature/**`, `agents branch >feature/**`, `agents edit ./* >feature/**`
+- Lifecycle operations:
+  - `git repobox check <agent> push ">feature/qa"`
+  - `git repobox check <agent> push ">main"` (expected deny)
+  - `git remote add origin ...`, `git push -u origin main`
+  - no-identity clone + `git repobox whoami` + commit attempt + `git pull --rebase`
+  - agent clone + feature branch commit + push
+  - detached clone + no-upstream branch + `git pull --rebase`
+  - founder follow-up commit + push + agent rebase
+- Static self-lockout smoke:
+  - rewrote config to `founders push >*` only + `default: deny`
+  - `git repobox lint` warning observed
+  - commit attempt blocked on founder edit
+  - add `founders edit ./*` recovery and retry committed.
+
+### Observed outputs
+- No-identity commit blocked with clear guidance:
+  - `❌ no identity configured. Run: git repobox identity set <private-key>`
+- Founder/agent rule checks:
+  - founder owns rule: ✅
+  - agent push to feature: ✅ allowed
+  - agent push to main: `implicit deny` (expected)
+- No-upstream branch pull UX:
+  - `There is no tracking information for the current branch.`
+- Clone lifecycle:
+  - `no identity configured...` warning emitted on read/clone path
+  - feature branch push by agent succeeds when permissions allow both branch + file verbs.
+- Self-lockout explicitness:
+  - `cannot append to README.md` when founder edits rights removed.
+  - recovery guidance available after adding explicit edit rule.
+
+### UX notes
+- `git repobox check` deprecation copy (`create`/`write`) is still emitted for rules expanded from `own`, but it remains a warning only.
+- No regressions requiring code patch in this story run.
+
+### Validation results
+- ✅ one deep scenario completed including lifecycle: init, whoami, alias add, check, commit, push, pull/rebase.
+- ✅ lockout guard remains explicit with remediation path.
+- ✅ no-identity failure message is understandable and short.
+
+
 
 ## 2026-03-23 — Private repo x402 paid-access flow (founder/agent/no-identity + self-lockout)
 

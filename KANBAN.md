@@ -344,3 +344,16 @@ HTTP + on-chain resolvers with caching. Alchemy proxy.
   - signed grant flow works (`access granted` + successful clone + pull/rebase).
   - paid metadata is discoverable and discoverability header is present on unauth `info/refs`.
 - Outcome: behavior accepted; recorded in `docs/spec/cli-ux-adversarial.md`.
+
+### No-identity lifecycle + no-upstream branch matrix (adversarial)
+- **Date:** 2026-03-23
+- **Agent:** repobox-qa-pipeline
+- **Status:** ✅ Completed
+- **Story:** `no identity configured + commit/push/pull` (matrix item)
+- Ran founder/agent/no-identity fixture on local server `127.0.0.1:3821`.
+- Findings:
+  - no-identity `git commit` is blocked with explicit instruction to set identity (`git repobox identity set <private-key>`).
+  - founder branch-scoped file/branch rules work (agent denied on main, allowed on `feature/` context).
+  - detached/no-upstream pull returns explicit Git guidance when upstream missing.
+  - self-lockout simulation (`founders push >*` only) gives actionable lint warning + commit block; adding explicit edit rule restores path.
+- Result: accepted; no code changes required.
