@@ -667,6 +667,39 @@ network: "base"
         "should receive 402 Payment Required, got: {}",
         stderr
     );
+
+    // Bad/malformed auth header should still surface the same discoverability UX, not an auth prompt
+    let clone_dir_bad = temp.path().join("clone-bad-header");
+    let clone_bad_str = clone_dir_bad.to_string_lossy().to_string();
+    let bad_output = Command::new("git")
+        .current_dir(temp.path())
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .args([
+            "-c",
+            "http.extraheader=Authorization: Basic !!bad!!",
+            "clone",
+            &remote,
+            &clone_bad_str,
+        ])
+        .output()
+        .unwrap();
+
+    assert!(!bad_output.status.success(), "bad auth header clone should fail");
+    assert!(!clone_dir_bad.exists(), "clone should not be created");
+
+    let bad_stderr = String::from_utf8_lossy(&bad_output.stderr);
+    assert!(
+        bad_stderr.contains("payment required for read access") ||
+            bad_stderr.contains("402") ||
+            bad_stderr.contains("Payment Required"),
+        "bad auth header should keep payment-required guidance, got: {}",
+        bad_stderr
+    );
+    assert!(
+        !bad_stderr.contains("could not read Username"),
+        "malformed auth must not degrade into username prompt, got: {}",
+        bad_stderr
+    );
 }
 
 #[test]
