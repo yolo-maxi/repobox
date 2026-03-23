@@ -38,6 +38,16 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### Private repo x402 preview/access lifecycle + identity matrix pass (no changes)
+- **Date:** 2026-03-23 | **Agent:** repobox-qa-pipeline
+- Scenario exercised: founder/agent/unknown identities against an x402 private repo, including unknown/no-identity clone, signed authorized clone, grant endpoint flow, and pull/rebase lifecycle.
+- Findings:
+  - No regressions found in this pass for payment-required guidance or discoverability (`/{repo}/x402/info`)
+  - `x402/info` returns metadata while repo content stays gated when no DB grant.
+  - Self-lockout guard for founder config edits is present and includes recovery guidance.
+- Commands: real local `repobox-server` + signed `git clone` / `grant-access` / `pull --rebase` sequence.
+- Fix status: ✅ No code changes required; this run is an adversarial regression validation entry.
+
 ### x402 malformed auth UX + local helper URL parse hardening
 - **Date:** 2026-03-23 | **Agent:** repobox-qa-pipeline
 - Added server-side handling so malformed `Authorization` headers on private x402 repos receive actionable payment-required guidance instead of username prompt failures.

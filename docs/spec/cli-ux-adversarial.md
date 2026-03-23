@@ -1,4 +1,64 @@
 
+## 2026-03-23 — Private repo x402 paid-access flow (founder/agent/no-identity + self-lockout)
+
+### Scenario selected
+`private repo paid access / x402 preview discovery / self-lockout prevention`.
+
+### Environment
+- Preferred DO host was reachable, but `/home/xiko/repobox` was missing there; run executed locally with a full fixture in `/tmp/repobox-qa-private`.
+- Server: local `repobox-server` on `127.0.0.1:3797` using data dir `/tmp/repobox-qa-remote`.
+- Repo: `0xa02B18A9eec01d5a6d331033236E29df97A4f80B/private-qa-001`.
+- CLI binary: `/home/xiko/repobox/target/debug/repobox` and shim via `PATH=/tmp/repobox-qa-private/founder-home/.repobox/bin:$PATH`.
+
+### Commands run
+- Founder fixture seed:
+  - `git init`, `git repobox init`
+  - `REPOBOX_HOME=/tmp/repobox-qa-private/founder-home git repobox keys generate --alias founder`
+  - `git repobox alias add founder evm:0xa02...`
+  - write `.repobox/config.yml` with founder/agent groups, `default: deny`, and `.repobox/x402.yml`
+  - signed commit + `git push -u origin main`
+- Identity checks:
+  - `git repobox whoami`
+  - `git repobox check founder read '>main'`
+  - `git repobox check founder edit '>main ./.repobox/config.yml'`
+  - `git repobox check evm:0x8aC6... push '>feature/test'`
+  - `git repobox whoami` with no identity directory
+- Lifecycle checks:
+  - founder commit + push on `main`
+  - `git clone` as founder with signed header, then `git pull --rebase` in authorized clone after upstream update
+- Private-read UX checks:
+  - no-identity clone (expected `402`)
+  - malformed header clone (`http.extraheader=Authorization: Basic !!bad!!`) (expected `402`)
+  - `curl .../x402/info`
+  - agent identity header clone before grant (`402` expected)
+  - POST `.../x402/grant-access`
+  - agent identity header clone after grant (`success`)
+- Linter/self-lockout check:
+  - switch to branch with PATH shim and attempt to remove founder edit rights in `.repobox/config.yml`
+  - commit blocked with explicit blocker + recovery hint.
+
+### Findings
+- Anonymous/no-identity clone is still blocked with actionable next steps:
+  - `payment required for read access...`
+  - explicit `.../x402/grant-access` and `.../x402/info` guidance.
+- Signed/authorized clone path remains blocked for unpaid agent identities until DB grant exists.
+- `x402/info` endpoint is publicly reachable and returns discoverability metadata (`for_sale`, `read_price`, recipient, memo, scheme).
+- Once grant exists, agent identity clone works.
+- Pull/rebase lifecycle works when a clone has `http..../.extraheader` persisted.
+- Self-lockout protection is active and explicit:
+  - `cannot commit this change because it removes your edit access to ./.repobox/config.yml`
+  - includes recovery text to re-add an edit rule.
+
+### Fix status
+- No code change required in this run; behavior already matches UX expectations for this story.
+- Logged as adversarial evidence for the matrix item:
+  `private repo paid access/x402 preview/discovery flow`.
+
+### Validation
+- Manual CLI + git exercises above.
+- Observed statuses: 402 guidance, lockout BLOCK, and successful post-grant authorized clone.
+
+
 ## 2026-03-23 — Private repo x402 clone UX: malformed auth hardening
 
 ### Scenario selected
