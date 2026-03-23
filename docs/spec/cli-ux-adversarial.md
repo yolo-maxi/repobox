@@ -35,6 +35,68 @@
 - Commit created in this run and pushed.
 - Follow-up remaining: add end-to-end paid-access clone success test once deterministic signature fixture is standardized.
 
+## 2026-03-23 — First-time install + founder-first push (founder/agent/no-identity matrix)
+
+### Scenario selected
+`first-time install + first successful push` (with founder, agent, no-identity flows to exercise lifecycle commands)
+
+### Environment
+- Preferred DO host was reachable but lacked `/home/xiko/repobox`, so fallback local workspace used.
+- Local server used: `target/debug/repobox-server` on `127.0.0.1:3560` with `/tmp/repobox-server` data.
+- CLI shim used: `/home/xiko/repobox/target/debug/repobox`.
+- Fixture workspace: `/tmp/repobox-qa4`.
+
+### Commands run
+- `HOME=/tmp/repobox-qa4/founder-home`
+- `repobox setup`
+- `git init`
+- `git repobox status` (baseline, before identity)
+- `git repobox keys generate --alias founder`
+- `git repobox alias add founder <evm:...>`
+- `git repobox check <founder> own ">main"`
+- `git checkout -B main`
+- wrote `.repobox/config.yml` with explicit valid founder-only allow policy and committed it with `README.md`
+- `git remote add origin http://127.0.0.1:3560/$FOUNDER_ID/founder-repo.git`
+- `git push -u origin main`
+- **No-identity clone flow:**
+  - setup identity-less shim
+  - `git clone <origin>`
+  - `git repobox status`
+  - `git pull --rebase origin main`
+- **Agent flow:**
+  - setup fresh agent home
+  - `git clone <origin>`
+  - `git repobox keys generate --alias agent`
+  - `git repobox check <agent> own ">main"`
+  - `git pull --rebase origin main`
+  - local change + `git commit` + `git push`
+
+### Findings
+- Fresh init from clean home now writes parseable `.repobox/config.yml`:
+  - no longer hits `groups must be a list, mapping, or resolver` parse error.
+- Founder path completed a clean first push to a new remote branch (`main`).
+- No-identity clone path works end-to-end for public read:
+  - clone + status + pull/rebase are usable without a local identity.
+- Agent path behaves as configured:
+  - `check` shows explicit implicit-deny for `push >main`.
+  - `git push` returns explicit `cannot push to main` with actionable rule wording.
+- One non-blocking UX issue remains: no-identity check using bare alias name (`git repobox check founder read ">main"`) fails with `invalid identity: founder` because aliases are repo-local and not populated in the clone.
+
+### Fix applied
+- `repobox-cli/src/main.rs`
+  - Updated `CONFIG_TEMPLATE` (init scaffold) to default valid empty groups:
+  - `founders: []`
+  - `agents: []`
+  - keeps placeholder guidance in comments only.
+
+### Validation
+- `cargo test -p repobox-cli -- --nocapture` passed (all tests green).
+- Scenario outputs include founder commit/push success and agent denial + pull/rebase execution in cloned repos.
+
+### UX judgment
+- `good` for first-push onboarding: config is parseable and founder path can complete in <30s.
+- `improvement` for alias UX in check: `invalid identity: founder` is technically correct but likely expected in no-alias/no-identity clones.
+
 # CLI UX Adversarial QA Log
 
 ## 2026-03-22 — Identity matrix + self-lockout verification run
