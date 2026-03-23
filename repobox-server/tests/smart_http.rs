@@ -2,7 +2,7 @@ use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use rusqlite::Connection;
 use tempdir::TempDir;
@@ -453,6 +453,20 @@ fn setup_repobox_key(temp_dir: &Path, private_key: &str, address: &str) -> PathB
     repobox_home
 }
 
+fn build_read_auth_header(
+    repobox_home: &Path,
+    signer_address: &str,
+    namespace: &str,
+    repo_name: &str,
+    timestamp: u64,
+) -> String {
+    let message = format!("{}/{}:{}", namespace, repo_name, timestamp);
+    let sig = repobox::signing::sign(repobox_home, signer_address, message.as_bytes())
+        .expect("signing should succeed for auth header helper");
+    let sig_hex = hex::encode(sig);
+    format!("Authorization: Bearer {sig_hex}:{timestamp}")
+}
+
 fn create_signed_commit(repo: &Path, repobox_home: &Path, address: &str, message: &str) -> String {
     let tree_hash = git_output(repo, &["write-tree"]);
 
@@ -806,6 +820,124 @@ network: "base"
     // TODO: In a full implementation, we would verify that the payer_address
     // was added to the paid-readers group and can now access the repo
     // For MVP, we're just testing the endpoint responds correctly
+}
+
+#[test]
+fn x402_grant_unlocks_authorized_clone() {
+    let temp = TempDir::new("repobox-server-x402-unlock-test").unwrap();
+    let data_dir = temp.path().join("data");
+    let bind = free_addr();
+    let _server = start_server(bind, &data_dir);
+
+    let private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    let owner_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+    let payer_address = owner_address;
+
+    let source_repo = init_working_repo(temp.path().join("source"));
+    let repobox_home = setup_repobox_key(temp.path(), private_key, owner_address);
+
+    // Create repo with separate x402 config
+    let config_content = r#"
+groups:
+  paid-readers: []
+
+permissions:
+  default: deny
+  rules:
+    - paid-readers read >*
+"#;
+
+    let x402_content = r#"
+read_price: "2.00"
+recipient: "0xDbbAfc2a00175D0cDDFDF130EFc9FA0fb61d2048"
+network: "base"
+"#;
+
+    std::fs::create_dir_all(&source_repo.join(".repobox")).unwrap();
+    write_file(&source_repo.join(".repobox").join("config.yml"), config_content);
+    write_file(&source_repo.join(".repobox").join("x402.yml"), x402_content);
+    write_file(&source_repo.join("README.md"), "# paid repo for unlock test\n");
+
+    git(&source_repo, &["add", "."]);
+    let commit_hash = create_signed_commit(
+        &source_repo,
+        &repobox_home,
+        owner_address,
+        "initial commit with x402",
+    );
+    git(&source_repo, &["update-ref", "HEAD", &commit_hash]);
+
+    let namespace = owner_address;
+    let repo_name = "unlock-test-repo";
+    let remote = format!("http://{bind}/{namespace}/{repo_name}.git");
+    git(&source_repo, &["remote", "add", "origin", &remote]);
+    git(
+        &source_repo,
+        &["push", "-u", "origin", "HEAD:refs/heads/main"],
+    );
+
+    // Clone without access should fail with 402 guidance.
+    let clone_dir = temp.path().join("clone-no-access");
+    let clone_str = clone_dir.to_string_lossy().to_string();
+    let output = Command::new("git")
+        .current_dir(temp.path())
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .args(["clone", &remote, &clone_str])
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "clone should fail without paid access");
+    assert!(!clone_dir.exists(), "clone should not be created when access denied");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("payment required for read access")
+            || stderr.contains("Payment Required")
+            || stderr.contains("402"),
+        "expected payment required response without access, got: {stderr}",
+    );
+
+    // Grant access with lowercase payer address to verify case-insensitive lookup.
+    let grant_url = format!("http://{bind}/{namespace}/{repo_name}.git/x402/grant-access");
+    let client = reqwest::blocking::Client::new();
+    let payload = serde_json::json!({
+        "address": payer_address.to_lowercase(),
+        "tx_hash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    });
+    let grant_response = client.post(&grant_url).json(&payload).send().unwrap();
+    let grant_status = grant_response.status();
+    let grant_text = grant_response.text().unwrap();
+    assert_eq!(
+        grant_status,
+        200,
+        "grant-access should succeed, got {} with body: {}",
+        grant_status,
+        grant_text
+    );
+
+    // Retry with valid signature-based auth to verify paid-read unlock works end-to-end.
+    let timestamp = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let auth_header = build_read_auth_header(&repobox_home, payer_address, namespace, repo_name, timestamp);
+    let clone_dir_auth = temp.path().join("clone-with-access");
+    let clone_auth_str = clone_dir_auth.to_string_lossy().to_string();
+    let clone_output = Command::new("git")
+        .current_dir(temp.path())
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .args([
+            "-c",
+            &format!("http.extraheader={auth_header}"),
+            "clone",
+            &remote,
+            &clone_auth_str,
+        ])
+        .output()
+        .unwrap();
+
+    assert!(clone_output.status.success(), "authorized clone should succeed");
+    let readme = std::fs::read_to_string(clone_dir_auth.join("README.md")).unwrap();
+    assert_eq!(readme, "# paid repo for unlock test\n");
 }
 
 #[test]

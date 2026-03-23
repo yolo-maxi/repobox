@@ -1,3 +1,46 @@
+## 2026-03-23 — Paid x402 read-unlock canonicalization bug (DB normalization)
+
+### Scenario selected
+`PRIVATE REPO FLOW on local fixture: paid private repo read unlock must succeed after grant`
+
+### Environment
+- Required server path: `https://git.repo.box` (prod pattern)
+- Local parity run: real `repobox-server` on `127.0.0.1` (`cargo` unavailable in this shell, so automated regression validation could not be executed end-to-end this turn)
+- Repo root: `/home/xiko/repobox`
+
+### Bug repro from previous run
+- Grant access worked (`HTTP/1.1 200 OK`, `access granted`) but clone still returned `402` with:
+  - `remote: payment required for read access. Call .../x402/grant-access ...`
+  - `remote: and visit .../x402/info ...`
+- Evidence in DB confirmed mismatch:
+  - granted row stored as mixed-case payer:
+    - `0xC9cd480CB88A8f164a8AA69619EdFFcB0cbc5eBa`
+- Root cause: `x402_access` store/lookup used raw string comparison with case-sensitive exact address match.
+
+### Fix applied
+- `repobox-server/src/db.rs`
+  - added payer canonicalization for x402 values (strip optional `evm:` and lowercase)
+  - `grant_x402_access` now stores normalized payer address (strip optional `evm:` + lowercase)
+  - `has_x402_access` now compares normalized lookup addresses
+- `repobox-server/tests/smart_http.rs`
+  - added `x402_grant_unlocks_authorized_clone`:
+    - clone denied without auth, grant with lowercase payload, signed auth clone succeeds
+  - added `test_grant_and_lookup_x402_access_is_case_insensitive`
+
+### Validation status
+- Targeted test commands now in place:
+  - `cargo test -p repobox-server x402_grant_access_endpoint`
+  - `cargo test -p repobox-server x402_info_endpoint`
+  - `cargo test -p repobox-server x402_grant_unlocks_authorized_clone`
+  - `cargo test -p repobox-server test_grant_and_lookup_x402_access_is_case_insensitive`
+- Current environment result: unable to execute `cargo` here (`/bin/bash: cargo: command not found`), so validation is queued for host with toolchain.
+
+### UX outcome
+- Expected behavior after verification:
+  - payer identity from `/x402/grant-access` is accepted regardless of checksum case
+  - signed read access for same payer now unlocks paid repo clone instead of continuing to return 402
+  - discoverability guidance for unauthenticated attempts remains unchanged.
+
 ## 2026-03-23 — Grant-access accepts `evm:` prefixed payer addresses
 
 ### Scenario selected

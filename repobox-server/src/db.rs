@@ -246,6 +246,14 @@ pub(crate) fn is_valid_alias_format(alias: &str) -> bool {
 }
 
 /// Grant x402 paid read access to a payer address for a repo.
+fn normalize_payer_address(address: &str) -> String {
+    address
+        .trim()
+        .strip_prefix("evm:")
+        .unwrap_or(address)
+        .to_lowercase()
+}
+
 pub(crate) fn grant_x402_access(
     db_path: &Path,
     repo_address: &str,
@@ -254,11 +262,13 @@ pub(crate) fn grant_x402_access(
     tx_hash: &str,
 ) -> std::io::Result<()> {
     let connection = Connection::open(db_path).map_err(to_io_error)?;
+    let normalized_payer = normalize_payer_address(payer_address);
+
     connection
         .execute(
             "INSERT OR IGNORE INTO x402_access(repo_address, repo_name, payer_address, tx_hash, granted_at)
              VALUES(?1, ?2, ?3, ?4, ?5)",
-            params![repo_address, repo_name, payer_address, tx_hash, now_string()],
+            params![repo_address, repo_name, normalized_payer, tx_hash, now_string()],
         )
         .map_err(to_io_error)?;
     Ok(())
@@ -272,11 +282,12 @@ pub(crate) fn has_x402_access(
     payer_address: &str,
 ) -> std::io::Result<bool> {
     let connection = Connection::open(db_path).map_err(to_io_error)?;
+    let normalized_payer = normalize_payer_address(payer_address);
     let count: i64 = connection
         .query_row(
             "SELECT COUNT(*) FROM x402_access
              WHERE repo_address = ?1 AND repo_name = ?2 AND payer_address = ?3",
-            params![repo_address, repo_name, payer_address],
+            params![repo_address, repo_name, normalized_payer],
             |row| row.get(0),
         )
         .map_err(to_io_error)?;
@@ -337,5 +348,32 @@ mod tests {
 
         // Should be the same (deterministic based on address)
         assert_eq!(alias1, alias2);
+    }
+
+    #[test]
+    fn test_grant_and_lookup_x402_access_is_case_insensitive() {
+        let temp_dir = TempDir::new("repobox_test").unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        init(&db_path).unwrap();
+
+        let repo_address = "0xabcdef1234567890abcdef1234567890abcdef12";
+        let repo_name = "paid-repo";
+        let raw_address = "0x90aB12cD34Ef560A1234567890aBcDeF56789012ab";
+        let lower_address = raw_address.to_lowercase();
+        let mixed_address = raw_address;
+
+        grant_x402_access(
+            &db_path,
+            repo_address,
+            repo_name,
+            &lower_address,
+            "0xfeedfacecafebabe",
+        )
+        .unwrap();
+
+        let found = has_x402_access(&db_path, repo_address, repo_name, mixed_address)
+            .unwrap();
+        assert!(found, "x402 access should be matched case-insensitively");
     }
 }

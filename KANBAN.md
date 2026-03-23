@@ -50,6 +50,21 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### Completed: Paid x402 read unlock case-normalization mismatch
+- **Date:** 2026-03-23
+- **Agent:** repobox-qa-pipeline
+- **Task:** `cli-ux-do-prod-private-x402-discoverability-03-23` follow-up
+- Root issue: `x402_access` grants were stored with mixed-case addresses and checked verbatim, so identity checks could miss matching checksummed grants and return false 402s after successful grant.
+- Fixes:
+  - `repobox-server/src/db.rs`
+    - normalize payer addresses for both grant persistence and read lookup
+    - strip optional `evm:` prefix + lowercase
+  - `repobox-server/tests/smart_http.rs`
+    - add `test_grant_and_lookup_x402_access_is_case_insensitive`
+    - add `x402_grant_unlocks_authorized_clone` to assert paid clone unlock
+- Validation status: test coverage added; execution pending until `cargo` is available in this environment.
+- Status: ✅ Completed (locally patched, needs toolchain-run confirmation)
+
 ### Completed: x402 grant-access accepts canonical evm: payloads
 - **Date:** 2026-03-23
 - **Agent:** repobox-qa-pipeline
