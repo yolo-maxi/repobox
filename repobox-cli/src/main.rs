@@ -1973,21 +1973,6 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                 });
 
             if status.success() {
-                // After successful git init, drop .repobox/config.yml template
-                if args.first().map(|s| s.as_str()) == Some("init") {
-                    // Determine the init target dir (git init [dir])
-                    let init_dir = args.iter()
-                        .skip(1)
-                        .find(|a| !a.starts_with('-'))
-                        .map(PathBuf::from)
-                        .unwrap_or_else(|| PathBuf::from("."));
-                    let config_dir = init_dir.join(".repobox");
-                    let config_path = config_dir.join("config.yml");
-                    if !config_path.exists() {
-                        let _ = std::fs::create_dir_all(&config_dir);
-                        let _ = std::fs::write(&config_path, CONFIG_TEMPLATE);
-                    }
-                }
                 ExitCode::SUCCESS
             } else {
                 ExitCode::FAILURE
