@@ -236,7 +236,7 @@ export default function EnsSubdomainModal({
             {error && <div className="ens-err">{error}</div>}
 
             <div className="ens-note">
-              After minting: <strong>transfer the NFT to the account you want to name</strong>.
+              After minting: <strong>transfer the NFT to the right address, or use the resolvedAddress function</strong>.
             </div>
           </div>
         </div>
