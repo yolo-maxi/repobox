@@ -1110,8 +1110,10 @@ async fn grant_access(
         Err(_) => return (StatusCode::BAD_REQUEST, "invalid x402 config").into_response(),
     };
 
+    let payer_address = payload.address.trim().strip_prefix("evm:").unwrap_or(&payload.address);
+
     // Validate payer address format
-    if repobox::config::Identity::parse(&format!("evm:{}", payload.address)).is_err() {
+    if repobox::config::Identity::parse(&format!("evm:{payer_address}")).is_err() {
         return (StatusCode::BAD_REQUEST, "invalid address format").into_response();
     }
 
@@ -1120,7 +1122,7 @@ async fn grant_access(
 
     tracing::info!(
         repo = %format!("{}/{}", repo.address, repo.name),
-        payer_address = %payload.address,
+        payer_address = %payer_address,
         tx_hash = %payload.tx_hash,
         "granting paid read access (payment verification skipped for MVP)"
     );
@@ -1130,7 +1132,7 @@ async fn grant_access(
         &state.db_path,
         &repo.address,
         &repo.name,
-        &payload.address,
+        payer_address,
         &payload.tx_hash,
     ) {
         tracing::error!(error = %e, "failed to grant x402 access");

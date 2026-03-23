@@ -50,6 +50,16 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### Completed: x402 grant-access accepts canonical evm: payloads
+- **Date:** 2026-03-23
+- **Agent:** repobox-qa-pipeline
+- **Task:** `x402_grant_access_endpoint` payload normalization
+- Root issue: payer identity with `evm:` prefix was rejected with `invalid address format` (payload assumed raw hex only).
+- Fix: normalize grant payload address in `repobox-server/src/routes.rs` by stripping optional `evm:` before validation/DB write and add prefixed-case regression in `repobox-server/tests/smart_http.rs::x402_grant_access_endpoint`.
+- Validation: targeted server tests pass; manual curl now returns `200 OK` and `access granted` for prefixed address.
+- Status: ✅ Completed
+
+
 ### P0 fix: reject legacy top-level `rules/default` config shape (prevents silent policy bypass)
 - **Date:** 2026-03-23
 - **Agent:** repobox-qa-pipeline

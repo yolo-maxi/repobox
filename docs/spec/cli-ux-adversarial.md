@@ -1,3 +1,66 @@
+## 2026-03-23 — Grant-access accepts `evm:` prefixed payer addresses
+
+### Scenario selected
+`PRIVATE REPO FLOW on DO: private repo paid-access/preview + discoverability`
+
+### Environment
+- DO preference: `xiko@167.71.5.215` preferred first; fallback used (`/home/xiko/repobox` absent on DO path)
+- Execution environment: `/tmp/repobox-qa-cycle-4` with local `repobox-server` on `127.0.0.1:37993`
+- CLI/shim path: `/home/xiko/repobox/target/debug/repobox`
+- Server path: `/tmp/repobox-qa-cycle-2/data`
+
+### Identities exercised
+- founder: `evm:0xE0D08f39d05C0B4e50501E69Ed75F72e3F8d44e6`
+- agent: `evm:0x78eb9484933B33Be02C1753E3855D2D191650575`
+- unknown/no identity (fresh clone without `~/.repobox/identity`)
+
+### Commands run (exact flow)
+- `git repobox keys generate --alias founder`
+- `git repobox keys generate --alias agent`
+- `git init`
+- `git repobox init --force`
+- write `.repobox/config.yml` + `.repobox/x402.yml`
+- `git repobox lint`
+- `git commit -m "chore: add private policy + x402"`
+- `git remote add origin http://127.0.0.1:37993/<founder>/private-adversarial.git`
+- `git push -u origin main`
+- `git clone <origin>` with no identity
+- `curl <origin>/.git/x402/info`
+- `curl -X POST <origin>/.git/x402/grant-access`
+- `cat /tmp/repobox-qa-cycle-4/scenario.log`
+- `cargo test -p repobox-server x402_grant_access_endpoint -- --nocapture`
+- `cargo test -p repobox-server x402_info_endpoint -- --nocapture`
+
+### Exact notable output
+- No-identity read UX stayed actionable:
+  - `remote: payment required for read access. Call /.../x402/grant-access ...`
+  - `fatal: ... returned error: 402`
+- Initial grant probe with prefixed identity failed (expected from old behavior):
+  - `HTTP/1.1 400 Bad Request ... invalid address format`
+- After fix, prefixed probe now succeeds:
+  - `HTTP/1.1 200 OK ... access granted`
+- x402 metadata remained discoverable:
+  - `{"currency":"USDC","for_sale":true,...,"read_price":"2.50",...}`
+- Self-lockout guard remains explicit:
+  - `cannot commit this change because it removes your edit access to ./.repobox/config.yml.`
+  - recovery text printed in the same error.
+
+### Fix applied
+- `repobox-server/src/routes.rs`
+  - normalize `grant_access` payer address by stripping optional `evm:` prefix
+  - persist normalized address for validation + DB grant write
+- `repobox-server/tests/smart_http.rs`
+  - added acceptance assertion for `address: "evm:<0x...>"` in `x402_grant_access_endpoint`
+
+### Validation / pass-fail
+- `cargo test -p repobox-server x402_grant_access_endpoint -- --nocapture` ✅
+- `cargo test -p repobox-server x402_info_endpoint -- --nocapture` ✅
+- manual server smoke via curl against updated binary ✅
+
+### UX judgement
+- ✅ Partial P0 reduction: paid-access grant payload now accepts canonical `evm:` identity format, removing an immediate integration failure.
+- ⚠️ Remaining high-priority work: paid read unlock + clone workflow still cannot be fully validated in local host without repo-box host-based helper path adjustments.
+
 ## 2026-03-23 — Legacy config self-lockout bypass in private x402 flow (P0)
 
 ### Scenario selected

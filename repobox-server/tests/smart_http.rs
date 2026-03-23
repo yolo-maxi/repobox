@@ -784,6 +784,25 @@ network: "base"
         status, text
     );
 
+    // Accept canonical evm: prefix payloads too.
+    let prefixed_payload = serde_json::json!({
+        "address": format!("evm:{payer_address}"),
+        "tx_hash": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+    });
+    let prefixed_response = client
+        .post(&grant_url)
+        .json(&prefixed_payload)
+        .send()
+        .unwrap();
+    let prefixed_status = prefixed_response.status();
+    let prefixed_text = prefixed_response.text().unwrap();
+    assert_eq!(
+        prefixed_status, 200,
+        "grant-access should also accept evm:address, got {} with body: {}",
+        prefixed_status,
+        prefixed_text
+    );
+
     // TODO: In a full implementation, we would verify that the payer_address
     // was added to the paid-readers group and can now access the repo
     // For MVP, we're just testing the endpoint responds correctly
