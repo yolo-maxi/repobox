@@ -92,7 +92,7 @@ function commitSignerAddress(commit: Commit): string | null {
 function ContributorCard({ contributor }: { contributor: Contributor }) {
   const ensName = useENSName(contributor.address);
   return (
-    <Link href={`/explore/${contributor.address}`} className="rd-contributor-card">
+    <Link href={`/${contributor.address}`} className="rd-contributor-card">
       <div className="rd-contributor-header">
         <div className="rd-contributor-avatar">
           {ensName ? ensName.charAt(0).toUpperCase() : '0x'}
@@ -159,12 +159,12 @@ export default function RepoPage() {
             if (rev.ok) {
               const d = await rev.json();
               const canonical = (d?.tier === 'purchased' && d?.alias) ? d.alias : resolved;
-              router.replace(`/explore/${canonical}/${name}`);
+              router.replace(`/${canonical}/${name}`);
             } else {
-              router.replace(`/explore/${resolved}/${name}`);
+              router.replace(`/${resolved}/${name}`);
             }
           } catch {
-            router.replace(`/explore/${resolved}/${name}`);
+            router.replace(`/${resolved}/${name}`);
           }
         } else { setNotFound(true); }
       } catch { setNotFound(true); }
@@ -264,8 +264,8 @@ export default function RepoPage() {
     ? undefined
     : (addressOrName || undefined);
   const breadcrumbHref = addressOrName
-    ? `/explore/${encodeURIComponent(addressOrName)}`
-    : `/explore/${repo.owner_address}`;
+    ? `/${encodeURIComponent(addressOrName)}`
+    : `/${repo.owner_address}`;
 
   // Sort files: directories first, then alphabetical
   const sortedFiles = [...currentFiles].sort((a, b) => {

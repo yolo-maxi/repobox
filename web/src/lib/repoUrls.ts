@@ -4,23 +4,23 @@
 
 export const repoUrls = {
   home: (addr: string, name: string) => 
-    `/explore/${addr}/${name}`,
+    `/${addr}/${name}`,
   
   tree: (addr: string, name: string, branch: string, path: string = '') => {
     const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-    return `/explore/${addr}/${name}/tree/${branch}${cleanPath ? `/${cleanPath}` : ''}`;
+    return `/${addr}/${name}/tree/${branch}${cleanPath ? `/${cleanPath}` : ''}`;
   },
   
   blob: (addr: string, name: string, branch: string, path: string) => {
     const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-    return `/explore/${addr}/${name}/blob/${branch}/${cleanPath}`;
+    return `/${addr}/${name}/blob/${branch}/${cleanPath}`;
   },
   
   commits: (addr: string, name: string, branch: string) =>
-    `/explore/${addr}/${name}/commits/${branch}`,
+    `/${addr}/${name}/commits/${branch}`,
   
   commit: (addr: string, name: string, hash: string) =>
-    `/explore/${addr}/${name}/commit/${hash}`,
+    `/${addr}/${name}/commit/${hash}`,
 };
 
 /**

@@ -155,7 +155,7 @@ export default function CommitsPage() {
         <div className="explore-main-header-content">
           <Link href="/explore" className="explore-breadcrumb-link">Explore</Link>
           <span className="explore-breadcrumb-separator">/</span>
-          <Link href={`/explore/${repo.owner_address}`} className="explore-breadcrumb-link">
+          <Link href={`/${repo.owner_address}`} className="explore-breadcrumb-link">
             {formatAddress(repo.owner_address)}
           </Link>
           <span className="explore-breadcrumb-separator">/</span>

@@ -136,7 +136,7 @@ export default function ExploreSidebar({
             {activity.map(item => (
               <div key={item.id} className="explore-sidebar-activity-item">
                 <Link
-                  href={`/explore/${item.address}/${item.name}`}
+                  href={`/${item.address}/${item.name}`}
                   className="explore-sidebar-activity-link"
                 >
                   {item.name}

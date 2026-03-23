@@ -60,7 +60,7 @@ function RepoCard({ repo, formatCommitCount }: { repo: Repo; formatCommitCount: 
 
   return (
     <Link
-      href={`/explore/${repo.address}/${repo.name}`}
+      href={`/${repo.address}/${repo.name}`}
       className={`explore-repo-item ${isRecentlyActive ? 'recently-active' : ''}`}
     >
       <div className="explore-repo-item-header">
@@ -106,7 +106,7 @@ function ContributorRepoCard({ repo }: { repo: ContributorRepo }) {
 
   return (
     <Link
-      href={`/explore/${repo.address}/${repo.name}`}
+      href={`/${repo.address}/${repo.name}`}
       className={`explore-repo-item ${isRecentlyActive ? 'recently-active' : ''}`}
     >
       <div className="explore-repo-item-header">
@@ -204,7 +204,7 @@ export default function AddressPage() {
               const d = await rev.json();
               const canonical = (d?.tier === 'purchased' && d?.alias) ? d.alias : resolved;
               if (canonical.toLowerCase() !== String(addressOrName).toLowerCase()) {
-                router.replace(`/explore/${canonical}`);
+                router.replace(`/${canonical}`);
               }
             }
           } catch {

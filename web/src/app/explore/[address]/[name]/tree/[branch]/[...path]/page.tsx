@@ -94,7 +94,7 @@ export default function TreePage() {
           <div className="tree-breadcrumb">
             <Link href="/explore">explore</Link>
             <span>/</span>
-            <Link href={`/explore/${address}`}>{formatAddress(address)}</Link>
+            <Link href={`/${address}`}>{formatAddress(address)}</Link>
             <span>/</span>
             <Link href={repoUrls.home(address, name)}>{name}</Link>
             <span>/</span>

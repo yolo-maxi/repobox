@@ -98,7 +98,7 @@ export default function CommitPage() {
         <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--bp-dim)', flexWrap: 'wrap' }}>
           <Link href="/explore" style={{ color: 'var(--bp-accent)', textDecoration: 'none' }}>explore</Link>
           <span>/</span>
-          <Link href={`/explore/${address}`} style={{ color: 'var(--bp-accent)', textDecoration: 'none' }}>{formatAddress(address)}</Link>
+          <Link href={`/${address}`} style={{ color: 'var(--bp-accent)', textDecoration: 'none' }}>{formatAddress(address)}</Link>
           <span>/</span>
           <Link href={repoUrls.home(address, name)} style={{ color: 'var(--bp-accent)', textDecoration: 'none' }}>{name}</Link>
           <span>/</span>

@@ -123,7 +123,7 @@ export default function ExplorePage() {
                   <div key={item.id} className="explore-activity-item">
                     <div className="explore-activity-dot" />
                     <div>
-                      <Link href={`/explore/${item.address}/${item.name}`} className="explore-activity-name">
+                      <Link href={`/${item.address}/${item.name}`} className="explore-activity-name">
                         {item.name}
                       </Link>
                       {item.commit_message && (
@@ -179,7 +179,7 @@ export default function ExplorePage() {
                 {filtered.map((repo) => (
                   <Link
                     key={`${repo.address}/${repo.name}`}
-                    href={`/explore/${repo.address}/${repo.name}`}
+                    href={`/${repo.address}/${repo.name}`}
                     className="explore-repo-row"
                   >
                     <div className="explore-repo-info">

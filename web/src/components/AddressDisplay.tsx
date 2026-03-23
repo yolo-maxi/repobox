@@ -82,7 +82,7 @@ export default function AddressDisplay({
   
   // Link uses name slug when available, otherwise address
   const slug = identity?.slug || address;
-  const linkHref = href || (linkable ? `/explore/${encodeURIComponent(slug)}` : undefined);
+  const linkHref = href || (linkable ? `/${encodeURIComponent(slug)}` : undefined);
 
   // Tier-specific CSS class
   const tierClass = `address-display--tier-${tier}`;
