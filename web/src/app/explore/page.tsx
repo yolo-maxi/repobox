@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
 import { EmptyRepository, NoSearchResults, QuietActivity } from '@/components/illustrations';
@@ -34,10 +33,8 @@ export default function ExplorePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'latest' | 'commits' | 'name'>('commits');
   const [showDemo, setShowDemo] = useState(true);
-  const searchParams = useSearchParams();
-  const mintParam = (searchParams.get('mint') || '').toLowerCase();
-  const shouldAutoOpenMint = ['1', 'true', 'yes', 'open'].includes(mintParam);
-  const prefillMintName = searchParams.get('name') || '';
+  const [shouldAutoOpenMint, setShouldAutoOpenMint] = useState(false);
+  const [prefillMintName, setPrefillMintName] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -62,6 +59,14 @@ export default function ExplorePage() {
     }, 30000);
     return () => clearInterval(iv);
   }, [sortBy]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const mintParam = (params.get('mint') || '').toLowerCase();
+    setShouldAutoOpenMint(['1', 'true', 'yes', 'open'].includes(mintParam));
+    setPrefillMintName(params.get('name') || '');
+  }, []);
 
   const realRepos = repos.filter(r => !r.name.startsWith('demo-hackathon-') && r.name !== 'private-test');
   const demoRepos = repos.filter(r => r.name.startsWith('demo-hackathon-') || r.name === 'private-test');
