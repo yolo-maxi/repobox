@@ -66,13 +66,17 @@ fn main() -> ExitCode {
         }
 
         // Enforce signatures on every newly introduced commit.
+        // Keep signer per commit for file-level permission checks.
         let mut tip_pusher: Option<String> = None;
+        let mut commit_signers: Vec<(String, String)> = Vec::new();
         for sha in &new_commits {
             match extract_signer_from_commit(sha) {
                 Ok(Some(address)) => {
+                    let signer = format!("evm:{}", address);
                     if sha == new_sha {
-                        tip_pusher = Some(format!("evm:{}", address));
+                        tip_pusher = Some(signer.clone());
                     }
+                    commit_signers.push((sha.clone(), signer));
                 }
                 Ok(None) => {
                     eprintln!(
@@ -132,6 +136,15 @@ fn main() -> ExitCode {
                 Ok(false) => {}
                 Err(e) => {
                     eprintln!("❌ Error checking for force push: {}", e);
+                    reject_push = true;
+                }
+            }
+
+            // Server-side file verb enforcement: edit/write/append/upload checks per pushed commit.
+            // This closes bypasses where branch push is allowed but file-level policy should deny.
+            for (sha, signer) in &commit_signers {
+                if let Err(msg) = check_commit_file_permissions(signer, branch, sha) {
+                    eprintln!("❌ File permission denied on {} by {}: {}", &sha[..8.min(sha.len())], signer, msg);
                     reject_push = true;
                 }
             }
@@ -391,6 +404,234 @@ fn check_force_push_authorized(pusher: &str, branch_name: &str) -> std::io::Resu
     );
 
     Ok(result.is_allowed())
+}
+
+/// Enforce file-level permissions for all files changed in a commit.
+/// Uses commit diff classification into upload/append/insert/edit and applies
+/// the same verb hierarchy semantics used by the local shim.
+fn check_commit_file_permissions(pusher: &str, branch_name: &str, commit_sha: &str) -> std::io::Result<()> {
+    let config_path = Path::new(".repobox/config.yml");
+    if !config_path.exists() {
+        // No policy = no file checks.
+        return Ok(());
+    }
+
+    let config_content = std::fs::read_to_string(config_path)?;
+    let config = parser::parse(&config_content)
+        .map_err(|e| std::io::Error::other(format!("invalid .repobox/config.yml: {e}")))?;
+
+    let identity = Identity::parse(pusher)
+        .map_err(|_| std::io::Error::other(format!("invalid identity: {pusher}")))?;
+
+    let changed = list_changed_files_in_commit(commit_sha)?;
+    let parent = parent_of_commit(commit_sha)?;
+
+    for (status, path) in changed {
+        let verb = classify_commit_file_change(commit_sha, parent.as_deref(), &status, &path)?;
+
+        // Hierarchy: edit > insert > append > upload
+        let verbs_to_check: Vec<Verb> = match verb {
+            Verb::Edit => vec![Verb::Edit],
+            Verb::Insert => vec![Verb::Insert, Verb::Edit],
+            Verb::Append => vec![Verb::Append, Verb::Insert, Verb::Edit],
+            Verb::Upload => vec![Verb::Upload, Verb::Append, Verb::Insert, Verb::Edit],
+            _ => vec![verb],
+        };
+
+        let mut explicit_deny: Option<Verb> = None;
+        let mut any_allowed = false;
+
+        for &check_verb in &verbs_to_check {
+            // Support configs written with or without ./ prefix.
+            let path_variants = [path.clone(), format!("./{path}")];
+            let mut result = engine::check(&config, &identity, check_verb, Some(branch_name), Some(&path_variants[0]));
+            if !result.is_allowed() {
+                let alt = engine::check(&config, &identity, check_verb, Some(branch_name), Some(&path_variants[1]));
+                if alt.is_allowed() {
+                    result = alt;
+                }
+            }
+
+            if matches!(result, engine::CheckResult::Deny { .. }) {
+                explicit_deny = Some(check_verb);
+                break;
+            }
+            if result.is_allowed() {
+                any_allowed = true;
+            }
+        }
+
+        if let Some(v) = explicit_deny {
+            return Err(std::io::Error::other(format!(
+                "{} cannot {} {} on >{}",
+                pusher,
+                verb_display(v),
+                path,
+                branch_name
+            )));
+        }
+
+        if !any_allowed {
+            return Err(std::io::Error::other(format!(
+                "{} cannot {} {} on >{}",
+                pusher,
+                verb_display(verb),
+                path,
+                branch_name
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn verb_display(v: Verb) -> &'static str {
+    match v {
+        Verb::Upload => "upload",
+        Verb::Append => "append to",
+        Verb::Insert => "insert into",
+        Verb::Edit => "edit",
+        _ => "modify",
+    }
+}
+
+fn parent_of_commit(commit_sha: &str) -> std::io::Result<Option<String>> {
+    let output = Command::new("git")
+        .args(["rev-list", "--parents", "-n", "1", commit_sha])
+        .output()?;
+
+    if !output.status.success() {
+        return Err(std::io::Error::other("git rev-list --parents failed"));
+    }
+
+    let line = String::from_utf8_lossy(&output.stdout);
+    let mut parts = line.split_whitespace();
+    let _commit = parts.next();
+    Ok(parts.next().map(|s| s.to_string()))
+}
+
+fn list_changed_files_in_commit(commit_sha: &str) -> std::io::Result<Vec<(String, String)>> {
+    let output = Command::new("git")
+        .args(["show", "--name-status", "--format=", commit_sha])
+        .output()?;
+
+    if !output.status.success() {
+        return Err(std::io::Error::other("git show --name-status failed"));
+    }
+
+    let mut out = Vec::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        let status = parts[0].to_string();
+        // For renames/copies, use destination path (last column).
+        let path = parts.last().unwrap_or(&"").to_string();
+        if !path.is_empty() {
+            out.push((status, path));
+        }
+    }
+    Ok(out)
+}
+
+fn classify_commit_file_change(commit_sha: &str, parent: Option<&str>, status: &str, path: &str) -> std::io::Result<Verb> {
+    // Added file is always upload.
+    if status.starts_with('A') {
+        return Ok(Verb::Upload);
+    }
+
+    // Deleted or renamed files are non-append edits by definition.
+    if status.starts_with('D') || status.starts_with('R') || status.starts_with('C') {
+        return Ok(Verb::Edit);
+    }
+
+    // Root commit without parent: conservative fallback.
+    let parent = match parent {
+        Some(p) => p,
+        None => return Ok(Verb::Edit),
+    };
+
+    let numstat = Command::new("git")
+        .args(["diff", "--numstat", parent, commit_sha, "--", path])
+        .output()?;
+
+    if !numstat.status.success() {
+        return Ok(Verb::Edit);
+    }
+
+    let line = String::from_utf8_lossy(&numstat.stdout);
+    let parts: Vec<&str> = line.trim().split('\t').collect();
+    if parts.len() < 2 {
+        return Ok(Verb::Edit);
+    }
+
+    let additions: u64 = parts[0].parse().unwrap_or(0);
+    let deletions: u64 = parts[1].parse().unwrap_or(0);
+
+    if additions > 0 && deletions == 0 {
+        let orig_lines = original_line_count(parent, path)?;
+        if is_append_only_in_commit(parent, commit_sha, path, orig_lines)? {
+            return Ok(Verb::Append);
+        }
+        return Ok(Verb::Insert);
+    }
+
+    Ok(Verb::Edit)
+}
+
+fn original_line_count(parent: &str, path: &str) -> std::io::Result<u64> {
+    let output = Command::new("git")
+        .args(["show", &format!("{parent}:{path}")])
+        .output()?;
+
+    if !output.status.success() {
+        return Ok(0);
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).lines().count() as u64)
+}
+
+fn is_append_only_in_commit(parent: &str, commit_sha: &str, path: &str, orig_lines: u64) -> std::io::Result<bool> {
+    let output = Command::new("git")
+        .args(["diff", "-U0", parent, commit_sha, "--", path])
+        .output()?;
+
+    if !output.status.success() {
+        return Ok(false);
+    }
+
+    let diff = String::from_utf8_lossy(&output.stdout);
+    for line in diff.lines() {
+        if !line.starts_with("@@") {
+            continue;
+        }
+        if let Some(old_range) = line.split_whitespace().nth(1) {
+            let old_range = old_range.strip_prefix('-').unwrap_or(old_range);
+            let old_start: u64 = old_range
+                .split(',')
+                .next()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            let old_count: u64 = old_range
+                .split(',')
+                .nth(1)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1);
+
+            if old_count > 0 {
+                return Ok(false);
+            }
+            if old_start < orig_lines {
+                return Ok(false);
+            }
+        }
+    }
+
+    Ok(true)
 }
 
 #[cfg(test)]
