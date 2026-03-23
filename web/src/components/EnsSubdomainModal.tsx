@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ethers } from 'ethers';
 
 const MINT_ADDRESS = '0x09c4D67e3491EeFBe2a51eaBF1E473e3Ee0B8518';
@@ -17,6 +17,8 @@ type Availability = 'unknown' | 'checking' | 'available' | 'taken';
 interface EnsSubdomainModalProps {
   triggerLabel?: string;
   className?: string;
+  initialOpen?: boolean;
+  prefillName?: string;
 }
 
 function normalizeName(input: string): string {
@@ -29,12 +31,14 @@ function isValidName(name: string): boolean {
 
 export default function EnsSubdomainModal({
   triggerLabel = 'Get ENS Subdomain',
-  className = ''
+  className = '',
+  initialOpen = false,
+  prefillName = ''
 }: EnsSubdomainModalProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [wallet, setWallet] = useState<string | null>(null);
   const [priceEth, setPriceEth] = useState<string | null>(null);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(normalizeName(prefillName));
   const [availability, setAvailability] = useState<Availability>('unknown');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +46,15 @@ export default function EnsSubdomainModal({
 
   const normalizedName = useMemo(() => normalizeName(name), [name]);
   const fullName = normalizedName ? `${normalizedName}.repobox.eth` : '';
+
+  useEffect(() => {
+    if (initialOpen) setOpen(true);
+  }, [initialOpen]);
+
+  useEffect(() => {
+    if (!prefillName) return;
+    setName(normalizeName(prefillName));
+  }, [prefillName]);
 
   async function getProvider(): Promise<ethers.BrowserProvider> {
     const eth = (window as any).ethereum;

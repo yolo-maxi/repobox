@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { formatTimeAgo, formatAddress } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
 import { EmptyRepository, NoSearchResults, QuietActivity } from '@/components/illustrations';
 import { SiteNav } from '@/components/SiteNav';
 import AddressDisplay from '@/components/AddressDisplay';
+import EnsSubdomainModal from '@/components/EnsSubdomainModal';
 
 function truncateMsg(msg: string, max = 60): string {
   if (msg.length <= max) return msg;
@@ -32,6 +34,10 @@ export default function ExplorePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'latest' | 'commits' | 'name'>('latest');
   const [showDemo, setShowDemo] = useState(true);
+  const searchParams = useSearchParams();
+  const mintParam = (searchParams.get('mint') || '').toLowerCase();
+  const shouldAutoOpenMint = ['1', 'true', 'yes', 'open'].includes(mintParam);
+  const prefillMintName = searchParams.get('name') || '';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -143,17 +149,24 @@ export default function ExplorePage() {
           {/* Header bar */}
           <div className="explore-main-header">
             <h1 className="explore-title">Repositories</h1>
-            <div className="explore-search-wrap">
-              <svg className="explore-search-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M10.68 11.74a6 6 0 0 1-7.92-8.98 6 6 0 0 1 8.98 7.92l3.81 3.81a.75.75 0 0 1-1.06 1.06l-3.81-3.81zM6.5 11a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z"/>
-              </svg>
-              <input
-                type="text"
-                placeholder="Search…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="explore-search"
+            <div className="explore-main-header-actions">
+              <EnsSubdomainModal
+                triggerLabel="Mint ENS name"
+                initialOpen={shouldAutoOpenMint}
+                prefillName={prefillMintName}
               />
+              <div className="explore-search-wrap">
+                <svg className="explore-search-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M10.68 11.74a6 6 0 0 1-7.92-8.98 6 6 0 0 1 8.98 7.92l3.81 3.81a.75.75 0 0 1-1.06 1.06l-3.81-3.81zM6.5 11a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z"/>
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search…"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="explore-search"
+                />
+              </div>
             </div>
           </div>
 
@@ -368,6 +381,11 @@ export default function ExplorePage() {
           color: var(--bp-heading);
           letter-spacing: -0.3px;
         }
+        .explore-main-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
         .explore-search-wrap {
           position: relative;
           width: 220px;
@@ -535,6 +553,11 @@ export default function ExplorePage() {
             flex-direction: column;
             gap: 10px;
             align-items: flex-start;
+          }
+          .explore-main-header-actions {
+            width: 100%;
+            flex-direction: column;
+            align-items: stretch;
           }
           .explore-search-wrap {
             width: 100%;
