@@ -467,65 +467,67 @@ export default function AddressPage() {
           <ActivityHeatmap activity={profileData.activity} />
         )}
 
-        {/* Owned Repositories */}
-        <div className="explore-content-section">
-          <div className="explore-section-header">
-            <h2 className="explore-section-title">Repositories</h2>
+        <div className="explore-profile-sections-grid">
+          {/* Owned Repositories */}
+          <div className="explore-content-section">
+            <div className="explore-section-header">
+              <h2 className="explore-section-title">Repositories</h2>
+            </div>
+
+            {loading ? (
+              <div className="explore-repo-grid">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="explore-repo-item skeleton">
+                    <div className="explore-repo-item-header">
+                      <div className="explore-repo-item-name skeleton-line"></div>
+                      <div className="explore-repo-item-language skeleton-dot"></div>
+                    </div>
+                    <div className="explore-repo-item-description skeleton-line short"></div>
+                    <div className="explore-repo-item-meta">
+                      <span className="skeleton-line tiny"></span>
+                      <span className="skeleton-line tiny"></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : repos.length === 0 ? (
+              <EmptyState
+                illustration={EmptyRepository}
+                title="No repositories found"
+                description="This developer hasn't published any repositories yet"
+                size="lg"
+              />
+            ) : (
+              <div className="explore-repo-grid">
+                {repos.map((repo) => (
+                  <RepoCard
+                    key={`${repo.address}/${repo.name}`}
+                    repo={repo}
+                    formatCommitCount={formatCommitCount}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
-          {loading ? (
-            <div className="explore-repo-grid">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="explore-repo-item skeleton">
-                  <div className="explore-repo-item-header">
-                    <div className="explore-repo-item-name skeleton-line"></div>
-                    <div className="explore-repo-item-language skeleton-dot"></div>
-                  </div>
-                  <div className="explore-repo-item-description skeleton-line short"></div>
-                  <div className="explore-repo-item-meta">
-                    <span className="skeleton-line tiny"></span>
-                    <span className="skeleton-line tiny"></span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : repos.length === 0 ? (
-            <EmptyState
-              illustration={EmptyRepository}
-              title="No repositories found"
-              description="This developer hasn't published any repositories yet"
-              size="lg"
-            />
-          ) : (
-            <div className="explore-repo-grid">
-              {repos.map((repo) => (
-                <RepoCard
-                  key={`${repo.address}/${repo.name}`}
-                  repo={repo}
-                  formatCommitCount={formatCommitCount}
-                />
-              ))}
+          {/* Contributor Repos */}
+          {!loading && contributorRepos.length > 0 && (
+            <div className="explore-content-section">
+              <div className="explore-section-header">
+                <h2 className="explore-section-title">Latest contributions</h2>
+              </div>
+
+              <div className="explore-repo-grid">
+                {contributorRepos.map((repo) => (
+                  <ContributorRepoCard
+                    key={`contrib-${repo.address}/${repo.name}`}
+                    repo={repo}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
-
-        {/* Contributor Repos */}
-        {!loading && contributorRepos.length > 0 && (
-          <div className="explore-content-section">
-            <div className="explore-section-header">
-              <h2 className="explore-section-title">Latest contributions</h2>
-            </div>
-
-            <div className="explore-repo-grid">
-              {contributorRepos.map((repo) => (
-                <ContributorRepoCard
-                  key={`contrib-${repo.address}/${repo.name}`}
-                  repo={repo}
-                />
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1269,6 +1269,24 @@ html {
   margin-bottom: 48px;
 }
 
+.explore-profile-sections-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 1100px) {
+  .explore-profile-sections-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 28px;
+  }
+
+  .explore-profile-sections-grid .explore-content-section {
+    margin-bottom: 0;
+  }
+}
+
 .explore-section-header {
   display: flex;
   align-items: center;
