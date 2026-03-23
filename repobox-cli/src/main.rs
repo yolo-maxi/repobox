@@ -15,10 +15,19 @@ const CONFIG_TEMPLATE: &str = r#"# repo.box configuration
 # Docs: https://repo.box/docs
 
 groups:
-  founders:
-    # - evm:0xYOUR_ADDRESS_HERE
-  agents:
-    # - evm:0xAGENT_ADDRESS_HERE
+  founders: []
+  agents: []
+
+  # Optional: populate founders directly
+  # founders:
+  #   - evm:0xYOUR_ADDRESS_HERE
+  #
+  # Optional: add nested members/includes style
+  # founders:
+  #   members:
+  #     - evm:0xYOUR_ADDRESS_HERE
+  #   includes:
+  #     - agents
 
 permissions:
   default: allow

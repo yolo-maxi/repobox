@@ -38,6 +38,14 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### First-time install + first push onboarding hardening
+- **Date:** 2026-03-23 | **Agent:** repobox-qa-pipeline
+- Covered founder/agent/no-identity lifecycle end-to-end: setup, identity, alias, check, commit, push, clone, pull/rebase.
+- Fixed stale first-run config scaffold bug by updating `.repobox/config.yml` template defaults to parse-safe empty groups (`founders: []`, `agents: []`) in `repobox-cli/src/main.rs`.
+- Result: clean first-time install path now avoids YAML parse failure and supports successful founder first push.
+- Commit: `80514e8`
+- Status: ✅ Completed
+
 ### x402 preview endpoint + payment-required UX improvement
 - **Date:** 2026-03-22 | **Agent:** repobox-qa-pipeline
 - Added discoverability endpoint `/{address}/{repo}.git/x402/info` and expanded 402 response body with grant + preview URLs.
