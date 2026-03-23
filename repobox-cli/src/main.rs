@@ -118,9 +118,18 @@ enum Commands {
     Status,
     /// Configure git to use repobox as the command interceptor
     Setup {
-        /// Remove repobox git hooks
+        /// Remove repobox PATH shim setup
         #[arg(long)]
         remove: bool,
+
+        /// Replace system git binaries (/usr/bin/git, /bin/git) with repobox wrapper symlink
+        /// and keep a backup copy for restoration.
+        #[arg(long)]
+        replace_binary: bool,
+
+        /// Restore system git binaries from repobox backup copy.
+        #[arg(long)]
+        restore_binary: bool,
     },
     /// Git credential helper (called by git automatically)
     #[command(name = "credential-helper", hide = true)]
@@ -228,7 +237,9 @@ fn main() -> ExitCode {
         }
         Some(Commands::Lint) => cmd_lint(),
         Some(Commands::Status) => cmd_status(&home),
-        Some(Commands::Setup { remove }) => cmd_setup(remove),
+        Some(Commands::Setup { remove, replace_binary, restore_binary }) => {
+            cmd_setup(remove, replace_binary, restore_binary)
+        }
         Some(Commands::CredentialHelper { action }) => cmd_credential_helper(&action, &home),
         Some(Commands::Hook { hook, args }) => cmd_hook(&hook, &args, &home),
         None => {
@@ -300,7 +311,7 @@ fn cmd_init(force: bool) -> ExitCode {
     let shim_path = repobox_home.join("bin").join("git");
     if !shim_path.exists() {
         println!("   Setting up git shim (first time on this machine)...");
-        cmd_setup(false);
+        cmd_setup(false, false, false);
     }
 
     // Store real git path in ~/.repobox/real-git (system-level, not per-repo)
@@ -857,12 +868,93 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
 
 // ── Setup ─────────────────────────────────────────────────────────────
 
-fn cmd_setup(remove: bool) -> ExitCode {
+fn cmd_setup(remove: bool, replace_binary: bool, restore_binary: bool) -> ExitCode {
+    if remove && (replace_binary || restore_binary) {
+        eprintln!("error: --remove cannot be combined with --replace-binary/--restore-binary");
+        return ExitCode::FAILURE;
+    }
+
+    if replace_binary && restore_binary {
+        eprintln!("error: choose either --replace-binary or --restore-binary");
+        return ExitCode::FAILURE;
+    }
+
     let home = home_dir();
     let repobox_home = identity::repobox_home_with_base(&home);
     let bin_dir = repobox_home.join("bin");
     let shim_path = bin_dir.join("git");
     let real_git_path = repobox_home.join("real-git");
+    let system_git_backup = bin_dir.join("git.system.real");
+
+    if restore_binary {
+        if !system_git_backup.exists() {
+            eprintln!(
+                "error: no backup found at {}. Cannot restore system git.",
+                system_git_backup.display()
+            );
+            return ExitCode::FAILURE;
+        }
+
+        let backup_str = system_git_backup.to_string_lossy().to_string();
+        for target in ["/usr/bin/git", "/bin/git"] {
+            let _ = run_command_with_optional_sudo("rm", &["-f", target]);
+            if let Err(e) = run_command_with_optional_sudo("install", &["-m", "755", &backup_str, target]) {
+                eprintln!("error restoring {target}: {e}");
+                return ExitCode::FAILURE;
+            }
+        }
+
+        if let Err(e) = std::fs::write(&real_git_path, "/usr/bin/git") {
+            eprintln!("warning: restored git but failed to update {}: {e}", real_git_path.display());
+        }
+
+        println!("✅ Restored system git binaries from backup");
+        println!("   Backup: {}", system_git_backup.display());
+        return ExitCode::SUCCESS;
+    }
+
+    if replace_binary {
+        let real_git = find_system_git();
+        if real_git.is_empty() {
+            eprintln!("error: could not find system git to back up");
+            return ExitCode::FAILURE;
+        }
+
+        if let Err(e) = std::fs::create_dir_all(&bin_dir) {
+            eprintln!("error creating {}: {e}", bin_dir.display());
+            return ExitCode::FAILURE;
+        }
+
+        let backup_str = system_git_backup.to_string_lossy().to_string();
+        if !system_git_backup.exists() {
+            if let Err(e) = run_command_with_optional_sudo("install", &["-m", "755", &real_git, &backup_str]) {
+                eprintln!("error creating git backup: {e}");
+                return ExitCode::FAILURE;
+            }
+        }
+
+        if let Err(e) = std::fs::write(&real_git_path, &backup_str) {
+            eprintln!("error writing real git path: {e}");
+            return ExitCode::FAILURE;
+        }
+
+        let our_binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("repobox"));
+        let our_binary_str = our_binary.to_string_lossy().to_string();
+
+        for target in ["/usr/bin/git", "/bin/git"] {
+            if let Err(e) = run_command_with_optional_sudo("ln", &["-sfn", &our_binary_str, target]) {
+                eprintln!("error replacing {target}: {e}");
+                return ExitCode::FAILURE;
+            }
+        }
+
+        println!("✅ System git replacement mode enabled");
+        println!("   Backup binary: {}", system_git_backup.display());
+        println!("   Wrapper binary: {}", our_binary.display());
+        println!("   Replaced: /usr/bin/git, /bin/git");
+        println!("   Run `git repobox setup --restore-binary` to restore the original git binary.");
+        return ExitCode::SUCCESS;
+    }
 
     if remove {
         let _ = std::fs::remove_file(&shim_path);
@@ -956,8 +1048,43 @@ fn cmd_setup(remove: bool) -> ExitCode {
     println!("   --no-verify won't help — this is a shim, not a hook.");
     println!();
     println!("   Run `git repobox setup --remove` to undo.");
+    println!("   Run `git repobox setup --replace-binary` for full binary replacement mode.");
 
     ExitCode::SUCCESS
+}
+
+fn run_command_with_optional_sudo(program: &str, args: &[&str]) -> Result<(), String> {
+    let first_try = Command::new(program)
+        .args(args)
+        .output()
+        .map_err(|e| format!("failed to run {program}: {e}"))?;
+
+    if first_try.status.success() {
+        return Ok(());
+    }
+
+    let mut sudo_args = Vec::with_capacity(args.len() + 1);
+    sudo_args.push(program);
+    sudo_args.extend(args.iter().copied());
+
+    let sudo_try = Command::new("sudo")
+        .args(&sudo_args)
+        .output()
+        .map_err(|e| format!("{program} failed and sudo retry could not start: {e}"))?;
+
+    if sudo_try.status.success() {
+        return Ok(());
+    }
+
+    let first_err = String::from_utf8_lossy(&first_try.stderr).trim().to_string();
+    let sudo_err = String::from_utf8_lossy(&sudo_try.stderr).trim().to_string();
+    Err(format!(
+        "{program} failed (exit: {:?}) and sudo retry failed (exit: {:?}). stderr: {} | sudo stderr: {}",
+        first_try.status.code(),
+        sudo_try.status.code(),
+        if first_err.is_empty() { "<empty>" } else { &first_err },
+        if sudo_err.is_empty() { "<empty>" } else { &sudo_err }
+    ))
 }
 
 // ── Credential Helper ────────────────────────────────────────────────
@@ -2081,7 +2208,9 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                 }
                 Some(Commands::Lint) => cmd_lint(),
                 Some(Commands::Status) => cmd_status(&home),
-                Some(Commands::Setup { remove }) => cmd_setup(remove),
+                Some(Commands::Setup { remove, replace_binary, restore_binary }) => {
+                    cmd_setup(remove, replace_binary, restore_binary)
+                },
                 Some(Commands::CredentialHelper { action }) => cmd_credential_helper(&action, &home),
                 Some(Commands::Hook { hook, args }) => cmd_hook(&hook, &args, &home),
                 None => {
