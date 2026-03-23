@@ -50,6 +50,19 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### Completed: Wrong-remote + detached/no-upstream deep lifecycle (founder/agent/no-identity)
+- **Date:** 2026-03-23
+- **Agent:** repobox-qa-pipeline
+- **Scenario:** `wrong remote, detached HEAD, no-upstream branch` matrix with required identity matrix and git lifecycle steps (init/identity/check/push/pull/rebase).
+- **Environment:** DO preferred but repo absent (`xiko@167.71.5.215` had no /home/xiko/repobox), ran locally with real binaries under `/home/xiko/repobox/target/debug/`.
+- **Findings:**
+  - wrong remote push produces clear git error and actionable user fix (choose/create correct remote)
+  - founder/agent check matrix is consistent (`founder` allowed on main, `agent` denied on main, `agent` allowed on `feature/**`)
+  - `git pull --rebase` on detached/no-upstream paths can surface remote-auth failures first, which can mask no-upstream guidance in this fixture
+  - self-lockout warning + recovery message confirms when edit-right is truly removed
+- **Fix status:** No code fixes; document/validate status updated.
+- **Commit:** (pending after this run documentation updates)
+
 ### Completed: Paid x402 read unlock case-normalization mismatch
 - **Date:** 2026-03-23
 - **Agent:** repobox-qa-pipeline

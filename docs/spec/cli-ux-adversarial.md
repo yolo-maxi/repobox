@@ -1124,3 +1124,74 @@ Self-lockout prevention on config edits while exercising founder, agent, and mis
 ### Fix status
 - No code commit in this run (environment lacks Rust toolchain on DO and blocker reproduced before safe patch+validation cycle).
 - This entry records a reproducible **P0 onboarding blocker** for immediate triage.
+
+## 2026-03-23 — wrong-remote + detached/no-upstream deep lifecycle (founder/agent/no-identity)
+
+### Scenario selected
+`wrong remote, detached HEAD, no-upstream branch matrix` with required git lifecycle steps: init, identity set, whoami, alias add, check, commit, push, pull/rebase. Also exercised self-lockout edge path.
+
+### Environment
+- DO preference check: `xiko@167.71.5.215` was reachable, but `/home/xiko/repobox` is not present there.
+- Fallback run local: `/home/xiko/repobox` with local binaries
+  - cli: `/home/xiko/repobox/target/debug/repobox`
+  - server: `/home/xiko/repobox/target/debug/repobox-server`
+- Fixture root: `/tmp/repobox-qa-run-20260323T053848`
+- Server: `127.0.0.1:38485`
+
+### Identities exercised
+- founder: `evm:0x77d11d9e8c87deb97a1f45b25c8dec546d2bf518`
+- agent: `evm:0x1513c011b8c5c3c9040f00fcd89daa6494ab6482`
+- no identity: separate HOME (`$WORK/noid-home`) and `whoami` check with no key
+
+### Commands run
+- `git init`
+- `git repobox init --force`
+- `git repobox keys generate --alias founder`
+- `git repobox alias add founder <founder_identity>`
+- `git add README.md && git commit -m "seed repo"`
+- `git remote add origin /tmp/repobox-qa-does-not-exist/nonexistent.git`
+- `git push -u origin main` (wrong remote failure)
+- `git remote set-url origin http://127.0.0.1:38485/<founder>/qa-wrong-remote-demo.git`
+- `git push -u origin main` (success)
+- `git clone` as agent (second identity)
+- `git repobox keys generate --alias agent`
+- `git repobox alias add agent <agent_identity>`
+- staged `.repobox/config.yml` with founder-only edit/upload + branch-limited agent rules
+- `git repobox check` matrix for founder/agent push targets
+- `git checkout --detach HEAD && git pull --rebase`
+- `git checkout -b feature/qa && git pull --rebase` (no-upstream case)
+- agent feature commit/push (`feature/qa`)
+- founder follow-up commit/push on main
+- `git pull --rebase origin main` from agent
+- self-lockout test with config edit-right removal
+
+### Observed outputs
+- Wrong remote push:
+  - `fatal: '/tmp/repobox-qa-does-not-exist/nonexistent.git' does not appear to be a git repository`
+- Founder policy check:
+  - allowed on `push >main`, denied for agent on `push >main`, allowed for agent on `push >feature/**`.
+- Detached pull:
+  - `detached_pull_exit=1` with `fatal: unable to access 'http://127.0.0.1:38485/...': Failed to connect...`
+- no-upstream pull on feature (initial attempt while remote session still alive before shutdown):
+  - `fatal: could not read Username for 'http://127.0.0.1:38485': No such device or address`
+  - `no_upstream_pull_exit=1`
+- `git repobox whoami` in no-identity home: no identity error path (`no identity configured...`)
+- agent pull/rebase origin main after founder follow-up returned non-zero exit because auth context was not configured for the feature clone.
+- lockout check with explicit minimal config edit path worked and returned explicit blocking guidance:
+  - `❌ permission denied: founder (...) cannot commit this change because it removes your edit access to ./.repobox/config.yml.`
+  - Recovery guidance printed with an example `edit ./.repobox/config.yml` rule.
+
+### UX judgment
+- Actionable for wrong remote failure (native git transport error) and lockout guard (explicit block + recovery).
+- No-upstream guidance did **not** surface consistently in this specific remote-auth setup; authentication errors can mask the intended guidance message.
+- Multiple identities were exercised, and branch-limited permissions (`agent` on `feature/**`) behaved as expected.
+
+### Fix status
+- No repository code changes applied in this run.
+- Artifact updates only (spec + KANBAN + pipeline status).
+
+### Commands pass/fail (this run)
+- ✅ wrong remote push fails with clear git diagnostic
+- ✅ founder/agent policy matrix for target paths validated
+- ✅ self-lockout BLOCK + recovery guidance verified on explicit minimal edit-right case
+- ⚠️ no-upstream pull guidance is masked by remote auth/network failures in this fixture
