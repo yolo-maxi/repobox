@@ -1,3 +1,58 @@
+## 2026-03-23 — Legacy config self-lockout bypass in private x402 flow (P0)
+
+### Scenario selected
+`untouched/half-written config.yml (wrong rule syntax)` in the `private repo paid access/x402 preview/discovery` path.
+
+### Environment
+- Preferred host checked first: `xiko@167.71.5.215` → `DO_REPOBOX_MISSING` (no `/home/xiko/repobox`), so run executed locally.
+- Local fixture: `/tmp/repobox-qa-teaser2-1774239087`
+- Server: `repobox-server --bind 127.0.0.1:4131 --data-dir /tmp/repobox-qa-teaser2-1774239087/remote`
+- CLI/shim: `/home/xiko/repobox/target/release/repobox` + `PATH=$HOME/.repobox/bin:$PATH`
+
+### Identities exercised
+- founder: `evm:0x289c665341eAf944b00037DFD1C55911494727DC`
+- agent: `evm:0xCF6B3d2E6e74e140531C557dCb995464bA68899E`
+- outsider: `evm:0x09eE10Ba902b48D86de552E45E54A5F4a77B9503`
+- unknown/no identity: fresh HOME with no `~/.repobox/identity`
+
+### Deep run summary (exact notable outputs)
+- `git repobox lint` on legacy-shaped config (`rules:` + `default:` at top-level) incorrectly passed:
+  - `✅ .repobox/config.yml is valid`
+  - `2 groups, 0 rules, default: Allow`
+- self-lockout prevention was bypassed under this config shape:
+  - `[lockout] remove founder config edit right + commit`
+  - commit succeeded: `[main 74c9e25] test: lockout attempt`
+  - `[lockout-exit] 0`
+- private paid gating also silently failed (repo effectively public):
+  - no identity clone succeeded: `[noid-exit] 0`
+  - outsider read succeeded: `[outsider-exit] 0`
+- x402 teaser endpoint remained visible:
+  - `{"currency":"USDC","for_sale":true,...,"read_price":"2.50",...}`
+- grant endpoint UX mismatch in this run (payload shape confusion):
+  - `missing field address at line 1 column 85`
+
+### Root cause
+Parser accepted unknown top-level keys and treated missing `permissions:` as default-allow + empty rules. Legacy config looked "valid" while disabling policy enforcement.
+
+### Fix applied
+- `repobox-core/src/parser.rs`
+  - detect legacy top-level `rules` / `default` keys and return explicit blocking error:
+    - `invalid rule: legacy config format detected: move top-level rules/default under permissions:`
+- Added regression tests:
+  - `test_legacy_top_level_rules_are_rejected`
+  - `test_mixed_permissions_and_legacy_keys_are_rejected`
+
+### Validation
+- `cargo test -p repobox-core test_legacy_top_level_rules_are_rejected -- --nocapture` ✅
+- `cargo test -p repobox-core test_mixed_permissions_and_legacy_keys_are_rejected -- --nocapture` ✅
+- Manual re-test (fresh repo, legacy config):
+  - `repobox lint` now fails with explicit migration guidance.
+  - `git commit` now blocks with `.repobox/config.yml error: invalid rule: legacy config format detected ...`.
+
+### UX judgement
+- **P0 fixed in code:** legacy/wrong config syntax can no longer silently unlock private repos or bypass self-lockout protections.
+- Recovery step is now explicit in <30s: move keys under `permissions:`.
+
 ## 2026-03-23 — DO production private paid flow + unborn-HEAD fix verification
 
 ### Scenario selected

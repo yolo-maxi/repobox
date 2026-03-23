@@ -13,6 +13,11 @@ struct RawConfig {
     permissions: Option<RawPermissions>,
     #[serde(default)]
     virtuals: Option<RawVirtualsConfig>,
+    // Legacy v0 shape (unsupported): top-level `rules` / `default`
+    #[serde(default)]
+    rules: Option<serde_yaml::Value>,
+    #[serde(default)]
+    default: Option<String>,
 }
 
 /// A group can be:
@@ -190,6 +195,12 @@ fn default_min_reputation() -> f64 {
 /// Parse a .repobox/config.yml YAML string into a validated Config.
 pub fn parse(yaml: &str) -> Result<Config, ConfigError> {
     let raw: RawConfig = serde_yaml::from_str(yaml)?;
+
+    if raw.rules.is_some() || raw.default.is_some() {
+        return Err(ConfigError::InvalidRule(
+            "legacy config format detected: move top-level `rules`/`default` under `permissions:` (e.g. `permissions: { default: deny, rules: [...] }`)".into(),
+        ));
+    }
 
     // Parse groups
     let mut groups = HashMap::new();
@@ -1141,6 +1152,42 @@ permissions:
         let config = parse(yaml).unwrap();
         assert!(config.permissions.rules.is_empty());
         assert_eq!(config.permissions.default, DefaultPolicy::Allow);
+    }
+
+    #[test]
+    fn test_legacy_top_level_rules_are_rejected() {
+        let yaml = r#"
+groups:
+  founders:
+    - evm:0xAAA0000000000000000000000000000000000001
+
+rules:
+  - "founders push >main"
+default: deny
+"#;
+        let err = parse(yaml).unwrap_err();
+        assert!(
+            err.to_string().contains("legacy config format detected"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_mixed_permissions_and_legacy_keys_are_rejected() {
+        let yaml = r#"
+permissions:
+  default: deny
+  rules:
+    - "* read >*"
+
+rules:
+  - "* push >main"
+"#;
+        let err = parse(yaml).unwrap_err();
+        assert!(
+            err.to_string().contains("legacy config format detected"),
+            "got: {err}"
+        );
     }
 
     #[test]

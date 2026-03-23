@@ -50,6 +50,22 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### P0 fix: reject legacy top-level `rules/default` config shape (prevents silent policy bypass)
+- **Date:** 2026-03-23
+- **Agent:** repobox-qa-pipeline
+- Adversarial finding: config written as
+  - top-level `rules:` + `default:` (without `permissions:`)
+  was accepted as valid with `0 rules, default: Allow`, causing:
+  - private repo no-identity clone success
+  - outsider read success
+  - self-lockout commit not blocked
+- Fix in `repobox-core/src/parser.rs`:
+  - detect legacy keys and return explicit blocking error with migration guidance to `permissions:`.
+- Added tests:
+  - `test_legacy_top_level_rules_are_rejected`
+  - `test_mixed_permissions_and_legacy_keys_are_rejected`
+- Validation: targeted repobox-core tests pass + manual commit path now fails fast on malformed/legacy shape.
+
 ### Fix: unborn HEAD branch detection unblocks first commit with branch-scoped file rules
 - **Date:** 2026-03-23
 - **Agent:** repobox-qa-pipeline
