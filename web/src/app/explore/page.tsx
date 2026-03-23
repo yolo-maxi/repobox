@@ -32,7 +32,7 @@ export default function ExplorePage() {
   const [activity, setActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'latest' | 'commits' | 'name'>('latest');
+  const [sortBy, setSortBy] = useState<'latest' | 'commits' | 'name'>('commits');
   const [showDemo, setShowDemo] = useState(true);
   const searchParams = useSearchParams();
   const mintParam = (searchParams.get('mint') || '').toLowerCase();
