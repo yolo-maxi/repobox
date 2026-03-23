@@ -1,3 +1,73 @@
+## 2026-03-23 — DO production private paid flow + unborn-HEAD fix verification
+
+### Scenario selected
+`private repo paid access/x402 preview/discovery flow` (deep run on DO), including founder/agent/unknown/no-identity matrix and lockout guard.
+
+### Environment
+- Preferred host used: **DigitalOcean** `xiko@167.71.5.215`
+- Real CLI/shim binary path: `~/rbqa-bin/repobox`
+- Real remote: `https://git.repo.box/<founder-address>/private-paid-<ts>.git`
+- Run root: `/tmp/repobox-do-full-1774237852`
+
+### Commands run (key lifecycle)
+- identity lifecycle:
+  - `repobox setup`
+  - `repobox keys generate --alias founder|agent|outsider`
+  - `repobox identity set <private-key>`
+  - `repobox whoami`
+  - `repobox alias add ...`
+- repo lifecycle:
+  - `git init && git branch -m main`
+  - `repobox init --force`
+  - seed `.repobox/config.yml` + `.repobox/x402.yml`
+  - signed `git commit` and `git push -u origin main`
+  - `repobox check <identity> push/read ...`
+- lockout guard:
+  - removed `founders edit * >*` and attempted commit
+- private/x402 checks:
+  - no-identity clone
+  - unknown signed `git ls-remote` with generated Basic auth token
+  - `curl https://git.repo.box/<addr>/<repo>/x402/info`
+  - `POST .../x402/grant-access`
+  - agent signed `git ls-remote` after grant
+
+### Exact notable outputs
+- First commit now succeeds on unborn HEAD with branch-scoped upload rules:
+  - `[founder-first-commit-exit] 0`
+  - `create mode 100644 .repobox/config.yml`
+- Lockout prevention remains explicit:
+  - `cannot commit this change because it removes your edit access to ./.repobox/config.yml`
+- No identity clone UX (still weak):
+  - `fatal: could not read Username for 'https://git.repo.box': terminal prompts disabled`
+- Unknown signed read (private repo):
+  - `remote: read access denied`
+  - `... returned error: 403`
+- Later after adding founder read rule and retrying signed founder clone:
+  - `remote: payment required for read access`
+  - `... returned error: 402`
+- x402 endpoints on this production flow were not discoverable from these paths:
+  - `curl .../x402/info` returned empty body
+  - `POST .../x402/grant-access` returned empty body in one run and no observable read unlock in another
+
+### UX judgement
+- ✅ Self-lockout block/guidance quality is good.
+- ✅ First-commit branch-scoped commit path is fixed in CLI (no founder upload deadlock).
+- ❌ P0 (production UX): private paid discoverability/read flow is inconsistent on `git.repo.box` (mix of 403/402 and empty x402 endpoint responses), and no-identity clone path falls back to generic username prompt instead of actionable purchase guidance.
+
+### Fix applied in this run
+- Code patch in `repobox-cli/src/main.rs`:
+  - robust unborn HEAD branch detection (`detect_current_branch`) now handles `rev-parse` non-zero + symbolic-ref fallback.
+  - used in shim and status paths.
+- Added regression test:
+  - `test_detect_current_branch_on_unborn_head`
+
+### Validation
+- `cargo test -p repobox-cli test_detect_current_branch_on_unborn_head -- --nocapture` ✅
+- `cargo test -p repobox-cli -- --nocapture` ✅
+- Manual repro before/after:
+  - before fix: branch showed `unknown` and first commit denied `cannot upload .repobox/config.yml`
+  - after fix: branch resolves `main`; first commit allowed with branch-scoped file rules.
+
 ## 2026-03-23 — Private x402 founder/agent matrix + pull/rebase (deep clean run)
 
 ### Scenario selected

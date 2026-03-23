@@ -1073,19 +1073,9 @@ fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
         }
     };
 
-    // Get current branch
+    // Get current branch (handle unborn HEAD by resolving symbolic ref)
     let real_git = find_real_git();
-    let current_branch = Command::new(&real_git)
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        });
+    let current_branch = detect_current_branch(&real_git);
 
     match hook {
         "pre-commit" => {
@@ -1725,15 +1715,7 @@ fn cmd_status(home: &Path) -> ExitCode {
 
     // Branch
     let real_git = find_real_git();
-    let branch = Command::new(&real_git)
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .ok()
-        .and_then(|o| if o.status.success() {
-            Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-        } else {
-            None
-        })
+    let branch = detect_current_branch(&real_git)
         .unwrap_or_else(|| "unknown".to_string());
 
     println!("repo.box status");
@@ -1901,18 +1883,8 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
         .or_else(|| read_identity_from_git_config())
         .or_else(|| identity::get_identity(home).ok().flatten());
 
-    // Get current branch
-    let current_branch = Command::new(&real_git)
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .ok()
-        .and_then(|o| {
-            if o.status.success() {
-                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-            } else {
-                None
-            }
-        });
+    // Get current branch (handle unborn HEAD by resolving symbolic ref)
+    let current_branch = detect_current_branch(&real_git);
 
     // Create resolver if REPOBOX_SERVER env var is set (e.g. "https://repo.box/api")
     let resolver = std::env::var("REPOBOX_SERVER").ok().map(|url| {
@@ -2283,6 +2255,36 @@ fn find_real_git() -> String {
     "git".to_string()
 }
 
+fn detect_current_branch(real_git: &str) -> Option<String> {
+    let head_output = Command::new(real_git)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .ok()?;
+
+    // On unborn HEAD, git can print "HEAD" to stdout while returning non-zero.
+    // We still want to inspect stdout and then fall back to symbolic-ref.
+    let head = String::from_utf8_lossy(&head_output.stdout).trim().to_string();
+
+    if !head.is_empty() && head != "HEAD" {
+        return Some(head);
+    }
+
+    // Unborn repositories can report HEAD above while still pointing to a branch
+    // (e.g. refs/heads/main). Use symbolic-ref as a fallback to recover that branch.
+    Command::new(real_git)
+        .args(["symbolic-ref", "--short", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                let branch = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                if branch.is_empty() { None } else { Some(branch) }
+            } else {
+                None
+            }
+        })
+}
+
 fn read_identity_from_git_config() -> Option<Identity> {
     let output = Command::new(find_real_git())
         .args(["config", "user.signingkey"])
@@ -2388,5 +2390,42 @@ mod tests {
         assert!(!contains_issue_reference("handle edge case"));
         assert!(!contains_issue_reference("fixes bug but no number"));
         assert!(!contains_issue_reference("closes something"));
+    }
+
+    #[test]
+    fn test_detect_current_branch_on_unborn_head() {
+        use std::fs;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let old_cwd = std::env::current_dir().expect("cwd");
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let repo = std::env::temp_dir().join(format!("repobox-branch-detect-{ts}"));
+        fs::create_dir_all(&repo).expect("create temp repo dir");
+
+        let real_git = find_system_git();
+        assert!(!real_git.is_empty(), "system git must be available in tests");
+
+        let status = Command::new(&real_git)
+            .args(["init", "-q", repo.to_string_lossy().as_ref()])
+            .status()
+            .expect("git init");
+        assert!(status.success(), "git init failed");
+
+        std::env::set_current_dir(&repo).expect("chdir repo");
+        let status = Command::new(&real_git)
+            .args(["branch", "-m", "main"])
+            .status()
+            .expect("rename branch");
+        assert!(status.success(), "git branch -m main failed");
+
+        let branch = detect_current_branch(&real_git);
+        assert_eq!(branch.as_deref(), Some("main"));
+
+        // cleanup
+        std::env::set_current_dir(old_cwd).expect("restore cwd");
+        let _ = fs::remove_dir_all(&repo);
     }
 }

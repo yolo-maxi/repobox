@@ -28,15 +28,18 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 🔨 In Progress
 
-### P0: First-commit founder upload denial on new repos blocks onboarding
+### P0: Production private paid flow (git.repo.box) has inconsistent discoverability/read UX
 - **Date:** 2026-03-23
 - **Agent:** repobox-qa-pipeline
-- **Environment:** DO SSH run (`xiko@167.71.5.215`) with real `/tmp/repobox` + `/tmp/repobox-server` binaries.
-- **Symptom:** first signed commit on fresh repo fails with:
-  - `permission denied: founder (...) cannot upload .repobox/config.yml`
-- **Impact:** blocks first push, prevents lockout and x402 private-flow validation from completing in clean setup.
+- **Environment:** DO host (`xiko@167.71.5.215`) against production `https://git.repo.box`.
+- **Observed symptoms (adversarial run):**
+  - no-identity clone returns generic prompt failure (`could not read Username ... terminal prompts disabled`) instead of actionable purchase guidance.
+  - signed unknown read returns `403 read access denied` in one pass.
+  - signed founder read after config update surfaced `402 payment required` despite explicit founder read rule.
+  - `/x402/info` and `/x402/grant-access` responses were empty/inconclusive from tested production paths, making paid discovery unclear.
+- **Impact:** users cannot reliably discover/purchase private repos from clone/read failures on production.
 - **Priority:** P0
-- **Next action:** patch branch-context detection for unborn HEAD / first-commit permission evaluation, then re-run full private paid flow matrix on DO.
+- **Next action:** align production read gate with x402 discoverability contract (consistent 402 + metadata + grant unlock) and add a production-equivalent integration test path.
 
 
 ## 🚧 Blocked
@@ -46,6 +49,17 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 - **Tags**: infra
 
 ## ✅ Done
+
+### Fix: unborn HEAD branch detection unblocks first commit with branch-scoped file rules
+- **Date:** 2026-03-23
+- **Agent:** repobox-qa-pipeline
+- Root cause: branch detection relied on `git rev-parse --abbrev-ref HEAD` success; on unborn repos it can return non-zero while still printing `HEAD`, causing branch to resolve `unknown` and branch-scoped upload/edit rules to misfire.
+- Fix in `repobox-cli/src/main.rs`:
+  - added `detect_current_branch` fallback to `git symbolic-ref --short HEAD` when rev-parse reports `HEAD`/non-success.
+  - wired into shim and status branch detection paths.
+- Added regression test: `test_detect_current_branch_on_unborn_head`.
+- Validation: `cargo test -p repobox-cli` passing; manual repro confirmed first commit now succeeds with `upload * >*` + `edit * >*` rules.
+- Commit: `TBD` (record after push)
 
 ### Private repo x402 founder/agent lifecycle + pull/rebase adversarial pass (deep run)
 - **Date:** 2026-03-23
