@@ -24,7 +24,16 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## 📋 Backlog
 
-*No tasks currently in backlog*
+### P0: Replace path-shim approach with full binary replacement mode to reduce bypass
+- **Priority**: P0
+- **Tags**: security, cli, install
+- **Source note (from chat discussion):** "Instead of a path-shim, we will need to fully replace the binary to avoid bypass"
+- **Goal:** Provide an install mode where direct `git` bypass is materially harder than PATH-only shim setups.
+- **Acceptance criteria:**
+  - define replacement strategy + rollback path
+  - verify normal git UX still works for legitimate commands
+  - ensure repobox policy checks remain enforced on commit/push flows
+  - add adversarial tests for bypass attempts and document residual risk
 
 ## 🔨 In Progress
 
