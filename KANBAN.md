@@ -61,7 +61,7 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
   - `git pull --rebase` on detached/no-upstream paths can surface remote-auth failures first, which can mask no-upstream guidance in this fixture
   - self-lockout warning + recovery message confirms when edit-right is truly removed
 - **Fix status:** No code fixes; document/validate status updated.
-- **Commit:** (pending after this run documentation updates)
+- **Commit:** 323e4c6
 
 ### Completed: Paid x402 read unlock case-normalization mismatch
 - **Date:** 2026-03-23
