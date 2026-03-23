@@ -63,6 +63,7 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 - Fixed stale first-run config scaffold bug by updating `.repobox/config.yml` template defaults to parse-safe empty groups (`founders: []`, `agents: []`) in `repobox-cli/src/main.rs`.
 - Result: clean first-time install path now avoids YAML parse failure and supports successful founder first push.
 - Commit: `80514e8`
+- Commit: `80514e8`
 - Status: ✅ Completed
 
 ### x402 preview endpoint + payment-required UX improvement
