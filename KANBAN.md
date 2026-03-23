@@ -38,6 +38,19 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
 
 ## ✅ Done
 
+### Private repo x402 founder/agent lifecycle + pull/rebase adversarial pass (deep run)
+- **Date:** 2026-03-23
+- **Agent:** repobox-qa-pipeline
+- Scenario: founder/agent/no-identity lifecycle through x402 private repo with signed read checks, grant flow, and rebase pull path.
+- Environment: local fixture (`/tmp/repobox-qa-private-run-deep`) with repobox-server on `127.0.0.1:3999`.
+- Findings:
+  - no-identity and malformed auth clones consistently return `402` with explicit grant/info guidance.
+  - `/.git/x402/info` exposes discoverability metadata (`for_sale/read_price/network/recipient/scheme`).
+  - grant is accepted and authorized agent read workflow proceeds (signed `ls-remote`, `git pull --rebase`).
+  - self-lockout linter warns and explicitly blocks founder config edit path, with recovery by keeping file write permissions.
+- Fix status: ✅ Completed (no code changes in this run)
+
+
 ### Private repo x402 preview/access lifecycle + identity matrix pass (no changes)
 - **Date:** 2026-03-23 | **Agent:** repobox-qa-pipeline
 - Scenario exercised: founder/agent/unknown identities against an x402 private repo, including unknown/no-identity clone, signed authorized clone, grant endpoint flow, and pull/rebase lifecycle.

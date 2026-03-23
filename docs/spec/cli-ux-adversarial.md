@@ -1,3 +1,62 @@
+## 2026-03-23 — Private x402 founder/agent matrix + pull/rebase (deep clean run)
+
+### Scenario selected
+`private repo paid-access / founder + agent + no identity / pull --rebase` run with deterministic local fixture.
+
+### Environment
+- DO host path was preferred, but remote checkout path unavailable; ran locally.
+- Server: `/home/xiko/repobox/target/debug/repobox-server` on `127.0.0.1:3999`
+- Fixture: `/tmp/repobox-qa-private-run-deep`
+- Repo namespace: `evm:0x77b68E39A345688D6E015307897796fdc11f7351/qa-private-1144`
+
+### Commands run
+- bootstrap identities and lifecycle setup
+  - `HOME=$founder_home repobox keys generate --alias founder`
+  - `HOME=$agent_home repobox keys generate --alias agent`
+  - `git init`
+  - `repobox init --force`
+  - write `.repobox/config.yml` + `.repobox/x402.yml`
+  - `repobox whoami`
+  - `repobox alias add founder ...`
+  - `repobox lint`
+  - `repobox check <founder> push ">*"`
+  - `repobox check <founder> read ">*"`
+- seed + remote lifecycle
+  - signed `git commit -m "seed paid private repo config"`
+  - `git push -u origin HEAD:refs/heads/main`
+  - `repobox lint` + denied `repobox check <founder> edit ".repobox/config.yml"` on lockout config
+- anonymous failure path
+  - `git clone <private origin>` (no identity)
+  - `git clone -c http.extraheader="Authorization: Basic !!bad!!"` (malformed)
+  - both expected 402 with payment guidance
+- discoverability
+  - `curl <origin>.git/x402/info`
+  - `curl -X POST <origin>.git/x402/grant-access`
+- authorized agent read/workflow
+  - immediate `repobox` signature generation via `gpg` message
+  - `git ls-remote <origin>` succeeded with valid Basic auth header
+  - `repobox init --force` in agent clone
+  - `agent-note` commit + `git push origin HEAD:refs/heads/feature/qa`
+  - founder follow-up commit + push
+  - `git pull --rebase origin main` from agent clone with fresh signed auth header
+
+### Key observed output
+- No-identity clone: `remote: payment required for read access. Call /x402/grant-access ... and visit /x402/info for pricing metadata`
+- Bad-auth clone: same `402` guidance (no username prompt)
+- `x402/info` response: readable discoverability JSON with `for_sale:true`, `read_price:"3.00"`, `recipient:"evm:0x77..."`, `scheme:"exact"`
+- Grant endpoint: `access granted`
+- `ls-remote` authorized: returned branch hashes immediately with valid auth
+- `git push` feature branch: created `feature/qa`
+- `git pull --rebase origin main`: `Successfully rebased and updated refs/heads/main`
+- Lockout guard behavior:
+  - lint warning for founder branch-only rules
+  - `denied — founder ... edit .repobox/config.yml (default: deny)`
+  - recovered on restoring file permissions
+
+### Findings / UX result
+- `founder`/`agent` lifecycle + no-identity matrix is coherent when HOME-aware signing is preserved in commit/pull commands.
+- Paid repo discoverability and grant UX remains explicit and machine-readable.
+- No behavior regression requiring code change in this run.
 ## 2026-03-23 — No-identity lifecycle + branch-policy matrix
 
 ### Scenario selected
