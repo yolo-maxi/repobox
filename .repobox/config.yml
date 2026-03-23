@@ -20,6 +20,9 @@ groups:
 permissions:
   default: deny
   rules:
+    # Public read for this repo
+    - "* read >*"
+
     # ── Founders (Mergeooor + Fran + Vitalik) ────
     - founders own >*
 

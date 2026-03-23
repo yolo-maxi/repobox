@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { runQuery, type Repo, type RepoPermission } from '@/lib/database';
 import { getCommitCount, getContributorCount, getLastCommitDate, getReadmeFirstLine } from '@/lib/git';
 import { ensurePermissionsScanned } from '@/lib/permissionScanner';
+import { isRepoPublicVisible } from '@/lib/repoVisibility';
 
 interface RepoWithMetadata extends Repo {
   commit_count: number;
@@ -73,10 +74,11 @@ export async function GET(request: NextRequest) {
         [owner]
       );
 
-      const ownedWithMeta = ownedRepos.map(enrichRepo);
+      const ownedPublicRepos = ownedRepos.filter((r) => isRepoPublicVisible(r.address, r.name));
+      const ownedWithMeta = ownedPublicRepos.map(enrichRepo);
 
       // 2. Repos this identity actually contributed commits to (authorship from push_log)
-      const ownedSet = new Set(ownedRepos.map(r => `${r.address}/${r.name}`.toLowerCase()));
+      const ownedSet = new Set(ownedPublicRepos.map(r => `${r.address}/${r.name}`.toLowerCase()));
       const contributionRows = runQuery<{
         address: string;
         name: string;
@@ -115,7 +117,12 @@ export async function GET(request: NextRequest) {
           [row.address, row.name]
         );
         if (repoRows.length > 0) {
-          const enriched = enrichRepo(repoRows[0]);
+          const repoRow = repoRows[0];
+          if (!isRepoPublicVisible(repoRow.address, repoRow.name)) {
+            continue;
+          }
+
+          const enriched = enrichRepo(repoRow);
           contributorRepos.push({
             ...enriched,
             permissions: Array.from(permissionMap.get(key) || []),
@@ -142,7 +149,8 @@ export async function GET(request: NextRequest) {
 
     // No owner filter — return all repos
     const repos = runQuery<Repo>('SELECT * FROM repos');
-    const reposWithMetadata = repos.map(enrichRepo);
+    const publicRepos = repos.filter((r) => isRepoPublicVisible(r.address, r.name));
+    const reposWithMetadata = publicRepos.map(enrichRepo);
     const sortedRepos = sortRepos(reposWithMetadata, sort).slice(0, limit);
 
     return NextResponse.json({

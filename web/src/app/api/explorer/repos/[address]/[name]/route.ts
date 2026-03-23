@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runQueryOne } from '@/lib/database';
 import { getCommitCount, getDefaultBranch, getFileTree, getReadmeContent, branchExists } from '@/lib/git';
+import { isRepoPublicVisible } from '@/lib/repoVisibility';
 
 interface RouteContext {
   params: Promise<{ address: string; name: string }>;
@@ -26,6 +27,13 @@ export async function GET(
     const repo = await runQueryOne('SELECT * FROM repos WHERE address = ? AND name = ?', [address, name]);
     
     if (!repo) {
+      return NextResponse.json(
+        { error: 'Repository not found' },
+        { status: 404 }
+      );
+    }
+
+    if (!isRepoPublicVisible(address, name)) {
       return NextResponse.json(
         { error: 'Repository not found' },
         { status: 404 }
