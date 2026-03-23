@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { CCIPGateway } from './gateway';
 import { Database } from './database';
+import { NamesIndexer } from './names-indexer';
 
 dotenv.config();
 
@@ -15,6 +16,9 @@ app.use(express.json());
 
 // Initialize database and gateway
 const dbPath = process.env.DB_PATH || './data/aliases.json';
+const namesIndexDbPath = process.env.NAMES_INDEX_DB_PATH || '/var/lib/repobox/repos/repobox.db';
+const namesContractAddress = process.env.NAMES_CONTRACT_ADDRESS;
+const rpcUrl = process.env.RPC_URL || 'https://eth.drpc.org';
 const privateKey = process.env.GATEWAY_PRIVATE_KEY;
 
 if (!privateKey) {
@@ -22,8 +26,17 @@ if (!privateKey) {
     process.exit(1);
 }
 
-const database = new Database(dbPath);
+const database = new Database(dbPath, namesIndexDbPath);
 const gateway = new CCIPGateway(database, privateKey);
+
+let namesIndexer: NamesIndexer | null = null;
+if (namesContractAddress) {
+    namesIndexer = new NamesIndexer({
+        sqlitePath: namesIndexDbPath,
+        rpcUrl,
+        contractAddress: namesContractAddress,
+    });
+}
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -95,10 +108,34 @@ app.get('/:sender/:data.json', async (req, res) => {
 });
 
 // Start server
-app.listen(port, () => {
+app.listen(port, async () => {
     console.log(`🚀 CCIP Gateway server running on port ${port}`);
-    console.log(`📂 Using database: ${dbPath}`);
+    console.log(`📂 Using aliases JSON: ${dbPath}`);
+    console.log(`🗄️ Using names index SQLite: ${namesIndexDbPath}`);
     console.log(`🔑 Gateway signer: ${gateway.getSignerAddress()}`);
+
+    if (!namesIndexer) {
+        console.warn('⚠️ NAMES_CONTRACT_ADDRESS not configured; on-chain names indexing disabled');
+        return;
+    }
+
+    try {
+        const result = await namesIndexer.syncOnce();
+        console.log(`✅ On-chain names index sync complete: ${result.synced}/${result.total}`);
+    } catch (error) {
+        console.error('❌ Initial on-chain names index sync failed:', error);
+    }
+
+    const intervalMs = Number(process.env.NAMES_SYNC_INTERVAL_MS || 300000);
+    setInterval(async () => {
+        if (!namesIndexer) return;
+        try {
+            const result = await namesIndexer.syncOnce();
+            console.log(`🔄 On-chain names index sync: ${result.synced}/${result.total}`);
+        } catch (error) {
+            console.error('❌ Periodic on-chain names index sync failed:', error);
+        }
+    }, intervalMs);
 });
 
 export default app;

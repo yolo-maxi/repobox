@@ -10,7 +10,8 @@ This gateway enables ENS resolution of repo.box aliases like `clever-green-canyo
 
 1. **OffchainResolver Contract** - Deployed on Ethereum mainnet as the ENS resolver for repo.box
 2. **CCIP Gateway Server** - This TypeScript server that responds to resolution requests
-3. **Database** - Uses the same SQLite database as repobox-server for alias storage
+3. **SQLite Name Index** - Indexed on-chain RepoBoxNames data (token name, owner, resolved address)
+4. **JSON Alias Fallback** - Static aliases for local/dev and free aliases
 
 ## Quick Start
 
@@ -28,14 +29,23 @@ Copy `.env.example` to `.env` and set:
 # Gateway server port
 PORT=3001
 
-# Path to repobox SQLite database
-DB_PATH=../repobox-server/repobox.db
+# Path to JSON aliases fallback file
+DB_PATH=./data/aliases.json
+
+# Path to SQLite index DB (shared repobox db is recommended)
+NAMES_INDEX_DB_PATH=/var/lib/repobox/repos/repobox.db
+
+# RepoBoxNames contract address to index
+NAMES_CONTRACT_ADDRESS=0x891eaE87e40dF6B26B7ae4877f2bdd781313fAe8
 
 # Private key for signing responses (must match resolver contract signer)
 GATEWAY_PRIVATE_KEY=0x...
 
-# Optional: Custom RPC URL
-RPC_URL=https://rpc.ankr.com/eth
+# Ethereum mainnet RPC URL
+RPC_URL=https://eth.drpc.org
+
+# Optional periodic sync cadence (ms)
+NAMES_SYNC_INTERVAL_MS=300000
 ```
 
 ### 3. Start the Gateway
@@ -65,12 +75,18 @@ This endpoint is called automatically by ENS clients when resolving repo.box dom
 
 ## How It Works
 
-1. **ENS Query**: User queries `clever-green-canyon.repo.box` in their wallet
+1. **ENS Query**: User queries `name.repobox.eth` in their wallet
 2. **Resolver Lookup**: ENS finds the OffchainResolver contract for repo.box
 3. **CCIP-Read**: Resolver contract reverts with `OffchainLookup` pointing to this gateway
-4. **Gateway Resolution**: This server looks up the alias in the database
+4. **Gateway Resolution**: This server resolves alias/address using indexed on-chain names first
 5. **Signed Response**: Gateway signs and returns the Ethereum address
 6. **Verification**: Resolver contract verifies the signature and returns the address
+
+### Reverse Resolution Priority (address → name)
+
+1. Match by `resolvedAddress` in indexed RepoBoxNames
+2. Fallback to `ownerOf(tokenId)` in indexed RepoBoxNames
+3. Fallback to static JSON aliases
 
 ## Development
 

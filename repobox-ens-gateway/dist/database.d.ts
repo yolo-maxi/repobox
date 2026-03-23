@@ -1,16 +1,20 @@
+interface ReverseResult {
+    alias: string;
+    tier: string;
+}
 export declare class Database {
     private aliases;
     private reverseMap;
-    constructor(dbPath: string);
+    private sqlitePath?;
+    constructor(jsonPath: string, sqlitePath?: string);
+    private sqliteJsonQuery;
     resolveAlias(alias: string): Promise<string | null>;
-    reverseResolve(address: string): {
-        alias: string;
-        tier: string;
-    } | null;
+    reverseResolve(address: string): ReverseResult | null;
     getAliasWithTier(alias: string): {
         address: string;
         tier: string;
     } | null;
     close(): void;
 }
+export {};
 //# sourceMappingURL=database.d.ts.map
