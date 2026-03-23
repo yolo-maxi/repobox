@@ -333,3 +333,14 @@ HTTP + on-chain resolvers with caching. Alchemy proxy.
 - Known follow-up:
   - malformed `Authorization` in git clone still surfaces a generic git credential error in some clients despite clear server message (`auth token must be signature:timestamp`).
   - consider improving client-facing auth-failure UX in next run.
+
+### Private repo x402 discoverability + identity matrix (adversarial, run 2026-03-23)
+- **Date:** 2026-03-23 | **Agent:** repobox-qa-pipeline
+- **Status:** ✅ Completed (no code change)
+- Scenario executed: one deep founder/agent/unknown path with git shim lifecycle (`init`, `identity` selection, `whoami`, `alias add`, `check`, `commit`, `push`, `pull --rebase`) + x402 grant.
+- Findings:
+  - linter self-lockout guard remains explicit and actionable (`permission denied ... removes your edit access ...` + recovery example).
+  - no-identity/unauthorized/malformed clone attempts all return 402 with discoverability links (`/x402/grant-access`, `/x402/info`).
+  - signed grant flow works (`access granted` + successful clone + pull/rebase).
+  - paid metadata is discoverable and discoverability header is present on unauth `info/refs`.
+- Outcome: behavior accepted; recorded in `docs/spec/cli-ux-adversarial.md`.

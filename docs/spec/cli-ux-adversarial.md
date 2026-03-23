@@ -648,3 +648,81 @@ Self-lockout prevention on config edits while exercising founder, agent, and mis
 - ✅ `402 Payment Required` path is clear for both anonymous and unauthorized identities and makes private repos discoverable as paid-gated.
 - ✅ founder/agent role split plus authenticated clone flow works end-to-end (push + rebase lifecycle).
 - ⚠️ malformed auth tokens via Git produce a noisy client-side error (`could not read Username...`) even though server returns clear 401 text; not yet remediated.
+
+## 2026-03-23 — x402 private repo paid-access/discovery cycle (founder-agent-unknown matrix)
+
+### Scenario selected
+`private repo paid access/x402 preview/discovery flow` one deep run, with founder, agent, and unknown/no-identity identities.
+
+### Environment
+- Preference check: DO SSH to `xiko@167.71.5.215` was reachable, but `/home/xiko/repobox` is not present there, so ran locally with real binaries.
+- Server (ephemeral): `127.0.0.1:34789` with data under `/tmp/repobox-qa/private-adv-run/server/data`.
+- Git shim path used:
+  - `PATH=/tmp/repobox-qa/private-adv-run/home/.repobox/bin:$PATH`
+  - shim command: `/tmp/repobox-qa/private-adv-run/home/.repobox/bin/git`
+
+### Commands run
+- `git repobox setup`
+- `git repobox keys import <founder_key> --alias founder`
+- `git repobox keys import <agent_key> --alias agent`
+- `git repobox use founder`
+- `git repobox alias add founder <founder_address>`
+- `git repobox alias add agent <agent_address>`
+- `git init`
+- `git repobox init`
+- create `.repobox/config.yml` + `.repobox/x402.yml`
+- `git add ... && git commit -m "feat: initialize private repo"`
+- `git remote add origin http://127.0.0.1:34789/$OWNER/$REPO.git`
+- `git push -u origin main`
+- `git repobox check founder push ">*"`
+- `git repobox check founder edit ".repobox/config.yml"`
+- `git repobox check founder read ">*"`
+- `git repobox check agent read ">*"`
+- self-lockout attempt (`founders` edit removal in config) and commit
+- clone attempts:
+  - unauth `git clone` (`GIT_TERMINAL_PROMPT=0`)
+  - malformed token `http.extraheader=Authorization: Basic !!bad!!`
+  - signed unauthorized agent header (402 expected)
+  - grant via `curl -X POST .../x402/grant-access`
+  - signed agent clone after grant
+- fetch paid metadata: `curl .../x402/info`
+- follow-up lifecycle:
+  - founder `echo more >> README.md; git commit; git push`
+  - authenticated agent pull: `git pull --rebase` in granted clone
+- final discoverability check:
+  - `curl -i .../info/refs?service=git-upload-pack`
+
+### Observed outputs / UX quality
+- Founder checks:
+  - `✅ allowed — founder ... push`.
+  - `✅ allowed — founder ... edit .repobox/config.yml`
+  - `✅ allowed — founder ... read`.
+- Agent check:
+  - `❌ denied — agent ... read >* (implicit deny: rules exist for 'read', no match for this identity)`.
+- Self-lockout guard:
+  - explicit block:
+    - `repo.box lint warnings: group 'paid-readers' is defined but never used...` (warning)
+    - `❌ permission denied: founder ... cannot commit this change because it removes your edit access to ./.repobox/config.yml.`
+    - included concrete recovery hint with required example rule.
+- Clone/auth UX:
+  - unauth clone: `fatal: ... returned error: 402` with guidance line: `payment required for read access... x402/grant-access ... x402/info`.
+  - malformed token: same 402 + payment guidance.
+  - agent before grant (signed identity): 402 + payment guidance.
+  - grant call response: `access granted`.
+  - agent after grant clone: success.
+- Metadata discoverability:
+  - `/x402/info` returns JSON with `for_sale:true`, `read_price`, `memo`, `recipient`, `network`.
+  - `/info/refs` unauth path returns 402 and `x-payment` header with the same metadata.
+- pull/rebase:
+  - founder commit + push
+  - granted agent `git pull --rebase` returned `0`.
+
+### Fixes
+- No code changes required in this run; behavior for this story is acceptable.
+
+### Pass/fail
+- ✅ `lockout + recovery guidance` for founder self-lockout remains clear and blocking.
+- ✅ private repo visibility now discoverable via `/x402/info` and unauth `info/refs` returns actionable payment guidance.
+- ✅ full founder/agent/unknown flow works end-to-end including signed/ungranted/granted reads.
+- ⚠️ none introduced in this run.
+
