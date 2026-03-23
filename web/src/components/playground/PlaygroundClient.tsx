@@ -3,16 +3,18 @@
 import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
-import {
-  REPOBOX_SYSTEM_PROMPT,
-  VENICE_ENDPOINT,
-  VENICE_MODEL,
-  EXPLAIN_EXAMPLES,
-} from "@/lib/repobox-prompt";
+import { EXPLAIN_EXAMPLES } from "@/lib/repobox-prompt";
 import { YamlHighlighter, ExplanationHighlighter } from "./SyntaxHighlighter";
 import { TestRunner } from "./TestRunner";
 
 type Mode = "generate" | "explain";
+
+type LintState = {
+  ok: boolean;
+  output: string;
+  repaired?: boolean;
+  guardIssues?: string[];
+} | null;
 
 const GENERATE_EXAMPLES = [
   {
@@ -42,6 +44,7 @@ export function PlaygroundClient() {
   const [generateInput, setGenerateInput] = useState("");
   const [explainInput, setExplainInput] = useState("");
   const [output, setOutput] = useState("");
+  const [lintState, setLintState] = useState<LintState>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [showTests, setShowTests] = useState(false);
@@ -53,45 +56,23 @@ export function PlaygroundClient() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const userMessage =
-      targetMode === "generate"
-        ? `Generate a .repobox/config.yml for this scenario:\n\n${inputText}\n\nOutput ONLY the YAML. No explanation, no code fences.`
-        : `Explain this .repobox/config.yml in plain English. What can each group do? What are they denied?\n\n${inputText}`;
-
     try {
-      const res = await fetch(VENICE_ENDPOINT, {
+      const res = await fetch("/api/playground", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_VENICE_API_KEY}`,
         },
-        body: JSON.stringify({
-          model: VENICE_MODEL,
-          stream: false, // Non-streaming for test runs
-          messages: [
-            { role: "system", content: REPOBOX_SYSTEM_PROMPT },
-            { role: "user", content: userMessage },
-          ],
-          temperature: 0.1,
-          max_tokens: 1500,
-          ...(VENICE_MODEL.includes('claude') ? {
-            anthropic_parameters: {
-              include_anthropic_system_prompt: false,
-            }
-          } : {
-            venice_parameters: {
-              include_venice_system_prompt: false,
-              disable_thinking: true,
-            }
-          }),
-        }),
+        body: JSON.stringify({ mode: targetMode, input: inputText }),
         signal: controller.signal,
       });
 
       if (!res.ok) throw new Error(`API error: ${res.status}`);
-      
+
       const data = await res.json();
-      return data.choices?.[0]?.message?.content || "";
+      if (targetMode === "generate") {
+        setLintState(data.lint ?? null);
+      }
+      return data.output || "";
     } finally {
       abortRef.current = null;
     }
@@ -101,84 +82,16 @@ export function PlaygroundClient() {
     const input = mode === "generate" ? generateInput.trim() : explainInput.trim();
     if (!input) return;
 
-    if (abortRef.current) abortRef.current.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
     setOutput("");
+    if (mode === "generate") setLintState(null);
     setIsStreaming(true);
     setStatusText("thinking...");
 
-    const userMessage =
-      mode === "generate"
-        ? `Generate a .repobox/config.yml for this scenario:\n\n${input}\n\nOutput ONLY the YAML. No explanation, no code fences.`
-        : `Explain this .repobox/config.yml in plain English. What can each group do? What are they denied?\n\n${input}`;
-
     try {
-      const res = await fetch(VENICE_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_VENICE_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: VENICE_MODEL,
-          stream: true,
-          messages: [
-            { role: "system", content: REPOBOX_SYSTEM_PROMPT },
-            { role: "user", content: userMessage },
-          ],
-          temperature: 0.1, // Reduced for more consistent structured output
-          max_tokens: 1500,  // Reduced for faster responses
-          // Model-specific optimizations
-          ...(VENICE_MODEL.includes('claude') ? {
-            anthropic_parameters: {
-              include_anthropic_system_prompt: false,
-            }
-          } : {
-            venice_parameters: {
-              include_venice_system_prompt: false,
-              disable_thinking: true,
-            }
-          }),
-        }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-
-      setStatusText("streaming...");
-
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let fullText = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop()!;
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") continue;
-
-          try {
-            const json = JSON.parse(data);
-            const delta = json.choices?.[0]?.delta?.content;
-            if (delta) {
-              fullText += delta;
-              setOutput(fullText);
-              if (outputRef.current) {
-                outputRef.current.scrollTop = outputRef.current.scrollHeight;
-              }
-            }
-          } catch {}
-        }
+      const result = await runGeneration(input, mode);
+      setOutput(result);
+      if (outputRef.current) {
+        outputRef.current.scrollTop = outputRef.current.scrollHeight;
       }
     } catch (err: any) {
       if (err.name !== "AbortError") {
@@ -189,7 +102,7 @@ export function PlaygroundClient() {
       setStatusText("");
       abortRef.current = null;
     }
-  }, [mode, generateInput, explainInput]);
+  }, [mode, generateInput, explainInput, runGeneration]);
 
   const copyOutput = useCallback(() => {
     const text = outputRef.current?.innerText || output;
@@ -205,6 +118,8 @@ export function PlaygroundClient() {
     },
     [run]
   );
+
+  const lintFailed = mode === "generate" && !!lintState && !lintState.ok;
 
   return (
     <div className="pg-root">
@@ -322,9 +237,16 @@ export function PlaygroundClient() {
               <label className="pg-label">
                 {mode === "generate" ? "Generated config" : "Explanation"}
               </label>
-              <button className="pg-copy-btn" onClick={copyOutput}>
-                copy
-              </button>
+              <div className="pg-output-actions">
+                {mode === "generate" && lintState && (
+                  <span className={`pg-lint-badge ${lintState.ok ? "pass" : "fail"}`}>
+                    Linter: {lintState.ok ? "PASS" : "FAIL"}
+                  </span>
+                )}
+                <button className="pg-copy-btn" onClick={copyOutput} disabled={lintFailed}>
+                  copy
+                </button>
+              </div>
             </div>
             <div
               ref={outputRef}
@@ -340,6 +262,19 @@ export function PlaygroundClient() {
                 <span className="pg-output-placeholder">Output will appear here...</span>
               )}
             </div>
+            {mode === "generate" && lintState && !lintState.ok && (
+              <div className="pg-lint-errors">
+                <div className="pg-lint-errors-title">Config failed validation. Copy is disabled.</div>
+                <pre>{lintState.output}</pre>
+                {lintState.guardIssues && lintState.guardIssues.length > 0 && (
+                  <ul>
+                    {lintState.guardIssues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Test Runner — hidden from UI, kept for dev use */}
@@ -633,6 +568,36 @@ export function PlaygroundClient() {
           color: var(--bp-accent);
           border-color: rgba(79, 195, 247, 0.3);
         }
+        .pg-copy-btn:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+          color: var(--bp-dim);
+          border-color: var(--bp-border);
+        }
+        .pg-output-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .pg-lint-badge {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          padding: 3px 7px;
+          border-radius: 999px;
+          border: 1px solid var(--bp-border);
+        }
+        .pg-lint-badge.pass {
+          color: #78e08f;
+          background: rgba(120, 224, 143, 0.12);
+          border-color: rgba(120, 224, 143, 0.28);
+        }
+        .pg-lint-badge.fail {
+          color: #ff8a8a;
+          background: rgba(255, 138, 138, 0.12);
+          border-color: rgba(255, 138, 138, 0.28);
+        }
         .pg-output {
           min-height: 200px;
           padding: 16px;
@@ -648,6 +613,30 @@ export function PlaygroundClient() {
         .pg-output-placeholder {
           color: #2a4a62;
           font-style: italic;
+        }
+        .pg-lint-errors {
+          margin-top: 10px;
+          border: 1px solid rgba(255, 138, 138, 0.28);
+          background: rgba(255, 138, 138, 0.08);
+          border-radius: 6px;
+          padding: 10px 12px;
+          color: #ffb3b3;
+          font-size: 11px;
+        }
+        .pg-lint-errors-title {
+          font-weight: 700;
+          margin-bottom: 6px;
+          color: #ffd0d0;
+        }
+        .pg-lint-errors pre {
+          margin: 0;
+          white-space: pre-wrap;
+          word-break: break-word;
+          color: #ffc9c9;
+        }
+        .pg-lint-errors ul {
+          margin: 8px 0 0 16px;
+          padding: 0;
         }
 
         /* Sidebar */

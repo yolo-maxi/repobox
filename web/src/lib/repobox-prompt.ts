@@ -7,9 +7,9 @@ export const VENICE_MODEL = "llama-3.3-70b"; // Fast on Venice, good at followin
 export const EXPLAIN_EXAMPLES = [
   `groups:
   founders:
-    - evm:0xAAA...123
+    - evm:0x7777777777777777777777777777777777777777
   agents:
-    - evm:0xBBB...456
+    - evm:0x6666666666666666666666666666666666666666
 
 permissions:
   default: allow
@@ -25,9 +25,9 @@ permissions:
 
   `groups:
   maintainers:
-    - evm:0xAAA...123
+    - evm:0x7777777777777777777777777777777777777777
   viewers:
-    - evm:0xBBB...456
+    - evm:0x6666666666666666666666666666666666666666
 
 permissions:
   default: deny
@@ -37,12 +37,12 @@ permissions:
 
   `groups:
   orchestrator:
-    - evm:0xAAA...001
+    - evm:0x8888888888888888888888888888888888888888
   workers:
-    - evm:0xBBB...002
-    - evm:0xCCC...003
-    - evm:0xDDD...004
-    - evm:0xEEE...005
+    - evm:0x9999999999999999999999999999999999999999
+    - evm:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    - evm:0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    - evm:0x5555555555555555555555555555555555555555
 
 permissions:
   default: deny

@@ -73,18 +73,18 @@ CRITICAL RULES:
 - Implicit deny per target: if ANY rule mentions a verb+target, others are denied for THAT target
 - Top-to-bottom priority: first match wins
 - Quote targets starting with > in nested YAML rules
-- Use placeholder addresses: evm:0xAAA...111, evm:0xBBB...222, evm:0xCCC...333, etc.
+- Use placeholder addresses: evm:0x1111111111111111111111111111111111111111, evm:0x2222222222222222222222222222222222222222, evm:0x3333333333333333333333333333333333333333, etc.
 - "own" expands: read >* + all write verbs at the specified target
 
 COMPLETE EXAMPLE (team + AI agents):
 
 groups:
   founders:
-    - evm:0xAAA...111
-    - evm:0xBBB...222
+    - evm:0x1111111111111111111111111111111111111111
+    - evm:0x2222222222222222222222222222222222222222
   agents:
-    - evm:0xCCC...333
-    - evm:0xDDD...444
+    - evm:0x3333333333333333333333333333333333333333
+    - evm:0x4444444444444444444444444444444444444444
 
 permissions:
   default: allow
@@ -109,9 +109,9 @@ ANOTHER EXAMPLE (file lockdown):
 
 groups:
   maintainers:
-    - evm:0xAAA...111
+    - evm:0x1111111111111111111111111111111111111111
   contributors:
-    - evm:0xBBB...222
+    - evm:0x2222222222222222222222222222222222222222
 
 permissions:
   default: allow
@@ -133,9 +133,9 @@ ANOTHER EXAMPLE (strict with file control):
 
 groups:
   founders:
-    - evm:0xAAA...111
+    - evm:0x1111111111111111111111111111111111111111
   agents:
-    - evm:0xBBB...222
+    - evm:0x2222222222222222222222222222222222222222
 
 permissions:
   default: allow
@@ -163,9 +163,9 @@ EXAMPLE WITH READ ACCESS:
 
 groups:
   owners:
-    - evm:0xAAA...111
+    - evm:0x1111111111111111111111111111111111111111
   viewers:
-    - evm:0xBBB...222
+    - evm:0x2222222222222222222222222222222222222222
 
 permissions:
   default: deny
