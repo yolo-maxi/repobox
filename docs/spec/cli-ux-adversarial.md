@@ -28,12 +28,11 @@
   - added `test_grant_and_lookup_x402_access_is_case_insensitive`
 
 ### Validation status
-- Targeted test commands now in place:
-  - `cargo test -p repobox-server x402_grant_access_endpoint`
-  - `cargo test -p repobox-server x402_info_endpoint`
-  - `cargo test -p repobox-server x402_grant_unlocks_authorized_clone`
-  - `cargo test -p repobox-server test_grant_and_lookup_x402_access_is_case_insensitive`
-- Current environment result: unable to execute `cargo` here (`/bin/bash: cargo: command not found`), so validation is queued for host with toolchain.
+- Targeted test commands executed (via `/home/xiko/.cargo/bin/cargo`):
+  - `cargo test -p repobox-server x402_ -- --nocapture`
+  - `cargo test -p repobox-server test_grant_and_lookup_x402_access_is_case_insensitive -- --nocapture`
+- Result: ✅ all targeted tests pass, including signed-auth positive clone after grant.
+- Deep rerun scenario `RUN_ID=repobox-qa-loop-1774243000`: still returns `402` after raw post-grant clone in this helper flow (expected, because header is not injected automatically), and all user-facing guidance remains unchanged.
 
 ### UX outcome
 - Expected behavior after verification:
