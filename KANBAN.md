@@ -34,6 +34,7 @@ Use on-chain resolver to gate read access. Hold X tokens to clone.
   - verify normal git UX still works for legitimate commands
   - ensure repobox policy checks remain enforced on commit/push flows
   - add adversarial tests for bypass attempts and document residual risk
+- **Progress (2026-03-23):** CLI prototype shipped in `repobox setup --replace-binary` / `--restore-binary` with backup+rollback flow (commit `aaaddfa`). Pending: adversarial validation + docs + production rollout playbook.
 
 ## 🔨 In Progress
 
