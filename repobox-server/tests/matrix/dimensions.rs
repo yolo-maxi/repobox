@@ -1,14 +1,14 @@
 use std::collections::HashSet;
 
 /// Test scenario dimensions for policy matrix testing
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TestLayer {
     Unit,
     Shim,
     Server,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PolicyArea {
     Ownership,
     AppendOnly,
@@ -18,7 +18,7 @@ pub enum PolicyArea {
     Routing,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Operation {
     Push,
     CreateBranch,
@@ -28,7 +28,7 @@ pub enum Operation {
     RebaseResultPush,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RepoState {
     EmptyRepo,
     ExistingBranch,
@@ -37,7 +37,7 @@ pub enum RepoState {
     ProtectedBranch,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChangeShape {
     Create,
     Modify,
@@ -48,7 +48,7 @@ pub enum ChangeShape {
     ModeOnly,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ActorState {
     Allowed,
     Disallowed,
@@ -59,7 +59,7 @@ pub enum ActorState {
     WrongSigner,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ClientPath {
     RawGit,
     Shim,
@@ -67,19 +67,24 @@ pub enum ClientPath {
     AlternateClient,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ExpectedResult {
     Allow,
     Reject,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReasonCode {
     OwnershipViolation,
     AppendViolation,
     SignatureRequired,
     NonFfDenied,
     BranchCreateDenied,
+    BranchDeleteDenied,
+    ForcePushDenied,
+    ProtectedBranchDeleteDenied,
+    ProtectedBranchForcePushDenied,
+    AtomicMultiRefPartialFailure,
     UnauthorizedAccess,
     PolicyViolation,
 }
@@ -99,26 +104,16 @@ pub struct DimensionRegistry {
 
 impl Default for DimensionRegistry {
     fn default() -> Self {
-        use TestLayer::*;
-        use PolicyArea::*;
-        use Operation::*;
-        use RepoState::*;
-        use ChangeShape::*;
-        use ActorState::*;
-        use ClientPath::*;
-        use ExpectedResult::*;
-        use ReasonCode::*;
-
         Self {
-            layers: [Unit, Shim, Server].into_iter().collect(),
-            policy_areas: [Ownership, AppendOnly, Signatures, BranchTopology, MergeRules, Routing].into_iter().collect(),
-            operations: [Push, CreateBranch, DeleteBranch, ForcePush, Merge, RebaseResultPush].into_iter().collect(),
-            repo_states: [EmptyRepo, ExistingBranch, DivergedHistory, MergePresent, ProtectedBranch].into_iter().collect(),
-            change_shapes: [Create, Modify, Delete, Rename, Append, Rewrite, ModeOnly].into_iter().collect(),
-            actor_states: [Allowed, Disallowed, Owner, NonOwner, Signed, Unsigned, WrongSigner].into_iter().collect(),
-            client_paths: [RawGit, Shim, OutdatedShim, AlternateClient].into_iter().collect(),
-            expected_results: [Allow, Reject].into_iter().collect(),
-            reason_codes: [OwnershipViolation, AppendViolation, SignatureRequired, NonFfDenied, BranchCreateDenied, UnauthorizedAccess, PolicyViolation].into_iter().collect(),
+            layers: [TestLayer::Unit, TestLayer::Shim, TestLayer::Server].into_iter().collect(),
+            policy_areas: [PolicyArea::Ownership, PolicyArea::AppendOnly, PolicyArea::Signatures, PolicyArea::BranchTopology, PolicyArea::MergeRules, PolicyArea::Routing].into_iter().collect(),
+            operations: [Operation::Push, Operation::CreateBranch, Operation::DeleteBranch, Operation::ForcePush, Operation::Merge, Operation::RebaseResultPush].into_iter().collect(),
+            repo_states: [RepoState::EmptyRepo, RepoState::ExistingBranch, RepoState::DivergedHistory, RepoState::MergePresent, RepoState::ProtectedBranch].into_iter().collect(),
+            change_shapes: [ChangeShape::Create, ChangeShape::Modify, ChangeShape::Delete, ChangeShape::Rename, ChangeShape::Append, ChangeShape::Rewrite, ChangeShape::ModeOnly].into_iter().collect(),
+            actor_states: [ActorState::Allowed, ActorState::Disallowed, ActorState::Owner, ActorState::NonOwner, ActorState::Signed, ActorState::Unsigned, ActorState::WrongSigner].into_iter().collect(),
+            client_paths: [ClientPath::RawGit, ClientPath::Shim, ClientPath::OutdatedShim, ClientPath::AlternateClient].into_iter().collect(),
+            expected_results: [ExpectedResult::Allow, ExpectedResult::Reject].into_iter().collect(),
+            reason_codes: [ReasonCode::OwnershipViolation, ReasonCode::AppendViolation, ReasonCode::SignatureRequired, ReasonCode::NonFfDenied, ReasonCode::BranchCreateDenied, ReasonCode::BranchDeleteDenied, ReasonCode::ForcePushDenied, ReasonCode::ProtectedBranchDeleteDenied, ReasonCode::ProtectedBranchForcePushDenied, ReasonCode::AtomicMultiRefPartialFailure, ReasonCode::UnauthorizedAccess, ReasonCode::PolicyViolation].into_iter().collect(),
         }
     }
 }

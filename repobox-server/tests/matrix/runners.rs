@@ -4,7 +4,8 @@ use std::path::Path;
 use std::time::Duration;
 use std::thread;
 
-use super::scenario::{TestScenario, ScenarioMatrix, ExpectedResult};
+use super::scenario::{TestScenario, ScenarioMatrix};
+use super::dimensions::{ExpectedResult, ClientPath};
 use super::fixtures::{TestFixture, TestActor};
 use super::dimensions::ReasonCode;
 
@@ -370,6 +371,11 @@ impl ServerTestRunner {
             ReasonCode::SignatureRequired => "signature",
             ReasonCode::NonFfDenied => "non-fast-forward",
             ReasonCode::BranchCreateDenied => "branch",
+            ReasonCode::BranchDeleteDenied => "branch delete",
+            ReasonCode::ForcePushDenied => "force push",
+            ReasonCode::ProtectedBranchDeleteDenied => "protected branch delete",
+            ReasonCode::ProtectedBranchForcePushDenied => "protected branch force push",
+            ReasonCode::AtomicMultiRefPartialFailure => "atomic",
             ReasonCode::UnauthorizedAccess => "unauthorized",
             ReasonCode::PolicyViolation => "policy",
         };
