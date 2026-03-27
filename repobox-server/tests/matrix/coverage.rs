@@ -228,9 +228,10 @@ impl CoverageAuditor {
         let policy_matrix = matrices.iter()
             .find(|m| m.policy_area == contract.policy_area);
 
+        let empty_scenarios = vec![];
         let scenarios = policy_matrix
             .map(|m| &m.scenarios)
-            .unwrap_or(&vec![]);
+            .unwrap_or(&empty_scenarios);
 
         let mut missing_server_cases = Vec::new();
         let mut missing_shim_cases = Vec::new();
@@ -287,7 +288,7 @@ impl CoverageAuditor {
     }
 
     fn find_duplicate_scenarios(&self, scenarios: &[TestScenario]) -> Vec<(String, String)> {
-        let mut seen_patterns = HashMap::new();
+        let mut seen_patterns: HashMap<String, String> = HashMap::new();
         let mut duplicates = Vec::new();
 
         for scenario in scenarios {
