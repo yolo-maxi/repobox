@@ -374,6 +374,9 @@ fn test_signature_coverage_completeness() {
     let matrix = ScenarioMatrix::new(PolicyArea::Signatures).add_scenarios(scenarios);
     
     let auditor = CoverageAuditor::new();
+    let matrix_len = matrix.scenarios.len();
+    let server_count = matrix.get_server_scenarios().len();
+    let shim_count = matrix.get_shim_scenarios().len();
     let analyses = auditor.audit(&[matrix]);
     
     let signature_analysis = analyses.iter()
@@ -406,9 +409,9 @@ fn test_signature_coverage_completeness() {
     }
     
     println!("📊 Signature policy coverage analysis completed");
-    println!("   - Total scenarios: {}", matrix.scenarios.len());
-    println!("   - Server scenarios: {}", matrix.get_server_scenarios().len());
-    println!("   - Shim scenarios: {}", matrix.get_shim_scenarios().len());
+    println!("   - Total scenarios: {}", matrix_len);
+    println!("   - Server scenarios: {}", server_count);
+    println!("   - Shim scenarios: {}", shim_count);
     
     // Validate core security scenarios are present
     let server_scenarios = matrix.get_server_scenarios();
