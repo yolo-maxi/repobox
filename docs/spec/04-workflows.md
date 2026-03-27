@@ -1,452 +1,620 @@
-# repo.box Spec: Workflows
+# repo.box Workflows v1
 
-## Overview
+This file is both:
 
-Workflows are generic state machines defined in `.repobox/config.yml`. PRs, ideas, releases, governance proposals — all are instances of workflows. States, transitions, guards, and actions are the building blocks. Instances live as JSONL files in the repo.
+- the product spec for workflow definitions
+- the operating guide for agents writing or validating workflow transactions
 
-**Everything as code.** Workflow definitions, instance data, discussions — all are files in the repo, versioned by git, governed by permissions.
+It defines:
 
-## Core Concepts
+- what a workflow config file must contain
+- how workflow rules interact with `.repobox/config.yml`
+- how workflow state is stored in Git refs
+- what the server clerk must validate
+- what local shim validation should mirror
 
-- **Workflow**: a named state machine with states and transition rules
-- **State**: a named position in the machine (e.g. `draft`, `review`, `merged`)
-- **Transition**: a movement from one state to another, with rules about who can trigger it
-- **Guard**: a condition that must be true for a transition to proceed (onchain call, HTTP check, internal requirement)
-- **Action**: a side effect that fires when a transition completes (merge branch, webhook, notification)
-- **Instance**: a single item moving through a workflow (a specific PR, idea, release)
+---
 
-## Workflow Definitions
+## 1. Goal
 
-Defined in `.repobox/config.yml` under `workflows:`:
+A workflow file defines a **deterministic state machine** for a tracked object.
+
+It tells repo.box:
+
+- what states exist
+- which transitions are allowed
+- who may perform them
+- what approvals are required
+- which canonical events the core emits
+
+It does **not** define delivery, execution, or automation behavior.
+
+---
+
+## 2. Core boundary
+
+### Core owns
+The repo.box core engine, both server-side and local where possible, is responsible for:
+
+- schema validation
+- transition validation
+- permission validation
+- approval validation
+- state mutation validation
+- canonical event emission
+
+### Agents / integrations own
+Agents and integrations are responsible for:
+
+- observing emitted events
+- doing external work
+- checking external systems
+- writing new events or state updates back into repo.box
+
+### Therefore workflow files must not contain
+- webhook URLs
+- delivery config
+- retries
+- ack subsystems
+- CI/GitHub-specific checks
+- arbitrary scripts
+- side effects
+- execution plans
+
+If an external fact matters, an agent must first write it into canonical state. Then workflow validation may check that state.
+
+---
+
+## 3. Workflow definition location
+
+Recommended path:
+
+```text
+.repobox/workflows/<name>.yaml
+```
+
+Example:
+
+```text
+.repobox/workflows/feature_delivery.yaml
+```
+
+Workflow definitions live on `main` and are versioned as normal repo code.
+
+---
+
+## 4. Required YAML shape
+
+A workflow definition must follow this shape:
 
 ```yaml
-workflows:
-  pull-request:
-    states:
-      - draft
-      - review
-      - approved
-      - merged
-      - closed
+workflow: feature_delivery
+version: 1
 
-    transitions:
-      draft -> review:
-        who:
-          - $author
-        
-      review -> approved:
-        who:
-          - @devs
-        requires:
-          approvals: 2
+object:
+  type: feature
+  state_field: state
+  required:
+    - id
+    - title
+    - state
 
-      review -> draft:
-        who:
-          - $author
+states:
+  - idea
+  - scoped
+  - planned
+  - building
+  - review
+  - staged
+  - prod
+  - rejected
 
-      approved -> merged:
-        who:
-          - @founders
-        actions:
-          - merge-branch
-          - close-branch
+initial: idea
 
-      * -> closed:
-        who:
-          - $author
-          - @founders
+terminal:
+  - prod
+  - rejected
+
+paths:
+  - null->idea->scoped->planned->building->review->staged->prod
+
+allow:
+  - review->building
+  - staged->building
+  - idea->rejected
+
+permissions:
+  default: deny
+  rules:
+    - "* transition null->idea"
+    - "pm transition idea->scoped->planned"
+    - "dev transition planned->building"
+    - "reviewer transition building->review"
+    - "release transition review->staged->prod"
+
+requires:
+  - when: review->staged
+    approvals:
+      from: group:project:reviewers
+      threshold: majority
+
+events:
+  emit:
+    - transition.requested
+    - transition.committed
+    - transition.rejected
 ```
 
-### Special Variables
+---
 
-- `$author` — the identity that created the instance
-- `$assignee` — the assigned identity (if set)
-- `*` — wildcard state (any state)
+## 5. Field semantics
 
-### Terminal States
+### `workflow`
+Human-readable workflow id.
 
-States that have no outgoing transitions are terminal. An instance in a terminal state is immutable — no further transitions possible. In the example above, `merged` and `closed` are terminal.
+### `version`
+Workflow schema version. Start with `1`.
 
-## Guards
-
-Guards are conditions checked **before** a transition is allowed. If any guard fails, the transition is rejected.
-
-### Approval Guard
+### `object`
+Defines the governed object shape.
 
 ```yaml
-review -> approved:
-  who:
-    - @devs
-  requires:
-    approvals: 2                  # need 2 approved reviews from @devs
+object:
+  type: feature
+  state_field: state
+  required:
+    - id
+    - title
+    - state
 ```
 
-The workflow engine counts `review` entries with `verdict: approved` in the instance thread from identities in the `who` list.
+Meaning:
 
-### Onchain Guard
+- `type`: object kind
+- `state_field`: field storing workflow state
+- `required`: fields required on every object
 
-Calls a smart contract function. The function takes a single `uint256` (the instance ID) and returns `bool`.
+### `states`
+All valid states.
+
+### `initial`
+State used on creation.
+
+### `terminal`
+Final states. No further transitions out unless a future schema explicitly permits them.
+
+### `paths`
+Canonical lifecycle chains.
+
+Example:
 
 ```yaml
-voting -> executed:
-  who:
-    - @everyone
-  guard:
-    onchain:
-      chain: 8453
-      contract: "0xGovernance..."
-      function: isApproved          # f(uint256) → bool
-      arg: $instance.id
+paths:
+  - null->idea->scoped->planned->building->review->staged->prod
 ```
 
-Use case: DAO governance. Members vote onchain, setting `proposalId → true` in a mapping. The transition only proceeds if the contract confirms.
+This implies allowed edges:
 
-Server calls the contract via its own RPC (same as group resolvers — users don't need nodes).
+- `null->idea`
+- `idea->scoped`
+- `scoped->planned`
+- `planned->building`
+- `building->review`
+- `review->staged`
+- `staged->prod`
 
-### HTTP Guard
+### `allow`
+Extra edges outside the canonical paths.
 
-POSTs instance data to an HTTP endpoint. Expects `{"approved": true}` or `{"approved": false}` in response.
+Example:
 
 ```yaml
-review -> approved:
-  who:
-    - @devs
-  guard:
-    http:
-      url: https://ci.example.com/status
-      # POSTs: {"instance_id": 1, "workflow": "pull-request", "branch": "feature/...", ...}
+allow:
+  - review->building
+  - idea->rejected
 ```
 
-Use case: CI status checks, external review tools (Watson/Gaston), security scanners.
+### `permissions`
+Workflow-layer transition permissions.
 
-### Combined Guards
-
-Multiple guards can be required. All must pass.
+Example:
 
 ```yaml
-approved -> merged:
-  who:
-    - @founders
-  requires:
-    approvals: 2
-  guard:
-    http:
-      url: https://ci.example.com/status
-    onchain:
-      chain: 8453
-      contract: "0xApprovalRegistry..."
-      function: isApproved
-      arg: $instance.id
-  actions:
-    - merge-branch
+permissions:
+  default: deny
+  rules:
+    - "* transition null->idea"
+    - "reviewer transition review->approved"
 ```
 
-This transition requires: 2 approvals from @founders + CI passing + onchain approval. All three must be true.
+Interpretation:
 
-## Actions
+- `default` is the fallback workflow policy
+- each rule grants transition capability
+- chained edges expand left-to-right
 
-Actions fire **after** a transition completes successfully. They are side effects.
-
-### Built-in Actions
-
-| Action | Meaning |
-|--------|---------|
-| `merge-branch` | Merge the instance's source branch into its target branch |
-| `close-branch` | Delete the source branch after merge |
-
-### Webhook Action
-
-Fire-and-forget HTTP POST with instance data.
+Example:
 
 ```yaml
-actions:
-  - webhook:
-      url: https://hooks.example.com/deploy
-      # POSTs full instance data
+"pm transition idea->scoped->planned"
 ```
 
-Use cases: trigger deploys, notify external systems, update dashboards.
+expands to:
 
-### Onchain Action
+- `idea->scoped`
+- `scoped->planned`
 
-Call a contract function after transition.
+### `requires`
+Approval requirements for specific transitions.
+
+Example:
 
 ```yaml
-actions:
-  - onchain:
-      chain: 8453
-      contract: "0xRegistry..."
-      function: recordMerge           # f(uint256) → void
-      arg: $instance.id
+requires:
+  - when: in_review->approved
+    approvals:
+      from: group:project:reviewers
+      threshold: majority
 ```
 
-Use case: record events onchain (audit trail, reputation, rewards).
+### `events.emit`
+Canonical event types emitted by the core after validation.
 
-## Instance Storage
+This declares event types, not delivery mechanisms.
 
-Instances are JSONL files in `.box/workflows/<workflow-name>/`.
+---
 
-### Directory Structure
+## 6. Selector syntax
 
-```
-.box/
-  workflows/
-    pull-request/
-      index.jsonl              # master index — one line per instance
-      fix-auth-bug.jsonl       # discussion thread for PR #1
-      add-streaming.jsonl      # discussion thread for PR #2
-    idea/
-      index.jsonl
-      monorepo-migration.jsonl
-    release/
-      index.jsonl
+Selectors identify users or groups.
+
+Recommended shape:
+
+```text
+<kind>:<namespace>:<value>
 ```
 
-### `index.jsonl` — Master Index
+Examples:
 
-One JSON line per instance. **Line number = instance ID** (1-indexed).
+- `user:evm:0xF053A15C36f1FbCC2A281095e6f1507ea1EFc931`
+- `user:ens:fran.eth`
+- `group:project:reviewers`
+- `group:workflow:maintainers`
 
-```jsonl
-{"title":"Fix auth bug","slug":"fix-auth-bug","branch":"feature/fix-auth","target":"main","author":"evm:0xAlice...","state":"review","labels":["bug","security"],"created":"2026-03-17T10:00:00Z","updated":"2026-03-17T11:15:00Z"}
-{"title":"Add streaming support","slug":"add-streaming","branch":"feature/streaming","target":"main","author":"evm:0xBob...","state":"draft","labels":["feature"],"created":"2026-03-17T11:00:00Z","updated":"2026-03-17T11:00:00Z"}
-```
+### Rule
+Selectors may be human-friendly in config, but the engine should normalize them to canonical principals during evaluation.
 
-Fields:
-- `title` — human-readable title
-- `slug` — URL/file-safe name, used for the thread filename
-- `branch` — source branch (optional — ideas don't have branches)
-- `target` — target branch for merge (optional)
-- `author` — identity that created the instance
-- `state` — current state in the workflow
-- `labels` — freeform tags
-- `created` / `updated` — timestamps
-- Any additional fields defined by the workflow
+Example:
 
-**State transitions** modify the instance's line in `index.jsonl`. This requires `edit` permission on the index file, which is controlled by the workflow's transition rules.
+- `user:ens:fran.eth` may resolve internally to an EVM identity
 
-### `<slug>.jsonl` — Discussion Thread
+---
 
-One file per instance. Append-only bulletin board. Each line is a self-contained JSON event.
+## 7. Approval semantics
 
-#### Line Types
-
-**Description** (first line, by author):
-```jsonl
-{"type":"description","author":"evm:0xAlice...","body":"This PR fixes the auth bypass in the middleware. The bug was caused by...","ts":"2026-03-17T10:00:00Z"}
-```
-
-**Comment:**
-```jsonl
-{"type":"comment","author":"evm:0xBob...","body":"Looks good but check line 42 in auth.ts","ts":"2026-03-17T10:30:00Z"}
-```
-
-**Code suggestion** (inline review comment):
-```jsonl
-{"type":"suggestion","author":"evm:0xBob...","file":"src/auth.ts","line":42,"old":"if (token) {","new":"if (token && verify(token)) {","body":"Should verify the token, not just check existence","ts":"2026-03-17T10:31:00Z"}
-```
-
-**Review verdict:**
-```jsonl
-{"type":"review","author":"evm:0xBob...","verdict":"approved","body":"LGTM after the fix","ts":"2026-03-17T11:15:00Z"}
-```
-
-Verdict values: `approved`, `changes-requested`, `comment-only`.
-
-**Suggestion accepted:**
-```jsonl
-{"type":"suggestion-accepted","ref":3,"by":"evm:0xAlice...","commit":"abc123","ts":"2026-03-17T11:00:00Z"}
-```
-
-`ref` is the line number of the original suggestion.
-
-**Transition log:**
-```jsonl
-{"type":"transition","from":"review","to":"approved","by":"evm:0xBob...","ts":"2026-03-17T11:15:00Z"}
-```
-
-**Cross-reference:**
-```jsonl
-{"type":"reference","ref":"idea/3","body":"Implements idea #3","author":"evm:0xAlice...","ts":"2026-03-17T10:00:00Z"}
-```
-
-### Why JSONL
-
-- **Append-friendly**: new events are new lines. Works perfectly with `append` permission.
-- **Machine-readable**: every line is valid JSON. Agents parse it trivially.
-- **Git-diffable**: each line is self-contained. Merges are clean. Conflicts are rare (append-only).
-- **No schema migration**: new line types can be added without changing existing data.
-- **Line number as ID**: implicit, stable, free.
-
-## Creating Instances
-
-To open a new PR/idea/etc:
-
-1. Append a line to `index.jsonl` with metadata and initial state
-2. Create a new `<slug>.jsonl` file with the description as the first line
-
-The shim provides a helper: `git repobox pr create --title "Fix auth bug" --branch feature/fix-auth --target main` (which generates the JSONL entries and commits them). But you can also just manually append to the files with `git commit`.
-
-### Permission Model for Instances
-
-Controlled by the standard file permissions in `.repobox/config.yml`:
+### Shape
 
 ```yaml
-.box/workflows/pull-request/index.jsonl:
-  append: @everyone              # anyone can open a PR (append to index)
-  edit: @founders                # only founders can change state
-
-.box/workflows/pull-request/*.jsonl:
-  append: @everyone              # anyone can comment on any PR
+requires:
+  - when: in_review->approved
+    approvals:
+      from: group:project:reviewers
+      threshold: majority
 ```
 
-The workflow engine validates transitions additionally — even if you have `edit` on `index.jsonl`, you can only perform transitions allowed by the workflow definition for your identity.
+### `approvals.from`
+Defines the candidate signer set.
 
-## Example Workflows
+Can be:
 
-### Idea / Discussion
+- a user selector
+- a group selector
 
-No branch required. Pure discussion workflow.
+### `approvals.threshold`
+Allowed v1 values:
+
+- integer, e.g. `1`, `2`, `3`
+- `all`
+- `majority`
+
+### Validation semantics
+At validation time:
+
+- resolve the selector set from canonical state/config
+- dedupe signers by canonical identity
+- evaluate threshold against the resolved set
+
+### Majority rule
+
+```text
+majority(X) = floor(|X| / 2) + 1
+```
+
+### Empty-set rule
+If a selector resolves to an empty set:
+
+- reject the transition
+- error: `ERR_GUARD_EMPTY_SET`
+
+If no approval rule is wanted, omit `requires`.
+
+---
+
+## 8. Relationship to `.repobox/config.yml`
+
+There are **two permission layers**.
+
+### Layer 1: base repo permissions
+Defined in:
+
+```text
+.repobox/config.yml
+```
+
+This governs repository capabilities such as:
+
+- who may read
+- who may push
+- who may write refs
+- who may update canonical workflow state refs
+- who may edit workflow definitions on `main`
+
+This is the coarse security perimeter.
+
+### Layer 2: workflow permissions
+Defined in the workflow YAML.
+
+This governs workflow behavior such as:
+
+- who may move `idea -> scoped`
+- who may approve `review -> staged`
+- who may close a bug
+- who may trigger a release transition
+
+This is the process layer.
+
+### Critical rule
+A transition is allowed only if **both** layers allow it.
+
+That means:
+
+- passing workflow rules is not enough
+- passing repo config rules is not enough
+- both must pass
+
+### Practical split
+A user may be allowed to:
+
+- push proposal refs
+- submit transition requests
+- comment on workflow objects
+
+without being allowed to:
+
+- mutate canonical workflow state refs directly
+- approve protected transitions
+- edit workflow definitions
+
+That split is intentional.
+
+### Recommended responsibility split
+`.repobox/config.yml` should define:
+
+- identities
+- groups
+- base read/write capabilities
+- which refs are writable by which actors
+- who can edit workflow definitions
+
+Workflow YAML should define:
+
+- valid states
+- valid transitions
+- transition permissions
+- approval rules
+- emitted canonical events
+
+Workflow YAML should preferably reference groups rooted in `.repobox/config.yml` rather than duplicating identity truth.
+
+---
+
+## 9. Git storage model
+
+Workflow state is stored in Git refs, not only in files on `main`.
+
+### Definitions
+Workflow definitions live in versioned files on `main`, for example:
+
+```text
+.repobox/workflows/feature_delivery.yaml
+```
+
+### Canonical state refs
+Recommended pattern:
+
+```text
+refs/repobox/workflows/<workflow>/<object-id>
+```
+
+Example:
+
+```text
+refs/repobox/workflows/feature_delivery/feat-123
+```
+
+That ref points to the canonical serialized state for that object.
+
+### Transition request refs
+Optional proposal/request refs should live separately, for example:
+
+```text
+refs/repobox/workflow-queue/<workflow>/<object-id>/<request-id>
+```
+
+This lets actors propose transitions without directly mutating canonical state.
+
+### Event refs
+Canonical event history may also be materialized separately, for example:
+
+```text
+refs/repobox/workflow-events/<workflow>/<object-id>
+```
+
+Exact storage layout may evolve, but the distinction should remain:
+
+- definitions in `main`
+- canonical state in refs
+- requests/events in dedicated workflow refs
+
+---
+
+## 10. Canonical object state
+
+Each workflow object should serialize enough data for deterministic validation.
+
+Minimum recommended fields:
 
 ```yaml
-workflows:
-  idea:
-    states:
-      - open
-      - discussing
-      - accepted
-      - rejected
-      - implemented
-
-    transitions:
-      open -> discussing:
-        who:
-          - @everyone
-
-      discussing -> accepted:
-        who:
-          - @founders
-
-      discussing -> rejected:
-        who:
-          - @founders
-
-      accepted -> implemented:
-        who:
-          - @devs
-        guard:
-          requires:
-            linked-pr: merged     # must link to a merged PR
+id: feat-123
+type: feature
+title: Add YAML workflow parser
+state: review
+version: 7
+workflow: feature_delivery
 ```
 
-### Release
+Additional fields may include:
 
-```yaml
-workflows:
-  release:
-    states:
-      - proposed
-      - testing
-      - approved
-      - published
+- approvals
+- signers
+- timestamps
+- linked refs
+- attached artifact refs
+- review metadata
 
-    transitions:
-      proposed -> testing:
-        who:
-          - @devs
+### Rule
+Core validation may only rely on:
 
-      testing -> approved:
-        who:
-          - @auditors
-        requires:
-          approvals: 1
-        guard:
-          http:
-            url: https://ci.example.com/release-check
+- current canonical state
+- proposed next state
+- workflow definition
+- attached signed payload
 
-      approved -> published:
-        who:
-          - @founders
-        actions:
-          - webhook:
-              url: https://deploy.example.com/publish
-```
+It must not fetch external truth.
 
-### Governance Proposal
+So this is allowed:
 
-Token-gated voting with onchain confirmation.
+- `review.approval_count >= 2` if that field is already in canonical state
 
-```yaml
-workflows:
-  proposal:
-    states:
-      - draft
-      - voting
-      - passed
-      - rejected
-      - executed
+This is not allowed:
 
-    transitions:
-      draft -> voting:
-        who:
-          - @token-holders
+- “GitHub checks are green” unless an agent first writes that fact into canonical state
 
-      voting -> passed:
-        who:
-          - @everyone
-        guard:
-          onchain:
-            chain: 8453
-            contract: "0xGovernor..."
-            function: hasPassed
-            arg: $instance.id
+---
 
-      voting -> rejected:
-        who:
-          - @everyone
-        guard:
-          onchain:
-            chain: 8453
-            contract: "0xGovernor..."
-            function: hasRejected
-            arg: $instance.id
+## 11. Transaction model
 
-      passed -> executed:
-        who:
-          - @founders
-        actions:
-          - merge-branch
-          - onchain:
-              chain: 8453
-              contract: "0xGovernor..."
-              function: markExecuted
-              arg: $instance.id
-```
+A transition transaction should minimally include:
 
-## Tooling
+- target object id
+- workflow id
+- current version or base ref
+- proposed state change
+- actor identity
+- signatures
+- optional code diff / artifact refs
+- timestamp
 
-### `git repobox pr create`
-Create a pull request (appends to index.jsonl + creates thread file).
+Intent:
 
-### `git repobox pr review --approve|--request-changes`
-Submit a review verdict (appends review line to thread).
+- signer submits an event
+- signer includes `codeDiff` or artifact refs when relevant
+- clerk checks whether the transaction is well-formed
+- clerk checks whether the transition is allowed
+- clerk rejects malformed or invalid transactions
 
-### `git repobox pr merge`
-Attempt the `approved → merged` transition.
+### Clerk must reject when
+- workflow file is invalid
+- object shape is invalid
+- state is unknown
+- transition edge is not allowed
+- actor lacks base repo permission
+- actor lacks workflow permission
+- approval threshold is unsatisfied
+- selector resolves to empty set
+- version/base is stale
+- payload/signature is malformed
 
-### `git repobox workflow list <workflow-name>`
-List all instances of a workflow (reads index.jsonl).
+---
 
-### `git repobox workflow transition <workflow-name> <id> <target-state>`
-Generic transition command for any workflow.
+## 12. Local validation objective
 
-### `git repobox workflow create <workflow-name> --title "..." [--branch ...] [--target ...]`
-Create a new instance of any workflow.
+Workflow validation should work locally as well as on the server.
 
-Note: All of these are convenience wrappers. The underlying operation is always a `git commit` that modifies JSONL files — users and agents can do it manually too.
+### Why
+This reduces back-and-forth and lets users/agents catch invalid transitions before push.
 
-## What Workflows Does NOT Cover
+### Objective
+The local shim should mirror server validation as closely as possible for deterministic checks.
 
-- **CI/CD execution** — workflows can trigger webhooks to external CI systems, but don't run builds themselves.
-- **Notifications** — webhook actions can ping notification services, but there's no built-in notification system.
-- **Time-based transitions** — "auto-close after 30 days of inactivity" requires an external cron-like system. Could be a future addition.
-- **Voting weight** — the onchain guard is boolean (passed/not passed). Vote counting, quorum rules, etc. live in the contract, not in repo.box.
+That includes:
+
+- workflow schema parsing
+- transition edge checks
+- workflow permission checks
+- approval-shape checks
+- object/state shape checks
+- stale-base/version checks when enough local information exists
+
+### Server remains canonical
+Local validation is a fast fail layer.
+Server validation remains the final authority.
+
+If local and server validation diverge, that is a bug to fix.
+
+---
+
+## 13. Agent rules
+
+When acting against workflows, agents should:
+
+1. read `.repobox/config.yml`
+2. read the referenced workflow YAML
+3. resolve the object’s current canonical state from refs
+4. propose only valid transitions
+5. attach only well-formed payloads
+6. never assume workflow permission implies ref-write permission
+7. never assume external facts unless already written into canonical state
+
+Agents must not:
+
+- invent side effects from workflow YAML
+- treat delivery as workflow semantics
+- bypass canonical refs
+- mutate workflow state directly unless base repo permissions allow it
+
+---
+
+## 14. Non-goals for v1
+
+Not part of v1:
+
+- webhook delivery
+- retries
+- ack primitives
+- arbitrary expression languages
+- external API querying inside validation
+- custom scripting in workflow files
+- platform-specific automation rules
+
+Keep v1 small, deterministic, and enforceable.
+
+---
+
+## 15. Short rule
+
+If a workflow rule requires the core to understand the outside world, it is probably the wrong rule.
+
+The core should validate **state**, not discover reality.
+
+Reality should arrive through signed events first.

@@ -1,0 +1,44 @@
+workflow: task_basic
+version: 1
+
+object:
+  type: task
+  state_field: state
+  required:
+    - id
+    - title
+    - state
+
+states:
+  - open
+  - in_progress
+  - in_review
+  - closed
+
+initial: open
+
+terminal:
+  - closed
+
+paths:
+  - null->open->in_progress->in_review->closed
+
+allow:
+  - in_progress->open
+  - in_review->in_progress
+
+permissions:
+  default: deny
+  rules:
+    - "* transition null->open"
+    - "* transition open->in_progress"
+    - "* transition in_progress->in_review"
+    - "* transition in_review->closed"
+    - "* transition in_progress->open"
+    - "* transition in_review->in_progress"
+
+events:
+  emit:
+    - transition.requested
+    - transition.committed
+    - transition.rejected
