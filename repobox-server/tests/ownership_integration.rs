@@ -248,7 +248,7 @@ fn test_ownership_coverage_completeness() {
     let matrix = ScenarioMatrix::new(PolicyArea::Ownership).add_scenarios(scenarios);
     
     let auditor = CoverageAuditor::new();
-    let analyses = auditor.audit(&[matrix]);
+    let analyses = auditor.audit(&[matrix.clone()]);
     
     let ownership_analysis = analyses.iter()
         .find(|a| a.policy_area == PolicyArea::Ownership)
