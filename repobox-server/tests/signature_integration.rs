@@ -377,7 +377,7 @@ fn test_signature_coverage_completeness() {
     let matrix_len = matrix.scenarios.len();
     let server_count = matrix.get_server_scenarios().len();
     let shim_count = matrix.get_shim_scenarios().len();
-    let analyses = auditor.audit(&[matrix]);
+    let analyses = auditor.audit(&[matrix.clone()]);
     
     let signature_analysis = analyses.iter()
         .find(|a| a.policy_area == PolicyArea::Signatures)

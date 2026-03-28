@@ -316,7 +316,7 @@ fn test_append_only_coverage_completeness() {
     let matrix = ScenarioMatrix::new(PolicyArea::AppendOnly).add_scenarios(scenarios);
     
     let auditor = CoverageAuditor::new();
-    let analyses = auditor.audit(&[matrix]);
+    let analyses = auditor.audit(&[matrix.clone()]);
     
     let append_analysis = analyses.iter()
         .find(|a| a.policy_area == PolicyArea::AppendOnly)
