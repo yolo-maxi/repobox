@@ -19,3 +19,6 @@ rand = "0.8"
 regex = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 repobox = { package = "repobox-core", path = "../repobox-core" }
+
+[dev-dependencies]
+tempfile = "3.0"
