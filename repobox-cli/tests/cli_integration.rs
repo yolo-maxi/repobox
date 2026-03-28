@@ -432,6 +432,129 @@ fn test_excluded_scenarios() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Test deterministic output behavior for agents and scripting
+#[test]  
+fn test_deterministic_output_behavior() -> Result<(), Box<dyn std::error::Error>> {
+    // Status command should have consistent output format
+    run_scenario(
+        CliTestScenario::new()
+            .command(CliCommand::Status)
+            .repo_state(RepoState::Clean)
+            .identity_state(IdentityState::Valid)
+            .setup_state(SetupState::Configured)
+            .expected_outcome(ExpectedOutcome::OutputContains("Identity:".to_string()))
+            .description("Status command contains identity in output")
+    )?;
+
+    // Whoami should output just the identity, suitable for scripting
+    run_scenario(
+        CliTestScenario::new()
+            .command(CliCommand::Whoami)
+            .repo_state(RepoState::Clean)
+            .identity_state(IdentityState::Valid)
+            .setup_state(SetupState::Configured)
+            .expected_outcome(ExpectedOutcome::Success)
+            .description("Whoami provides deterministic identity output")
+    )?;
+
+    // Check command should provide clear success/failure indication
+    run_scenario(
+        CliTestScenario::new()
+            .command(CliCommand::Check)
+            .args(vec!["evm:0x74632663b6D56A3CaB5bA54fE493abcCF715A81C".to_string(), "push".to_string(), ">main".to_string()])
+            .repo_state(RepoState::HasConfig)
+            .identity_state(IdentityState::Valid)
+            .setup_state(SetupState::Configured)
+            .expected_outcome(ExpectedOutcome::Success)
+            .description("Check command provides clear permission result")
+    )?;
+
+    Ok(())
+}
+
+/// Test actionable error messages for common failure scenarios
+#[test]
+fn test_actionable_error_messages() -> Result<(), Box<dyn std::error::Error>> {
+    // No identity configured should suggest action
+    run_scenario(
+        CliTestScenario::new()
+            .command(CliCommand::Status)
+            .repo_state(RepoState::Clean)
+            .identity_state(IdentityState::None)
+            .setup_state(SetupState::Configured)
+            .expected_outcome(ExpectedOutcome::ErrorContains("No identity".to_string()))
+            .description("Status with no identity provides actionable error")
+    )?;
+
+    // Config file missing should be explicit
+    run_scenario(
+        CliTestScenario::new()
+            .command(CliCommand::Lint)
+            .repo_state(RepoState::NoConfig)
+            .identity_state(IdentityState::Valid)
+            .setup_state(SetupState::Configured)
+            .expected_outcome(ExpectedOutcome::ErrorContains("config".to_string()))
+            .description("Lint without config provides clear error message")
+    )?;
+
+    // Not git repo should be explicit
+    run_scenario(
+        CliTestScenario::new()
+            .command(CliCommand::Init)
+            .repo_state(RepoState::NoRepo)
+            .identity_state(IdentityState::Valid)
+            .setup_state(SetupState::NotConfigured)
+            .expected_outcome(ExpectedOutcome::ErrorContains("not a git repository".to_string()))
+            .description("Init outside git repo provides clear error")
+    )?;
+
+    Ok(())
+}
+
+
+
+/// Test non-interactive behavior - no hidden prompts or interactive flows
+#[test]
+fn test_non_interactive_behavior() -> Result<(), Box<dyn std::error::Error>> {
+    // All commands should work without interactive input in CI/scripting environments
+    
+    // Status should never prompt
+    run_scenario(
+        CliTestScenario::new()
+            .command(CliCommand::Status)
+            .repo_state(RepoState::Clean)
+            .identity_state(IdentityState::None)
+            .setup_state(SetupState::Configured)
+            .expected_outcome(ExpectedOutcome::ErrorContains("No identity".to_string()))
+            .description("Status command fails cleanly without prompting when no identity")
+    )?;
+
+    // Lint should be fully deterministic
+    run_scenario(
+        CliTestScenario::new()
+            .command(CliCommand::Lint)
+            .repo_state(RepoState::HasConfig) 
+            .identity_state(IdentityState::Valid)
+            .setup_state(SetupState::Configured)
+            .expected_outcome(ExpectedOutcome::Success)
+            .description("Lint command completes without user interaction")
+    )?;
+
+    // Check should complete without prompting
+    run_scenario(
+        CliTestScenario::new()
+            .command(CliCommand::Check)
+            .args(vec!["evm:0x74632663b6D56A3CaB5bA54fE493abcCF715A81C".to_string(), "push".to_string(), ">main".to_string()])
+            .repo_state(RepoState::HasConfig)
+            .identity_state(IdentityState::Valid)
+            .setup_state(SetupState::Configured) 
+            .expected_outcome(ExpectedOutcome::Success)
+            .description("Check command completes without user interaction")
+    )?;
+
+    Ok(())
+}
+
 /// Print coverage report at end of tests
 #[test]
 fn test_coverage_report() {
