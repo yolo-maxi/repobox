@@ -209,6 +209,14 @@ export default function ProjectsPage() {
             >
               blog
             </Link>
+            <Link
+              href="/status"
+              style={{ color: "var(--bp-dim)", transition: "color 0.2s" }}
+              onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+              onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+            >
+              status
+            </Link>
           </nav>
           <div
             className="font-mono font-bold"

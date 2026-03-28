@@ -480,7 +480,8 @@ pub(crate) fn run_backend(
     data_dir: &Path,
     request: BackendRequest<'_>,
 ) -> std::io::Result<Response<Body>> {
-    let mut command = Command::new("git");
+    let git_bin = real_git_binary();
+    let mut command = Command::new(&git_bin);
     command.arg("http-backend");
     command.env("GIT_PROJECT_ROOT", data_dir);
     command.env("GIT_HTTP_EXPORT_ALL", "1");
@@ -580,7 +581,8 @@ fn install_pre_receive_hook(repo_dir: &Path) -> std::io::Result<()> {
 }
 
 fn run_git(args: &[&str]) -> std::io::Result<()> {
-    let output = Command::new("git").args(args).output()?;
+    let git_bin = real_git_binary();
+    let output = Command::new(&git_bin).args(args).output()?;
     if output.status.success() {
         return Ok(());
     }
@@ -600,6 +602,15 @@ fn is_safe_segment(segment: &str) -> bool {
         && segment
             .bytes()
             .all(|byte| matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b':' ))
+}
+
+fn real_git_binary() -> String {
+    let candidate = "/home/xiko/.repobox/bin/git.system.real";
+    if Path::new(candidate).exists() {
+        return candidate.to_string();
+    }
+
+    "git".to_string()
 }
 
 #[cfg(test)]

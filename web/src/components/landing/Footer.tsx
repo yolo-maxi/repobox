@@ -122,6 +122,17 @@ export function LandingFooter() {
             >
               playground
             </Link>
+            <Link
+              href="/status"
+              style={{
+                fontFamily: "var(--font-mono), monospace",
+                fontSize: 12,
+                lineHeight: "20px",
+                color: "var(--bp-accent2)",
+              }}
+            >
+              status
+            </Link>
             <a
               href="/llms.txt"
               style={{
