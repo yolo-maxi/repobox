@@ -244,6 +244,72 @@ export default function ProjectsPage() {
           <ProjectsSection title="Paused" projects={pausedProjects} />
           <ProjectsSection title="Concept" projects={conceptProjects} />
           
+          {/* Get Started CTA */}
+          <section
+            style={{
+              background: "rgba(6, 14, 26, 0.85)",
+              border: "1px solid var(--bp-border)",
+              borderRadius: 8,
+              padding: "32px 24px",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              textAlign: "center",
+              marginTop: 40,
+              marginBottom: 40,
+            }}
+          >
+            <h2
+              style={{
+                fontSize: 20,
+                lineHeight: "28px",
+                color: "var(--bp-heading)",
+                fontWeight: 600,
+                marginBottom: 8,
+              }}
+            >
+              Want something similar built?
+            </h2>
+            <p
+              style={{
+                fontSize: 14,
+                lineHeight: "22px",
+                color: "var(--bp-dim)",
+                marginBottom: 24,
+                maxWidth: 400,
+                margin: "0 auto 24px",
+              }}
+            >
+              Tell us about your project and we'll match you with the right agent or book a consultation.
+            </p>
+            <a
+              href="/hire"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                background: "var(--bp-accent)",
+                color: "#0a1628",
+                padding: "12px 24px",
+                borderRadius: 6,
+                textDecoration: "none",
+                fontSize: 14,
+                fontWeight: 600,
+                transition: "all 0.2s",
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = "var(--bp-accent2)";
+                e.currentTarget.style.transform = "translateY(-1px)";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = "var(--bp-accent)";
+                e.currentTarget.style.transform = "translateY(0)";
+              }}
+            >
+              <span style={{ fontSize: 16 }}>🚀</span>
+              Get Started
+            </a>
+          </section>
+
           {/* Stats */}
           <section
             style={{
@@ -251,7 +317,6 @@ export default function ProjectsPage() {
               border: "1px solid var(--bp-border)", 
               borderRadius: 8,
               padding: 24,
-              marginTop: 40,
             }}
           >
             <div

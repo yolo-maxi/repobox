@@ -58,9 +58,7 @@ export function LandingHireCTA() {
         {/* Primary CTA Button */}
         <div style={{ marginBottom: 24 }}>
           <a
-            href="https://t.me/ocean_king_bot"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/hire"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -85,13 +83,36 @@ export function LandingHireCTA() {
               e.currentTarget.style.color = "#ffffff";
             }}
           >
-            <span style={{ fontSize: 20 }}>💬</span>
-            Start a conversation
+            <span style={{ fontSize: 20 }}>🚀</span>
+            Get Started
           </a>
         </div>
 
-        {/* Secondary CTA */}
-        <div>
+        {/* Secondary CTAs */}
+        <div style={{ display: "flex", gap: 24, justifyContent: "center", alignItems: "center" }}>
+          <a
+            href="https://t.me/ocean_king_bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontFamily: "var(--font-mono), monospace",
+              fontSize: 14,
+              color: "var(--bp-accent2)",
+              textDecoration: "none",
+              transition: "color 0.2s",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "var(--bp-heading)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "var(--bp-accent2)";
+            }}
+          >
+            <span style={{ fontSize: 16 }}>💬</span> Quick Chat
+          </a>
           <a
             href="/docs"
             style={{
@@ -111,7 +132,7 @@ export function LandingHireCTA() {
               e.currentTarget.style.color = "var(--bp-accent2)";
             }}
           >
-            <span style={{ fontSize: 16 }}>📖</span> Read the docs
+            <span style={{ fontSize: 16 }}>📖</span> Read docs
           </a>
         </div>
       </div>
