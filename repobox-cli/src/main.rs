@@ -3,6 +3,9 @@ use std::process::{Command, ExitCode};
 
 use clap::{Parser, Subcommand};
 
+mod errors;
+use errors::{CliError, print_error, set_json_output};
+
 use repobox::aliases;
 use repobox::config::{Identity, Verb};
 use repobox::engine;
@@ -82,6 +85,10 @@ COMMON WORKFLOWS:
 
 For detailed help on any command, use: repobox <command> --help")]
 struct Cli {
+    /// Output errors in JSON format for agent consumption
+    #[arg(long, global = true)]
+    json: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 
@@ -331,6 +338,10 @@ fn main() -> ExitCode {
 
     // Normal CLI mode
     let cli = Cli::parse();
+    
+    // Set global JSON output mode
+    set_json_output(cli.json);
+    
     let home = home_dir();
 
     match cli.command {
@@ -371,7 +382,7 @@ fn cmd_init(force: bool) -> ExitCode {
     let git_root = match git_root_out {
         Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).trim().to_string(),
         _ => {
-            eprintln!("error: you are not in the root folder of a git repo. Run git init first");
+            print_error(&CliError::not_git_repo());
             return ExitCode::FAILURE;
         }
     };
@@ -379,7 +390,7 @@ fn cmd_init(force: bool) -> ExitCode {
     let cwd = match std::env::current_dir() {
         Ok(dir) => dir,
         Err(_) => {
-            eprintln!("error: you are not in the root folder of a git repo. Run git init first");
+            print_error(&CliError::not_git_repo());
             return ExitCode::FAILURE;
         }
     };
@@ -388,7 +399,7 @@ fn cmd_init(force: bool) -> ExitCode {
     let root_canon = std::fs::canonicalize(PathBuf::from(git_root)).unwrap_or_else(|_| PathBuf::new());
 
     if cwd_canon != root_canon {
-        eprintln!("error: you are not in the root folder of a git repo. Run git init first");
+        print_error(&CliError::not_git_repo());
         return ExitCode::FAILURE;
     }
 
@@ -708,10 +719,7 @@ fn cmd_use(name: &str, home: &Path) -> ExitCode {
             if name.starts_with("evm:") {
                 name.to_string()
             } else {
-                eprintln!("error: unknown alias '{name}'");
-                eprintln!("help: Use 'repobox alias list' to see available aliases");
-                eprintln!("      Or use a raw address like 'repobox use evm:0x1234...'");
-                eprintln!("      Or create alias: 'repobox alias add {name} evm:0x...'");
+                print_error(&CliError::alias_not_found(name));
                 return ExitCode::FAILURE;
             }
         }
@@ -725,9 +733,7 @@ fn cmd_use(name: &str, home: &Path) -> ExitCode {
         .join("keys")
         .join(format!("{address}.key"));
     if !key_path.exists() {
-        eprintln!("error: no key found for {identity_str}");
-        eprintln!("help: Generate a new key: 'repobox keys generate --alias {name}'");
-        eprintln!("      Or import existing: 'repobox keys import <private-key> --alias {name}'");
+        print_error(&CliError::no_key(&identity_str));
         return ExitCode::FAILURE;
     }
 
@@ -764,10 +770,7 @@ fn cmd_whoami(home: &Path) -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(None) => {
-            eprintln!("error: no identity configured");
-            eprintln!("help: Generate a key: 'repobox keys generate --alias me'");
-            eprintln!("      Then set it: 'repobox use me'");
-            eprintln!("      Or import: 'repobox keys import <private-key> --alias me'");
+            print_error(&CliError::no_identity());
             ExitCode::FAILURE
         }
         Err(e) => {
@@ -847,9 +850,7 @@ fn cmd_alias(action: AliasAction, home: &Path) -> ExitCode {
 fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> ExitCode {
     let config_path = Path::new(".repobox/config.yml");
     if !config_path.exists() {
-        eprintln!("error: no .repobox/config.yml found");
-        eprintln!("help: Initialize repo.box in this repo: 'repobox init'");
-        eprintln!("      Or navigate to a repo.box-enabled repository");
+        print_error(&CliError::config_not_found());
         return ExitCode::FAILURE;
     }
 
@@ -897,12 +898,7 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
                 match Identity::parse(id_str) {
                     Ok(id) => id,
                     Err(e) => {
-                        eprintln!("error: invalid identity: {id_str}");
-                        eprintln!("       {}", e);
-                        eprintln!("help: Use an alias name: '@alice' or 'alice'");
-                        eprintln!("      Or EVM address: 'evm:0x1234...'");
-                        eprintln!("      Or ENS name: 'vitalik.eth'");
-                        eprintln!("      See aliases: 'repobox alias list'");
+                        print_error(&CliError::invalid_identity(id_str, &e.to_string()));
                         return ExitCode::FAILURE;
                     }
                 }
@@ -995,16 +991,12 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
 
 fn cmd_setup(remove: bool, replace_binary: bool, restore_binary: bool) -> ExitCode {
     if remove && (replace_binary || restore_binary) {
-        eprintln!("error: --remove cannot be combined with --replace-binary/--restore-binary");
-        eprintln!("help: Use 'repobox setup --remove' to remove all repobox setup");
-        eprintln!("      Or use 'repobox setup --restore-binary' first, then 'repobox setup --remove'");
+        print_error(&CliError::setup_conflict("--remove cannot be combined with --replace-binary/--restore-binary"));
         return ExitCode::FAILURE;
     }
 
     if replace_binary && restore_binary {
-        eprintln!("error: choose either --replace-binary or --restore-binary, not both");
-        eprintln!("help: Use 'repobox setup --replace-binary' to replace system git");
-        eprintln!("      Or use 'repobox setup --restore-binary' to restore original git");
+        print_error(&CliError::setup_conflict("choose either --replace-binary or --restore-binary, not both"));
         return ExitCode::FAILURE;
     }
 
@@ -1267,7 +1259,7 @@ fn cmd_credential_helper(action: &str, home: &Path) -> ExitCode {
     let identity = match identity::get_identity(home) {
         Ok(Some(id)) => id,
         _ => {
-            eprintln!("repobox: no identity configured. Run: git repobox keys generate");
+            print_error(&CliError::no_identity());
             return ExitCode::FAILURE;
         }
     };
@@ -1375,7 +1367,7 @@ fn find_system_git() -> String {
 
 // ── Hook ──────────────────────────────────────────────────────────────
 
-fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
+fn cmd_hook(hook: &str, _args: &[String], home: &Path) -> ExitCode {
     // Read .repobox/config.yml
     let config_path = Path::new(".repobox/config.yml");
     if !config_path.exists() {
@@ -1406,7 +1398,7 @@ fn cmd_hook(hook: &str, args: &[String], home: &Path) -> ExitCode {
     let identity = match identity {
         Some(id) => id,
         None => {
-            eprintln!("❌ no identity configured. Run: git repobox keys generate");
+            print_error(&CliError::no_identity());
             return ExitCode::FAILURE;
         }
     };
@@ -2634,7 +2626,7 @@ fn enhance_error_message(msg: &str, home: &Path) -> String {
     result
 }
 
-use repobox::config::Subject;
+
 
 #[cfg(test)]
 mod tests {

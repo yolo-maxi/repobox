@@ -1540,6 +1540,8 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "repobox-core",
+ "serde",
+ "serde_json",
  "tempfile",
 ]
 
