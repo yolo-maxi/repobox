@@ -209,6 +209,33 @@ impl fmt::Display for ExpectedOutcome {
     }
 }
 
+/// Shim validation layer for testing early blocking behavior
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ShimLayer {
+    /// Test direct shim function calls (unit test level)
+    Direct,
+    /// Test git command interception through shim (integration level)
+    Intercepted,
+    /// Test bypassing shim entirely (raw git)
+    Bypassed,
+}
+
+impl ShimLayer {
+    pub fn all() -> Vec<Self> {
+        vec![Self::Direct, Self::Intercepted, Self::Bypassed]
+    }
+}
+
+impl fmt::Display for ShimLayer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Direct => write!(f, "direct"),
+            Self::Intercepted => write!(f, "intercepted"),
+            Self::Bypassed => write!(f, "bypassed"),
+        }
+    }
+}
+
 /// A single test scenario in the CLI matrix
 #[derive(Debug, Clone)]
 pub struct CliTestScenario {
@@ -217,6 +244,7 @@ pub struct CliTestScenario {
     pub repo_state: RepoState,
     pub identity_state: IdentityState,
     pub setup_state: SetupState,
+    pub shim_layer: Option<ShimLayer>,
     pub expected_outcome: ExpectedOutcome,
     pub description: String,
     pub exclusions: Vec<String>,
@@ -230,6 +258,7 @@ impl CliTestScenario {
             repo_state: RepoState::Clean,
             identity_state: IdentityState::Valid,
             setup_state: SetupState::Configured,
+            shim_layer: None,
             expected_outcome: ExpectedOutcome::Success,
             description: String::new(),
             exclusions: vec![],
@@ -258,6 +287,11 @@ impl CliTestScenario {
 
     pub fn setup_state(mut self, state: SetupState) -> Self {
         self.setup_state = state;
+        self
+    }
+
+    pub fn shim_layer(mut self, layer: ShimLayer) -> Self {
+        self.shim_layer = Some(layer);
         self
     }
 
