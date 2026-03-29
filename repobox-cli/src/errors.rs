@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 
+/// Type alias for CLI operations that return CliError
+pub type CliResult<T> = Result<T, CliError>;
+
 /// Structured error system for consistent CLI error messages and agent-parseable output
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CliError {
@@ -186,6 +189,18 @@ impl CliError {
             "Initialize repo.box: 'repobox init'"
         )
     }
+
+    pub fn config_error(message: &str, details: Option<String>) -> Self {
+        let mut error = Self::new(
+            ErrorCodes::CONFIG_INVALID,
+            message,
+            "Fix configuration file or regenerate: 'repobox config init --template personal'"
+        );
+        if let Some(details) = details {
+            error = error.with_context("details", &details);
+        }
+        error
+    }
 }
 
 /// Global flag for JSON output mode
@@ -199,6 +214,15 @@ pub fn print_error(error: &CliError) {
         } else {
             eprintln!("{}", error.format_human());
         }
+    }
+}
+
+/// Print error using explicit format (for when global state is not available)
+pub fn print_error_explicit(error: &CliError, json_output: bool) {
+    if json_output {
+        eprintln!("{}", error.format_json());
+    } else {
+        eprintln!("{}", error.format_human());
     }
 }
 

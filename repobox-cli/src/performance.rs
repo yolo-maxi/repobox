@@ -67,8 +67,7 @@ macro_rules! profile_checkpoint {
     };
 }
 
-pub use profile_operation;
-pub use profile_checkpoint;
+// Macros available for internal use
 
 /// Performance optimization utilities
 pub mod optimizations {
