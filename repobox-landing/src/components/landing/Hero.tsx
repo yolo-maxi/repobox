@@ -40,6 +40,22 @@ export function LandingHero() {
           docs
         </Link>
         <Link
+          href="/projects"
+          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
+          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+        >
+          projects
+        </Link>
+        <Link
+          href="/proof"
+          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
+          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+        >
+          proof
+        </Link>
+        <Link
           href="/playground"
           style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
