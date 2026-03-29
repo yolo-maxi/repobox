@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LandingHero } from "@/components/landing/Hero";
+import { TrustStrip } from "@/components/landing/TrustStrip";
 import { AgentHeatmap } from "@/components/landing/AgentHeatmap";
 import { LandingShippedToday } from "@/components/landing/ShippedToday";
 import { LandingCaseStudies } from "@/components/landing/CaseStudies";
@@ -20,6 +21,7 @@ export default function Home() {
         style={{ maxWidth: 720, margin: "0 auto", position: "relative", zIndex: 2, padding: "80px 40px 100px" }}
       >
         <LandingHero />
+        <TrustStrip />
         <div style={{ height: 32 }} />
         <AgentHeatmap />
         <div style={{ height: 80 }} />
