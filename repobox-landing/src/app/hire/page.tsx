@@ -62,6 +62,14 @@ export default function HirePage() {
               projects
             </Link>
             <Link
+              href="/packages"
+              style={{ color: "var(--bp-dim)", transition: "color 0.2s" }}
+              onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+              onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+            >
+              packages
+            </Link>
+            <Link
               href="/proof"
               style={{ color: "var(--bp-dim)", transition: "color 0.2s" }}
               onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}

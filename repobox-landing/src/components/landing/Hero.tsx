@@ -48,6 +48,14 @@ export function LandingHero() {
           projects
         </Link>
         <Link
+          href="/packages"
+          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
+          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+        >
+          packages
+        </Link>
+        <Link
           href="/proof"
           style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
@@ -62,14 +70,6 @@ export function LandingHero() {
           onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
         >
           playground
-        </Link>
-        <Link
-          href="/projects"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          projects
         </Link>
         <Link
           href="/blog/"
