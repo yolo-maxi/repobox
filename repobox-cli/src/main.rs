@@ -64,6 +64,23 @@ permissions:
 
 #[derive(Parser)]
 #[command(name = "repobox", about = "Git permission layer for AI agents")]
+#[command(long_about = "Git permission layer for AI agents
+
+COMMON WORKFLOWS:
+  # Initial setup for new repo
+  repobox setup && repobox init && repobox keys generate
+  repobox alias add me && repobox use me
+  
+  # Verify permissions before pushing
+  repobox status && repobox check me push >main
+  
+  # Switch identity and test permissions
+  repobox use @dev && repobox check @dev push >feature/new-feature
+  
+  # Check all permissions for current identity
+  repobox whoami && repobox check $(repobox whoami) own >main
+
+For detailed help on any command, use: repobox <command> --help")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -76,12 +93,27 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize repo.box in the current git repo
+    ///
+    /// EXAMPLES:
+    ///     repobox init                           # Create .repobox/config.yml in current repo
+    ///     repobox init --force                   # Overwrite existing config
+    ///
+    /// NEXT STEPS:
+    ///     1. repobox keys generate               # Create your signing key
+    ///     2. repobox alias add me                # Create alias for your key  
+    ///     3. repobox use me                      # Set active identity
+    ///     4. git commit -m "test"                # Commits will be EVM-signed automatically
     Init {
         /// Overwrite existing .repobox/config.yml
         #[arg(long)]
         force: bool,
     },
-    /// Manage EVM key pairs
+    /// Manage EVM key pairs  
+    ///
+    /// EXAMPLES:
+    ///     repobox keys generate --alias me       # Create new key with alias
+    ///     repobox keys import 0x1234... --alias dev  # Import existing key  
+    ///     repobox keys list                      # Show all stored keys
     Keys {
         #[command(subcommand)]
         action: KeysAction,
@@ -92,18 +124,53 @@ enum Commands {
         action: IdentityAction,
     },
     /// Set identity by alias or address (shorthand for identity set)
+    ///
+    /// EXAMPLES:
+    ///     repobox use me                         # Use alias 'me'
+    ///     repobox use evm:0x1234...              # Use raw EVM address
+    ///     repobox use @alice                     # Use alias 'alice' (@ is optional)
+    ///
+    /// OUTPUT:
+    ///     ✅ Now using: @me (evm:0x1234...)
     Use {
         /// Alias name (e.g. fran-test) or evm:0x... address
         name: String,
     },
     /// Show current identity
+    ///
+    /// EXAMPLES:
+    ///     repobox whoami                         # Show current identity
+    ///     repobox whoami | cut -d: -f2           # Extract just the address
+    ///
+    /// OUTPUT:
+    ///     alias: me
+    ///     identity: evm:0x1234...
     Whoami,
     /// Manage local aliases
+    ///
+    /// EXAMPLES:
+    ///     repobox alias add me                   # Create alias for current identity
+    ///     repobox alias add alice evm:0x1234...  # Create alias for specific address  
+    ///     repobox alias list                     # Show all aliases
+    ///     repobox alias remove alice             # Delete alias
     Alias {
         #[command(subcommand)]
         action: AliasAction,
     },
     /// Check if an identity can perform an action
+    ///
+    /// EXAMPLES:
+    ///     repobox check me push >main            # Can I push to main?
+    ///     repobox check @alice edit *.rs         # Can Alice edit Rust files?
+    ///     repobox check evm:0x1234 own >feature  # Does address own feature branch?
+    ///     repobox check me all >main             # Check all permissions on main
+    ///
+    /// VERBS: push, merge, create, delete, force-push, edit, write, append, own (checks all)
+    /// TARGETS: >branch, path/**, *.ext, specific/file.txt
+    ///
+    /// OUTPUT:
+    ///     ✅ allowed — @me push >main
+    ///        matched rule line 15
     Check {
         /// Identity or alias (e.g. @alice, evm:0x...)
         identity: String,
@@ -113,10 +180,51 @@ enum Commands {
         target: String,
     },
     /// Validate .repobox/config.yml
+    ///
+    /// EXAMPLES:
+    ///     repobox lint                           # Check config syntax and rules
+    ///
+    /// OUTPUT:
+    ///     ✅ .repobox/config.yml is valid
+    ///        5 groups, 12 rules, default: deny
     Lint,
     /// Show current status: identity, groups, permissions summary
+    ///
+    /// EXAMPLES:
+    ///     repobox status                         # Show full status
+    ///
+    /// OUTPUT FORMAT:
+    ///     repo.box status
+    ///       Identity: @me (evm:0x1234...)
+    ///       Branch:   main  
+    ///       Default:  Deny
+    ///       Groups:   3
+    ///       Rules:    12
+    ///       Member of: founders, agents
+    ///     
+    ///       Permissions on >main:
+    ///         ✅ push
+    ///         ✅ merge
+    ///         ❌ force-push
     Status,
-    /// Configure git to use repobox as the command interceptor
+    /// Configure git to use repobox as the command interceptor (installs to ~/.repobox/bin)
+    ///
+    /// EXAMPLES:
+    ///     repobox setup                          # Add repobox to PATH (recommended)
+    ///     repobox setup --remove                 # Remove repobox from PATH completely  
+    ///     repobox setup --replace-binary         # Replace system git with repobox wrapper
+    ///     repobox setup --restore-binary         # Restore original system git from backup
+    ///
+    /// WORKFLOW:
+    ///     1. Run: repobox setup
+    ///     2. Add ~/.repobox/bin to your PATH in your shell profile
+    ///     3. Restart terminal or source your profile
+    ///     4. Verify: which git should show ~/.repobox/bin/git
+    ///     5. Test: git status (should work normally in any repo)
+    ///
+    /// PATH SETUP:
+    ///     # Add to ~/.bashrc, ~/.zshrc, etc:
+    ///     export PATH="$HOME/.repobox/bin:$PATH"
     Setup {
         /// Remove repobox PATH shim setup
         #[arg(long)]
@@ -352,7 +460,11 @@ fn cmd_init(force: bool) -> ExitCode {
             println!("✅ Initialized repo.box");
             println!("   {config_status}");
             println!("   Configured git to sign commits with repobox (gpg.program)");
-            println!("   No identity found. Run: git repobox keys generate");
+            println!("");
+            println!("   NEXT STEPS:");
+            println!("     repobox keys generate --alias me    # Create your signing key");
+            println!("     repobox use me                      # Set active identity");
+            println!("     git commit -m 'test'                # Commits will be EVM-signed");
         }
     }
 
@@ -596,7 +708,10 @@ fn cmd_use(name: &str, home: &Path) -> ExitCode {
             if name.starts_with("evm:") {
                 name.to_string()
             } else {
-                eprintln!("error: unknown alias '{name}'. Run: git repobox alias list");
+                eprintln!("error: unknown alias '{name}'");
+                eprintln!("help: Use 'repobox alias list' to see available aliases");
+                eprintln!("      Or use a raw address like 'repobox use evm:0x1234...'");
+                eprintln!("      Or create alias: 'repobox alias add {name} evm:0x...'");
                 return ExitCode::FAILURE;
             }
         }
@@ -610,7 +725,9 @@ fn cmd_use(name: &str, home: &Path) -> ExitCode {
         .join("keys")
         .join(format!("{address}.key"));
     if !key_path.exists() {
-        eprintln!("error: no key found for {identity_str}. Run: git repobox keys generate");
+        eprintln!("error: no key found for {identity_str}");
+        eprintln!("help: Generate a new key: 'repobox keys generate --alias {name}'");
+        eprintln!("      Or import existing: 'repobox keys import <private-key> --alias {name}'");
         return ExitCode::FAILURE;
     }
 
@@ -647,7 +764,10 @@ fn cmd_whoami(home: &Path) -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(None) => {
-            eprintln!("no identity configured. Run: git repobox identity set <private-key>");
+            eprintln!("error: no identity configured");
+            eprintln!("help: Generate a key: 'repobox keys generate --alias me'");
+            eprintln!("      Then set it: 'repobox use me'");
+            eprintln!("      Or import: 'repobox keys import <private-key> --alias me'");
             ExitCode::FAILURE
         }
         Err(e) => {
@@ -728,6 +848,8 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
     let config_path = Path::new(".repobox/config.yml");
     if !config_path.exists() {
         eprintln!("error: no .repobox/config.yml found");
+        eprintln!("help: Initialize repo.box in this repo: 'repobox init'");
+        eprintln!("      Or navigate to a repo.box-enabled repository");
         return ExitCode::FAILURE;
     }
 
@@ -777,7 +899,10 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
                     Err(e) => {
                         eprintln!("error: invalid identity: {id_str}");
                         eprintln!("       {}", e);
-                        eprintln!("       use an alias name, ENS name, or evm:0x... address");
+                        eprintln!("help: Use an alias name: '@alice' or 'alice'");
+                        eprintln!("      Or EVM address: 'evm:0x1234...'");
+                        eprintln!("      Or ENS name: 'vitalik.eth'");
+                        eprintln!("      See aliases: 'repobox alias list'");
                         return ExitCode::FAILURE;
                     }
                 }
@@ -871,11 +996,15 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
 fn cmd_setup(remove: bool, replace_binary: bool, restore_binary: bool) -> ExitCode {
     if remove && (replace_binary || restore_binary) {
         eprintln!("error: --remove cannot be combined with --replace-binary/--restore-binary");
+        eprintln!("help: Use 'repobox setup --remove' to remove all repobox setup");
+        eprintln!("      Or use 'repobox setup --restore-binary' first, then 'repobox setup --remove'");
         return ExitCode::FAILURE;
     }
 
     if replace_binary && restore_binary {
-        eprintln!("error: choose either --replace-binary or --restore-binary");
+        eprintln!("error: choose either --replace-binary or --restore-binary, not both");
+        eprintln!("help: Use 'repobox setup --replace-binary' to replace system git");
+        eprintln!("      Or use 'repobox setup --restore-binary' to restore original git");
         return ExitCode::FAILURE;
     }
 
@@ -1047,8 +1176,17 @@ fn cmd_setup(remove: bool, replace_binary: bool, restore_binary: bool) -> ExitCo
     println!("   Every `git` command now routes through repobox.");
     println!("   --no-verify won't help — this is a shim, not a hook.");
     println!();
-    println!("   Run `git repobox setup --remove` to undo.");
-    println!("   Run `git repobox setup --replace-binary` for full binary replacement mode.");
+    println!("   VERIFY SETUP:");
+    println!("     which git    # Should show ~/.repobox/bin/git");
+    println!("     git status   # Should work normally in any repo");
+    println!();
+    println!("   NEXT STEPS:");
+    println!("     cd <your-repo> && repobox init     # Initialize repo.box in a repo");
+    println!("     repobox use <identity>             # Set your identity");
+    println!();
+    println!("   TROUBLESHOOT:");
+    println!("     repobox setup --remove              # Undo this setup");
+    println!("     repobox setup --replace-binary      # Full binary replacement mode");
 
     ExitCode::SUCCESS
 }
