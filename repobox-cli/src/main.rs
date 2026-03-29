@@ -4,7 +4,10 @@ use std::process::{Command, ExitCode};
 use clap::{Parser, Subcommand};
 
 mod errors;
+mod performance;
+
 use errors::{CliError, print_error, set_json_output};
+use performance::{PerformanceProfiler, profile_operation, profile_checkpoint};
 
 use repobox::aliases;
 use repobox::config::{Identity, Verb};
@@ -757,6 +760,8 @@ fn cmd_use(name: &str, home: &Path) -> ExitCode {
 // ── Whoami ────────────────────────────────────────────────────────────
 
 fn cmd_whoami(home: &Path) -> ExitCode {
+    let profiler = PerformanceProfiler::new("whoami");
+    
     match identity::get_identity(home) {
         Ok(Some(id)) => {
             let id_str = id.to_string();
@@ -767,6 +772,7 @@ fn cmd_whoami(home: &Path) -> ExitCode {
                 println!("identity: {id_str}");
                 println!("tip: set an alias with `git repobox alias add me` (uses current identity)");
             }
+            profiler.finish();
             ExitCode::SUCCESS
         }
         Ok(None) => {
@@ -2036,26 +2042,35 @@ fn create_payment_claim(
 // ── Status ────────────────────────────────────────────────────────────
 
 fn cmd_status(home: &Path) -> ExitCode {
+    let profiler = PerformanceProfiler::new("status");
+    
     // Identity
+    profiler.checkpoint("identity_lookup_start");
     let identity = identity::get_identity(home).ok().flatten();
     let id_display = match &identity {
         Some(id) => aliases::display_identity(home, &id.to_string()),
         None => "not set".to_string(),
     };
+    profiler.checkpoint("identity_lookup_complete");
 
     // Branch
+    profiler.checkpoint("branch_detection_start");
     let real_git = find_real_git();
     let branch = detect_current_branch(&real_git)
         .unwrap_or_else(|| "unknown".to_string());
+    profiler.checkpoint("branch_detection_complete");
 
+    profiler.checkpoint("output_start");
     println!("repo.box status");
     println!("  Identity: {id_display}");
     println!("  Branch:   {branch}");
 
     // Config
+    profiler.checkpoint("config_parsing_start");
     let config_path = Path::new(".repobox/config.yml");
     if !config_path.exists() {
         println!("  Config:   no .repobox/config.yml found");
+        profiler.finish();
         return ExitCode::SUCCESS;
     }
 
@@ -2071,9 +2086,11 @@ fn cmd_status(home: &Path) -> ExitCode {
         Ok(c) => c,
         Err(e) => {
             println!("  Config:   error: {e}");
+            profiler.finish();
             return ExitCode::FAILURE;
         }
     };
+    profiler.checkpoint("config_parsing_complete");
 
     println!("  Default:  {:?}", config.permissions.default);
     println!("  Groups:   {}", config.groups.len());
@@ -2123,6 +2140,7 @@ fn cmd_status(home: &Path) -> ExitCode {
         }
     }
 
+    profiler.finish();
     ExitCode::SUCCESS
 }
 

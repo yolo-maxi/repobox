@@ -6,6 +6,7 @@
 //! Tests are organized by command and cover both success and failure scenarios.
 
 mod cli_matrix;
+mod performance_benchmarks;
 
 use cli_matrix::{
     CliCommand, CliTestScenario, ExpectedOutcome, IdentityState, MatrixCoverage, RepoState,
@@ -769,6 +770,138 @@ fn test_cli_binary_exists() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Git permission layer for AI agents"), 
             "Help output should contain expected description");
+    
+    Ok(())
+}
+
+// ── Performance Benchmark Tests ────────────────────────────────────────
+
+use performance_benchmarks::{run_performance_suite, PerformanceTester, PerformanceBaselines};
+
+/// Test that critical CLI commands meet performance targets for agent automation
+#[test]
+fn test_cli_performance_targets() -> Result<(), Box<dyn std::error::Error>> {
+    let results = run_performance_suite()?;
+    
+    let mut target_violations = Vec::new();
+    
+    for result in &results {
+        let expected_target = match result.command.as_str() {
+            cmd if cmd.starts_with("status") => 100,
+            cmd if cmd.starts_with("whoami") => 100,
+            cmd if cmd.starts_with("check") => 100,
+            cmd if cmd.starts_with("lint") => 100,
+            cmd if cmd.starts_with("init") => 500,
+            _ => 200, // Default target for unlisted commands
+        };
+        
+        if !result.meets_target(expected_target) {
+            target_violations.push(format!(
+                "{}: {}ms > {}ms target",
+                result.command,
+                result.median_duration.as_millis(),
+                expected_target
+            ));
+        }
+    }
+    
+    if !target_violations.is_empty() {
+        return Err(format!(
+            "Performance targets violated:\n{}",
+            target_violations.join("\n")
+        ).into());
+    }
+    
+    println!("✅ All CLI commands meet performance targets");
+    Ok(())
+}
+
+/// Test cold start overhead is reasonable for agent workflows
+#[test]
+fn test_cold_start_overhead() -> Result<(), Box<dyn std::error::Error>> {
+    let tester = PerformanceTester::new()?;
+    tester.setup_repobox_config()?;
+    
+    // Benchmark status command with cold start measurement
+    let result = tester.benchmark_command(&["status"], 10, true)?;
+    
+    if let Some(overhead) = result.cold_start_overhead {
+        // Cold start overhead should be reasonable for automation
+        const MAX_COLD_START_OVERHEAD_MS: u64 = 50;
+        
+        if overhead.as_millis() as u64 > MAX_COLD_START_OVERHEAD_MS {
+            return Err(format!(
+                "Cold start overhead too high: {}ms > {}ms",
+                overhead.as_millis(),
+                MAX_COLD_START_OVERHEAD_MS
+            ).into());
+        }
+        
+        println!("✅ Cold start overhead: {}ms (within {}ms limit)", 
+                overhead.as_millis(), MAX_COLD_START_OVERHEAD_MS);
+    } else {
+        return Err("Cold start overhead measurement failed".into());
+    }
+    
+    Ok(())
+}
+
+/// Test performance regression detection system
+#[test] 
+fn test_performance_regression_detection() -> Result<(), Box<dyn std::error::Error>> {
+    use std::time::Duration;
+    use performance_benchmarks::BenchmarkResult;
+    
+    let mut baselines = PerformanceBaselines::new();
+    
+    // Create a mock baseline
+    let baseline = BenchmarkResult {
+        command: "status".to_string(),
+        iterations: 10,
+        min_duration: Duration::from_millis(40),
+        max_duration: Duration::from_millis(60),
+        mean_duration: Duration::from_millis(50),
+        median_duration: Duration::from_millis(50),
+        std_deviation: Duration::from_millis(5),
+        cold_start_overhead: None,
+    };
+    
+    baselines.set_baseline("status".to_string(), baseline.clone());
+    
+    // Create a current result that represents a regression (30% slower)
+    let regressed = BenchmarkResult {
+        command: "status".to_string(),
+        iterations: 10,
+        min_duration: Duration::from_millis(55),
+        max_duration: Duration::from_millis(75),
+        mean_duration: Duration::from_millis(65),
+        median_duration: Duration::from_millis(65), // 30% increase
+        std_deviation: Duration::from_millis(5),
+        cold_start_overhead: None,
+    };
+    
+    // Check for regressions with 20% threshold
+    let regressions = baselines.check_regressions(&[regressed], 20.0);
+    
+    assert_eq!(regressions.len(), 1, "Should detect one regression");
+    assert_eq!(regressions[0].0, "status");
+    
+    println!("✅ Performance regression detection working correctly");
+    Ok(())
+}
+
+/// Benchmark and profile specific commands for optimization opportunities
+#[test]
+#[ignore] // Manual profiling test, not run by default
+fn test_profile_command_bottlenecks() -> Result<(), Box<dyn std::error::Error>> {
+    use performance_benchmarks::profile_command_bottlenecks;
+    
+    // Profile the slowest expected command
+    println!("Profiling 'init' command...");
+    profile_command_bottlenecks(&["init", "--force"])?;
+    
+    println!("Profiling 'status' command...");
+    profile_command_bottlenecks(&["status"])?;
     
     Ok(())
 }
