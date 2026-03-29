@@ -1,0 +1,9 @@
+version: "1.0"
+groups:
+  founders:
+    - alice
+  contributors:
+    - alice # Alias conflict
+aliases:
+  alice: "0x1234567890abcdef1234567890abcdef12345678"
+  bob: "invalid_address"

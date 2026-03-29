@@ -1,0 +1,27 @@
+version: "1.0"
+groups:
+  founders:
+    name: "founders"
+    members:
+      - alice
+    includes:
+      - contributors  # Circular dependency: contributors includes founders
+  contributors:
+    name: "contributors"
+    members:
+      - alice  # Alias conflict with founder
+      - bob
+    includes:
+      - founders  # Circular dependency: founders includes contributors
+aliases:
+  alice: "0x1234567890abcdef1234567890abcdef12345678"
+  bob: "invalid_address_format"
+  help: "0x1234567890abcdef1234567890abcdef12345679"  # Reserved word conflict
+permissions:
+  - rule_id: "test_rule"
+    actors:
+      - "@founders"
+    verbs:
+      - "invalid_verb"  # Invalid permission verb
+    targets:
+      - "*"
