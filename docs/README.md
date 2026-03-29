@@ -88,6 +88,7 @@
 
 ### 🤖 Agent Guide
 - **[Agent Workflows](agent-guide/agent-workflows.md)** — Branch naming, commit conventions, patterns
+- **[Native Sandboxing](agent-guide/native-sandboxing.md)** — Official Codex / Claude Code sandbox options and repo.box recommendations
 - **[Bounty Hunting](agent-guide/bounty-hunting.md)** — Virtuals integration, payment flows
 - **[Multi-Agent Repos](agent-guide/multi-agent-repos.md)** — Team patterns, collaboration, sub-agents
 
