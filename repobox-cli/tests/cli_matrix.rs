@@ -152,11 +152,30 @@ pub enum SetupState {
     NotConfigured,
     /// Partially configured (e.g., PATH set but hooks missing)
     Partial,
+    /// Fresh install state - never been installed before
+    FreshInstall,
+    /// Already installed state - attempting to install again
+    AlreadyInstalled,
+    /// Already removed state - attempting to remove again
+    AlreadyRemoved,
+    /// Missing backup state - trying to restore but no backup exists
+    MissingBackup,
+    /// Invalid backup path state - backup file is corrupted/missing
+    InvalidBackupPath,
 }
 
 impl SetupState {
     pub fn all() -> Vec<Self> {
-        vec![Self::Configured, Self::NotConfigured, Self::Partial]
+        vec![
+            Self::Configured,
+            Self::NotConfigured, 
+            Self::Partial,
+            Self::FreshInstall,
+            Self::AlreadyInstalled,
+            Self::AlreadyRemoved,
+            Self::MissingBackup,
+            Self::InvalidBackupPath,
+        ]
     }
 }
 
@@ -472,6 +491,29 @@ impl TestEnvironment {
             SetupState::Partial => {
                 // Create partial setup marker
                 std::fs::write(self.repo_path.join(".repobox-setup"), "partial")?;
+            }
+            SetupState::FreshInstall => {
+                // Clean state with no previous installation markers
+                // This is the default for new test environments
+            }
+            SetupState::AlreadyInstalled => {
+                // Create markers indicating installation already completed
+                std::fs::write(self.repo_path.join(".repobox-setup"), "installed")?;
+                std::fs::write(self.repo_path.join(".repobox-installed"), "true")?;
+            }
+            SetupState::AlreadyRemoved => {
+                // Create markers indicating removal already completed
+                std::fs::write(self.repo_path.join(".repobox-removed"), "true")?;
+            }
+            SetupState::MissingBackup => {
+                // Setup state where backup files are expected but missing
+                std::fs::write(self.repo_path.join(".repobox-setup"), "installed")?;
+                // Intentionally don't create backup files
+            }
+            SetupState::InvalidBackupPath => {
+                // Setup state with corrupted/invalid backup files
+                std::fs::write(self.repo_path.join(".repobox-setup"), "installed")?;
+                std::fs::write(self.repo_path.join(".repobox-backup"), "corrupted-data")?;
             }
         }
 
