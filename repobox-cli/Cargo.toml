@@ -20,6 +20,7 @@ regex = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
 repobox = { package = "repobox-core", path = "../repobox-core" }
 
 [dev-dependencies]

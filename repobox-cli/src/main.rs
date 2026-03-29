@@ -5,9 +5,10 @@ use clap::{Parser, Subcommand};
 
 mod errors;
 mod performance;
+mod config;
 
-use errors::{CliError, print_error, set_json_output};
-use performance::{PerformanceProfiler, profile_operation, profile_checkpoint};
+use errors::{CliError, print_error, print_error_explicit, set_json_output};
+use performance::PerformanceProfiler;
 
 use repobox::aliases;
 use repobox::config::{Identity, Verb};
@@ -264,6 +265,55 @@ enum Commands {
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
     },
+    /// Configuration management and validation
+    ///
+    /// EXAMPLES:
+    ///     repobox config validate                # Validate current configuration
+    ///     repobox config validate --json         # JSON output for agents
+    ///     repobox config migrate --from-version 0.9.0  # Migrate from older version
+    ///     repobox config init --template personal      # Initialize personal config
+    ///     repobox config init --template team          # Initialize team config
+    ///     repobox config init --template enterprise    # Initialize enterprise config
+    ///     repobox config diff --canonical              # Show deviations from best practices
+    ///     repobox config diff --canonical --json       # JSON diff output
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigAction {
+    /// Validate configuration file for errors and policy violations
+    Validate,
+    /// Migrate configuration from older version with backup and diff
+    Migrate {
+        /// Version to migrate from (e.g. "0.9.0")
+        #[arg(long)]
+        from_version: String,
+    },
+    /// Initialize new configuration from template
+    Init {
+        /// Configuration template type
+        #[arg(long, value_enum)]
+        template: ConfigTemplateType,
+    },
+    /// Show configuration deviations from canonical patterns
+    Diff {
+        /// Compare against canonical configuration patterns
+        #[arg(long)]
+        canonical: bool,
+    },
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum ConfigTemplateType {
+    /// Single-user personal setup
+    Personal,
+    /// Multi-user team setup with founders and contributors
+    Team,
+    /// Complex enterprise setup with departments and approval flows
+    Enterprise,
 }
 
 #[derive(Subcommand)]
@@ -364,6 +414,7 @@ fn main() -> ExitCode {
         }
         Some(Commands::CredentialHelper { action }) => cmd_credential_helper(&action, &home),
         Some(Commands::Hook { hook, args }) => cmd_hook(&hook, &args, &home),
+        Some(Commands::Config { action }) => cmd_config(action, cli.json, &home),
         None => {
             // No subcommand → shim mode (intercept git commands)
             cmd_shim(&cli.git_args, &home)
@@ -2144,6 +2195,49 @@ fn cmd_status(home: &Path) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+// ── Config ────────────────────────────────────────────────────────────
+
+fn cmd_config(action: ConfigAction, json_output: bool, _home: &Path) -> ExitCode {
+    use crate::config::{ConfigManager, ConfigTemplate};
+    
+    let config_path = Path::new(".repobox/config.yml");
+    let config_manager = match ConfigManager::new(config_path.to_path_buf()) {
+        Ok(manager) => manager,
+        Err(e) => {
+            print_error_explicit(&e, json_output);
+            return ExitCode::FAILURE;
+        }
+    };
+    
+    let result = match action {
+        ConfigAction::Validate => config_manager.validate(json_output),
+        ConfigAction::Migrate { from_version } => config_manager.migrate(&from_version),
+        ConfigAction::Init { template } => {
+            let config_template = match template {
+                ConfigTemplateType::Personal => ConfigTemplate::Personal,
+                ConfigTemplateType::Team => ConfigTemplate::Team,
+                ConfigTemplateType::Enterprise => ConfigTemplate::Enterprise,
+            };
+            config_manager.init(config_template)
+        }
+        ConfigAction::Diff { canonical } => {
+            if canonical {
+                config_manager.diff_canonical(json_output)
+            } else {
+                Err(CliError::config_error("only --canonical diff is supported", None))
+            }
+        }
+    };
+    
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            print_error_explicit(&e, json_output);
+            ExitCode::FAILURE
+        }
+    }
+}
+
 // ── Lint ──────────────────────────────────────────────────────────────
 
 fn cmd_lint() -> ExitCode {
@@ -2361,6 +2455,7 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                 },
                 Some(Commands::CredentialHelper { action }) => cmd_credential_helper(&action, &home),
                 Some(Commands::Hook { hook, args }) => cmd_hook(&hook, &args, &home),
+                Some(Commands::Config { action }) => cmd_config(action, cli.json, &home),
                 None => {
                     eprintln!("Unknown repobox command. Run: git repobox --help");
                     ExitCode::FAILURE
