@@ -1,10 +1,10 @@
 {
-  "lastCheckedBlock": 44019937,
-  "lastRunAt": "2026-03-30T00:07:05.762Z",
+  "lastCheckedBlock": 44041537,
+  "lastRunAt": "2026-03-30T12:07:02.717Z",
   "lastResult": {
     "totalEvents": 0,
     "externalEvents": 0,
-    "fromBlock": 43933538,
-    "toBlock": 44019937
+    "fromBlock": 44019938,
+    "toBlock": 44041537
   }
 }

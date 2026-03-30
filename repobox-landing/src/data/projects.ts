@@ -1,14 +1,6 @@
 // Live Portfolio Wall Data
 // Auto-generated from kanban projects
 
-export interface ProjectDemo {
-  type: "iframe" | "screenshots" | "gif" | "link";
-  url?: string;
-  screenshots?: string[];
-  gifUrl?: string;
-  description?: string;
-}
-
 export interface Project {
   id: string;
   name: string;
@@ -18,7 +10,14 @@ export interface Project {
   lastActivity: string;
   tags: string[];
   team: "ocean" | "fran" | "both";
-  demo?: ProjectDemo;
+  demo?: {
+    type: "iframe" | "screenshot" | "gif" | "cli";
+    url?: string;
+    screenshots?: string[];
+    gifUrl?: string;
+    cliCommand?: string;
+    previewText?: string;
+  };
 }
 
 export const projects: Project[] = [
@@ -32,9 +31,9 @@ export const projects: Project[] = [
     tags: ["git", "security", "infrastructure"],
     team: "both",
     demo: {
-      type: "gif",
-      gifUrl: "/api/demo/repobox-cli-demo.gif",
-      description: "CLI commands showing permission enforcement"
+      type: "cli",
+      cliCommand: "repobox init && repobox check",
+      previewText: "CLI tool that protects git repos from AI agent mistakes"
     }
   },
   {
@@ -49,7 +48,7 @@ export const projects: Project[] = [
     demo: {
       type: "iframe",
       url: "https://sss.repo.box",
-      description: "Live DAO interface with member verification"
+      previewText: "Live DAO interface with agent verification and corvée task system"
     }
   },
   {
@@ -60,7 +59,12 @@ export const projects: Project[] = [
     link: "https://marketplace.visualstudio.com/items?itemName=ocean.oceangram",
     lastActivity: "2026-03-19",
     tags: ["vscode", "telegram", "developer-tools"],
-    team: "ocean"
+    team: "ocean",
+    demo: {
+      type: "screenshot",
+      screenshots: ["/api/demo/oceangram-command-palette.png", "/api/demo/oceangram-services.png"],
+      previewText: "76 services integrated into VS Code via Telegram interface"
+    }
   },
   {
     id: "archipelago",
@@ -70,7 +74,12 @@ export const projects: Project[] = [
     link: "https://archipelago.repo.box",
     lastActivity: "2026-03-13",
     tags: ["dashboard", "telegram", "collaboration"],
-    team: "ocean"
+    team: "ocean",
+    demo: {
+      type: "iframe",
+      url: "https://archipelago.repo.box",
+      previewText: "Live dashboard showing real-time activity across multiple Telegram topics"
+    }
   },
   {
     id: "supstrategy",
@@ -80,7 +89,12 @@ export const projects: Project[] = [
     link: "https://supstrategy.repo.box",
     lastActivity: "2026-03-08",
     tags: ["trading", "superfluid", "defi"],
-    team: "ocean"
+    team: "ocean",
+    demo: {
+      type: "iframe",
+      url: "https://supstrategy.repo.box",
+      previewText: "Live trading dashboard with AI-generated Superfluid token signals"
+    }
   },
   {
     id: "cabin",
@@ -91,9 +105,9 @@ export const projects: Project[] = [
     tags: ["travel", "ai-agent", "crypto"],
     team: "ocean",
     demo: {
-      type: "screenshots",
-      screenshots: ["/api/demo/cabin-search.png", "/api/demo/cabin-booking.png", "/api/demo/cabin-payment.png"],
-      description: "Flight search and booking flow with USDC payments"
+      type: "gif",
+      gifUrl: "/api/demo/cabin-booking-flow.gif",
+      previewText: "AI agent searches flights and books with crypto payments"
     }
   },
   {
@@ -105,9 +119,9 @@ export const projects: Project[] = [
     tags: ["gaming", "ai-behavior", "social"],
     team: "ocean",
     demo: {
-      type: "screenshots",
-      screenshots: ["/api/demo/botfight-lobby.png", "/api/demo/botfight-game.png"],
-      description: "Game lobby and live social deduction gameplay"
+      type: "screenshot",
+      screenshots: ["/api/demo/botfight-game-lobby.png", "/api/demo/botfight-voting.png"],
+      previewText: "AI agents playing social deduction games with strategic evolution"
     }
   },
   {

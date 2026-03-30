@@ -1,7 +1,7 @@
 {
-  "timestamp_utc": "2026-03-30T00:17:01Z",
+  "timestamp_utc": "2026-03-30T12:17:01Z",
   "status": "failed",
   "reason": "unexpected rejection text for unsigned push",
-  "remote": "https://git.repo.box/repobox-smoke-20260330-001701.git",
+  "remote": "https://git.repo.box/repobox-smoke-20260330-121701.git",
   "push_exit_code": 1
 }
