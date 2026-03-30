@@ -314,7 +314,7 @@ export default function BuildingPage() {
               maxWidth: 500,
             }}
           >
-            Live status of active development at repo.box. Status badges reflect real development momentum based on commit activity and deployment state.
+            Live status of active development at repo.box. Status badges reflect real development momentum based on commit activity and deployment state. See what we're building in our AI development studio portfolio.
           </p>
         </header>
 
