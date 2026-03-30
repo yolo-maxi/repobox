@@ -48,6 +48,14 @@ export function LandingHero() {
           projects
         </Link>
         <Link
+          href="/agents"
+          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
+          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+        >
+          agents
+        </Link>
+        <Link
           href="/docs"
           style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
