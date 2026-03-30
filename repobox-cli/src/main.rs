@@ -175,20 +175,28 @@ enum Commands {
     ///     repobox check @alice edit *.rs         # Can Alice edit Rust files?
     ///     repobox check evm:0x1234 own >feature  # Does address own feature branch?
     ///     repobox check me all >main             # Check all permissions on main
+    ///     repobox check --pre-merge feature main # Validate merge safety from feature to main
     ///
     /// VERBS: push, merge, create, delete, force-push, edit, write, append, own (checks all)
     /// TARGETS: >branch, path/**, *.ext, specific/file.txt
+    ///
+    /// PRE-MERGE VALIDATION:
+    ///     Validates that merging source-ref into target-ref would not introduce unauthorized
+    ///     config changes. Designed for Git hooks and CI/CD pipelines.
     ///
     /// OUTPUT:
     ///     ✅ allowed — @me push >main
     ///        matched rule line 15
     Check {
-        /// Identity or alias (e.g. @alice, evm:0x...)
+        /// Validate merge safety between two git refs
+        #[arg(long)]
+        pre_merge: bool,
+        /// Identity, source-ref (for --pre-merge), or verb target
         identity: String,
-        /// Action verb (push, merge, edit, etc.)
+        /// Target-ref (for --pre-merge), or action verb
         verb: String,
-        /// Target (>main, contracts/**, etc.)
-        target: String,
+        /// Target (>main, contracts/**, etc.) - not used with --pre-merge
+        target: Option<String>,
     },
     /// Validate .repobox/config.yml
     ///
@@ -404,8 +412,19 @@ fn main() -> ExitCode {
         Some(Commands::Use { name }) => cmd_use(&name, &home),
         Some(Commands::Whoami) => cmd_whoami(&home),
         Some(Commands::Alias { action }) => cmd_alias(action, &home),
-        Some(Commands::Check { identity: id_str, verb, target }) => {
-            cmd_check(&id_str, &verb, &target, &home)
+        Some(Commands::Check { pre_merge, identity: id_str, verb, target }) => {
+            if pre_merge {
+                cmd_check_pre_merge(&id_str, &verb, cli.json, &home)
+            } else {
+                let target_str = target.as_ref().ok_or_else(|| {
+                    print_error(&CliError::config_error("Missing target parameter for check command", None));
+                    ExitCode::FAILURE
+                });
+                match target_str {
+                    Ok(t) => cmd_check(&id_str, &verb, t, &home),
+                    Err(exit_code) => exit_code,
+                }
+            }
         }
         Some(Commands::Lint) => cmd_lint(),
         Some(Commands::Status) => cmd_status(&home),
@@ -1042,6 +1061,377 @@ fn cmd_check(id_str: &str, verb_str: &str, target_str: &str, home: &Path) -> Exi
         }
         ExitCode::FAILURE
     }
+}
+
+// ── Pre-merge validation ──────────────────────────────────────────────
+
+fn cmd_check_pre_merge(source_ref: &str, target_ref: &str, json_output: bool, home: &Path) -> ExitCode {
+    use std::process::Command;
+    
+    let config_path = Path::new(".repobox/config.yml");
+    if !config_path.exists() {
+        if json_output {
+            let output = serde_json::json!({
+                "result": "safe",
+                "reason": "no_config",
+                "message": "No .repobox/config.yml found - merge allowed"
+            });
+            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        } else {
+            println!("✅ merge safe - no .repobox/config.yml found");
+        }
+        return ExitCode::SUCCESS;
+    }
+
+    // Check if merge would modify .repobox/config.yml
+    let git_output = Command::new("git")
+        .args(["diff", "--name-only", target_ref, source_ref])
+        .output();
+
+    let changed_files = match git_output {
+        Ok(output) => {
+            if !output.status.success() {
+                let error = format!("git diff failed: {}", String::from_utf8_lossy(&output.stderr));
+                if json_output {
+                    let json_result = serde_json::json!({
+                        "result": "error",
+                        "message": error
+                    });
+                    println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+                } else {
+                    eprintln!("error: {}", error);
+                }
+                return ExitCode::from(2);
+            }
+            String::from_utf8_lossy(&output.stdout).to_string()
+        },
+        Err(e) => {
+            let error = format!("failed to run git diff: {}", e);
+            if json_output {
+                let json_result = serde_json::json!({
+                    "result": "error", 
+                    "message": error
+                });
+                println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+            } else {
+                eprintln!("error: {}", error);
+            }
+            return ExitCode::from(2);
+        }
+    };
+
+    let config_modified = changed_files.lines()
+        .any(|line| line.trim() == ".repobox/config.yml");
+
+    if !config_modified {
+        if json_output {
+            let output = serde_json::json!({
+                "result": "safe",
+                "reason": "no_config_changes",
+                "message": "Merge does not modify .repobox/config.yml"
+            });
+            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        } else {
+            println!("✅ merge safe - no .repobox/config.yml changes detected");
+        }
+        return ExitCode::SUCCESS;
+    }
+
+    // Config will be modified - need to verify merging identity has editConfig permission
+    
+    // First, get the target branch config to check permissions against
+    let target_config_output = Command::new("git")
+        .args(["show", &format!("{}:.repobox/config.yml", target_ref)])
+        .output();
+
+    let target_config_content = match target_config_output {
+        Ok(output) => {
+            if !output.status.success() {
+                let error = format!("unable to read .repobox/config.yml from target branch {}", target_ref);
+                if json_output {
+                    let json_result = serde_json::json!({
+                        "result": "error",
+                        "message": error
+                    });
+                    println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+                } else {
+                    eprintln!("error: {}", error);
+                }
+                return ExitCode::from(2);
+            }
+            String::from_utf8_lossy(&output.stdout).to_string()
+        },
+        Err(e) => {
+            let error = format!("failed to read target config: {}", e);
+            if json_output {
+                let json_result = serde_json::json!({
+                    "result": "error",
+                    "message": error
+                });
+                println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+            } else {
+                eprintln!("error: {}", error);
+            }
+            return ExitCode::from(2);
+        }
+    };
+
+    let target_config = match parser::parse(&target_config_content) {
+        Ok(c) => c,
+        Err(e) => {
+            let error = format!("invalid .repobox/config.yml in target branch: {}", e);
+            if json_output {
+                let json_result = serde_json::json!({
+                    "result": "error",
+                    "message": error
+                });
+                println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+            } else {
+                eprintln!("error: {}", error);
+            }
+            return ExitCode::from(2);
+        }
+    };
+
+    // Get the merging identity from the source ref tip commit
+    let source_tip_output = Command::new("git")
+        .args(["rev-parse", source_ref])
+        .output();
+
+    let source_tip = match source_tip_output {
+        Ok(output) => {
+            if !output.status.success() {
+                let error = format!("failed to resolve source ref {}", source_ref);
+                if json_output {
+                    let json_result = serde_json::json!({
+                        "result": "error",
+                        "message": error
+                    });
+                    println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+                } else {
+                    eprintln!("error: {}", error);
+                }
+                return ExitCode::from(2);
+            }
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        },
+        Err(e) => {
+            let error = format!("failed to get source commit: {}", e);
+            if json_output {
+                let json_result = serde_json::json!({
+                    "result": "error",
+                    "message": error
+                });
+                println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+            } else {
+                eprintln!("error: {}", error);
+            }
+            return ExitCode::from(2);
+        }
+    };
+
+    // Extract signer from source tip commit using the same logic as the git hooks
+    let merging_identity = match extract_signer_from_commit(&source_tip) {
+        Ok(Some(address)) => format!("evm:{}", address),
+        Ok(None) => {
+            let error = format!("source commit {} is not EVM-signed - cannot validate merge permissions", &source_tip[..8]);
+            if json_output {
+                let json_result = serde_json::json!({
+                    "result": "unauthorized",
+                    "message": error
+                });
+                println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+            } else {
+                eprintln!("❌ {}", error);
+            }
+            return ExitCode::from(1);
+        },
+        Err(e) => {
+            let error = format!("failed to extract signer from commit {}: {}", &source_tip[..8], e);
+            if json_output {
+                let json_result = serde_json::json!({
+                    "result": "error",
+                    "message": error
+                });
+                println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+            } else {
+                eprintln!("error: {}", error);
+            }
+            return ExitCode::from(2);
+        }
+    };
+
+    let identity = match Identity::parse(&merging_identity) {
+        Ok(id) => id,
+        Err(e) => {
+            let error = format!("invalid merging identity {}: {}", merging_identity, e);
+            if json_output {
+                let json_result = serde_json::json!({
+                    "result": "error",
+                    "message": error
+                });
+                println!("{}", serde_json::to_string_pretty(&json_result).unwrap());
+            } else {
+                eprintln!("error: {}", error);
+            }
+            return ExitCode::from(2);
+        }
+    };
+
+    // Extract branch name from target ref
+    let target_branch = target_ref.strip_prefix("refs/heads/")
+        .or_else(|| {
+            // Handle plain branch names
+            if !target_ref.contains('/') && !target_ref.starts_with("refs/") {
+                Some(target_ref)
+            } else {
+                None
+            }
+        });
+
+    // Check if identity has edit permission for .repobox/config.yml on target branch
+    let result = engine::check(
+        &target_config,
+        &identity,
+        Verb::Edit,
+        target_branch,
+        Some(".repobox/config.yml")
+    );
+
+    if result.is_allowed() {
+        if json_output {
+            let output = serde_json::json!({
+                "result": "authorized",
+                "identity": merging_identity,
+                "files": [".repobox/config.yml"],
+                "message": "Merge authorized: identity can edit config"
+            });
+            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        } else {
+            println!("✅ merge authorized - {} can edit .repobox/config.yml on {}", 
+                aliases::display_identity(home, &merging_identity), 
+                target_branch.unwrap_or(target_ref));
+        }
+        ExitCode::SUCCESS
+    } else {
+        if json_output {
+            let output = serde_json::json!({
+                "result": "unauthorized", 
+                "identity": merging_identity,
+                "files": [".repobox/config.yml"],
+                "message": format!("Identity {} cannot modify .repobox/config.yml on branch {}", 
+                    merging_identity, target_branch.unwrap_or(target_ref))
+            });
+            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        } else {
+            eprintln!("❌ merge denied - {} cannot edit .repobox/config.yml on {}", 
+                aliases::display_identity(home, &merging_identity),
+                target_branch.unwrap_or(target_ref));
+        }
+        ExitCode::from(1)
+    }
+}
+
+// Helper function to extract EVM signer from commit (reused from check.rs logic)
+fn extract_signer_from_commit(commit_sha: &str) -> std::io::Result<Option<String>> {
+    use std::process::Command;
+    
+    let output = Command::new("git")
+        .args(["cat-file", "commit", commit_sha])
+        .output()?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let commit_text = String::from_utf8_lossy(&output.stdout);
+    extract_signer_from_commit_text(&commit_text)
+}
+
+fn extract_signer_from_commit_text(commit_text: &str) -> std::io::Result<Option<String>> {
+    // Extract the gpgsig header value
+    let sig_hex = match extract_gpgsig(commit_text) {
+        Some(s) => s,
+        None => return Ok(None),
+    };
+
+    let sig_bytes = hex::decode(&sig_hex).map_err(|e| {
+        std::io::Error::other(format!("invalid gpgsig hex: {}", e))
+    })?;
+
+    if sig_bytes.len() != 65 {
+        return Ok(None); // Not a repobox EVM signature
+    }
+
+    // Reconstruct the commit content without the gpgsig header (that's what was signed)
+    let signed_data = strip_gpgsig(commit_text);
+
+    match repobox::signing::recover_address(signed_data.as_bytes(), &sig_bytes) {
+        Ok(address) => Ok(Some(address)),
+        Err(_) => Ok(None),
+    }
+}
+
+fn extract_gpgsig(commit_text: &str) -> Option<String> {
+    let mut in_gpgsig = false;
+    let mut sig_lines = Vec::new();
+
+    for line in commit_text.lines() {
+        if line.starts_with("gpgsig ") {
+            in_gpgsig = true;
+            sig_lines.push(line.strip_prefix("gpgsig ").unwrap().trim());
+        } else if in_gpgsig && line.starts_with(' ') {
+            sig_lines.push(line.trim());
+        } else if in_gpgsig {
+            break;
+        }
+    }
+
+    if sig_lines.is_empty() {
+        return None;
+    }
+
+    // Join and clean
+    let combined: String = sig_lines.join("");
+    let combined = combined.trim().to_string();
+
+    // Strip REPOBOX SIGNATURE armor if present
+    let combined = combined
+        .replace("-----BEGIN REPOBOX SIGNATURE-----", "")
+        .replace("-----END REPOBOX SIGNATURE-----", "")
+        .trim()
+        .to_string();
+
+    if combined.is_empty() {
+        None
+    } else {
+        Some(combined)
+    }
+}
+
+fn strip_gpgsig(commit_text: &str) -> String {
+    let mut result = String::new();
+    let mut in_gpgsig = false;
+
+    for line in commit_text.lines() {
+        if line.starts_with("gpgsig ") {
+            in_gpgsig = true;
+            continue;
+        }
+        if in_gpgsig && line.starts_with(' ') {
+            continue;
+        }
+        in_gpgsig = false;
+        result.push_str(line);
+        result.push('\n');
+    }
+
+    // Remove trailing newline if the original didn't have one
+    if !commit_text.ends_with('\n') && result.ends_with('\n') {
+        result.pop();
+    }
+
+    result
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────
@@ -2445,8 +2835,19 @@ fn cmd_shim(args: &[String], home: &Path) -> ExitCode {
                 Some(Commands::Use { name }) => cmd_use(&name, &home),
                 Some(Commands::Whoami) => cmd_whoami(&home),
                 Some(Commands::Alias { action }) => cmd_alias(action, &home),
-                Some(Commands::Check { identity: id_str, verb, target }) => {
-                    cmd_check(&id_str, &verb, &target, &home)
+                Some(Commands::Check { pre_merge, identity: id_str, verb, target }) => {
+                    if pre_merge {
+                        cmd_check_pre_merge(&id_str, &verb, cli.json, &home)
+                    } else {
+                        let target_str = target.as_ref().ok_or_else(|| {
+                            print_error(&CliError::config_error("Missing target parameter for check command", None));
+                            ExitCode::FAILURE
+                        });
+                        match target_str {
+                            Ok(t) => cmd_check(&id_str, &verb, t, &home),
+                            Err(exit_code) => exit_code,
+                        }
+                    }
                 }
                 Some(Commands::Lint) => cmd_lint(),
                 Some(Commands::Status) => cmd_status(&home),
