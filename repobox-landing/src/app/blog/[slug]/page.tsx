@@ -57,14 +57,17 @@ export async function generateStaticParams() {
   }
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const post = await getBlogPost(params.slug);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const post = await getBlogPost(slug);
   
   if (!post) {
     return {
       title: 'Post Not Found - repo.box',
     };
   }
+  
+  const ogImageUrl = `https://repo.box/og/${slug}`;
   
   return {
     title: `${post.title} - repo.box`,
@@ -76,17 +79,27 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       authors: [post.author],
       publishedTime: post.date,
       tags: post.tags,
+      images: [
+        {
+          url: ogImageUrl,
+          width: 1200,
+          height: 630,
+          alt: post.title,
+        },
+      ],
     },
     twitter: {
       card: 'summary_large_image',
       title: post.title,
       description: post.excerpt,
+      images: [ogImageUrl],
     },
   };
 }
 
-export default async function BlogPostPage({ params }: { params: { slug: string } }) {
-  const post = await getBlogPost(params.slug);
+export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const post = await getBlogPost(slug);
   
   if (!post) {
     notFound();
