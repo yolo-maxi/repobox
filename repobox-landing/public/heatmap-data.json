@@ -1,67 +1,7 @@
 {
-  "startDate": "2025-03-20",
-  "endDate": "2026-03-20",
+  "startDate": "2025-03-30",
+  "endDate": "2026-03-30",
   "data": {
-    "2025-03-20": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2025-03-21": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2025-03-22": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2025-03-23": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2025-03-24": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2025-03-25": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2025-03-26": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2025-03-27": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2025-03-28": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2025-03-29": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
     "2025-03-30": {
       "count": 0,
       "level": "empty",
@@ -117,10 +57,10 @@
       "repoCount": 0
     },
     "2025-04-08": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-04-09": {
       "count": 0,
@@ -213,16 +153,16 @@
       "repoCount": 0
     },
     "2025-04-24": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-04-25": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-04-26": {
       "count": 0,
@@ -261,10 +201,10 @@
       "repoCount": 0
     },
     "2025-05-02": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-05-03": {
       "count": 0,
@@ -279,16 +219,16 @@
       "repoCount": 0
     },
     "2025-05-05": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-05-06": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-05-07": {
       "count": 0,
@@ -333,10 +273,10 @@
       "repoCount": 0
     },
     "2025-05-14": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-05-15": {
       "count": 0,
@@ -351,16 +291,16 @@
       "repoCount": 0
     },
     "2025-05-17": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-18": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-19": {
       "count": 0,
@@ -369,34 +309,34 @@
       "repoCount": 0
     },
     "2025-05-20": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-21": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-22": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 11,
+      "level": "intense",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-23": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 21,
+      "level": "intense",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-24": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 6,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-25": {
       "count": 0,
@@ -405,82 +345,82 @@
       "repoCount": 0
     },
     "2025-05-26": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-27": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 14,
+      "level": "intense",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-28": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 8,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-29": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 10,
+      "level": "medium",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-05-30": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 7,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-05-31": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-01": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 8,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-02": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-03": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 11,
+      "level": "intense",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-04": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-05": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 10,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-06": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 5,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-07": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 7,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-08": {
       "count": 0,
@@ -489,82 +429,82 @@
       "repoCount": 0
     },
     "2025-06-09": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-06-10": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 17,
+      "level": "intense",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-11": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-12": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 8,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-13": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-14": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 7,
+      "level": "medium",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-06-15": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-16": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 17,
+      "level": "intense",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-17": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 10,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-18": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 9,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-19": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-20": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-21": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-06-22": {
       "count": 0,
@@ -585,10 +525,10 @@
       "repoCount": 0
     },
     "2025-06-25": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-06-26": {
       "count": 0,
@@ -621,10 +561,10 @@
       "repoCount": 0
     },
     "2025-07-01": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 7,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-02": {
       "count": 0,
@@ -633,10 +573,10 @@
       "repoCount": 0
     },
     "2025-07-03": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-04": {
       "count": 0,
@@ -687,10 +627,10 @@
       "repoCount": 0
     },
     "2025-07-12": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-13": {
       "count": 0,
@@ -699,16 +639,16 @@
       "repoCount": 0
     },
     "2025-07-14": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-15": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 8,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-16": {
       "count": 0,
@@ -717,40 +657,40 @@
       "repoCount": 0
     },
     "2025-07-17": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-18": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 7,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-19": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-20": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-21": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-07-22": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-23": {
       "count": 0,
@@ -759,40 +699,40 @@
       "repoCount": 0
     },
     "2025-07-24": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-25": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 10,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-26": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 8,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-27": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 5,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-28": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 8,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-29": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 5,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-07-30": {
       "count": 0,
@@ -801,16 +741,16 @@
       "repoCount": 0
     },
     "2025-07-31": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 11,
+      "level": "intense",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-08-01": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-02": {
       "count": 0,
@@ -819,40 +759,40 @@
       "repoCount": 0
     },
     "2025-08-03": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-04": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-05": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 6,
+      "level": "medium",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-08-06": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 6,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-07": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 9,
+      "level": "medium",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-08-08": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 5,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-09": {
       "count": 0,
@@ -873,10 +813,10 @@
       "repoCount": 0
     },
     "2025-08-12": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 6,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-13": {
       "count": 0,
@@ -885,34 +825,34 @@
       "repoCount": 0
     },
     "2025-08-14": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 6,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-15": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 7,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-16": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-08-17": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-18": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-19": {
       "count": 0,
@@ -921,10 +861,10 @@
       "repoCount": 0
     },
     "2025-08-20": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-08-21": {
       "count": 0,
@@ -933,16 +873,16 @@
       "repoCount": 0
     },
     "2025-08-22": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-23": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 7,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-24": {
       "count": 0,
@@ -957,16 +897,16 @@
       "repoCount": 0
     },
     "2025-08-26": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 5,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-27": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-08-28": {
       "count": 0,
@@ -993,10 +933,10 @@
       "repoCount": 0
     },
     "2025-09-01": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-09-02": {
       "count": 0,
@@ -1005,10 +945,10 @@
       "repoCount": 0
     },
     "2025-09-03": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-09-04": {
       "count": 0,
@@ -1035,10 +975,10 @@
       "repoCount": 0
     },
     "2025-09-08": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-09-09": {
       "count": 0,
@@ -1059,16 +999,16 @@
       "repoCount": 0
     },
     "2025-09-12": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-09-13": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-09-14": {
       "count": 0,
@@ -1083,10 +1023,10 @@
       "repoCount": 0
     },
     "2025-09-16": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-09-17": {
       "count": 0,
@@ -1095,10 +1035,10 @@
       "repoCount": 0
     },
     "2025-09-18": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-09-19": {
       "count": 0,
@@ -1125,10 +1065,10 @@
       "repoCount": 0
     },
     "2025-09-23": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-09-24": {
       "count": 0,
@@ -1179,10 +1119,10 @@
       "repoCount": 0
     },
     "2025-10-02": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-10-03": {
       "count": 0,
@@ -1209,28 +1149,28 @@
       "repoCount": 0
     },
     "2025-10-07": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-10-08": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-10-09": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-10-10": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-10-11": {
       "count": 0,
@@ -1245,10 +1185,10 @@
       "repoCount": 0
     },
     "2025-10-13": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-10-14": {
       "count": 0,
@@ -1257,10 +1197,10 @@
       "repoCount": 0
     },
     "2025-10-15": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-10-16": {
       "count": 0,
@@ -1293,22 +1233,22 @@
       "repoCount": 0
     },
     "2025-10-21": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-10-22": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 9,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-10-23": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-10-24": {
       "count": 0,
@@ -1341,10 +1281,10 @@
       "repoCount": 0
     },
     "2025-10-29": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "pool-admin,streme-frontend",
+      "repoCount": 2
     },
     "2025-10-30": {
       "count": 0,
@@ -1407,16 +1347,16 @@
       "repoCount": 0
     },
     "2025-11-09": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-11-10": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-11-11": {
       "count": 0,
@@ -1425,10 +1365,10 @@
       "repoCount": 0
     },
     "2025-11-12": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-11-13": {
       "count": 0,
@@ -1443,10 +1383,10 @@
       "repoCount": 0
     },
     "2025-11-15": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-11-16": {
       "count": 0,
@@ -1473,10 +1413,10 @@
       "repoCount": 0
     },
     "2025-11-20": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-11-21": {
       "count": 0,
@@ -1485,16 +1425,16 @@
       "repoCount": 0
     },
     "2025-11-22": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-11-23": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-11-24": {
       "count": 0,
@@ -1515,10 +1455,10 @@
       "repoCount": 0
     },
     "2025-11-27": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-11-28": {
       "count": 0,
@@ -1527,10 +1467,10 @@
       "repoCount": 0
     },
     "2025-11-29": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-11-30": {
       "count": 0,
@@ -1539,34 +1479,34 @@
       "repoCount": 0
     },
     "2025-12-01": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-12-02": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 5,
+      "level": "medium",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-12-03": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2025-12-04": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-12-05": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-12-06": {
       "count": 0,
@@ -1587,28 +1527,28 @@
       "repoCount": 0
     },
     "2025-12-09": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2025-12-10": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-12-11": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 15,
+      "level": "intense",
+      "repos": "streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 3
     },
     "2025-12-12": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 7,
+      "level": "medium",
+      "repos": "streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 3
     },
     "2025-12-13": {
       "count": 0,
@@ -1617,46 +1557,46 @@
       "repoCount": 0
     },
     "2025-12-14": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 10,
+      "level": "medium",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2025-12-15": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 12,
+      "level": "intense",
+      "repos": "streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 3
     },
     "2025-12-16": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 16,
+      "level": "intense",
+      "repos": "streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 3
     },
     "2025-12-17": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 3,
+      "level": "light",
+      "repos": "streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 3
     },
     "2025-12-18": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 10,
+      "level": "medium",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2025-12-19": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 17,
+      "level": "intense",
+      "repos": "streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 3
     },
     "2025-12-20": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "streme-frontend",
+      "repoCount": 1
     },
     "2025-12-21": {
       "count": 0,
@@ -1707,22 +1647,22 @@
       "repoCount": 0
     },
     "2025-12-29": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 8,
+      "level": "medium",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2025-12-30": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 8,
+      "level": "medium",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2025-12-31": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 20,
+      "level": "intense",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2026-01-01": {
       "count": 0,
@@ -1731,10 +1671,10 @@
       "repoCount": 0
     },
     "2026-01-02": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 10,
+      "level": "medium",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2026-01-03": {
       "count": 0,
@@ -1749,10 +1689,10 @@
       "repoCount": 0
     },
     "2026-01-05": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 1,
+      "level": "light",
+      "repos": "pool-admin",
+      "repoCount": 1
     },
     "2026-01-06": {
       "count": 0,
@@ -1773,34 +1713,34 @@
       "repoCount": 0
     },
     "2026-01-09": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 10,
+      "level": "medium",
+      "repos": "pool-admin,streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 4
     },
     "2026-01-10": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2026-01-11": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 2,
+      "level": "light",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2026-01-12": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 22,
+      "level": "intense",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2026-01-13": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2026-01-14": {
       "count": 0,
@@ -1815,10 +1755,10 @@
       "repoCount": 0
     },
     "2026-01-16": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 6,
+      "level": "medium",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2026-01-17": {
       "count": 0,
@@ -1833,196 +1773,196 @@
       "repoCount": 0
     },
     "2026-01-19": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 21,
+      "level": "intense",
+      "repos": "langbot,rikai-ui,SUPStrategy,tradestrategy-work",
+      "repoCount": 4
     },
     "2026-01-20": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 62,
+      "level": "intense",
+      "repos": "pool-admin,rikai-ui,streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 5
     },
     "2026-01-21": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 4,
+      "level": "medium",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2026-01-22": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
+      "count": 16,
+      "level": "intense",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
     },
     "2026-01-23": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-01-24": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-01-25": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-01-26": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-01-27": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-01-28": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-01-29": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-01-30": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-01-31": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-02-01": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-02-02": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-02-03": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-02-04": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-02-05": {
-      "count": 4,
-      "level": "medium",
-      "repos": "clawd",
-      "repoCount": 1
-    },
-    "2026-02-06": {
-      "count": 2,
-      "level": "light",
-      "repos": "clawd",
-      "repoCount": 1
-    },
-    "2026-02-07": {
-      "count": 4,
-      "level": "medium",
-      "repos": "clawd",
-      "repoCount": 1
-    },
-    "2026-02-08": {
-      "count": 0,
-      "level": "empty",
-      "repos": "",
-      "repoCount": 0
-    },
-    "2026-02-09": {
-      "count": 3,
-      "level": "light",
-      "repos": "clawd",
-      "repoCount": 1
-    },
-    "2026-02-10": {
-      "count": 2,
-      "level": "light",
-      "repos": "clawd",
-      "repoCount": 1
-    },
-    "2026-02-11": {
-      "count": 1,
-      "level": "light",
-      "repos": "clawd",
-      "repoCount": 1
-    },
-    "2026-02-12": {
-      "count": 2,
-      "level": "light",
-      "repos": "clawd",
-      "repoCount": 1
-    },
-    "2026-02-13": {
-      "count": 4,
-      "level": "medium",
-      "repos": "clawd",
-      "repoCount": 1
-    },
-    "2026-02-14": {
-      "count": 13,
+      "count": 16,
       "level": "intense",
-      "repos": "clawd",
-      "repoCount": 1
-    },
-    "2026-02-15": {
-      "count": 3,
-      "level": "light",
-      "repos": "clawd",
-      "repoCount": 1
-    },
-    "2026-02-16": {
-      "count": 8,
-      "level": "medium",
-      "repos": "clawd,sss",
-      "repoCount": 2
-    },
-    "2026-02-17": {
-      "count": 7,
-      "level": "medium",
-      "repos": "clawd,sss",
-      "repoCount": 2
-    },
-    "2026-02-18": {
-      "count": 20,
-      "level": "intense",
-      "repos": "clawd,oceangram,sss",
+      "repos": "beamr-economy,SUPStrategy,tradestrategy-work",
       "repoCount": 3
     },
-    "2026-02-19": {
-      "count": 51,
+    "2026-01-24": {
+      "count": 35,
       "level": "intense",
-      "repos": "clawd,oceangram",
+      "repos": "rikai-ui,SUPStrategy,tradestrategy-work",
+      "repoCount": 3
+    },
+    "2026-01-25": {
+      "count": 44,
+      "level": "intense",
+      "repos": "SUPStrategy,tradestrategy-work",
       "repoCount": 2
+    },
+    "2026-01-26": {
+      "count": 30,
+      "level": "intense",
+      "repos": "langbot,rikai-ui,streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 5
+    },
+    "2026-01-27": {
+      "count": 10,
+      "level": "medium",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
+    },
+    "2026-01-28": {
+      "count": 12,
+      "level": "intense",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
+    },
+    "2026-01-29": {
+      "count": 18,
+      "level": "intense",
+      "repos": "beamr-economy,streme-frontend",
+      "repoCount": 2
+    },
+    "2026-01-30": {
+      "count": 44,
+      "level": "intense",
+      "repos": "beamr-economy,langbot,streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 5
+    },
+    "2026-01-31": {
+      "count": 48,
+      "level": "intense",
+      "repos": "beamr-economy,streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 4
+    },
+    "2026-02-01": {
+      "count": 47,
+      "level": "intense",
+      "repos": "beamr-economy,pool-admin,streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 5
+    },
+    "2026-02-02": {
+      "count": 26,
+      "level": "intense",
+      "repos": "SUPStrategy,tradestrategy-work",
+      "repoCount": 2
+    },
+    "2026-02-03": {
+      "count": 38,
+      "level": "intense",
+      "repos": "beamr-economy,streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 4
+    },
+    "2026-02-04": {
+      "count": 43,
+      "level": "intense",
+      "repos": "SUPStrategy,tradestrategy-work,yolomaxi-telegram",
+      "repoCount": 3
+    },
+    "2026-02-05": {
+      "count": 50,
+      "level": "intense",
+      "repos": "clawd,streme-frontend,SUPStrategy,tradestrategy-work",
+      "repoCount": 4
+    },
+    "2026-02-06": {
+      "count": 36,
+      "level": "intense",
+      "repos": "clawd,SUPStrategy,tradestrategy-work",
+      "repoCount": 3
+    },
+    "2026-02-07": {
+      "count": 10,
+      "level": "medium",
+      "repos": "clawd,SUPStrategy,tradestrategy-work",
+      "repoCount": 3
+    },
+    "2026-02-08": {
+      "count": 9,
+      "level": "medium",
+      "repos": "pool-admin,SUPStrategy,tradestrategy-work",
+      "repoCount": 3
+    },
+    "2026-02-09": {
+      "count": 33,
+      "level": "intense",
+      "repos": "clawd,pool-admin,SUPStrategy,tradestrategy-work",
+      "repoCount": 4
+    },
+    "2026-02-10": {
+      "count": 19,
+      "level": "intense",
+      "repos": "botfight,clawd,pool-admin,SUPStrategy",
+      "repoCount": 4
+    },
+    "2026-02-11": {
+      "count": 37,
+      "level": "intense",
+      "repos": "botfight,clawd,pool-admin,prompster,prompster-app,SUPStrategy",
+      "repoCount": 6
+    },
+    "2026-02-12": {
+      "count": 16,
+      "level": "intense",
+      "repos": "clawd,prompster,SUPStrategy",
+      "repoCount": 3
+    },
+    "2026-02-13": {
+      "count": 25,
+      "level": "intense",
+      "repos": "botfight,clawd,prompster,SUPStrategy",
+      "repoCount": 4
+    },
+    "2026-02-14": {
+      "count": 45,
+      "level": "intense",
+      "repos": "botfight,clawd,SUPStrategy,yolomaxi-telegram",
+      "repoCount": 4
+    },
+    "2026-02-15": {
+      "count": 14,
+      "level": "intense",
+      "repos": "botfight,clawd",
+      "repoCount": 2
+    },
+    "2026-02-16": {
+      "count": 15,
+      "level": "intense",
+      "repos": "botfight,clawd,sss,SUPStrategy",
+      "repoCount": 4
+    },
+    "2026-02-17": {
+      "count": 9,
+      "level": "medium",
+      "repos": "clawd,sss,SUPStrategy",
+      "repoCount": 3
+    },
+    "2026-02-18": {
+      "count": 21,
+      "level": "intense",
+      "repos": "clawd,oceangram,sss,SUPStrategy",
+      "repoCount": 4
+    },
+    "2026-02-19": {
+      "count": 67,
+      "level": "intense",
+      "repos": "clawd,oceangram,SUPStrategy",
+      "repoCount": 3
     },
     "2026-02-20": {
       "count": 44,
@@ -2045,44 +1985,44 @@
     "2026-02-23": {
       "count": 46,
       "level": "intense",
-      "repos": "clawd,oceangram,sss",
-      "repoCount": 3
+      "repos": "beamr-economy,clawd,oceangram,sss,SUPStrategy",
+      "repoCount": 5
     },
     "2026-02-24": {
-      "count": 114,
+      "count": 130,
       "level": "intense",
-      "repos": "clawd,oceangram,repobox",
-      "repoCount": 3
+      "repos": "beamr-economy,clawd,oceangram,repobox,SUPStrategy",
+      "repoCount": 5
     },
     "2026-02-25": {
-      "count": 24,
+      "count": 32,
       "level": "intense",
-      "repos": "oceangram,repobox",
-      "repoCount": 2
+      "repos": "oceangram,repobox,skillmarket",
+      "repoCount": 3
     },
     "2026-02-26": {
-      "count": 13,
+      "count": 59,
       "level": "intense",
-      "repos": "clawd,oceangram",
-      "repoCount": 2
+      "repos": "clawd,oceangram,skillmarket",
+      "repoCount": 3
     },
     "2026-02-27": {
-      "count": 12,
+      "count": 17,
       "level": "intense",
-      "repos": "oceangram,repobox,sss",
-      "repoCount": 3
+      "repos": "beamr-economy,botfight,oceangram,repobox,skillmarket,sss,tradestrategy-work",
+      "repoCount": 7
     },
     "2026-02-28": {
       "count": 10,
-      "level": "intense",
+      "level": "medium",
       "repos": "oceangram,sss",
       "repoCount": 2
     },
     "2026-03-01": {
-      "count": 3,
-      "level": "light",
-      "repos": "sss",
-      "repoCount": 1
+      "count": 4,
+      "level": "medium",
+      "repos": "skillmarket,sss",
+      "repoCount": 2
     },
     "2026-03-02": {
       "count": 7,
@@ -2109,28 +2049,28 @@
       "repoCount": 3
     },
     "2026-03-06": {
-      "count": 17,
+      "count": 33,
       "level": "intense",
-      "repos": "oceangram,repobox,sss",
-      "repoCount": 3
+      "repos": "beamr-economy,cabin,oceangram,repobox,sss",
+      "repoCount": 5
     },
     "2026-03-07": {
-      "count": 5,
+      "count": 8,
       "level": "medium",
-      "repos": "clawd,oceangram,sss",
-      "repoCount": 3
-    },
-    "2026-03-08": {
-      "count": 16,
-      "level": "intense",
-      "repos": "clawd,oceangram,repobox,sss",
+      "repos": "cabin,clawd,oceangram,sss",
       "repoCount": 4
     },
-    "2026-03-09": {
-      "count": 22,
+    "2026-03-08": {
+      "count": 18,
       "level": "intense",
-      "repos": "clawd,oceangram,sss",
-      "repoCount": 3
+      "repos": "clawd,kanban-projects,oceangram,repobox,sss",
+      "repoCount": 5
+    },
+    "2026-03-09": {
+      "count": 29,
+      "level": "intense",
+      "repos": "cabin,clawd,kanban-projects,oceangram,sss",
+      "repoCount": 5
     },
     "2026-03-10": {
       "count": 22,
@@ -2151,10 +2091,10 @@
       "repoCount": 1
     },
     "2026-03-13": {
-      "count": 9,
-      "level": "intense",
-      "repos": "clawd,oceangram,sss",
-      "repoCount": 3
+      "count": 10,
+      "level": "medium",
+      "repos": "clawd,kanban-projects,oceangram,sss",
+      "repoCount": 4
     },
     "2026-03-14": {
       "count": 21,
@@ -2163,16 +2103,16 @@
       "repoCount": 3
     },
     "2026-03-15": {
-      "count": 16,
+      "count": 27,
       "level": "intense",
-      "repos": "clawd,oceangram,sss",
-      "repoCount": 3
+      "repos": "cabin,clawd,kanban-projects,oceangram,sss",
+      "repoCount": 5
     },
     "2026-03-16": {
-      "count": 19,
+      "count": 22,
       "level": "intense",
-      "repos": "clawd,oceangram,sss",
-      "repoCount": 3
+      "repos": "clawd,kanban-projects,oceangram,sss",
+      "repoCount": 4
     },
     "2026-03-17": {
       "count": 27,
@@ -2183,20 +2123,80 @@
     "2026-03-18": {
       "count": 62,
       "level": "intense",
-      "repos": "clawd,oceangram,repobox",
-      "repoCount": 3
+      "repos": "clawd,kanban-projects,oceangram,repobox",
+      "repoCount": 4
     },
     "2026-03-19": {
-      "count": 112,
+      "count": 93,
       "level": "intense",
-      "repos": "clawd,oceangram,repobox,sss",
-      "repoCount": 4
+      "repos": "clawd,kanban-projects,oceangram,repobox,sss",
+      "repoCount": 5
     },
     "2026-03-20": {
-      "count": 46,
+      "count": 82,
       "level": "intense",
-      "repos": "clawd,oceangram,repobox,sss",
+      "repos": "cabin,clawd,oceangram,repobox,sss",
+      "repoCount": 5
+    },
+    "2026-03-21": {
+      "count": 173,
+      "level": "intense",
+      "repos": "cabin,clawd,kanban-projects,oceangram,repobox,sss",
+      "repoCount": 6
+    },
+    "2026-03-22": {
+      "count": 133,
+      "level": "intense",
+      "repos": "cabin,clawd,oceangram,repobox",
       "repoCount": 4
+    },
+    "2026-03-23": {
+      "count": 42,
+      "level": "intense",
+      "repos": "clawd,repobox",
+      "repoCount": 2
+    },
+    "2026-03-24": {
+      "count": 4,
+      "level": "medium",
+      "repos": "cabin,clawd,repobox",
+      "repoCount": 3
+    },
+    "2026-03-25": {
+      "count": 2,
+      "level": "light",
+      "repos": "clawd,oceangram",
+      "repoCount": 2
+    },
+    "2026-03-26": {
+      "count": 2,
+      "level": "light",
+      "repos": "clawd,oceangram",
+      "repoCount": 2
+    },
+    "2026-03-27": {
+      "count": 80,
+      "level": "intense",
+      "repos": "clawd,kanban-projects,oceangram,repobox,sss",
+      "repoCount": 5
+    },
+    "2026-03-28": {
+      "count": 20,
+      "level": "intense",
+      "repos": "cabin,clawd,kanban-projects,oceangram,repobox",
+      "repoCount": 5
+    },
+    "2026-03-29": {
+      "count": 12,
+      "level": "intense",
+      "repos": "repobox",
+      "repoCount": 1
+    },
+    "2026-03-30": {
+      "count": 3,
+      "level": "light",
+      "repos": "repobox",
+      "repoCount": 1
     }
   }
 }
