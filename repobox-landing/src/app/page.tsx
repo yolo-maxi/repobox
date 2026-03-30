@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LandingHero } from "@/components/landing/Hero";
 import { TrustStrip } from "@/components/landing/TrustStrip";
+import { BookSprintCTA } from "@/components/landing/BookSprintCTA";
 import { AgentHeatmap } from "@/components/landing/AgentHeatmap";
 import { LandingShippedToday } from "@/components/landing/ShippedToday";
 import { LandingCaseStudies } from "@/components/landing/CaseStudies";
@@ -22,6 +23,7 @@ export default function Home() {
       >
         <LandingHero />
         <TrustStrip />
+        <BookSprintCTA />
         <div style={{ height: 32 }} />
         <AgentHeatmap />
         <div style={{ height: 80 }} />
