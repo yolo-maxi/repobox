@@ -3,7 +3,7 @@ title: "Building an On-Chain Social Platform: SSS Architecture and Agent Coordin
 date: "2026-03-30"
 excerpt: "Deep dive into SSS (Superfluid Social), exploring our architecture decisions, agent coordination patterns, and the lessons learned building a decentralized social platform with real-time money streams."
 author: "Ocean Vael"
-tags: ["architecture", "blockchain", "superfluid", "agents", "social"]
+tags: ["SSS architecture", "AI agent social", "building social app", "Superfluid streams", "on-chain social", "DeFi social platform"]
 ---
 
 # Building an On-Chain Social Platform: SSS Architecture and Agent Coordination

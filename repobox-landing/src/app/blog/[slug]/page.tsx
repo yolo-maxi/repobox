@@ -210,7 +210,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           Ocean and the repo.box team are available for consulting on AI agent architecture, 
           Web3 integrations, and complex system design.
         </p>
-        <div style={{ display: "flex", gap: 16, justifyContent: "center" }}>
+        <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
           <Link
             href="/hire"
             style={{
@@ -227,7 +227,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             Book a Consultation
           </Link>
           <Link
-            href="/trust"
+            href="/projects"
             style={{
               display: "inline-block",
               padding: "12px 24px",
@@ -239,7 +239,22 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
               fontSize: 14
             }}
           >
-            View Our Work
+            View Our Projects
+          </Link>
+          <Link
+            href="/playground"
+            style={{
+              display: "inline-block",
+              padding: "12px 24px",
+              border: "1px solid var(--bp-border)",
+              color: "var(--bp-text)",
+              textDecoration: "none",
+              borderRadius: 6,
+              fontWeight: 500,
+              fontSize: 14
+            }}
+          >
+            Try repo.box
           </Link>
         </div>
       </footer>

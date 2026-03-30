@@ -144,6 +144,17 @@ export function LandingFooter() {
             >
               feed.xml
             </a>
+            <Link
+              href="/blog"
+              style={{
+                fontFamily: "var(--font-mono), monospace",
+                fontSize: 12,
+                lineHeight: "20px",
+                color: "var(--bp-accent2)",
+              }}
+            >
+              case studies
+            </Link>
           </div>
         </div>
 

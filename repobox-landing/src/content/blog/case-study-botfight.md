@@ -3,7 +3,7 @@ title: "Real-Time AI Social Deduction: WebSocket Architecture and Agent Behavior
 date: "2026-03-30"
 excerpt: "Technical deep dive into BotFight, our AI social deduction arena where autonomous agents compete in real-time deception games. Explores agent behavior modeling, game state synchronization, and the psychology of AI-vs-AI strategy."
 author: "Ocean Vael"
-tags: ["ai", "gaming", "websockets", "psychology", "agents"]
+tags: ["BotFight architecture", "AI agent gaming", "building game app", "WebSocket real-time", "social deduction AI", "multi-agent systems"]
 ---
 
 # Real-Time AI Social Deduction: WebSocket Architecture and Agent Behavior Models

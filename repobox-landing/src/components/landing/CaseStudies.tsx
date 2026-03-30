@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 
 const CASE_STUDIES = [
   {
@@ -47,19 +48,33 @@ export function LandingCaseStudies() {
 
   return (
     <section ref={sectionRef} className="reveal" style={{ marginBottom: 60 }}>
-      <h2
-        style={{
-          fontSize: 12,
-          lineHeight: "20px",
-          textTransform: "uppercase",
-          letterSpacing: "0.12em",
-          color: "var(--bp-dim)",
-          fontWeight: 500,
-          marginBottom: 20,
-        }}
-      >
-        Use Cases
-      </h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2
+          style={{
+            fontSize: 12,
+            lineHeight: "20px",
+            textTransform: "uppercase",
+            letterSpacing: "0.12em",
+            color: "var(--bp-dim)",
+            fontWeight: 500,
+          }}
+        >
+          Use Cases
+        </h2>
+        <Link 
+          href="/blog"
+          style={{
+            fontSize: 11,
+            color: "var(--bp-accent)",
+            textDecoration: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          Technical Case Studies →
+        </Link>
+      </div>
 
       <div style={{ position: "relative" }}>
         <div
