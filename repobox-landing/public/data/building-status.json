@@ -1,0 +1,147 @@
+{
+  "generated": "2026-03-30T12:52:41.128Z",
+  "projects": [
+    {
+      "id": "rikai",
+      "name": "Rikai",
+      "description": "Interactive language reading assistant with real-time vocabulary help. Features context-aware definitions and progress tracking.",
+      "status": "concept",
+      "link": "null",
+      "lastCommitDate": "2026-03-30",
+      "lastActivity": "2026-03-30",
+      "tags": ["education","language","reading","ai-assistant"],
+      "contributorAttribution": "fran",
+      "commitCount7d": 0,
+      "team": "fran",
+      "repositoryPath": "/home/xiko/rikai"
+    }
+,
+    {
+      "id": "archipelago",
+      "name": "Archipelago",
+      "description": "Real-time multi-topic visibility dashboard for Telegram teams. Provides unified view across chat topics with activity monitoring.",
+      "status": "beta",
+      "link": "https://archipelago.repo.box",
+      "lastCommitDate": "2026-03-28",
+      "lastActivity": "2026-03-28",
+      "tags": ["dashboard","telegram","collaboration","monitoring"],
+      "contributorAttribution": "ocean",
+      "commitCount7d": 3,
+      "team": "ocean",
+      "repositoryPath": "/home/xiko/archipelago"
+    }
+,
+    {
+      "id": "repobox",
+      "name": "Repobox",
+      "description": "Git permission layer that makes repositories safe for AI agents. Server-first security architecture with CLI tools and browser explorer.",
+      "status": "active",
+      "link": "https://repo.box",
+      "lastCommitDate": "2026-03-30",
+      "lastActivity": "2026-03-30",
+      "tags": ["git","security","infrastructure","cli"],
+      "contributorAttribution": "both",
+      "commitCount7d": 45,
+      "team": "both",
+      "repositoryPath": "/home/xiko/repobox"
+    }
+,
+    {
+      "id": "agentation",
+      "name": "Agentation",
+      "description": "Visual feedback and annotation tool for AI agent interactions. Enables humans to provide context-aware guidance to agents.",
+      "status": "shipped",
+      "link": "https://agentation.repo.box",
+      "lastCommitDate": "2026-03-30",
+      "lastActivity": "2026-03-30",
+      "tags": ["ai-tools","feedback","annotation","interaction"],
+      "contributorAttribution": "both",
+      "commitCount7d": 0,
+      "team": "both",
+      "repositoryPath": "/home/xiko/agentation"
+    }
+,
+    {
+      "id": "cabin",
+      "name": "Cabin",
+      "description": "AI group travel agent that finds and books real flights with USDC payments. Features multi-destination planning and crypto-native booking flow.",
+      "status": "beta",
+      "link": "null",
+      "lastCommitDate": "2026-03-28",
+      "lastActivity": "2026-03-28",
+      "tags": ["travel","ai-agent","crypto","booking"],
+      "contributorAttribution": "ocean",
+      "commitCount7d": 5,
+      "team": "ocean",
+      "repositoryPath": "/home/xiko/cabin"
+    }
+,
+    {
+      "id": "oceangram",
+      "name": "Oceangram",
+      "description": "Telegram interface for VS Code with 76 integrated services. Enables coding through chat with full IDE integration and multi-service orchestration.",
+      "status": "active",
+      "link": "https://marketplace.visualstudio.com/items?itemName=ocean.oceangram",
+      "lastCommitDate": "2026-03-28",
+      "lastActivity": "2026-03-28",
+      "tags": ["vscode","telegram","developer-tools","integration"],
+      "contributorAttribution": "ocean",
+      "commitCount7d": 15,
+      "team": "ocean",
+      "repositoryPath": "/home/xiko/oceangram"
+    }
+,
+    {
+      "id": "supstrategy",
+      "name": "Supstrategy",
+      "description": "AI-powered Superfluid token trading monitor with smart signals. Tracks pool activity, price movements, and provides trading insights.",
+      "status": "concept",
+      "link": "https://supstrategy.repo.box",
+      "lastCommitDate": "2026-03-30",
+      "lastActivity": "2026-03-30",
+      "tags": ["trading","superfluid","defi","monitoring"],
+      "contributorAttribution": "ocean",
+      "commitCount7d": 0,
+      "team": "ocean",
+      "repositoryPath": "/home/xiko/supstrategy"
+    }
+,
+    {
+      "id": "sss",
+      "name": "Sss",
+      "description": "Verified agent DAO with on-chain reputation system. Features corvée work assignment, lobster verification tests, and SUP token rewards.",
+      "status": "active",
+      "link": "https://sss.repo.box",
+      "lastCommitDate": "2026-03-27",
+      "lastActivity": "2026-03-27",
+      "tags": ["dao","verification","on-chain","superfluid"],
+      "contributorAttribution": "ocean",
+      "commitCount7d": 64,
+      "team": "ocean",
+      "repositoryPath": "/home/xiko/sss"
+    }
+,
+    {
+      "id": "botfight",
+      "name": "Botfight",
+      "description": "AI social deduction arena where agents play Mafia with evolving strategies. Real-time multiplayer with behavioral learning systems.",
+      "status": "concept",
+      "link": "null",
+      "lastCommitDate": "2026-02-27",
+      "lastActivity": "2026-02-27",
+      "tags": ["gaming","ai-behavior","social","multiplayer"],
+      "contributorAttribution": "ocean",
+      "commitCount7d": 0,
+      "team": "ocean",
+      "repositoryPath": "/home/xiko/botfight"
+    }
+  ],
+  "stats": {
+    "totalProjects": 9,
+    "activeCount": 3,
+    "commitsThisWeek": 132,
+    "oceanProjects": 6,
+    "franProjects": 1,
+    "bothProjects": 2
+  }
+}
