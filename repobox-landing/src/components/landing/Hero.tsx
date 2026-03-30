@@ -48,6 +48,14 @@ export function LandingHero() {
           projects
         </Link>
         <Link
+          href="/portfolio"
+          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
+          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+        >
+          portfolio
+        </Link>
+        <Link
           href="/packages"
           style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
@@ -65,7 +73,14 @@ export function LandingHero() {
         </Link>
         <Link
           href="/docs"
->>>>>>> 5ade5b6a (REPO-040: Complete agent showcase gallery implementation)
+          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
+          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+        >
+          docs
+        </Link>
+        <Link
+          href="/packages"
           style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
           onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
           onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
