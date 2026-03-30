@@ -1,107 +1,84 @@
-# Security Incident Teardown Template
+# Incident Teardown Template
 
-## Guidelines for Content Creation
+This template provides a structured format for analyzing real-world security incidents and demonstrating how repo.box architecture prevents similar failures.
 
-This template provides a framework for analyzing real-world security incidents through the lens of repository access control and permission management. Use this structure to create technical teardowns that both educate and demonstrate repo.box's preventive capabilities.
+## Structure
 
-## Content Sections
+### 1. Incident Summary (150-200 words)
+- **System Affected**: Brief description of the compromised service/platform
+- **Failure Type**: Access control, supply chain, credential management, etc.
+- **Timeline**: Discovery date → public disclosure → resolution
+- **Impact Scale**: Users affected, data exposed, service downtime
 
-### 1. Incident Summary
-- **System/Organization**: Name and type of affected entity
-- **Primary Failure**: What specifically failed (access control, permissions, etc.)
-- **Timeline**: Key dates from initial compromise to discovery and resolution
-- **Attack Vector**: How the attackers initially gained access
-- **Discovery Method**: How and when the incident was detected
+### 2. Access Control Analysis (300-400 words)
+- **Permission Failures**: What access controls broke down
+- **Role Escalation**: How attackers gained elevated privileges
+- **Policy Gaps**: Missing or misconfigured security policies
+- **Detection Delays**: Why the breach wasn't caught sooner
 
-### 2. Access Control Failure Analysis
-- **Permission Architecture**: Description of the compromised system's access model
-- **Role Escalation**: How attackers moved from initial access to elevated privileges
-- **Control Gaps**: Specific missing or misconfigured access controls
-- **Credential Management**: How authentication/authorization failed
-- **Privilege Boundaries**: What access controls were bypassed
+### 3. Blast Radius Assessment (200-300 words)
+- **Affected Systems**: Primary and secondary systems compromised
+- **Data Exposure**: What sensitive information was accessed
+- **Service Impact**: Downtime, degraded performance, user disruption
+- **Trust Damage**: Long-term reputation and business impact
 
-### 3. Blast Radius Assessment
-- **Affected Systems**: List of compromised infrastructure and applications
-- **User Impact**: Number and types of users affected
-- **Data Exposure**: Types and volume of data compromised
-- **Duration**: How long the breach went undetected
-- **Lateral Movement**: How the attack spread through connected systems
+### 4. Resolution & Prevention (300-400 words)
+- **Immediate Fixes**: Emergency patches and containment measures
+- **Policy Changes**: New access controls and security procedures
+- **Monitoring Improvements**: Enhanced detection and alerting
+- **Lessons Learned**: Key takeaways for the broader industry
 
-### 4. Resolution and Policy Changes
-- **Immediate Response**: Actions taken to contain the breach
-- **System Hardening**: Security improvements implemented
-- **Policy Updates**: Changes to access control procedures
-- **Monitoring Enhancements**: New detection and alerting capabilities
-- **Long-term Remediation**: Ongoing security improvements
-
-### 5. How repo.box Prevents This
-**Structure this section as a technical comparison showing specific repo.box features that would have prevented or mitigated this incident:**
-
-- **Fine-Grained Permissions**: How repo.box's granular access controls prevent privilege escalation
-- **Cryptographic Authentication**: How keypair-based auth prevents credential theft
-- **Audit Trails**: How immutable audit logs provide complete visibility
-- **Automated Policy Enforcement**: How repo.box enforces access rules at the protocol level
-- **Zero-Trust Architecture**: How repo.box eliminates implicit trust assumptions
-
-### 6. Architecture Diagrams
-Include visual representations of:
-- **Failure Points**: Diagram showing where the original system's access controls failed
-- **repo.box Prevention**: Diagram showing how repo.box's architecture prevents the same attack
-- **Comparative Flow**: Side-by-side comparison of vulnerable vs. secure access patterns
-
-### 7. Call to Action
-- **Technical Assessment**: Invite readers to evaluate their current access control posture
-- **repo.box Solution**: Clear description of how repo.box addresses these risks
-- **Next Steps**: Specific actions readers can take (trial, consultation, implementation)
+### 5. repo.box Prevention (400-500 words)
+- **Architectural Comparison**: How our design differs fundamentally
+- **Technical Safeguards**: Specific features that prevent this attack class
+- **Policy Enforcement**: How our server-first model blocks bypass attempts
+- **Verification Methods**: How clients can audit our security claims
+- **Call to Action**: Link to /trust, /packages, or specific security features
 
 ## Writing Guidelines
 
-### Technical Depth
-- Target DevOps engineers, security architects, and CTOs
-- Include specific technical details and configuration examples
-- Reference industry standards and best practices
-- Provide actionable insights, not just analysis
+- **Technical Depth**: Assume engineering audience with security awareness
+- **Neutral Tone**: Analyze failures without inflammatory criticism
+- **Actionable Insights**: Focus on prevention, not blame
+- **Evidence-Based**: Reference official incident reports and disclosures
+- **Length Target**: 1200-1500 words total
 
-### SEO Considerations
-- **Primary Keywords**: "security incident analysis", "access control failure", "[company] breach analysis"
-- **Secondary Keywords**: "repository security", "permission management", "git access control"
-- **Meta Tags**: Include social sharing optimized titles and descriptions
-- **Internal Linking**: Connect to relevant repo.box technical documentation
+## SEO Optimization
 
-### Editorial Standards
-- **Factual Accuracy**: Only use publicly disclosed information
-- **Professional Tone**: Analytical and educational, not sensationalized
-- **Attribution**: Properly cite all sources and investigation reports
-- **Objectivity**: Focus on technical lessons learned, avoid inflammatory language
+### Primary Keywords
+- "[Company] security breach analysis"
+- "Access control failure prevention" 
+- "Incident response lessons"
+- "[Attack type] prevention architecture"
 
-### Exclusions
-- **No Speculation**: Don't theorize about undisclosed details
-- **No Confidential Information**: Only use publicly available incident reports
-- **No Inflammatory Language**: Maintain professional, educational tone
-- **No Vendor Bashing**: Focus on systemic issues, not specific company failures
+### Content Structure
+- H1: Incident name and date
+- H2: Each major section above
+- H3: Subsections within analysis areas
+- Meta description: 150-160 chars focusing on prevention angle
+
+### Social Sharing
+- Custom OG image with incident timeline graphic
+- Twitter card with key statistics
+- LinkedIn-optimized summary for professional sharing
 
 ## Publication Checklist
 
-- [ ] Timeline accuracy verified against official sources
-- [ ] Technical details confirmed from investigation reports
-- [ ] repo.box prevention claims are technically accurate
-- [ ] All diagrams are clear and technically correct
-- [ ] Meta tags and SEO optimization complete
-- [ ] Social sharing assets prepared
-- [ ] RSS feed integration confirmed
-- [ ] Legal review completed (if required)
+- [ ] Incident officially disclosed and documented
+- [ ] No confidential client information included
+- [ ] Technical details verified against public reports
+- [ ] repo.box prevention claims technically accurate
+- [ ] SEO metadata complete
+- [ ] Cross-promotion planned (Farcaster, Twitter, blog RSS)
+- [ ] Analytics tracking configured
+- [ ] Conversion CTAs appropriate and tested
 
-## Source Criteria
+## Future Posts Pipeline
 
-**Suitable incidents must have:**
-- Public investigation reports or official disclosures
-- Sufficient technical detail about access control failures
-- Clear timeline and impact assessment
-- Documented resolution and remediation steps
-- Relevance to repository/code access management
+Target major incidents with clear access control lessons:
+- Supply chain compromises (SolarWinds, Codecov)
+- Platform breaches (CircleCI, LastPass, Auth0)
+- Infrastructure failures (AWS outages, CDN poisoning)
+- Publishing pipeline attacks (NPM, PyPI, Docker Hub)
 
-**Publishing Schedule:** Target 1 post per month, timed around major security conferences and awareness campaigns.
-
----
-
-*This template should be updated based on reader feedback and evolving security landscape. Maintain version control for template changes.*
+Monthly cadence focusing on incidents with architectural prevention angles rather than simple implementation bugs.
