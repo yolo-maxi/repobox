@@ -1,0 +1,84 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 630px;
+    background: linear-gradient(135deg, #0a0a0a 0%, #111 100%);
+    color: #e0e0e0;
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .container {
+    text-align: center;
+    max-width: 900px;
+    padding: 40px;
+  }
+  .title {
+    font-size: 52px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 24px;
+    color: #fff;
+  }
+  .subtitle {
+    font-size: 28px;
+    color: #00ff88;
+    margin-bottom: 40px;
+  }
+  .logo {
+    position: absolute;
+    bottom: 40px;
+    right: 40px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 700;
+  }
+  .logo .dot { color: #00ff88; }
+  .accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 6px;
+    height: 100%;
+    background: #00ff88;
+  }
+  
+  .security-pattern {
+    position: absolute;
+    top: 20px;
+    left: 40px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: #00ff88;
+    opacity: 0.3;
+    line-height: 1.4;
+  }
+  
+</style>
+</head>
+<body>
+  <div class="accent"></div>
+  
+  <div class="security-pattern">
+    [SECURITY_BREACH]<br>
+    > analyzing_incident...<br>
+    > threat_vector: identified<br>
+    > mitigation: active<br>
+    [SECURED]
+  </div>
+  
+  <div class="container">
+    <h1 class="title">repo.box blog</h1>
+    <p class="subtitle">Irregular thoughts on building things</p>
+  </div>
+  <div class="logo">repo<span class="dot">.</span>box</div>
+</body>
+</html>

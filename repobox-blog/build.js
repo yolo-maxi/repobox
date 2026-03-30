@@ -90,13 +90,35 @@ const POST_STYLES = `
 .visual-break .diagram{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.5rem;font-family:'JetBrains Mono',monospace;font-size:.75rem;line-height:1.5;color:var(--accent);overflow-x:auto;white-space:pre}
 `;
 
-const htmlHead = (title, description) => `<!DOCTYPE html>
+const htmlHead = (title, description, url = SITE_URL, image = '/blog-social.png', tags = []) => `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${title}</title>
 <meta name="description" content="${description}">
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="article">
+<meta property="og:url" content="${url}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${description}">
+<meta property="og:image" content="${SITE_URL}${image}">
+<meta property="og:site_name" content="repo.box">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:url" content="${url}">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${description}">
+<meta name="twitter:image" content="${SITE_URL}${image}">
+
+<!-- SEO Keywords -->
+<meta name="keywords" content="${tags.join(', ')}, security analysis, developer tools, repo.box">
+<meta name="author" content="repo.box">
+<meta name="robots" content="index, follow">
+
+<link rel="canonical" href="${url}">
 <link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">`;
@@ -107,7 +129,7 @@ const htmlFooter = `<footer>
 </footer>`;
 
 // --- Generate index page ---
-const indexHtml = `${htmlHead('Blog — repo.box', 'Irregular thoughts on building things.')}
+const indexHtml = `${htmlHead('Blog — repo.box', 'Irregular thoughts on building things.', `${SITE_URL}/blog/`, '/blog-social.png', ['blog', 'developer', 'security'])}
 <style>${STYLES}${INDEX_STYLES}</style>
 </head>
 <body>
@@ -140,7 +162,9 @@ console.log('✓ blog/index.html');
 
 // --- Generate individual post pages ---
 for (const p of posts) {
-  const postHtml = `${htmlHead(`${p.title} — repo.box`, p.description)}
+  const postUrl = `${SITE_URL}/blog/${p.slug}.html`;
+  const postImage = p.slug.includes('circleci') ? '/circleci-breach-social.png' : '/blog-social.png';
+  const postHtml = `${htmlHead(`${p.title} — repo.box`, p.description, postUrl, postImage, p.tags)}
 <style>${STYLES}${POST_STYLES}</style>
 </head>
 <body>
