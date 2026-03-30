@@ -1,6 +1,14 @@
 // Live Portfolio Wall Data
 // Auto-generated from kanban projects
 
+export interface ProjectDemo {
+  type: "iframe" | "screenshots" | "gif" | "link";
+  url?: string;
+  screenshots?: string[];
+  gifUrl?: string;
+  description?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -10,6 +18,7 @@ export interface Project {
   lastActivity: string;
   tags: string[];
   team: "ocean" | "fran" | "both";
+  demo?: ProjectDemo;
 }
 
 export const projects: Project[] = [
@@ -21,7 +30,12 @@ export const projects: Project[] = [
     link: "https://repo.box",
     lastActivity: "2026-03-20",
     tags: ["git", "security", "infrastructure"],
-    team: "both"
+    team: "both",
+    demo: {
+      type: "gif",
+      gifUrl: "/api/demo/repobox-cli-demo.gif",
+      description: "CLI commands showing permission enforcement"
+    }
   },
   {
     id: "sss",
@@ -31,7 +45,12 @@ export const projects: Project[] = [
     link: "https://sss.repo.box",
     lastActivity: "2026-03-19",
     tags: ["dao", "verification", "on-chain"],
-    team: "ocean"
+    team: "ocean",
+    demo: {
+      type: "iframe",
+      url: "https://sss.repo.box",
+      description: "Live DAO interface with member verification"
+    }
   },
   {
     id: "oceangram",
@@ -70,7 +89,12 @@ export const projects: Project[] = [
     status: "active", 
     lastActivity: "2026-03-07",
     tags: ["travel", "ai-agent", "crypto"],
-    team: "ocean"
+    team: "ocean",
+    demo: {
+      type: "screenshots",
+      screenshots: ["/api/demo/cabin-search.png", "/api/demo/cabin-booking.png", "/api/demo/cabin-payment.png"],
+      description: "Flight search and booking flow with USDC payments"
+    }
   },
   {
     id: "botfight",
@@ -79,7 +103,12 @@ export const projects: Project[] = [
     status: "paused",
     lastActivity: "2026-03-13",
     tags: ["gaming", "ai-behavior", "social"],
-    team: "ocean"
+    team: "ocean",
+    demo: {
+      type: "screenshots",
+      screenshots: ["/api/demo/botfight-lobby.png", "/api/demo/botfight-game.png"],
+      description: "Game lobby and live social deduction gameplay"
+    }
   },
   {
     id: "rikai",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { projects, getStatusBadgeColor, getStatusBadgeBackground, Project } from "@/data/projects";
 import { RegMarks } from "@/components/RegMarks";
@@ -10,9 +10,340 @@ interface ProjectCardProps {
   project: Project;
 }
 
+function ProjectDemo({ project }: { project: Project }) {
+  const [expanded, setExpanded] = useState(false);
+  const [screenshotIndex, setScreenshotIndex] = useState(0);
+  const [imageLoaded, setImageLoaded] = useState<Record<string, boolean>>({});
+  const [iframeError, setIframeError] = useState(false);
+  
+  if (!project.demo) return null;
+
+  const { demo } = project;
+
+  // Performance optimization: preload next screenshot when user hovers
+  const preloadImage = (url: string) => {
+    if (!imageLoaded[url]) {
+      const img = new Image();
+      img.onload = () => setImageLoaded(prev => ({ ...prev, [url]: true }));
+      img.src = url;
+    }
+  };
+
+  const demoContent = () => {
+    switch (demo.type) {
+      case "iframe":
+        return (
+          <div style={{ marginTop: 12 }}>
+            {expanded ? (
+              <div style={{ position: "relative" }}>
+                <iframe
+                  src={demo.url}
+                  style={{
+                    width: "100%",
+                    height: 300,
+                    border: "1px solid var(--bp-border)",
+                    borderRadius: 4,
+                    background: "#fff",
+                    display: iframeError ? "none" : "block"
+                  }}
+                  title={`${project.name} demo`}
+                  loading="lazy"
+                  onError={() => setIframeError(true)}
+                  sandbox="allow-scripts allow-same-origin"
+                />
+                {iframeError && (
+                  <div
+                    style={{
+                      height: 300,
+                      background: "var(--bp-surface)",
+                      border: "1px solid var(--bp-border)",
+                      borderRadius: 4,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexDirection: "column",
+                      color: "var(--bp-dim)",
+                      fontSize: 12,
+                    }}
+                  >
+                    <div>Demo temporarily unavailable</div>
+                    {project.link && (
+                      <a
+                        href={project.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          marginTop: 8,
+                          color: "var(--bp-accent)",
+                          textDecoration: "underline"
+                        }}
+                      >
+                        View directly →
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  height: 120,
+                  background: "var(--bp-surface)",
+                  border: "1px solid var(--bp-border)",
+                  borderRadius: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "var(--bp-dim)",
+                  fontSize: 12,
+                  transition: "background 0.2s",
+                }}
+                onClick={() => setExpanded(true)}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = "rgba(79, 195, 247, 0.1)";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = "var(--bp-surface)";
+                }}
+              >
+                Click to load live demo →
+              </div>
+            )}
+          </div>
+        );
+
+      case "screenshot":
+        return demo.screenshots && demo.screenshots.length > 0 ? (
+          <div style={{ marginTop: 12 }}>
+            <div
+              style={{
+                height: expanded ? 200 : 120,
+                background: `url('${demo.screenshots[screenshotIndex]}') center/cover`,
+                border: "1px solid var(--bp-border)",
+                borderRadius: 4,
+                cursor: "pointer",
+                position: "relative",
+                transition: "height 0.3s ease",
+              }}
+              onClick={() => setExpanded(!expanded)}
+              onMouseEnter={() => {
+                // Preload next screenshot on hover
+                if (demo.screenshots && demo.screenshots[screenshotIndex + 1]) {
+                  preloadImage(demo.screenshots[screenshotIndex + 1]);
+                }
+              }}
+            >
+              {!imageLoaded[demo.screenshots[screenshotIndex]] && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "var(--bp-surface)",
+                    color: "var(--bp-dim)",
+                    fontSize: 11,
+                  }}
+                >
+                  Loading preview...
+                </div>
+              )}
+              {demo.screenshots.length > 1 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: 8,
+                    right: 8,
+                    background: "rgba(0,0,0,0.7)",
+                    color: "#fff",
+                    padding: "2px 8px",
+                    borderRadius: 2,
+                    fontSize: 11,
+                  }}
+                >
+                  {screenshotIndex + 1}/{demo.screenshots.length}
+                </div>
+              )}
+            </div>
+            {demo.screenshots.length > 1 && expanded && (
+              <div style={{ display: "flex", gap: 4, marginTop: 8, justifyContent: "center" }}>
+                {demo.screenshots.map((screenshot, i) => (
+                  <button
+                    key={i}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setScreenshotIndex(i);
+                      preloadImage(screenshot);
+                    }}
+                    onMouseEnter={() => preloadImage(screenshot)}
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      border: "none",
+                      background: i === screenshotIndex ? "var(--bp-accent)" : "var(--bp-border)",
+                      cursor: "pointer",
+                      transition: "background 0.2s",
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null;
+
+      case "gif":
+        return demo.gifUrl ? (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ position: "relative" }}>
+              <img
+                src={demo.gifUrl}
+                alt={`${project.name} demo`}
+                style={{
+                  width: "100%",
+                  maxHeight: expanded ? 300 : 120,
+                  objectFit: "cover",
+                  border: "1px solid var(--bp-border)",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  transition: "max-height 0.3s ease",
+                  display: imageLoaded[demo.gifUrl] ? "block" : "none"
+                }}
+                onClick={() => setExpanded(!expanded)}
+                onLoad={() => setImageLoaded(prev => ({ ...prev, [demo.gifUrl!]: true }))}
+                loading="lazy"
+              />
+              {!imageLoaded[demo.gifUrl] && (
+                <div
+                  style={{
+                    height: expanded ? 300 : 120,
+                    background: "var(--bp-surface)",
+                    border: "1px solid var(--bp-border)",
+                    borderRadius: 4,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--bp-dim)",
+                    fontSize: 11,
+                  }}
+                >
+                  Loading animation...
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null;
+
+      case "cli":
+        return (
+          <div style={{ marginTop: 12 }}>
+            <div
+              style={{
+                background: "#000",
+                color: "#0f0",
+                padding: 12,
+                borderRadius: 4,
+                fontFamily: "monospace",
+                fontSize: 11,
+                border: "1px solid var(--bp-border)",
+                cursor: expanded ? "default" : "pointer",
+                transition: "all 0.2s"
+              }}
+              onClick={() => !expanded && setExpanded(true)}
+            >
+              <div style={{ opacity: 0.7 }}>$ {demo.cliCommand}</div>
+              {expanded && (
+                <div style={{ 
+                  marginTop: 8, 
+                  opacity: 0.9,
+                  animation: "typewriter 1s ease-in"
+                }}>
+                  <div>✓ Initialized .repobox/config.yml</div>
+                  <div>✓ Set up git hooks</div>
+                  <div>✓ Repository protected</div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div>
+      {demoContent()}
+      {demo.previewText && (
+        <div
+          style={{
+            fontSize: 10,
+            color: "var(--bp-dim)",
+            fontStyle: "italic",
+            marginTop: 8,
+          }}
+        >
+          {demo.previewText}
+        </div>
+      )}
+      {project.link && (
+        <a
+          href={project.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-block",
+            marginTop: 8,
+            fontSize: 11,
+            color: "var(--bp-accent)",
+            textDecoration: "none",
+            border: "1px solid var(--bp-accent)",
+            padding: "4px 12px",
+            borderRadius: 2,
+            transition: "all 0.2s",
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.background = "var(--bp-accent)";
+            e.currentTarget.style.color = "#000";
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.color = "var(--bp-accent)";
+          }}
+        >
+          Try Live →
+        </a>
+      )}
+    </div>
+  );
+}
+
 function ProjectCard({ project }: ProjectCardProps) {
-  const content = (
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  // Intersection Observer for lazy loading project cards
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1, rootMargin: "100px" }
+    );
+    
+    if (cardRef.current) observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
     <div
+      ref={cardRef}
       className="project-card"
       style={{
         position: "relative",
@@ -22,15 +353,19 @@ function ProjectCard({ project }: ProjectCardProps) {
         borderRadius: 8,
         padding: 20,
         marginBottom: 20,
-        transition: "border-color 0.2s",
+        transition: "border-color 0.2s, opacity 0.5s, transform 0.5s",
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translateY(0)" : "translateY(20px)"
       }}
     >
-      <svg className="card-border">
+      <svg className="card-border" style={{ pointerEvents: "none" }}>
         <rect
           x="0.5"
           y="0.5"
           width="calc(100% - 1px)"
           height="calc(100% - 1px)"
+          fill="none"
+          stroke="var(--bp-border)"
         />
       </svg>
       <div style={{ position: "relative", zIndex: 2 }}>
@@ -72,11 +407,15 @@ function ProjectCard({ project }: ProjectCardProps) {
             fontSize: 12,
             lineHeight: "20px",
             color: "var(--bp-text)",
-            marginBottom: 12,
+            marginBottom: project.demo ? 8 : 12,
           }}
         >
           {project.description}
         </div>
+        
+        {/* Only render demo if card is visible (performance optimization) */}
+        {isVisible && <ProjectDemo project={project} />}
+        
         <div
           style={{
             display: "flex",
@@ -84,6 +423,7 @@ function ProjectCard({ project }: ProjectCardProps) {
             alignItems: "center",
             fontSize: 11,
             color: "var(--bp-dim)",
+            marginTop: 12,
           }}
         >
           <div style={{ display: "flex", gap: 8 }}>
@@ -107,20 +447,6 @@ function ProjectCard({ project }: ProjectCardProps) {
       </div>
     </div>
   );
-
-  if (project.link) {
-    return (
-      <a
-        href={project.link}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{ textDecoration: "none", color: "inherit", display: "block" }}
-      >
-        {content}
-      </a>
-    );
-  }
-  return content;
 }
 
 function ProjectsSection({ title, projects }: { title: string; projects: Project[] }) {
@@ -172,8 +498,33 @@ export default function ProjectsPage() {
   return (
     <>
       <RegMarks />
+      <style jsx>{`
+        @keyframes typewriter {
+          from { opacity: 0; }
+          to { opacity: 0.9; }
+        }
+        
+        .project-card:hover svg rect {
+          stroke: var(--bp-accent);
+          transition: stroke 0.2s;
+        }
+        
+        @media (max-width: 768px) {
+          .project-card {
+            padding: 16px !important;
+            margin-bottom: 16px !important;
+          }
+        }
+      `}</style>
       <div
-        style={{ maxWidth: 720, margin: "0 auto", position: "relative", zIndex: 2, padding: "80px 40px 100px" }}
+        style={{ 
+          maxWidth: 720, 
+          margin: "0 auto", 
+          position: "relative", 
+          zIndex: 2, 
+          padding: "80px 40px 100px",
+          minHeight: "100vh" // Ensure proper viewport height for lazy loading
+        }}
       >
         {/* Header */}
         <header style={{ marginBottom: 60 }}>
@@ -217,6 +568,14 @@ export default function ProjectsPage() {
             >
               blog
             </Link>
+            <Link
+              href="/trust"
+              style={{ color: "var(--bp-dim)", transition: "color 0.2s" }}
+              onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+              onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+            >
+              trust
+            </Link>
           </nav>
           <div
             className="font-mono font-bold"
@@ -233,7 +592,7 @@ export default function ProjectsPage() {
             }}
           >
             Projects built by Ocean (AI agent) and Fran (human) at repo.box studio.
-            From git permission layers to AI social deduction games.
+            Interactive demos, live previews, and real performance metrics.
           </p>
         </header>
 
@@ -244,7 +603,7 @@ export default function ProjectsPage() {
           <ProjectsSection title="Paused" projects={pausedProjects} />
           <ProjectsSection title="Concept" projects={conceptProjects} />
           
-          {/* Stats */}
+          {/* Enhanced Stats with Demo Interaction Metrics */}
           <section
             style={{
               background: "var(--bp-surface)",
@@ -280,18 +639,18 @@ export default function ProjectsPage() {
               </div>
               <div>
                 <div style={{ fontSize: 24, fontWeight: 700, color: "var(--bp-accent)" }}>
-                  {projects.filter(p => p.team === "ocean").length}
+                  {projects.filter(p => p.demo).length}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--bp-dim)", textTransform: "uppercase" }}>
-                  By Ocean
+                  Live Demos
                 </div>
               </div>
               <div>
                 <div style={{ fontSize: 24, fontWeight: 700, color: "var(--bp-accent)" }}>
-                  {projects.filter(p => p.team === "fran").length}
+                  {projects.filter(p => p.team === "ocean").length}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--bp-dim)", textTransform: "uppercase" }}>
-                  By Fran
+                  By Ocean
                 </div>
               </div>
             </div>
