@@ -52,15 +52,13 @@ export function LandingHireCTA() {
             margin: "0 auto 32px",
           }}
         >
-          Need an AI agent for your project? Our studio builds custom agents for coding, research, social media, and more.
+          Describe your project and we'll route you to the right expert. Start building in 48 hours.
         </p>
 
         {/* Primary CTA Button */}
         <div style={{ marginBottom: 24 }}>
           <a
-            href="https://t.me/ocean_king_bot"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/hire"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -85,8 +83,8 @@ export function LandingHireCTA() {
               e.currentTarget.style.color = "#ffffff";
             }}
           >
-            <span style={{ fontSize: 20 }}>💬</span>
-            Start a conversation
+            <span style={{ fontSize: 20 }}>🚀</span>
+            Start building in 48 hours
           </a>
         </div>
 
