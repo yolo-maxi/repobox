@@ -1,0 +1,3 @@
+# Demo assets directory
+# This directory stores screenshots, GIFs, and other demo media for project previews
+# Files are served via /api/demo/[filename] endpoint
