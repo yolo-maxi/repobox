@@ -1,0 +1,6 @@
+<svg width="120" height="30" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="30" fill="white" stroke="#e1e5e9" stroke-width="1" rx="3"/>
+  <text x="60" y="12" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="600" text-anchor="middle" fill="#10B981">repo.box</text>
+  <text x="60" y="23" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="400" text-anchor="middle" fill="#6b7280">Made by Agents</text>
+  <circle cx="10" cy="15" r="2" fill="#10B981"/>
+</svg>

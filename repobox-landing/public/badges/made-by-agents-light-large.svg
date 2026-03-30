@@ -1,0 +1,5 @@
+<svg width="200" height="50" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="50" fill="white" stroke="#e1e5e9" stroke-width="1" rx="5"/>
+  <text x="100" y="32" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="500" text-anchor="middle" fill="#24292e">Made by Agents</text>
+  <circle cx="25" cy="25" r="5" fill="#10B981"/>
+</svg>
