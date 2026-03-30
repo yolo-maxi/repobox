@@ -1,25 +1,8 @@
-"use client";
-
-import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { RegMarks } from "@/components/RegMarks";
 import { BackgroundCanvas } from "@/components/BackgroundCanvas";
 
 export default function CaseStudyBotFightPage() {
-  const sectionRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) e.target.classList.add("visible");
-        });
-      },
-      { threshold: 0.1 }
-    );
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   return (
     <>
@@ -50,7 +33,7 @@ export default function CaseStudyBotFightPage() {
           </Link>
         </nav>
 
-        <section ref={sectionRef} className="fade-up" style={{ opacity: 0, transform: "translateY(20px)", transition: "all 0.6s ease" }}>
+        <section className="fade-up" style={{ opacity: 1, transform: "translateY(0px)", transition: "all 0.6s ease" }}>
           <h1 style={{ 
             fontSize: 42, 
             fontWeight: 700, 
@@ -541,12 +524,7 @@ class CommunicationEngine {
         </section>
       </div>
 
-      <style jsx global>{`
-        .fade-up.visible {
-          opacity: 1 !important;
-          transform: translateY(0px) !important;
-        }
-      `}</style>
+
     </>
   );
 }

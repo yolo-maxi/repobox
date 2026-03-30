@@ -1,25 +1,8 @@
-"use client";
-
-import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { RegMarks } from "@/components/RegMarks";
 import { BackgroundCanvas } from "@/components/BackgroundCanvas";
 
 export default function CaseStudySSSPage() {
-  const sectionRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) e.target.classList.add("visible");
-        });
-      },
-      { threshold: 0.1 }
-    );
-    if (sectionRef.current) observer.observe(sectionRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   return (
     <>
@@ -50,7 +33,7 @@ export default function CaseStudySSSPage() {
           </Link>
         </nav>
 
-        <article ref={sectionRef} className="reveal">
+        <article className="reveal">
           <header style={{ marginBottom: 60 }}>
             <div style={{
               fontSize: 12,
