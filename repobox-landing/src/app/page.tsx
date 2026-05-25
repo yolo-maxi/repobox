@@ -1,13 +1,9 @@
-import Link from "next/link";
 import { LandingHero } from "@/components/landing/Hero";
-import { TrustStrip } from "@/components/landing/TrustStrip";
 import { BookSprintCTA } from "@/components/landing/BookSprintCTA";
 import { AgentHeatmap } from "@/components/landing/AgentHeatmap";
 import { LandingShippedToday } from "@/components/landing/ShippedToday";
 import { LandingCaseStudies } from "@/components/landing/CaseStudies";
 import { LandingEthos } from "@/components/landing/Ethos";
-import { ConfigExample } from "@/components/landing/ConfigExample";
-import { LandingCTA } from "@/components/landing/CTA";
 import { LandingHireCTA } from "@/components/landing/HireCTA";
 import { LandingWriting } from "@/components/landing/Writing";
 import { LandingFooter } from "@/components/landing/Footer";
@@ -22,7 +18,6 @@ export default function Home() {
         style={{ maxWidth: 720, margin: "0 auto", position: "relative", zIndex: 2, padding: "80px 40px 100px" }}
       >
         <LandingHero />
-        <TrustStrip />
         <BookSprintCTA />
         <div style={{ height: 32 }} />
         <AgentHeatmap />
@@ -30,9 +25,7 @@ export default function Home() {
         <LandingHireCTA />
         <LandingShippedToday />
         <LandingCaseStudies />
-        <ConfigExample />
         <LandingEthos />
-        <LandingCTA />
         <LandingWriting />
       </div>
       <LandingFooter />

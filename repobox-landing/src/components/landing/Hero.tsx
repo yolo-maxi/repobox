@@ -1,18 +1,39 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 
+const navItems = [
+  { href: "/projects", label: "projects" },
+  { href: "/portfolio", label: "portfolio" },
+  { href: "/proof", label: "proof" },
+  { href: "/agents", label: "agents" },
+  { href: "/packages", label: "packages" },
+  { href: "/git", label: "git" },
+  { href: "/blog/", label: "blog" },
+  { href: "/hire", label: "hire us" },
+];
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      style={{
+        color: "var(--bp-dim)",
+        transition: "color 0.2s",
+        minHeight: 44,
+        padding: "12px 8px",
+        display: "inline-flex",
+        alignItems: "center",
+      }}
+      onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+      onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export function LandingHero() {
-  const [copied, setCopied] = useState(false);
-  const cmd = "curl -sSf https://repo.box/install.sh | sh";
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(cmd);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <header
       style={{
@@ -29,199 +50,77 @@ export function LandingHero() {
           gap: 8,
           marginBottom: 24,
           fontSize: 12,
+          flexWrap: "wrap",
         }}
       >
-        <Link
-          href="/docs"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          docs
-        </Link>
-        <Link
-          href="/projects"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          projects
-        </Link>
-        <Link
-          href="/portfolio"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          portfolio
-        </Link>
-        <Link
-          href="/packages"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          packages
-        </Link>
-        <Link
-          href="/agents"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          agents
-        </Link>
-        <Link
-          href="/docs"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          docs
-        </Link>
-        <Link
-          href="/packages"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          packages
-        </Link>
-        <Link
-          href="/proof"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          proof
-        </Link>
-        <Link
-          href="/playground"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          playground
-        </Link>
-        <Link
-          href="/blog/"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          blog
-        </Link>
-        <Link
-          href="/trust"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          trust
-        </Link>
-        <Link
-          href="/made-by-agents"
-          style={{ color: "var(--bp-dim)", transition: "color 0.2s", minHeight: 44, padding: "12px 8px", display: "inline-flex", alignItems: "center" }}
-          onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
-          onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
-        >
-          badges
-        </Link>
+        {navItems.map((item) => (
+          <NavLink href={item.href} key={item.href}>
+            {item.label}
+          </NavLink>
+        ))}
       </nav>
+
       <div
         className="font-mono font-bold"
         style={{ fontSize: 56, lineHeight: 1.1, marginBottom: 24 }}
       >
         repo<span className="logo-dot">.</span>box
       </div>
+
       <p
         style={{
           fontSize: 18,
           lineHeight: "28px",
           color: "var(--bp-dim)",
-          maxWidth: 500,
+          maxWidth: 520,
           marginBottom: 48,
         }}
       >
-        Git permission layer that makes repositories safe for AI agents.
+        An independent team building cool ideas with cool people.
       </p>
+
       <p
         style={{
           fontSize: 15,
           lineHeight: "24px",
           color: "#8eafc4",
-          maxWidth: 560,
+          maxWidth: 580,
         }}
       >
-        EVM keys, a git shim, and a <code style={{ color: "var(--bp-accent)", background: "rgba(79,195,247,0.08)", padding: "1px 6px", borderRadius: 3 }}>.repobox/config.yml</code> file
-        that stands between your agents and your codebase. One config file. Per-agent permissions. Enforced before anything touches your repo.
+        We ship sharp little products, agent-powered systems, and weird useful
+        infrastructure. No pitch-deck theatre — just code, taste, receipts, and curiosity.
       </p>
-      {/* Inline CTA */}
-      <div
-        onClick={handleCopy}
-        style={{
-          marginTop: 32,
-          background: "rgba(0, 0, 0, 0.5)",
-          border: "1px solid var(--bp-border)",
-          borderRadius: 8,
-          padding: "14px 20px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          cursor: "pointer",
-          transition: "border-color 0.2s",
-          maxWidth: 520,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12, overflow: "hidden" }}>
-          <span style={{ color: "var(--bp-accent)", fontWeight: 600, flexShrink: 0, fontSize: 15 }}>$</span>
-          <code
-            style={{
-              fontSize: 14,
-              lineHeight: "22px",
-              color: "var(--bp-heading)",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              fontFamily: "var(--font-mono), monospace",
-              fontWeight: 500,
-            }}
-          >
-            {cmd}
-          </code>
-        </div>
-        <span
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 32 }}>
+        <Link
+          href="/portfolio"
           style={{
-            color: copied ? "var(--bp-accent)" : "var(--bp-dim)",
-            fontFamily: "var(--font-mono), monospace",
-            fontSize: 11,
-            flexShrink: 0,
-            transition: "color 0.2s",
-            border: `1px solid ${copied ? "var(--bp-accent)" : "var(--bp-border)"}`,
-            padding: "4px 12px",
-            borderRadius: 4,
+            border: "1px solid var(--bp-border)",
+            borderRadius: 8,
+            color: "var(--bp-heading)",
+            padding: "12px 18px",
+            textDecoration: "none",
+            background: "rgba(6, 14, 26, 0.72)",
+            fontSize: 13,
           }}
         >
-          {copied ? "copied!" : "copy"}
-        </span>
+          see the work
+        </Link>
+        <Link
+          href="/git"
+          style={{
+            border: "1px solid rgba(79,195,247,0.35)",
+            borderRadius: 8,
+            color: "var(--bp-accent)",
+            padding: "12px 18px",
+            textDecoration: "none",
+            background: "rgba(79,195,247,0.08)",
+            fontSize: 13,
+          }}
+        >
+          repo.box git layer →
+        </Link>
       </div>
-      <Link
-        href="/playground"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          marginTop: 16,
-          fontFamily: "var(--font-mono), monospace",
-          fontSize: 13,
-          color: "var(--bp-accent)",
-          textDecoration: "none",
-          transition: "opacity 0.2s",
-        }}
-      >
-        <span style={{ fontSize: 15 }}>▶</span> Try in Playground
-      </Link>
 
       <div
         style={{
