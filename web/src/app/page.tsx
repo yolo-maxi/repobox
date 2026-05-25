@@ -1,10 +1,9 @@
 import { LandingHero } from "@/components/landing/Hero";
-import { LandingProjects } from "@/components/landing/Projects";
 import { LandingEthos } from "@/components/landing/Ethos";
-import { ConfigExample } from "@/components/landing/ConfigExample";
-import { LandingCTA } from "@/components/landing/CTA";
 import { LandingFooter } from "@/components/landing/Footer";
 import { LiveFeed } from "@/components/landing/LiveFeed";
+import { LandingShippedToday } from "@/components/landing/ShippedToday";
+import { LandingWriting } from "@/components/landing/Writing";
 import { RegMarks } from "@/components/RegMarks";
 import { BackgroundCanvas } from "@/components/BackgroundCanvas";
 import { execSync } from "child_process";
@@ -74,10 +73,9 @@ export default function Home() {
         >
           <LandingHero />
           <div style={{ height: "clamp(20px, 5vw, 32px)" }} />
-          <LandingProjects />
-          <ConfigExample />
+          <LandingShippedToday />
           <LandingEthos />
-          <LandingCTA />
+          <LandingWriting />
           <LiveFeed entries={entries} />
         </div>
       </div>
