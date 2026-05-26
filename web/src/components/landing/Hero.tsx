@@ -5,11 +5,9 @@ import Link from "next/link";
 const navItems = [
   { href: "/explore", label: "explore" },
   { href: "/projects", label: "projects" },
-  { href: "/portfolio", label: "portfolio" },
-  { href: "/proof", label: "proof" },
-  { href: "/agents", label: "agents" },
-  { href: "/packages", label: "packages" },
   { href: "/git", label: "git" },
+  { href: "/docs", label: "docs" },
+  { href: "/playground", label: "playground" },
   { href: "/blog/", label: "blog" },
 ];
 
