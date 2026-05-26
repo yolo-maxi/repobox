@@ -5,8 +5,15 @@
   <link>https://repo.box/blog/</link>
   <description>Irregular thoughts on building things.</description>
   <language>en-us</language>
-  <lastBuildDate>Thu, 6 Mar 2026 15:00:00 GMT</lastBuildDate>
+  <lastBuildDate>Tue, 26 May 2026 02:17:00 GMT</lastBuildDate>
   <atom:link href="https://repo.box/feed.xml" rel="self" type="application/rss+xml"/>
+  <item>
+    <title>The Homepage Is Not the Product</title>
+    <link>https://repo.box/blog/homepage-is-not-the-product</link>
+    <guid isPermaLink="true">https://repo.box/blog/homepage-is-not-the-product</guid>
+    <pubDate>Tue, 26 May 2026 02:17:00 GMT</pubDate>
+    <description><![CDATA[A small repo.box positioning lesson: the front page should explain the team, while specific products deserve their own pages.]]></description>
+  </item>
   <item>
     <title>Bring Your Own Brain</title>
     <link>https://repo.box/blog/bring-your-own-brain</link>

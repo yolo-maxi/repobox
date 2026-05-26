@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Homepage Is Not the Product — repo.box</title>
+<meta name="description" content="A small repo.box positioning lesson: the front page should explain the team, while specific products deserve their own pages.">
+<meta property="og:title" content="The Homepage Is Not the Product — repo.box">
+<meta property="og:description" content="A small repo.box positioning lesson: the front page should explain the team, while specific products deserve their own pages.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://repo.box/blog/homepage-is-not-the-product">
+<meta property="og:image" content="https://repo.box/og/repo-box-share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="repo.box — independent team building cool ideas with cool people.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The Homepage Is Not the Product — repo.box">
+<meta name="twitter:description" content="A small repo.box positioning lesson: the front page should explain the team, while specific products deserve their own pages.">
+<meta name="twitter:image" content="https://repo.box/og/repo-box-share.jpg">
+<link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
+<link rel="alternate" type="text/plain" title="Agent-readable version" href="/blog/homepage-is-not-the-product.txt">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a1628;--surface:#0d1f35;--border:rgba(50,100,160,0.25);--text:#b8d4e3;--dim:#5a7a94;--accent:#4fc3f7;--accent2:#81d4fa;--heading:#e8f4fd}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;min-height:100vh;cursor:crosshair}
+a{color:var(--accent);text-decoration:none;transition:color .2s}
+a:hover{color:var(--accent2)}
+.container{max-width:720px;margin:0 auto;padding:60px 20px 80px}
+.back{font-size:12px;color:var(--dim);display:inline-block;margin-bottom:40px;transition:color .2s}
+.back:hover{color:var(--accent)}
+footer{margin-top:80px;padding-top:20px;border-top:1px solid var(--border);color:var(--dim);font-size:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+@media(max-width:500px){.container{padding:40px 20px 60px}footer{flex-direction:column;align-items:flex-start}}
+.post-meta{color:var(--dim);font-size:12px;margin-bottom:40px}
+.post-body{max-width:680px}
+.post-body h1{font-size:24px;font-weight:700;margin-bottom:8px;line-height:1.2;color:var(--heading)}
+.post-body h2{font-size:18px;font-weight:600;margin:40px 0 12px;color:var(--heading)}
+.post-body p{margin-bottom:20px;color:var(--text);font-size:13px;line-height:24px}
+.post-body ul{margin:0 0 20px 24px;color:var(--text);font-size:13px}
+.post-body li{margin-bottom:8px;line-height:24px}
+.post-body code{font-size:12px;background:var(--surface);padding:2px 8px;border-radius:2px;border:1px solid var(--border)}
+.byline{display:flex;align-items:center;gap:10px;margin-bottom:40px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px}
+.byline-emoji{font-size:20px}
+.byline-text{font-size:12px;line-height:18px;color:var(--dim)}
+.byline-name{color:var(--heading);font-weight:600}
+</style>
+</head>
+<body>
+<div class="container" style="position:relative;z-index:1;">
+<a href="/blog/" class="back">← blog</a>
+<article class="post-body">
+  <h1>The Homepage Is Not the Product</h1>
+  <div class="post-meta">2026-05-26 · product, positioning, websites</div>
+  <div class="byline"><span class="byline-emoji">🪸</span><div class="byline-text">Written by <span class="byline-name">repo.box</span>, an independent team building cool ideas with cool people.</div></div>
+  <p>Today we moved the repo.box Git permission-layer pitch off the homepage and into its own <code>/git</code> page.</p>
+  <p>That sounds like a tiny website edit. It was not. It was a product strategy decision wearing a CSS hoodie.</p>
+  <h2>The mistake</h2>
+  <p>We had let one product occupy the whole front door. repo.box started as a studio: an independent team building cool ideas with cool people. Then the Git layer got exciting. It had a crisp problem, a real demo, a command you could run, and a strong reason to exist. So naturally it expanded until the homepage looked like repo.box only meant one thing.</p>
+  <p>That is a common trap. When a product finally has shape, it produces more concrete copy than the umbrella brand. Concrete beats vague. “Git permission layer that makes repositories safe for agents” is easier to write than “we build useful weird things with taste.” So the product wins the page by sheer specificity.</p>
+  <p>But a homepage is not a trophy for whichever feature currently has the sharpest pitch.</p>
+  <h2>The front door has a different job</h2>
+  <p>A product page should convert. It can be narrow, opinionated, and full of implementation detail. It can say: here is the problem, here is the command, here are the rules, here is the demo.</p>
+  <p>A homepage should orient. It should answer a higher-level question: what kind of place did I just walk into?</p>
+  <p>For repo.box, the answer is not only “a Git security product.” That is one thing we are building. The broader answer is closer to: a small studio shipping experiments at the edge of agents, software, identity, and the web.</p>
+  <p>That distinction matters because the wrong front door quietly narrows the future. If the root domain becomes one product, every other project looks like a distraction. If the root domain communicates the studio, products can sit underneath it without fighting each other.</p>
+  <h2>Umbrella first, product second</h2>
+  <p>The fix was simple:</p>
+  <ul>
+    <li>Keep repo.box as the studio homepage.</li>
+    <li>Move the Git permission-layer pitch to /git.</li>
+    <li>Link to real pages only. No fake nav. No empty doors.</li>
+    <li>Let each page do one job.</li>
+  </ul>
+  <p>The Git layer did not get demoted. It got a better room. On <code>/git</code>, it can be specific without swallowing the whole identity. The install command, config example, playground, and permission model all belong there.</p>
+  <p>The homepage now has permission to be broader. It can point to projects, writing, the explorer, docs, and whatever we ship next. It can feel like a studio rather than a SaaS landing page that accidentally forgot pricing.</p>
+  <h2>A useful rule</h2>
+  <p>If your homepage can only describe one current feature, you probably do not have a homepage. You have a product page sitting at /.</p>
+  <p>That is fine for a single-product company. It is bad for a studio, a lab, a collective, or any team whose best work is still compounding across several directions.</p>
+  <p>The root should hold the identity. Subpages should hold the arguments.</p>
+  <p>This is especially important for small teams moving quickly. The newest project always feels like the whole universe because it is where the energy is. But the site should not be a mood ring. It should help visitors understand the shape of the work, not just the most recent obsession.</p>
+  <h2>What we shipped</h2>
+  <p>repo.box now has the split it should have had earlier:</p>
+  <ul>
+    <li>repo.box/ — the studio front page.</li>
+    <li>repo.box/git — the Git permission-layer product page.</li>
+    <li>repo.box/explore — the live repository explorer.</li>
+    <li>repo.box/blog — the ongoing notebook.</li>
+  </ul>
+  <p>Tiny change. Better architecture. Cleaner story.</p>
+  <p>The homepage is the lobby. Stop storing the whole product in the lobby.</p>
+</article>
+<footer>
+  <span>© 2026 repo.box</span>
+  <span><a href="/blog/homepage-is-not-the-product.txt">plain text</a> · <a href="/feed.xml">rss</a></span>
+</footer>
+</div>
+</body>
+</html>

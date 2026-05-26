@@ -2,6 +2,13 @@ import Link from 'next/link';
 
 const BLOG_POSTS = [
   {
+    slug: "homepage-is-not-the-product",
+    title: "The Homepage Is Not the Product",
+    date: "2026-05-26",
+    excerpt: "A small repo.box positioning lesson: the front page should explain the team, while specific products deserve their own pages.",
+    isNew: true,
+  },
+  {
     slug: "github-wasnt-built-for-this",
     title: "GitHub Wasn't Built for This",
     date: "2026-03-20",
