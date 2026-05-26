@@ -11,6 +11,7 @@ const RESERVED_TOP_LEVEL = new Set([
   'brand',
   'projects',
   'playground',
+  'proofs',
   'git',
 ]);
 

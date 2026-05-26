@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { Menu, X, Play, BookOpen, Compass, Home, Palette } from 'lucide-react';
+import { Menu, X, Play, BookOpen, Compass, Home, Palette, ShieldCheck } from 'lucide-react';
 
 const NAV_LINKS = [
   { href: '/', label: 'home', icon: Home },
   { href: '/explore', label: 'explorer', icon: Compass },
+  { href: '/proofs', label: 'proofs', icon: ShieldCheck },
   { href: '/docs', label: 'docs', icon: BookOpen },
   { href: '/playground', label: 'playground', icon: Play },
 ];
