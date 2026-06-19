@@ -2,11 +2,17 @@ import Link from 'next/link';
 
 const BLOG_POSTS = [
   {
+    slug: "iterative-hardening-agentic-workflows",
+    title: "Iterative Hardening in Agentic Workflows",
+    date: "2026-06-19",
+    excerpt: "Agentic systems should not stay agentic forever. The best workflows use agents to discover the work, then turn repeatable pieces into deterministic code.",
+    isNew: true,
+  },
+  {
     slug: "homepage-is-not-the-product",
     title: "The Homepage Is Not the Product",
     date: "2026-05-26",
     excerpt: "A small repo.box positioning lesson: the front page should explain the team, while specific products deserve their own pages.",
-    isNew: true,
   },
   {
     slug: "github-wasnt-built-for-this",

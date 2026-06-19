@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iterative Hardening in Agentic Workflows - repo.box</title>
+<meta name="description" content="Agentic systems should not stay agentic forever. The best workflows use agents to discover the work, then turn repeatable pieces into deterministic code.">
+<meta property="og:title" content="Iterative Hardening in Agentic Workflows - repo.box">
+<meta property="og:description" content="Agentic systems should not stay agentic forever. The best workflows use agents to discover the work, then turn repeatable pieces into deterministic code.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://repo.box/blog/iterative-hardening-agentic-workflows">
+<meta property="og:image" content="https://repo.box/og/repo-box-share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="repo.box - independent team building cool ideas with cool people.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Iterative Hardening in Agentic Workflows - repo.box">
+<meta name="twitter:description" content="Agentic systems should not stay agentic forever. The best workflows use agents to discover the work, then turn repeatable pieces into deterministic code.">
+<meta name="twitter:image" content="https://repo.box/og/repo-box-share.jpg">
+<link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
+<link rel="alternate" type="text/plain" title="Agent-readable version" href="/blog/iterative-hardening-agentic-workflows.txt">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a1628;--surface:#0d1f35;--border:rgba(50,100,160,0.25);--text:#b8d4e3;--dim:#5a7a94;--accent:#4fc3f7;--accent2:#81d4fa;--heading:#e8f4fd}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:20px;min-height:100vh;cursor:crosshair}
+a{color:var(--accent);text-decoration:none;transition:color .2s}
+a:hover{color:var(--accent2)}
+.container{max-width:720px;margin:0 auto;padding:60px 20px 80px}
+.back{font-size:12px;color:var(--dim);display:inline-block;margin-bottom:40px;transition:color .2s}
+.back:hover{color:var(--accent)}
+footer{margin-top:80px;padding-top:20px;border-top:1px solid var(--border);color:var(--dim);font-size:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+@media(max-width:500px){.container{padding:40px 20px 60px}footer{flex-direction:column;align-items:flex-start}}
+.post-meta{color:var(--dim);font-size:12px;margin-bottom:40px}
+.post-body{max-width:680px}
+.post-body h1{font-size:24px;font-weight:700;margin-bottom:8px;line-height:1.2;color:var(--heading)}
+.post-body h2{font-size:18px;font-weight:600;margin:40px 0 12px;color:var(--heading)}
+.post-body p{margin-bottom:20px;color:var(--text);font-size:13px;line-height:24px}
+.post-body ul{margin:0 0 20px 24px;color:var(--text);font-size:13px}
+.post-body li{margin-bottom:8px;line-height:24px}
+.post-body code{font-size:12px;background:var(--surface);padding:2px 8px;border-radius:2px;border:1px solid var(--border)}
+.byline{display:flex;align-items:center;gap:10px;margin-bottom:40px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:6px}
+.byline-emoji{font-size:20px}
+.byline-text{font-size:12px;line-height:18px;color:var(--dim)}
+.byline-name{color:var(--heading);font-weight:600}
+</style>
+</head>
+<body>
+<div class="container" style="position:relative;z-index:1;">
+<a href="/blog/" class="back">← blog</a>
+<article class="post-body">
+  <h1>Iterative Hardening in Agentic Workflows</h1>
+  <div class="post-meta">2026-06-19 · agents, workflows, infrastructure</div>
+  <div class="byline"><span class="byline-emoji">🪸</span><div class="byline-text">Written by <span class="byline-name">repo.box</span>, an independent team building cool ideas with cool people.</div></div>
+  <p>Most teams using agents are asking the wrong question.</p>
+  <p>They ask: how do we make the agent smarter?</p>
+  <p>The better question is: how do we make the agent necessary for fewer parts of the workflow next time?</p>
+  <p>That is the difference between agentic automation as a demo and agentic automation as infrastructure. The demo celebrates discretion. Infrastructure removes it.</p>
+
+  <h2>The failure mode</h2>
+  <p>We have been building Runyard, our workflow runner for agentic software work. It runs jobs, supervises agents, records traces, handles approvals, and keeps links back to the actual work.</p>
+  <p>In one recent pass, the UI showed a graveyard of cancelled and failed runs. Some of those runs had actually produced useful work. A Japanese-ness app had shipped and been used, but the system still looked like it had failed. Other runs were stale, ambiguous, or partially recovered by a human operator outside the workflow.</p>
+  <p>That mismatch is dangerous. When the product says "failed" but reality says "shipped," the system is not merely ugly. It is lying about its own state.</p>
+  <p>The obvious fix is to add retries. The deeper fix is to make the workflow atomic: each step either completes with a recorded artifact, hands off to a recovery path, or stops with a reason that future runs can use. No ghost successes. No half-finished states that depend on someone remembering what happened in a chat.</p>
+
+  <h2>Agents are scouts</h2>
+  <p>Agents are excellent at discovering the shape of a job. They inspect a repo, infer a test command, write a shell script, patch a file, run checks, read the error, and try again.</p>
+  <p>That is valuable. It is also evidence.</p>
+  <p>When an agent writes the same kind of script twice, that script is no longer an improvisation. It is a candidate for the platform. When a watcher keeps applying the same recovery judgment, that judgment should become a policy. When a workflow repeatedly needs the same repo resolution, branch detection, status normalization, or artifact capture, that should move out of the prompt and into code.</p>
+  <p>The point is not to eliminate agents. The point is to stop making agents rediscover stable facts.</p>
+
+  <h2>The hardening loop</h2>
+  <p>Our emerging process is simple:</p>
+  <ul>
+    <li>Run the workflow agentically first.</li>
+    <li>Record the full trace, artifacts, logs, scripts, approvals, and final state.</li>
+    <li>Review the run for friction, not only failure.</li>
+    <li>Delete steps that should not exist.</li>
+    <li>Split steps that are too broad to recover cleanly.</li>
+    <li>Extract repeated commands and scripts into deterministic code.</li>
+    <li>Leave only the genuinely judgment-heavy parts to agents.</li>
+  </ul>
+  <p>This borrows from a useful engineering instinct: do not automate a bad process. Simplify it first. Delete what should not be there. Make the remaining pieces legible. Only then make it faster.</p>
+  <p>In agent systems, that means the first working workflow is not the product. It is the prototype that teaches you what the product should harden.</p>
+
+  <h2>Retrospectives need to catch drag</h2>
+  <p>A failed run is not the only useful signal.</p>
+  <p>Sometimes a run succeeds but takes far too long. Sometimes the agent succeeds by writing a brittle script that should become a real tool. Sometimes a human has to merge from the outside because the workflow cannot safely mutate its own runner. Sometimes the output is technically correct but visually unusable, like raw JSON dumped where a graph should be.</p>
+  <p>A good retrospective should catch all of that.</p>
+  <p>Runyard should ask after every run: what obstructed the task? What did the agent have to infer that the system should already know? Which commands were invented during the run? Which decisions were recoverable, and which were vibes? Which failures should be hidden because they have been rerun and recovered?</p>
+  <p>This is how a workflow compounds. Not by admiring every trace, but by mining traces for things the platform can stop asking an agent to do.</p>
+
+  <h2>Prompt optimization is not hardening</h2>
+  <p>We also looked at GEPA, a system for evolving prompts and text artifacts from traces. It is interesting. It may belong in the toolbox.</p>
+  <p>But it is not hardening by itself.</p>
+  <p>A better prompt can make an agent more likely to do the right thing. Hardening changes the workflow so the agent has fewer chances to do the wrong thing.</p>
+  <p>That distinction matters. If a workflow fails because repo detection is ambiguous, the hardening move is not a prettier prompt saying "please detect the repo carefully." The hardening move is an explicit input contract, a repo map, validation against allowed roots, and a recorded decision. Once that exists, an agent can still help with ambiguous product judgment, but it no longer has to guess where the filesystem boundary is.</p>
+  <p>Our shorthand is: hardening reduces discretion. Prompt optimization improves the parts that still need discretion.</p>
+
+  <h2>The product surface changes too</h2>
+  <p>Hardening is not only backend architecture. It changes what the user sees.</p>
+  <p>A runs page should not be a pile of opaque IDs. It should show project, branch, title, description, hierarchy, recovery status, and links to logs and artifacts. Failed runs that were successfully rerun should not stay as scary red debris forever. They should become recovered history.</p>
+  <p>A workflow page should not hide the code behind a confusing modal. If the workflow is the thing being hardened, its definition, agents, approvals, runs, and history need to be inspectable.</p>
+  <p>That visibility is part of the system. You cannot harden what nobody can see.</p>
+
+  <h2>Where this goes</h2>
+  <p>The end state is not a fully deterministic build machine and it is not a swarm of agents improvising forever.</p>
+  <p>The end state is a ratchet.</p>
+  <p>Each run can use intelligence where intelligence is useful. Then the system asks what intelligence discovered, what should be kept as policy, what should be compiled into code, and what should never happen again.</p>
+  <p>That is iterative hardening: agents explore, workflows remember, infrastructure absorbs the repeatable parts.</p>
+  <p>The strongest agentic systems will not be the ones with the most elaborate prompts. They will be the ones where every successful run makes the next run less agentic in exactly the right places.</p>
+</article>
+<footer>
+  <span>© 2026 repo.box</span>
+  <span><a href="/blog/iterative-hardening-agentic-workflows.txt">plain text</a> · <a href="/feed.xml">rss</a></span>
+</footer>
+</div>
+</body>
+</html>

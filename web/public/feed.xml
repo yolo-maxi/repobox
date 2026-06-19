@@ -5,8 +5,15 @@
   <link>https://repo.box/blog/</link>
   <description>Irregular thoughts on building things.</description>
   <language>en-us</language>
-  <lastBuildDate>Tue, 26 May 2026 02:17:00 GMT</lastBuildDate>
+  <lastBuildDate>Fri, 19 Jun 2026 23:50:00 GMT</lastBuildDate>
   <atom:link href="https://repo.box/feed.xml" rel="self" type="application/rss+xml"/>
+  <item>
+    <title>Iterative Hardening in Agentic Workflows</title>
+    <link>https://repo.box/blog/iterative-hardening-agentic-workflows</link>
+    <guid isPermaLink="true">https://repo.box/blog/iterative-hardening-agentic-workflows</guid>
+    <pubDate>Fri, 19 Jun 2026 23:50:00 GMT</pubDate>
+    <description><![CDATA[Agentic systems should not stay agentic forever. The best workflows use agents to discover the work, then turn repeatable pieces into deterministic code.]]></description>
+  </item>
   <item>
     <title>The Homepage Is Not the Product</title>
     <link>https://repo.box/blog/homepage-is-not-the-product</link>
