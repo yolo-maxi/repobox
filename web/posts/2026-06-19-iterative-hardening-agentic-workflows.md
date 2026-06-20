@@ -15,13 +15,15 @@ That is the difference between agentic automation as a demo and agentic automati
 
 The failure mode
 
-We have been building Runyard, our workflow runner for agentic software work. It runs jobs, supervises agents, records traces, handles approvals, and keeps links back to the actual work.
+We have been building Runyard, our workflow runner for agentic software work. It runs jobs, records traces, handles approvals, supervises agents, and keeps links back to the actual work.
 
-In one recent pass, the UI showed a graveyard of cancelled and failed runs. Some of those runs had actually produced useful work. A Japanese-ness app had shipped and been used, but the system still looked like it had failed. Other runs were stale, ambiguous, or partially recovered by a human operator outside the workflow.
+In one recent pass, the UI collapsed several different outcomes into the same visual bucket: cancelled, failed, stale. Some runs were real failures. Some had produced artifacts. Some had been recovered by a human operator outside the workflow. Some had been superseded by a later run. From the product's point of view, they all looked like rubble.
 
 That mismatch is dangerous. When the product says "failed" but reality says "shipped," the system is not merely ugly. It is lying about its own state.
 
-The obvious fix is to add retries. The deeper fix is to make the workflow atomic: each step either completes with a recorded artifact, hands off to a recovery path, or stops with a reason that future runs can use. No ghost successes. No half-finished states that depend on someone remembering what happened in a chat.
+Retries alone do not fix this. A retry can produce useful work and still leave the system confused about what happened.
+
+The deeper fix is supervision: a watcher, often another constrained agent, sits above the worker. It checks whether artifacts exist, whether claims match repo state, whether a run is stuck, whether a retry superseded an earlier failure, and what state should be recorded. Atomic steps still matter, but supervision is what makes the atoms accountable. No ghost successes. No half-finished states that depend on someone remembering what happened in a chat.
 
 
 Agents are scouts
