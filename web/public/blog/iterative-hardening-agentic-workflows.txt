@@ -85,7 +85,7 @@ The end state is not a fully deterministic build machine and it is not a swarm o
 
 The end state is a ratchet.
 
-Each run can use intelligence where intelligence is useful. Then the system asks what intelligence discovered, what should be kept as policy, what should be compiled into code, and what should never happen again.
+Each run can use intelligence where intelligence is useful. But the goal of intelligence is not to solve the same problems over and over again. It is to build tools, contracts, interfaces, and institutions that make those problems trivial the next time they appear.
 
 That is iterative hardening: agents explore, workflows remember, infrastructure absorbs the repeatable parts.
 
