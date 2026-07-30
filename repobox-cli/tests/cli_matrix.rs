@@ -35,7 +35,7 @@
 //! scenario.execute_and_verify().await?;
 //! ```
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::PathBuf;
 use std::process::Command;
@@ -54,6 +54,7 @@ pub enum CliCommand {
     Keys,
     Identity,
     Alias,
+    Config,
 }
 
 impl CliCommand {
@@ -69,6 +70,7 @@ impl CliCommand {
             Self::Keys,
             Self::Identity,
             Self::Alias,
+            Self::Config,
         ]
     }
 
@@ -84,6 +86,7 @@ impl CliCommand {
             Self::Keys => "keys",
             Self::Identity => "identity",
             Self::Alias => "alias",
+            Self::Config => "config",
         }
     }
 }
@@ -344,15 +347,24 @@ impl CliTestScenario {
 
     /// Generate matrix key for coverage tracking
     pub fn matrix_key(&self) -> String {
+        let args_fingerprint = if self.args.is_empty() {
+            "-".to_string()
+        } else {
+            self.args.join("|")
+        };
+
         format!(
-            "{}_{:?}_{:?}_{:?}",
+            "{}|{:?}|{:?}|{:?}|{}|{}",
             self.command.as_str(),
             self.repo_state,
             self.identity_state,
-            self.setup_state
+            self.setup_state,
+            self.expected_outcome,
+            args_fingerprint
         )
     }
-}
+
+    }
 
 /// Test execution environment
 pub struct TestEnvironment {
@@ -602,9 +614,9 @@ pub struct TestResult {
 /// Coverage tracking for the CLI matrix
 #[derive(Default)]
 pub struct MatrixCoverage {
-    declared_scenarios: HashSet<String>,
-    executed_scenarios: HashSet<String>,
-    exclusions: HashMap<String, Vec<String>>,
+    declared_scenarios: BTreeSet<String>,
+    executed_scenarios: BTreeSet<String>,
+    exclusions: BTreeMap<String, Vec<String>>,
 }
 
 impl MatrixCoverage {
@@ -628,6 +640,16 @@ impl MatrixCoverage {
     }
 
     /// Calculate total possible matrix combinations
+    /// Count currently declared scenarios (for test assertions)
+    pub fn declared_count(&self) -> usize {
+        self.declared_scenarios.len()
+    }
+
+    /// Count currently executed scenarios (for test assertions)
+    pub fn executed_count(&self) -> usize {
+        self.executed_scenarios.len()
+    }
+
     pub fn total_combinations() -> usize {
         CliCommand::all().len()
             * RepoState::all().len()
@@ -641,12 +663,12 @@ impl MatrixCoverage {
         let declared_count = self.declared_scenarios.len();
         let executed_count = self.executed_scenarios.len();
         
-        let missing_declarations: HashSet<_> = self.executed_scenarios
+        let missing_declarations: BTreeSet<_> = self.executed_scenarios
             .difference(&self.declared_scenarios)
             .cloned()
             .collect();
 
-        let missing_executions: HashSet<_> = self.declared_scenarios
+        let missing_executions: BTreeSet<_> = self.declared_scenarios
             .difference(&self.executed_scenarios)
             .cloned()
             .collect();
@@ -668,9 +690,9 @@ pub struct CoverageReport {
     pub total_possible: usize,
     pub declared_count: usize,
     pub executed_count: usize,
-    pub missing_declarations: HashSet<String>,
-    pub missing_executions: HashSet<String>,
-    pub exclusions: HashMap<String, Vec<String>>,
+    pub missing_declarations: BTreeSet<String>,
+    pub missing_executions: BTreeSet<String>,
+    pub exclusions: BTreeMap<String, Vec<String>>,
 }
 
 impl CoverageReport {
@@ -720,10 +742,10 @@ mod tests {
     #[test]
     fn test_matrix_dimensions() {
         // Verify all enum variants are accounted for
-        assert_eq!(CliCommand::all().len(), 10);
+        assert_eq!(CliCommand::all().len(), 11);
         assert_eq!(RepoState::all().len(), 8);
         assert_eq!(IdentityState::all().len(), 4);
-        assert_eq!(SetupState::all().len(), 3);
+        assert_eq!(SetupState::all().len(), 8);
     }
 
     #[test]
@@ -748,13 +770,37 @@ mod tests {
             .command(CliCommand::Check)
             .repo_state(RepoState::Clean)
             .identity_state(IdentityState::Valid)
-            .setup_state(SetupState::Configured);
+            .setup_state(SetupState::Configured)
+            .expected_outcome(ExpectedOutcome::Success)
+            .args(vec!["-p".to_string(), "main".to_string()]);
 
         let key = scenario.matrix_key();
-        assert!(key.starts_with("check_"));
+        assert!(key.contains("check"));
         assert!(key.contains("Clean"));
         assert!(key.contains("Valid"));
         assert!(key.contains("Configured"));
+        assert!(key.contains("main"));
+    }
+
+    #[test]
+    fn test_matrix_key_is_deterministic_for_same_scenario() {
+        let one = CliTestScenario::new()
+            .command(CliCommand::Check)
+            .repo_state(RepoState::Clean)
+            .identity_state(IdentityState::Valid)
+            .setup_state(SetupState::Configured)
+            .expected_outcome(ExpectedOutcome::ErrorContains("ok".to_string()))
+            .args(vec!["@alice".to_string(), "push".to_string()]);
+
+        let two = CliTestScenario::new()
+            .command(CliCommand::Check)
+            .repo_state(RepoState::Clean)
+            .identity_state(IdentityState::Valid)
+            .setup_state(SetupState::Configured)
+            .expected_outcome(ExpectedOutcome::ErrorContains("ok".to_string()))
+            .args(vec!["@alice".to_string(), "push".to_string()]);
+
+        assert_eq!(one.matrix_key(), two.matrix_key());
     }
 
     #[test]
@@ -778,7 +824,7 @@ mod tests {
 
     #[test]
     fn test_total_combinations() {
-        // 10 commands * 8 repo states * 4 identity states * 3 setup states = 960
-        assert_eq!(MatrixCoverage::total_combinations(), 960);
+        // 11 commands * 8 repo states * 4 identity states * 8 setup states = 2816
+        assert_eq!(MatrixCoverage::total_combinations(), 2816);
     }
 }

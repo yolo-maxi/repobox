@@ -22,7 +22,7 @@
 //! above 20% threshold from recorded baselines.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
@@ -440,7 +440,7 @@ impl<'de> serde::Deserialize<'de> for BenchmarkResult {
         use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
         use std::fmt;
 
-        #[derive(Deserialize)]
+        #[derive(serde::Deserialize)]
         #[serde(field_identifier, rename_all = "snake_case")]
         enum Field {
             Command,

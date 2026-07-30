@@ -28,6 +28,7 @@ All primary CLI commands that users and agents interact with:
 - `keys` - Manage EVM key pairs
 - `identity` - Set/manage identity
 - `alias` - Manage local aliases
+- `config` - Manage and validate configuration
 
 ### 2. Repository State (`RepoState`)
 Git repository conditions that affect CLI behavior:
@@ -52,6 +53,11 @@ Git interceptor configuration status:
 - `Configured` - Repobox set up as git interceptor
 - `NotConfigured` - Not configured as interceptor
 - `Partial` - Partially configured (e.g., PATH set, hooks missing)
+- `FreshInstall` - Fresh environment with no prior setup
+- `AlreadyInstalled` - Setup command has already been completed
+- `AlreadyRemoved` - Setup command already removed
+- `MissingBackup` - Existing setup with missing backup markers
+- `InvalidBackupPath` - Setup metadata is present but corrupted
 
 ## Usage
 
@@ -106,7 +112,7 @@ The framework tracks which matrix combinations are tested:
 let mut coverage = MatrixCoverage::new();
 
 // Scenarios are automatically registered when executed
-run_scenario(scenario)?; 
+run_scenario(scenario)?;
 
 // Generate coverage report
 let report = coverage.coverage_report();
@@ -162,7 +168,7 @@ The framework provides detailed coverage analysis:
 
 ### Metrics
 
-- **Total possible combinations**: 10 commands × 8 repo states × 4 identity states × 3 setup states = 960
+- **Total possible combinations**: 11 commands × 8 repo states × 4 identity states × 8 setup states = 2816
 - **Declaration coverage**: % of combinations with declared tests
 - **Execution coverage**: % of declared tests that execute successfully
 
@@ -246,10 +252,10 @@ For each command, test:
 
 As of implementation, the framework covers:
 
-- **10 primary CLI commands** (all user-facing commands)
+- **11 primary CLI commands** (all user-facing commands)
 - **8 repository states** (clean to dirty to no-repo)
 - **4 identity states** (valid to missing to corrupted)  
-- **3 setup states** (configured to partial to none)
+- **8 setup states** (configured, not configured, partial, fresh install, already installed, already removed, missing backup, invalid backup path)
 
 Initial test suite implements ~45 scenarios covering the most important combinations for each command, with intentional exclusions documented for edge cases.
 

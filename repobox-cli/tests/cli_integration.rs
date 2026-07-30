@@ -10,11 +10,13 @@ mod performance_benchmarks;
 
 use cli_matrix::{
     CliCommand, CliTestScenario, ExpectedOutcome, IdentityState, MatrixCoverage, RepoState,
-    SetupState,
+    SetupState, CoverageReport,
 };
 
 use std::sync::Mutex;
 use std::sync::OnceLock;
+use std::thread;
+use std::time::{Duration, Instant};
 
 /// Initialize coverage tracking for all tests
 static COVERAGE: OnceLock<Mutex<MatrixCoverage>> = OnceLock::new();
@@ -23,18 +25,53 @@ fn get_coverage() -> &'static Mutex<MatrixCoverage> {
     COVERAGE.get_or_init(|| Mutex::new(MatrixCoverage::new()))
 }
 
+fn lock_coverage() -> std::sync::MutexGuard<'static, MatrixCoverage> {
+    get_coverage().lock().unwrap_or_else(|err| err.into_inner())
+}
+
+fn wait_for_coverage_stability(timeout_ms: u64) -> CoverageReport {
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    let mut previous = (0usize, 0usize);
+    let mut stable_since: Option<Instant> = None;
+
+    loop {
+        let guard = lock_coverage();
+        let current = (guard.declared_count(), guard.executed_count());
+
+        if previous == current {
+            let now = Instant::now();
+            stable_since = stable_since.or(Some(now));
+            if let Some(stable_start) = stable_since {
+                if now.duration_since(stable_start) >= Duration::from_millis(250) {
+                    return guard.coverage_report();
+                }
+            }
+        } else {
+            previous = current;
+            stable_since = Some(Instant::now());
+        }
+
+        drop(guard);
+        if Instant::now() >= deadline {
+            let guard = lock_coverage();
+            return guard.coverage_report();
+        }
+
+        thread::sleep(Duration::from_millis(40));
+    }
+}
+
 /// Helper function to run a scenario and track coverage
 fn run_scenario(scenario: CliTestScenario) -> Result<(), Box<dyn std::error::Error>> {
-    let coverage = get_coverage();
     {
-        let mut guard = coverage.lock().unwrap();
+        let mut guard = lock_coverage();
         guard.declare_scenario(&scenario);
     }
     
     let result = scenario.execute_and_verify()?;
     
     if result.success {
-        let mut guard = coverage.lock().unwrap();
+        let mut guard = lock_coverage();
         guard.mark_executed(&scenario);
         Ok(())
     } else {
@@ -576,7 +613,7 @@ fn test_excluded_scenarios() -> Result<(), Box<dyn std::error::Error>> {
     // Document intentional exclusions from the matrix
     
     {
-        let mut guard = get_coverage().lock().unwrap();
+        let mut guard = lock_coverage();
         guard.declare_scenario(
             &CliTestScenario::new()
                 .command(CliCommand::Setup)
@@ -731,18 +768,22 @@ fn test_non_interactive_behavior() -> Result<(), Box<dyn std::error::Error>> {
 /// Print coverage report at end of tests
 #[test]
 fn test_coverage_report() {
-    let coverage = get_coverage();
-    let guard = coverage.lock().unwrap();
-    let report = guard.coverage_report();
+    let report = wait_for_coverage_stability(2_000);
     report.print_report();
-    
+
+    // Guard against partial runs (for ad-hoc `cargo test test_coverage_report`).
+    if report.declared_count == 0 {
+        println!("Skipping strict coverage thresholds because no matrix scenarios were declared in this test run.");
+        return;
+    }
+
     // Assert minimum coverage thresholds
     assert!(
         report.declaration_coverage_percent() >= 5.0,
-        "Declaration coverage too low: {:.1}%", 
+        "Declaration coverage too low: {:.1}%",
         report.declaration_coverage_percent()
     );
-    
+
     assert!(
         report.execution_coverage_percent() >= 80.0,
         "Execution coverage too low: {:.1}%",

@@ -2,11 +2,14 @@
 // Auto-generated from kanban projects
 
 export interface ProjectDemo {
-  type: "iframe" | "screenshots" | "gif" | "link";
+  type: "iframe" | "screenshots" | "gif" | "link" | "cli";
   url?: string;
   screenshots?: string[];
   gifUrl?: string;
   description?: string;
+  cliCommand?: string;
+  cliOutput?: string;
+  previewText?: string;
 }
 
 export interface Project {

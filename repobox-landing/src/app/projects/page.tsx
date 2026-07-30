@@ -113,7 +113,7 @@ function ProjectDemo({ project }: { project: Project }) {
           </div>
         );
 
-      case "screenshot":
+      case "screenshots":
         return demo.screenshots && demo.screenshots.length > 0 ? (
           <div style={{ marginTop: 12 }}>
             <div
