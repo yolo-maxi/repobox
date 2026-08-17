@@ -88,30 +88,6 @@ export function LandingHireCTA() {
           </a>
         </div>
 
-        {/* Secondary CTA */}
-        <div>
-          <a
-            href="/docs"
-            style={{
-              fontFamily: "var(--font-mono), monospace",
-              fontSize: 14,
-              color: "var(--bp-accent2)",
-              textDecoration: "none",
-              transition: "color 0.2s",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = "var(--bp-heading)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--bp-accent2)";
-            }}
-          >
-            <span style={{ fontSize: 16 }}>📖</span> Read the docs
-          </a>
-        </div>
       </div>
     </section>
   );

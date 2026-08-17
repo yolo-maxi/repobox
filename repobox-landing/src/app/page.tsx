@@ -1,9 +1,5 @@
 import { LandingHero } from "@/components/landing/Hero";
 import { BookSprintCTA } from "@/components/landing/BookSprintCTA";
-import { AgentHeatmap } from "@/components/landing/AgentHeatmap";
-import { LandingShippedToday } from "@/components/landing/ShippedToday";
-import { LandingCaseStudies } from "@/components/landing/CaseStudies";
-import { LandingEthos } from "@/components/landing/Ethos";
 import { LandingHireCTA } from "@/components/landing/HireCTA";
 import { LandingWriting } from "@/components/landing/Writing";
 import { LandingFooter } from "@/components/landing/Footer";
@@ -20,12 +16,7 @@ export default function Home() {
         <LandingHero />
         <BookSprintCTA />
         <div style={{ height: 32 }} />
-        <AgentHeatmap />
-        <div style={{ height: 80 }} />
         <LandingHireCTA />
-        <LandingShippedToday />
-        <LandingCaseStudies />
-        <LandingEthos />
         <LandingWriting />
       </div>
       <LandingFooter />

@@ -8,7 +8,6 @@ const navItems = [
   { href: "/proof", label: "proof" },
   { href: "/agents", label: "agents" },
   { href: "/packages", label: "packages" },
-  { href: "/git", label: "git" },
   { href: "/blog/", label: "blog" },
   { href: "/hire", label: "hire us" },
 ];
@@ -105,20 +104,6 @@ export function LandingHero() {
           }}
         >
           see the work
-        </Link>
-        <Link
-          href="/git"
-          style={{
-            border: "1px solid rgba(79,195,247,0.35)",
-            borderRadius: 8,
-            color: "var(--bp-accent)",
-            padding: "12px 18px",
-            textDecoration: "none",
-            background: "rgba(79,195,247,0.08)",
-            fontSize: 13,
-          }}
-        >
-          repo.box git layer →
         </Link>
       </div>
 

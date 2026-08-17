@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // Turbopack chunk names can stay stable across tiny copy-only edits. Prefix
   // static assets for this deploy so browsers do not reuse old immutable JS.
-  assetPrefix: "/_next-static-a044dd2e",
+  assetPrefix: "/_next-static-sunset-git-20260817",
 };
 
 export default nextConfig;
