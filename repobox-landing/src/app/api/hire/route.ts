@@ -8,13 +8,78 @@ interface HireFormData {
   email: string;
 }
 
+const PROJECT_TYPES = new Set([
+  'AI Agent',
+  'Web App',
+  'Automation',
+  'Trading/Finance',
+  'Other',
+]);
+
+const MAX_TELEGRAM_FIELD_LENGTH = 900;
+
+function trimForNotification(value: string) {
+  const normalized = value.trim();
+  if (normalized.length <= MAX_TELEGRAM_FIELD_LENGTH) return normalized;
+  return `${normalized.slice(0, MAX_TELEGRAM_FIELD_LENGTH - 1)}...`;
+}
+
+function buildTelegramMessage(data: HireFormData, submittedAt: string) {
+  return [
+    'New repo.box hire request',
+    '',
+    `Type: ${data.projectType}`,
+    `Budget: ${data.budget || 'Not specified'}`,
+    `Timeline: ${data.timeline}`,
+    `Contact: ${data.email}`,
+    '',
+    trimForNotification(data.description),
+    '',
+    `Submitted: ${submittedAt}`,
+  ].join('\n');
+}
+
+async function sendTelegramNotification(message: string) {
+  const token = process.env.REPOBOX_HIRE_TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.REPOBOX_HIRE_TELEGRAM_CHAT_ID;
+  const threadId = process.env.REPOBOX_HIRE_TELEGRAM_THREAD_ID;
+
+  if (!token || !chatId) {
+    console.warn('Hire form Telegram notification is not configured.');
+    return { configured: false };
+  }
+
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_thread_id: threadId ? Number(threadId) : undefined,
+      text: message,
+      disable_web_page_preview: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Telegram notification failed: ${response.status} ${body.slice(0, 300)}`);
+  }
+
+  return { configured: true };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const data: HireFormData = await request.json();
+    const submittedAt = new Date().toISOString();
     
     // Validate required fields
     if (!data.description || !data.projectType || !data.timeline || !data.email) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    if (!PROJECT_TYPES.has(data.projectType)) {
+      return NextResponse.json({ error: 'Invalid project type' }, { status: 400 });
     }
 
     // Validate email format
@@ -28,9 +93,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Description too long' }, { status: 400 });
     }
 
-    // Format email content
-    const emailSubject = `New Hire Request: ${data.projectType} Project`;
-    const emailBody = `
+    // Format intake content for the local submissions log.
+    const notificationSubject = `New Hire Request: ${data.projectType} Project`;
+    const notificationBody = `
 New hire request received from repo.box/hire
 
 Project Details:
@@ -43,59 +108,14 @@ Description:
 ${data.description}
 
 ---
-Submitted: ${new Date().toISOString()}
+Submitted: ${submittedAt}
 Source: repo.box/hire
     `.trim();
 
-    // Send email to enterprise@repo.box
-    // Note: This would typically use a service like SendGrid, Resend, or nodemailer
-    // For now, we'll log it and save to a file for manual processing
-    
     console.log('Hire form submission:', {
-      subject: emailSubject,
-      body: emailBody,
-      timestamp: new Date().toISOString()
-    });
-
-    // In a production setup, you would integrate with an email service here
-    // Example with a hypothetical email service:
-    /*
-    await sendEmail({
-      to: 'enterprise@repo.box',
-      subject: emailSubject,
-      text: emailBody,
-      replyTo: data.email
-    });
-    */
-
-    // Send auto-responder to the user
-    const autoResponderSubject = 'Thank you for your project inquiry - repo.box';
-    const autoResponderBody = `
-Hi there,
-
-Thank you for reaching out about your ${data.projectType.toLowerCase()} project!
-
-We've received your request and our team will review it within 24 hours. Someone will reach out to discuss your project in detail and provide next steps.
-
-Project Summary:
-- Type: ${data.projectType}
-- Timeline: ${data.timeline}
-${data.budget ? `- Budget: ${data.budget}` : ''}
-
-In the meantime, feel free to explore our portfolio at repo.box to see examples of our work.
-
-Best regards,
-The repo.box Team
-
----
-This is an automated response. Please don't reply to this email.
-    `.trim();
-
-    console.log('Auto-responder email:', {
-      to: data.email,
-      subject: autoResponderSubject,
-      body: autoResponderBody,
-      timestamp: new Date().toISOString()
+      subject: notificationSubject,
+      body: notificationBody,
+      timestamp: submittedAt
     });
 
     // Save submission to a local file for manual processing
@@ -104,12 +124,10 @@ This is an automated response. Please don't reply to this email.
     const path = require('path');
     
     const submissionData = {
-      timestamp: new Date().toISOString(),
+      timestamp: submittedAt,
       data,
-      emailSubject,
-      emailBody,
-      autoResponderSubject,
-      autoResponderBody
+      notificationSubject,
+      notificationBody
     };
 
     try {
@@ -122,17 +140,29 @@ This is an automated response. Please don't reply to this email.
       console.error('Failed to save submission to file:', fileError);
     }
 
+    let telegramStatus = { configured: false };
+    try {
+      telegramStatus = await sendTelegramNotification(buildTelegramMessage(data, submittedAt));
+    } catch (notificationError) {
+      console.error('Failed to send hire notification:', notificationError);
+      return NextResponse.json(
+        { error: 'Submission could not be delivered. Please try again.' },
+        { status: 502 }
+      );
+    }
+
     // Track analytics
     console.log('Hire form conversion:', {
       projectType: data.projectType,
       budget: data.budget,
       timeline: data.timeline,
-      timestamp: new Date().toISOString()
+      notified: telegramStatus.configured,
+      timestamp: submittedAt
     });
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Request submitted successfully' 
+      message: 'Request submitted successfully'
     });
 
   } catch (error) {

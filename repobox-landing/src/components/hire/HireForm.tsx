@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 interface FormData {
   description: string;
@@ -83,36 +83,6 @@ export function HireForm() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const getRoutingDestination = () => {
-    const { projectType, budget, description, timeline } = formData;
-    
-    // Create context string for pre-filling
-    const contextData = {
-      type: projectType,
-      budget: budget || 'Not specified',
-      timeline: timeline,
-      description: description.slice(0, 200) + (description.length > 200 ? '...' : '')
-    };
-
-    switch (projectType) {
-      case "AI Agent":
-        return `https://t.me/ocean_king_bot?start=hire_ai_agent`;
-      
-      case "Automation":
-        return `https://t.me/ocean_king_bot?start=hire_automation`;
-      
-      case "Trading/Finance":
-        // Route to SUPStrategy project page + contact
-        return `/projects/supstrategy?contact=true`;
-      
-      case "Web App":
-      case "Other":
-      default:
-        // Will submit form to enterprise email
-        return null;
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -121,31 +91,19 @@ export function HireForm() {
     setIsSubmitting(true);
     
     try {
-      const routingDestination = getRoutingDestination();
-      
-      if (routingDestination && (formData.projectType === "AI Agent" || formData.projectType === "Automation")) {
-        // Direct routing to Telegram
-        window.open(routingDestination, '_blank');
-        setSubmitted(true);
-      } else if (routingDestination && formData.projectType === "Trading/Finance") {
-        // Route to SUPStrategy project page
-        window.location.href = routingDestination;
-      } else {
-        // Submit to enterprise email for Web App and Other
-        const response = await fetch('/api/hire', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(formData),
-        });
+      const response = await fetch('/api/hire', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
 
-        if (!response.ok) {
-          throw new Error('Failed to submit form');
-        }
-
-        setSubmitted(true);
+      if (!response.ok) {
+        throw new Error('Failed to submit form');
       }
+
+      setSubmitted(true);
     } catch (error) {
       console.error('Form submission error:', error);
       alert('There was an error submitting your request. Please try again.');
@@ -195,8 +153,7 @@ export function HireForm() {
             marginBottom: 24,
           }}
         >
-          We'll review your project details and get back to you within 24 hours.
-          Check your email for confirmation.
+          We'll review your project details and reply to the email you provided.
         </p>
         <button
           onClick={() => {
