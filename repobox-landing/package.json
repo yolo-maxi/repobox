@@ -2,10 +2,11 @@
   "name": "repobox-landing",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.29.3",
   "scripts": {
     "dev": "next dev -p 3480",
     "build": "next build",
-    "start": "next start -p 3480",
+    "start": "PORT=3480 HOSTNAME=0.0.0.0 node .next/standalone/server.js",
     "lint": "eslint"
   },
   "dependencies": {
