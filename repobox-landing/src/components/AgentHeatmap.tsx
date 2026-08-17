@@ -131,10 +131,10 @@ const AgentHeatmap = () => {
     <div className="w-full max-w-6xl mx-auto p-6">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          Agent Activity
+          Repository Activity
         </h2>
         <p className="text-gray-600 dark:text-gray-400 mb-4">
-          {totalCommits.toLocaleString()} commits across {activeDays} active days in the last year
+          {totalCommits.toLocaleString()} commits logged on {activeDays} days across tracked repos
         </p>
       </div>
 

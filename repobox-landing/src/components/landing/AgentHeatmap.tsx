@@ -140,10 +140,10 @@ export function AgentHeatmap() {
     <section>
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          Agent Activity
+          Repository Activity
         </h2>
         <p className="text-gray-600 dark:text-gray-400">
-          {totalCommits} commits across {activeDays} days • Proof of work across repositories
+          {totalCommits} commits logged on {activeDays} days across tracked repos
         </p>
       </div>
 
