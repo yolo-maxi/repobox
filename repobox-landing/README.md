@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# repobox-landing
 
-## Getting Started
+Next.js app for the repo.box homepage and marketing/docs routes.
 
-First, run the development server:
+## Local Development
+
+Use the checked-in pnpm lockfile as the source of truth.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+corepack enable
+pnpm install --frozen-lockfile
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The dev server listens on `http://localhost:3480`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Build From Source
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm build
+```
 
-## Learn More
+The app uses `output: "standalone"` in `next.config.ts`, so a production build emits a self-contained Node server at `.next/standalone/server.js`. The default static asset prefix is `/_next-static-sunset-git-20260817` to match the current repo.box cache-busting deployment shape. Override it only for a coordinated deploy:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+REPOBOX_ASSET_PREFIX="/_next-static-<release-id>" pnpm build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Browser source maps are disabled in production config. Do not commit `.next/`, `out/`, source maps, env files, `next-env.d.ts`, or generated monitor output.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Standalone Deploy Shape
 
-## Deploy on Vercel
+Build on the builder host, then ship only the files needed by the standalone server and static/public assets:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+pnpm build
+rm -rf .next/standalone/.next/static .next/standalone/public
+cp -R .next/static .next/standalone/.next/static
+cp -R public .next/standalone/public
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The checked-in `ecosystem.config.js` expects the release to live at `/home/xiko/repobox-landing` and starts `.next/standalone/server.js` with `PORT=3480`, `HOSTNAME=0.0.0.0`, and `NODE_ENV=production`.
+
+If `REPOBOX_ASSET_PREFIX` is set, the reverse proxy must serve that prefix to the same files as `.next/static`. With the default prefix, `/_next-static-sunset-git-20260817/_next/static/...` must resolve to the built static chunks. Keep the old prefix mounted until clients no longer hold cached HTML that references it.
