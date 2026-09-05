@@ -153,7 +153,9 @@ export function HireForm() {
             marginBottom: 24,
           }}
         >
-          We'll review your project details and reply to the email you provided.
+          We&apos;ll read it and reply to the email you gave us. It goes straight
+          to a person, not a queue, so expect a real answer rather than an
+          instant autoresponse.
         </p>
         <button
           onClick={() => {
@@ -422,7 +424,8 @@ export function HireForm() {
             lineHeight: "16px",
           }}
         >
-          We'll route your request to the most relevant expert and respond within 24 hours.
+          Goes straight to us. We read every one and reply by email, usually
+          within a day.
         </p>
       </div>
     </form>
