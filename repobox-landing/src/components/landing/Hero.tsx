@@ -6,8 +6,7 @@ const navItems = [
   { href: "/projects", label: "projects" },
   { href: "/portfolio", label: "portfolio" },
   { href: "/proof", label: "proof" },
-  { href: "/agents", label: "agents" },
-  { href: "/packages", label: "packages" },
+  // /agents and /packages quarantined from public nav by 2026-08-17 disposition.
   { href: "/blog/", label: "blog" },
   { href: "/hire", label: "hire us" },
 ];

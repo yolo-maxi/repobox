@@ -31,7 +31,7 @@ export function BackgroundCanvas() {
     let mantasDone = false;
     let mantaTick = 0;
 
-    fetch("/manta-final.json")
+    fetch("/internal/prototypes/manta-final.json")
       .then((r) => r.json())
       .then((data) => {
         mantaFrames = data;
@@ -126,7 +126,7 @@ export function BackgroundCanvas() {
     const baseRot = (70 * Math.PI) / 180;
     let lastSpawn = 0;
 
-    fetch("/jellyfish.json")
+    fetch("/internal/prototypes/jellyfish.json")
       .then((r) => r.json())
       .then((data) => {
         frames = data;

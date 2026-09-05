@@ -1,6 +1,6 @@
 // Unified canvas — repo.box
 // Grid background + cursor glow + scroll-driven snakes + interactive snake game
-// Include on any page: <script src="/canvas.js"></script>
+// Include on any page: <script src="/internal/prototypes/canvas.js"></script>
 (function () {
   const G = 20, MAJ = 80, MAX_LEN = 12;
   const canvas = document.createElement('canvas');

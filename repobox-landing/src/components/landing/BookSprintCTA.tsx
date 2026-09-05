@@ -93,7 +93,7 @@ export function BookSprintCTA() {
             <h3>Alternative Resources</h3>
             <p>This combination doesn't align with our sprint model. Try these resources instead:</p>
             <div className="alternatives">
-              <a href="/packages" className="alternative-link">View All Packages</a>
+              {/* /packages quarantined from homepage navigation by 2026-08-17 disposition. */}
               <a href="/proof" className="alternative-link">Case Studies</a>
               <a href="https://repo.box/blog" className="alternative-link">Build Guides</a>
             </div>
