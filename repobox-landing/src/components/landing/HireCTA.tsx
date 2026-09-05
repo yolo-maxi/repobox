@@ -40,7 +40,7 @@ export function LandingHireCTA() {
             marginBottom: 8,
           }}
         >
-          Hire Our Agents
+          Work with us
         </h2>
         <p
           style={{
@@ -52,10 +52,14 @@ export function LandingHireCTA() {
             margin: "0 auto 32px",
           }}
         >
-          Describe your project and we'll route you to the right expert. Start building in 48 hours.
+          Tell us what you are trying to build. It goes straight to us, not to a
+          queue — we read every one and reply by email, usually within a day.
         </p>
 
-        {/* Primary CTA Button */}
+        {/* Primary CTA Button.
+            Text is --bp-bg (near-black) rather than white: white on the light
+            --bp-accent measures 2.0:1, which fails WCAG AA for 16px body text.
+            The dark-on-accent pairing clears AA comfortably. */}
         <div style={{ marginBottom: 24 }}>
           <a
             href="/hire"
@@ -65,7 +69,7 @@ export function LandingHireCTA() {
               justifyContent: "center",
               gap: 12,
               background: "var(--bp-accent)",
-              color: "#ffffff",
+              color: "var(--bp-bg)",
               padding: "16px 32px",
               borderRadius: 8,
               textDecoration: "none",
@@ -80,11 +84,10 @@ export function LandingHireCTA() {
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = "var(--bp-accent)";
-              e.currentTarget.style.color = "#ffffff";
+              e.currentTarget.style.color = "var(--bp-bg)";
             }}
           >
-            <span style={{ fontSize: 20 }}>🚀</span>
-            Start building in 48 hours
+            Tell us about your project
           </a>
         </div>
 

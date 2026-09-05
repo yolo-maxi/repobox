@@ -71,10 +71,11 @@ export function LandingHero() {
           lineHeight: "28px",
           color: "var(--bp-dim)",
           maxWidth: 520,
-          marginBottom: 48,
+          marginBottom: 32,
         }}
       >
-        An independent team building cool ideas with cool people.
+        An independent team building infrastructure for software that runs
+        itself.
       </p>
 
       <p
@@ -85,13 +86,15 @@ export function LandingHero() {
           maxWidth: 580,
         }}
       >
-        We ship sharp little products, agent-powered systems, and weird useful
-        infrastructure. No pitch-deck theatre — just code, taste, receipts, and curiosity.
+        Right now that means a control plane for long-running agent work, an
+        on-chain order book, a landing-page agent that is deliberately powerless,
+        and a permission layer that makes a git repo safe to hand to a machine.
+        Everything below is running somewhere you can click.
       </p>
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 32 }}>
-        <Link
-          href="/portfolio"
+        <a
+          href="#work"
           style={{
             border: "1px solid var(--bp-border)",
             borderRadius: 8,
@@ -103,6 +106,20 @@ export function LandingHero() {
           }}
         >
           see the work
+        </a>
+        <Link
+          href="/hire"
+          style={{
+            border: "1px solid var(--bp-border)",
+            borderRadius: 8,
+            color: "var(--bp-heading)",
+            padding: "12px 18px",
+            textDecoration: "none",
+            background: "rgba(6, 14, 26, 0.72)",
+            fontSize: 13,
+          }}
+        >
+          work with us
         </Link>
       </div>
 
