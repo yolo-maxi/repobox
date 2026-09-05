@@ -89,3 +89,53 @@ the sitemap.
 - Whether the ten static blog HTML posts should be restored at their sitemap
   URLs or the sitemap should be regenerated to match served reality. That is a
   content decision for `REPOBOX-BLOG-001`, not an inventory gap.
+
+## Root cause of the static `public/` 404s — determined 2026-09-05T02:27Z
+
+The selective failure is fully explained. Two different servers answer for
+`repo.box`, and only two exact paths are intercepted.
+
+**1. `sitemap.xml` and `robots.txt` never reach the Next app.** The Caddy site
+block for `repo.box` has explicit `handle` blocks for `/releases/*`,
+`/install.sh`, `/sitemap.xml`, `/robots.txt` and `/assets/*`, each with
+`root * /var/www/repo.box/subdomains/root` + `file_server`. Everything else
+falls through to `handle { reverse_proxy localhost:3480 }`.
+
+Evidence — response headers differ by origin:
+- `/sitemap.xml` -> `server: Caddy`, `last-modified: Mon, 30 Mar 2026 06:09:48 GMT`
+  (Caddy's own file_server, static root)
+- `/llms.txt`    -> `via: 1.1 Caddy`, `content-type: text/html`, Next RSC `vary`
+  headers and a `_next-static-sunset-git-20260817` preload link
+  (Next app's 404 page, proxied)
+
+So `sitemap.xml`/`robots.txt` serving is **not** evidence that `public/` is
+mounted. They are served from a different directory entirely and are stale
+(March 2026), which is also why the sitemap lists URLs that no longer exist.
+
+**2. `public/` is not copied into the standalone build.** `next.config.ts` sets
+`output: "standalone"`. Next's standalone output deliberately does **not** copy
+`public/` or `.next/static`; the deploy is responsible for that step, and here
+it was never done.
+
+Decisive evidence:
+- `repobox-landing/public/` contains 23 entries.
+- `repobox-landing/.next/standalone/public/` contains exactly 1: `heatmap-data.json`.
+- `https://repo.box/heatmap-data.json` returns **200** with `via: 1.1 Caddy`
+  (served by the Next app, not the static root).
+- Every other `public/` file — `/llms.txt`, `/feed.xml`, `/SKILL.md`,
+  `/favicon.svg`, `/whitepaper.txt` — returns **404**.
+
+One file in the standalone `public/` dir serves; the 22 that are missing from it
+do not. That is a one-to-one match with the observed 404 set and rules out
+prompt-level guesses such as route conflicts or Caddy misrouting.
+
+**Consequence for the fix.** This is a deploy/packaging defect, not a source
+defect. Restoring the files in source would change nothing. The build or deploy
+step must copy `public/` (and `.next/static`) into the standalone output, per
+Next's documented standalone requirements.
+
+**Not yet determined.** Which build/deploy script produces the running service
+was not identified: no `3480` listener and no matching systemd unit are visible
+from this host, and `repo.box` resolves to `204.168.190.248`, which is not this
+machine (`77.42.89.161`). The running app is therefore deployed elsewhere, and
+the deploy script that must be corrected has not been located.
