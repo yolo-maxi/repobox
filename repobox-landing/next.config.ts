@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
   // Turbopack chunk names can stay stable across tiny copy-only edits. Prefix
   // static assets for this deploy so browsers do not reuse old immutable JS.
   assetPrefix,
+  // The blog index is a static file at public/blog/index.html, so Next only
+  // serves it at that exact path and the homepage nav link to /blog 404s.
+  // Rewrite (not redirect) so the canonical /blog URL renders the index.
+  async rewrites() {
+    return [{ source: "/blog", destination: "/blog/index.html" }];
+  },
 };
 
 export default nextConfig;
