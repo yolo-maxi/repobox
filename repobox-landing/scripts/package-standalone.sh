@@ -68,8 +68,12 @@ log() { printf '\n=== %s ===\n' "$*"; }
 # --- 1. build --------------------------------------------------------------
 if [[ "${1:-}" != "--no-build" ]]; then
   log "build"
-  corepack pnpm install --frozen-lockfile
-  corepack pnpm build
+  # CI=true is required for non-interactive use (cron, CI, ssh without a TTY).
+  # Without it pnpm refuses to reconcile the modules directory and aborts with
+  # ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY, which made this script
+  # unrunnable from automation even though it worked by hand.
+  CI=true corepack pnpm install --frozen-lockfile
+  CI=true corepack pnpm build
 else
   log "build skipped (--no-build)"
 fi
