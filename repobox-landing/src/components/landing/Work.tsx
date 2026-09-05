@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { useReveal } from "./useReveal";
-import { sectionTitleStyle } from "./shared";
+import { CardBorder, sectionTitleStyle } from "./shared";
 
 type WorkStatus = "live" | "public" | "building";
 
@@ -61,6 +61,13 @@ const STATUS_LABEL: Record<WorkStatus, string> = {
   building: "in progress",
 };
 
+const proofLinkStyle = {
+  fontFamily: "var(--font-mono), monospace",
+  fontSize: 12,
+  lineHeight: "20px",
+  color: "var(--bp-accent2)",
+} as const;
+
 function StatusPill({ status }: { status: WorkStatus }) {
   return (
     <span
@@ -95,9 +102,7 @@ function WorkCard({ entry }: { entry: WorkEntry }) {
         transition: "border-color 0.2s",
       }}
     >
-      <svg className="card-border" aria-hidden="true">
-        <rect x="0.5" y="0.5" width="calc(100% - 1px)" height="calc(100% - 1px)" />
-      </svg>
+      <CardBorder />
       <div style={{ position: "relative", zIndex: 2 }}>
         <div
           style={{
@@ -133,35 +138,23 @@ function WorkCard({ entry }: { entry: WorkEntry }) {
         </p>
 
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-          {entry.proof.map((link) => {
-            const external = link.href.startsWith("http");
-            const style = {
-              fontFamily: "var(--font-mono), monospace",
-              fontSize: 12,
-              lineHeight: "20px",
-              color: "var(--bp-accent2)",
-            } as const;
-
-            if (external) {
-              return (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={style}
-                >
-                  {link.label} →
-                </a>
-              );
-            }
-
-            return (
-              <Link key={link.href} href={link.href} style={style}>
+          {entry.proof.map((link) =>
+            link.href.startsWith("http") ? (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={proofLinkStyle}
+              >
+                {link.label} →
+              </a>
+            ) : (
+              <Link key={link.href} href={link.href} style={proofLinkStyle}>
                 {link.label} →
               </Link>
-            );
-          })}
+            )
+          )}
         </div>
       </div>
     </div>
