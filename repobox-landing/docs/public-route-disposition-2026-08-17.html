@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>repo.box Public Route Disposition - 2026-08-17</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080a0d;
+      --panel: #10141a;
+      --line: #27313b;
+      --text: #e8edf2;
+      --muted: #9aa8b4;
+      --accent: #63d297;
+      --warn: #f1c46b;
+      --bad: #ee7777;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    main { max-width: 1180px; margin: 0 auto; padding: 40px 24px 64px; }
+    h1, h2 { line-height: 1.2; margin: 0 0 12px; }
+    h1 { font-size: 28px; }
+    h2 { font-size: 18px; margin-top: 32px; }
+    p { color: var(--muted); margin: 0 0 16px; }
+    table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px 12px; vertical-align: top; text-align: left; }
+    th { color: var(--muted); font-weight: 600; background: #0c1015; }
+    tr:last-child td { border-bottom: 0; }
+    code { color: var(--accent); }
+    .tag { display: inline-block; min-width: 88px; color: #07100b; background: var(--accent); padding: 2px 7px; border-radius: 4px; font-weight: 700; text-align: center; }
+    .repair { background: var(--warn); }
+    .merge, .redirect { background: #8db7ff; }
+    .quarantine, .remove { background: var(--bad); }
+    ul { margin: 0; padding-left: 18px; color: var(--muted); }
+    .evidence { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .card { border: 1px solid var(--line); background: var(--panel); padding: 14px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>repo.box Public Route Disposition</h1>
+  <p>Inventory date: 2026-08-17. Scope: <code>/home/xiko/repobox/repobox-landing</code>. Deployment intentionally not touched.</p>
+
+  <h2>Source Evidence</h2>
+  <div class="evidence">
+    <div class="card">
+      <strong>App Router pages</strong>
+      <p><code>src/app</code> exposes <code>/</code>, <code>/git</code>, <code>/hire</code>, <code>/portfolio</code>, <code>/proof</code>, <code>/projects</code>, <code>/projects/supstrategy</code>, <code>/trust</code>, <code>/docs</code>, <code>/docs/[...slug]</code>, <code>/playground</code>, <code>/building</code>, <code>/packages</code>, <code>/made-by-agents</code>, <code>/agents</code>, <code>/agents/ocean-vael</code>, three Next case-study routes, and dynamic <code>/[address]</code>.</p>
+    </div>
+    <div class="card">
+      <strong>Static public surface</strong>
+      <p><code>public</code> includes <code>/blog/index.html</code>, ten static blog HTML posts, several TXT fallbacks, <code>/feed.xml</code>, <code>/llms.txt</code>, <code>/SKILL.md</code>, <code>/robots.txt</code>, <code>/sitemap.xml</code>, badge SVGs, data JSON/HTML, canvas/model JSON, OG image, and generic Next starter SVGs.</p>
+    </div>
+    <div class="card">
+      <strong>Nav and sitemap</strong>
+      <p>Internal links reference <code>/blog</code>, <code>/docs</code>, <code>/packages</code>, <code>/proof</code>, <code>/portfolio</code>, <code>/building</code>, <code>/agents</code>, <code>/made-by-agents</code>, <code>/SKILL.md</code>, <code>/llms.txt</code>, and <code>/feed.xml</code>. <code>public/sitemap.xml</code> lists extensionless blog slugs that do not match the static <code>.html</code> files and includes a missing PowerSchool post.</p>
+    </div>
+  </div>
+
+  <h2>Disposition List</h2>
+  <table>
+    <thead>
+      <tr><th>Route or asset</th><th>Disposition</th><th>Rationale</th><th>Follow-up ticket</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>/</code></td><td><span class="tag">keep</span></td><td>Main studio homepage and current conversion entry point.</td><td>REPOBOX-HOME-001: tighten homepage narrative after old prototype routes are hidden.</td></tr>
+      <tr><td><code>/hire</code> and <code>/api/hire</code></td><td><span class="tag">keep</span></td><td>Primary contact flow; memory notes recent Telegram integration and JSONL fallback.</td><td>REPOBOX-HIRE-001: add explicit privacy/autoresponse copy once email behavior is final.</td></tr>
+      <tr><td><code>/git</code>, <code>/docs</code>, <code>/docs/*</code>, <code>/playground</code>, <code>/SKILL.md</code>, <code>/llms.txt</code></td><td><span class="tag repair">repair</span></td><td>Core repo.box product/agent-readability surface, but public copy now mixes studio positioning with older git-permission-layer positioning.</td><td>REPOBOX-DOCS-001: choose canonical product framing and update docs, llms, and git hero together.</td></tr>
+      <tr><td><code>/projects</code>, <code>/projects/supstrategy</code></td><td><span class="tag">keep</span></td><td>Structured portfolio/project detail surface with active internal links and hire handoff.</td><td>REPOBOX-PROJECTS-001: verify project claims and external demo availability.</td></tr>
+      <tr><td><code>/portfolio</code> and <code>/proof</code></td><td><span class="tag merge">merge</span></td><td>Both sell proof/case studies; keeping both splits authority and repeats project evidence.</td><td>REPOBOX-PROOF-001: merge strongest proof content into one canonical evidence page and redirect the weaker URL.</td></tr>
+      <tr><td><code>/blog/</code>, static <code>/blog/*.html</code>, static <code>/blog/*.txt</code>, <code>/feed.xml</code></td><td><span class="tag repair">repair</span></td><td>Blog is intentional, but the index links only two posts while sitemap/feed mention more; sitemap uses extensionless URLs for static HTML posts.</td><td>REPOBOX-BLOG-001: regenerate blog index, feed, and sitemap from one manifest; add redirects from extensionless slugs to <code>.html</code> or move posts into App Router.</td></tr>
+      <tr><td><code>/blog/case-study-botfight</code>, <code>/blog/case-study-cabin</code>, <code>/blog/case-study-sss</code></td><td><span class="tag merge">merge</span></td><td>These App Router case studies overlap with <code>/proof</code> and package/portfolio pages rather than acting like dated blog posts.</td><td>REPOBOX-BLOG-002: fold case-study routes into the canonical proof system and redirect old URLs.</td></tr>
+      <tr><td><code>/made-by-agents</code>, <code>/api/badge-clicks</code>, <code>/badges/*</code></td><td><span class="tag">keep</span></td><td>Badge page and embeddable assets are coherent public affordances and linked from the footer.</td><td>REPOBOX-BADGE-001: add a lightweight smoke for embed-code click tracking.</td></tr>
+      <tr><td><code>/packages</code></td><td><span class="tag quarantine">quarantine</span></td><td>Package sales page is linked from homepage and agents page, but it is productized less than hire/projects and risks competing CTAs.</td><td>REPOBOX-PACKAGES-001: either make packages the pricing source of truth or remove nav exposure and route to <code>/hire</code>.</td></tr>
+      <tr><td><code>/agents</code>, <code>/agents/ocean-vael</code></td><td><span class="tag quarantine">quarantine</span></td><td>Agent profile pages use dated claims, emoji avatars, and personal-agent framing that conflicts with the studio homepage cleanup goal.</td><td>REPOBOX-AGENTS-001: replace with compact team/provenance section or redirect to <code>/made-by-agents</code>.</td></tr>
+      <tr><td><code>/building</code></td><td><span class="tag merge">merge</span></td><td>Build-log/project-progress page overlaps with <code>/projects</code> and <code>/portfolio</code>.</td><td>REPOBOX-BUILDING-001: preserve useful data feeds but merge public UI into <code>/projects</code> or hide from nav.</td></tr>
+      <tr><td><code>/trust</code>, <code>/api/trust-status</code></td><td><span class="tag repair">repair</span></td><td>Trust page is useful for conversion, but claims such as uptime, audit date, static-only deployment, and zero incidents need revalidation after the August 2026 incident history.</td><td>REPOBOX-TRUST-001: replace static claims with sourced status and incident disclosure.</td></tr>
+      <tr><td><code>/[address]</code></td><td><span class="tag repair">repair</span></td><td>Dynamic ERC-8004 profile route is plausible product surface, but every unknown top-level slug becomes an address parser path and the profile markdown is rendered as HTML.</td><td>REPOBOX-PROFILES-001: constrain path namespace, sanitize rendered metadata, and decide whether profiles are part of homepage launch.</td></tr>
+      <tr><td><code>/api/activity-heatmap</code>, <code>/api/demo</code>, <code>/api/docs/*</code>, public <code>/data/*</code></td><td><span class="tag">keep</span></td><td>These support visible pages or agent-readable docs/data.</td><td>REPOBOX-API-001: document which API/data routes are stable public contracts.</td></tr>
+      <tr><td><code>/canvas.js</code>, <code>/jellyfish.json</code>, <code>/manta-final.json</code>, <code>/manta-loop.json</code></td><td><span class="tag quarantine">quarantine</span></td><td>Visual prototype assets are public but not represented in sitemap or product copy.</td><td>REPOBOX-ASSETS-001: keep only assets referenced by live pages and move prototypes under an internal path.</td></tr>
+      <tr><td><code>/file.svg</code>, <code>/globe.svg</code>, <code>/next.svg</code>, <code>/vercel.svg</code>, <code>/window.svg</code></td><td><span class="tag remove">remove</span></td><td>Default scaffold assets have no repo.box public purpose found in source links.</td><td>REPOBOX-ASSETS-002: delete unused starter assets after confirming no deployed bundle reference.</td></tr>
+      <tr><td><code>/sitemap.xml</code>, <code>/robots.txt</code></td><td><span class="tag repair">repair</span></td><td>Robots is fine structurally; sitemap is stale and omits current App Router pages while listing missing or mismatched blog URLs.</td><td>REPOBOX-SITEMAP-001: generate sitemap from route inventory and blog manifest during build.</td></tr>
+      <tr><td><code>/whitepaper.txt</code></td><td><span class="tag quarantine">quarantine</span></td><td>Raw whitepaper text is discoverable but not linked from current product copy.</td><td>REPOBOX-CONTENT-001: decide whether this belongs under docs/resources or should be removed from public root.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Board Summary</h2>
+  <p>Recommended move for factory item <code>fi_7f852c33229de5ffbe07</code>: Review, after attaching this disposition. Blocker to note if the board cannot be updated from the current tool surface: RunYard MCP exposes run/status/artifact read APIs and capability launch APIs, but no work-item update or status transition API for moving this item to Review.</p>
+</main>
+</body>
+</html>
