@@ -184,7 +184,7 @@ export function BackgroundCanvas() {
     document.addEventListener("mouseleave", onMouseLeave);
 
     // ── Grid ──
-    fetch("/whitepaper.txt")
+    fetch("/internal/whitepaper.txt")
       .then((r) => r.text())
       .then((t) => { wpText = t.replace(/\s+/g, " ").trim(); if (bgGrid.length) rebuildBgLayer(); })
       .catch(() => {});
