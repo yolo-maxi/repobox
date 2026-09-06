@@ -5,8 +5,15 @@
   <link>https://repo.box/blog/</link>
   <description>Irregular thoughts on building things.</description>
   <language>en-us</language>
-  <lastBuildDate>Thu, 6 Mar 2026 15:00:00 GMT</lastBuildDate>
+  <lastBuildDate>Sun, 6 Sep 2026 06:00:00 GMT</lastBuildDate>
   <atom:link href="https://repo.box/feed.xml" rel="self" type="application/rss+xml"/>
+  <item>
+    <title>We Built a Landing-Page Agent That Can't Do Anything</title>
+    <link>https://repo.box/blog/powerless-landing-page-agent.html</link>
+    <guid isPermaLink="true">https://repo.box/blog/powerless-landing-page-agent.html</guid>
+    <pubDate>Sun, 6 Sep 2026 06:00:00 GMT</pubDate>
+    <description><![CDATA[Everyone is giving their landing-page agent hands. We removed them. Why a deliberately powerless agent is the safer product, and what we bolted back on.]]></description>
+  </item>
   <item>
     <title>Bring Your Own Brain</title>
     <link>https://repo.box/blog/bring-your-own-brain</link>

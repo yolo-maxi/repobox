@@ -1,0 +1,123 @@
+# We Built a Landing-Page Agent That Can't Do Anything
+// repo.box — 2026-09-06 — agent-readable version
+// tags: agents, security, product
+
+## Summary
+Concierge is a landing-page chat agent designed around subtraction: no tools, no
+retrieval, no memory by default. It answers only from a brief digested by hand
+and assembled into the system prompt server-side. Capability is the attack
+surface, so the default instance has none. Capabilities were later added as
+named, reviewable, server-side handlers behind a confirmation gate.
+
+Source: https://github.com/yolo-maxi/concierge
+Live instance: https://frontier.repo.box (currently running an older build than
+the one described here; theming and capability-pack work is merged but not yet
+deployed to it).
+
+## The argument
+A prompt injection is only as dangerous as what the agent can reach. An agent
+with database access turns injection into a breach; an agent with CRM write
+access turns injection into a write; an agent that can only emit sentences about
+a fixed brief turns injection into an off-brand sentence. Hardening a capable
+agent is fitting a better lock to a door standing in a field.
+
+Therefore the first design decision is subtraction. The default registry is
+empty and the model is never told any tools exist.
+
+## Server-enforced constraints
+The widget holds no secret; it knows only an endpoint URL. All constraints live
+server-side, because a constraint the client can edit is not a constraint.
+
+- Server-side prompt assembly. Client-supplied `system` roles are filtered out
+  before reaching the provider; only `user` and `assistant` messages survive.
+- Message depth cap: 24 messages (MAX_MESSAGES).
+- Message length cap: 2000 characters each (MAX_CHARS), applied by truncation
+  rather than rejection.
+- Per-IP rate limit: 20 requests / 60s (CONCIERGE_RATE_LIMIT_IP, window
+  CONCIERGE_RATE_LIMIT_WINDOW_MS).
+- Per-session rate limit: 12 requests / 60s (CONCIERGE_RATE_LIMIT_SESSION,
+  window CONCIERGE_SESSION_RATE_LIMIT_WINDOW_MS).
+- Concurrency bound: 4 concurrent provider calls (CONCIERGE_MAX_CONCURRENT).
+- Queue depth: 16 waiting requests (CONCIERGE_MAX_QUEUE_DEPTH), then `queue_full`.
+- Request budget: 30000ms (CONCIERGE_REQUEST_TIMEOUT_MS), aborting queued or
+  in-flight provider work.
+- Provider circuit breaker: opens after 3 consecutive failures
+  (CONCIERGE_CIRCUIT_FAILURES), resets after 30000ms
+  (CONCIERGE_CIRCUIT_RESET_MS). `/ready` returns 503 while open or saturated so
+  a load balancer drains the instance rather than treating the process as dead.
+- Retrieval, when enabled, caps injected context at 4000 characters by default.
+
+Structured client error codes: queue_full, rate_limited_ip,
+rate_limited_session, provider_circuit_open, page_not_configured, bad_request.
+
+## Capability packs
+Capabilities are named, reviewable, server-side handlers with JSON schemas. Not
+open-ended function calling. The model sees names and schemas only.
+
+Implemented tools: capture_lead (side effect), handoff_human (handoff).
+
+Side-effect gating for capture_lead:
+
+    capture_lead(args)                        -> refused, issues a confirmation ticket
+    capture_lead(args + matching ticket)      -> executes once
+    capture_lead(args + stale/forged ticket)  -> refused
+    capture_lead(other args + ticket)         -> refused (ticket is intent-bound)
+
+Additional properties:
+- An unclassified tool defaults to side-effecting, not read-only. Fails closed.
+- Repeats of an already-confirmed effect return the first result rather than
+  executing twice.
+- Idempotency is scoped to the caller and exact arguments, not global.
+- Read tools are neither gated nor deduplicated.
+- The `confirm` field is advertised only on side-effect tools.
+- Lead email addresses are masked by the sanitizer before reaching the audit log.
+
+## Generative UI without generated markup
+The agent can place UI in the conversation but cannot emit markup. It selects a
+registered component name and supplies schema-validated props.
+
+Registered components: button_group, lead_form, product_card, handoff_card.
+
+Validation behaviour:
+- Unregistered component: refused.
+- Unknown prop: refused, not passed through to the client.
+- Wrong prop type: refused, not coerced.
+- Missing required prop: refused. Empty required array: refused.
+- Enum props reject values outside the declared set.
+- Array props are bounded, so a model cannot emit a hundred buttons.
+- Over-long strings are truncated rather than rejected, so a chatty model still
+  renders.
+- Executable URL schemes (javascript:, data:) are refused on every URL field;
+  http and https are accepted.
+- A tool action naming a tool the page has not allowlisted is refused, as is any
+  tool action on a page with no tools. Otherwise the UI layer becomes a bypass
+  around tool policy.
+- Every UI event carries a mandatory text fallback, so the feature degrades to
+  plain chat.
+- render_ui is offered only to pages that opted in, and is ignored on pages that
+  did not even if the model calls it.
+
+## Verification
+- 60 tests passing (`pnpm test`), run against a fake provider; the default suite
+  requires no provider secrets.
+- `tsc -p tsconfig.json --noEmit` clean (`pnpm lint`).
+- `pnpm build` clean.
+- A concurrency smoke (`pnpm --filter @concierge/server smoke:concurrency`)
+  reports JSON evidence: status codes, completed SSE streams, peak observed
+  provider concurrency, provider call count, final runtime state.
+
+Two verification failures worth recording, because both were recorded as passing
+before they were checked:
+
+1. The concurrency smoke crashed at startup with a ReferenceError (a class used
+   before its declaration) and issued zero requests, while a prior cycle had
+   recorded "smoke 5/5". A gate that prints no assertions has asserted nothing.
+2. The component tests ran headless with no DOM, so the widget had never been
+   rendered in a browser. Every test passed and the mobile/accessibility
+   acceptance criteria were untouched by any of them. A gate set can be
+   structurally incapable of testing the clause it is meant to cover. A browser
+   render gate at 1440x900 and 390x844 was added afterwards.
+
+## Position
+Decide what a landing-page agent is allowed to do before deciding how clever it
+is. The clever part is easy. The allowed part is the product.

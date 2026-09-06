@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>We Built a Landing-Page Agent That Can't Do Anything — repo.box</title>
+<meta name="description" content="Everyone is giving their landing-page agent hands. We removed them. Why a deliberately powerless agent is the safer product, and what we bolted back on.">
+<link rel="alternate" type="application/rss+xml" title="repo.box blog" href="/feed.xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0a;--surface:#111;--border:#1a1a1a;--text:#e0e0e0;--dim:#666;--accent:#00ff88;--accent2:#00ccff}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;line-height:1.6;min-height:100vh}
+a{color:var(--accent);text-decoration:none;transition:opacity .2s}
+a:hover{opacity:.8}
+.container{max-width:720px;margin:0 auto;padding:3rem 1.5rem 4rem}
+.back{font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--dim);display:inline-block;margin-bottom:2rem;transition:color .2s}
+.back:hover{color:var(--accent)}
+.logo{font-family:'JetBrains Mono',monospace;font-size:1.8rem;font-weight:700;margin-bottom:.5rem}
+.logo .dot{color:var(--accent)}
+h2.section{font-size:.85rem;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-bottom:1.25rem;font-weight:500}
+footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--border);color:var(--dim);font-size:.8rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem}
+@media(max-width:500px){
+  .container{padding:2rem 1.25rem 3rem}
+  .logo{font-size:1.5rem}
+  footer{flex-direction:column;align-items:flex-start}
+}
+
+.post-meta{color:var(--dim);font-size:.85rem;font-family:'JetBrains Mono',monospace;margin-bottom:2rem}
+.post-body{max-width:680px}
+.post-body h1{font-size:1.8rem;font-weight:700;margin-bottom:.5rem;line-height:1.2}
+.post-body h2{font-size:1.3rem;font-weight:600;margin:2rem 0 .75rem;color:var(--text)}
+.post-body h3{font-size:1.1rem;font-weight:600;margin:1.5rem 0 .5rem;color:var(--text)}
+.post-body p{margin-bottom:1rem;color:#ccc;font-size:1rem;line-height:1.7}
+.post-body ul,.post-body ol{margin:0 0 1rem 1.5rem;color:#ccc}
+.post-body li{margin-bottom:.4rem;line-height:1.6}
+.post-body blockquote{border-left:3px solid var(--accent);padding:.5rem 1rem;margin:1rem 0;color:#999;background:rgba(0,255,136,.03);border-radius:0 6px 6px 0}
+.post-body code{font-family:'JetBrains Mono',monospace;font-size:.85em;background:var(--surface);padding:.15rem .4rem;border-radius:4px;border:1px solid var(--border)}
+.post-body pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin:1rem 0;overflow-x:auto}
+.post-body pre code{background:none;border:none;padding:0;font-size:.85rem;line-height:1.5}
+.post-body img{max-width:100%;border-radius:8px;margin:1rem 0}
+.post-body a{color:var(--accent);border-bottom:1px solid rgba(0,255,136,.2)}
+.post-body a:hover{border-bottom-color:var(--accent)}
+.post-body hr{border:none;border-top:1px solid var(--border);margin:2rem 0}
+.visual-break{margin:2rem 0}
+.visual-break .diagram{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.5rem;font-family:'JetBrains Mono',monospace;font-size:.75rem;line-height:1.5;color:var(--accent);overflow-x:auto;white-space:pre}
+</style>
+</head>
+<body>
+<div class="container">
+<a href="/blog/" class="back">← blog</a>
+<article class="post-body">
+  <h1>We Built a Landing-Page Agent That Can't Do Anything</h1>
+  <div class="post-meta">2026-09-06 · agents, security, product</div>
+  <p>Everyone is bolting an agent onto their landing page, and everyone is giving it hands. Tools, retrieval, CRM write access, calendar booking, a database connection "just for lookups". The pitch is that a capable agent converts better. The reality is that you have put a language model with credentials on the most hostile surface you own — a public page that anyone can type into.</p>
+<p>We went the other way. <a href="https://github.com/yolo-maxi/concierge">Concierge</a> is a landing-page agent that is deliberately powerless. No tools by default. No retrieval by default. No memory. It answers from one thing: a brief we digested by hand and baked into the system prompt on the server. Ask it something outside the brief and it says it does not know.</p>
+<h2>Capability is the attack surface</h2>
+<p>A prompt injection is only as dangerous as the thing it can reach. If your agent can query a database, injection is a data breach. If it can hit your CRM, injection is a write. If it can only emit sentences about a brief you wrote, the worst outcome of a successful jailbreak is an off-brand sentence.</p>
+<blockquote>
+<p>Hardening a capable agent is like fitting a better lock to a door you left in the middle of a field. The lock is not the problem.</p>
+</blockquote>
+<p>So the first design decision was subtraction, not addition. The default instance has zero tools. Not "tools behind a flag" — the registry is empty and the model is never told any exist.</p>
+<h2>What the server actually enforces</h2>
+<p>The widget holds no secret. It knows an endpoint URL and nothing else. Every constraint lives on the server, because a constraint the client can edit is not a constraint.</p>
+<ul>
+<li><strong>The system prompt is assembled server-side.</strong> Client-supplied <code>system</code> roles are filtered out before anything reaches the provider — the request handler keeps only <code>user</code> and <code>assistant</code> messages.</li>
+<li><strong>Depth and length caps.</strong> 24 messages, 2000 characters each, applied by truncation rather than rejection so a chatty visitor still gets an answer.</li>
+<li><strong>Two rate limiters.</strong> 20 requests per IP per minute, 12 per widget session per minute. Session limits stop one abusive tab; IP limits stop the tab's owner opening twenty more.</li>
+<li><strong>Bounded concurrency.</strong> Four concurrent provider calls, a queue that holds sixteen more and then returns <code>queue_full</code>, and a 30-second end-to-end budget that aborts queued or in-flight work.</li>
+<li><strong>A provider circuit breaker.</strong> Three consecutive upstream failures opens it; <code>/ready</code> starts returning 503 so a load balancer drains the instance instead of hammering a dead provider.</li>
+</ul>
+<p>Structured error codes throughout — <code>queue_full</code>, <code>rate_limited_ip</code>, <code>rate_limited_session</code>, <code>provider_circuit_open</code> — because "something went wrong" is not an operational signal.</p>
+<h2>The part where we started opening doors</h2>
+<p>Constraint as a feature is a nice story right up until someone asks the agent to actually do something. Fran did. So we added capability packs, and every one of them is a door we are deliberately opening.</p>
+<p>The rule we set was that a capability has to be a named, reviewable, server-side handler. Not open-ended function calling. The model sees names and JSON schemas; it never sees an execution path.</p>
+<p>Two tools exist so far: <code>capture_lead</code> and <code>handoff_human</code>. The interesting one is <code>capture_lead</code>, because it has a side effect, and side effects are where an agent stops being a chatbot and starts being a liability.</p>
+<pre><code>capture_lead(args)   -> refused, returns a confirmation ticket
+capture_lead(args + ticket) -> executes once
+capture_lead(args + stale/forged ticket) -> refused
+capture_lead(other args + ticket) -> refused (ticket is intent-bound)
+</code></pre>
+<p>The gate fails closed: a tool that has not been classified is treated as side-effecting, not read-only. Getting that default backwards is how you ship a tool nobody reviewed and find out later. Repeats of an already-confirmed effect return the first result instead of firing twice, and idempotency is scoped to the caller and the exact arguments rather than being global.</p>
+<h2>Generative UI without generated markup</h2>
+<p>The same subtraction applies to rendering. The agent can put UI in the conversation — a button group, a lead form, a product card, a handoff card — but it cannot emit markup. It selects a registered component name and supplies props against a schema.</p>
+<p>Unknown component: refused. Unknown prop: refused, not passed through. Wrong type: refused, not coerced. Arrays are bounded, so the model cannot decide to render a hundred buttons. Over-long strings truncate rather than fail, because a verbose model should degrade, not break. Every UI event carries a mandatory text fallback, so the whole feature can fall back to plain chat.</p>
+<p>URL props are the sharp edge — a component with an <code>href</code> is an XSS vector waiting for <code>javascript:</code>. Executable schemes are refused at validation on every URL field, and a UI action naming a tool the page has not allowlisted is refused too. Otherwise the UI layer becomes a way around the tool policy you just wrote.</p>
+<h2>What we actually verified</h2>
+<p>60 tests, all passing, against a fake provider so the default suite needs no secrets. <code>tsc --noEmit</code> clean. Build clean. The suite covers the boring-but-load-bearing cases: hostile client roles stripped, unregistered tools refused without executing, a hanging tool aborted, a throwing tool degrading to an answerable turn, a lead email masked before it reaches the audit log, forged confirmation tickets rejected.</p>
+<p>There is also a concurrency smoke that reports real numbers rather than an exit code — status codes, completed streams, peak observed provider concurrency, final circuit state. That distinction matters more than it sounds. An earlier version of that smoke crashed on startup with a <code>ReferenceError</code> before issuing a single request, and had been recorded as passing. A gate that prints no assertions has not asserted anything.</p>
+<blockquote>
+<p>A green status is a claim. Go and look at what the thing was supposed to produce.</p>
+</blockquote>
+<p>Same lesson in the render layer: the component tests ran headless with no DOM, so the widget had never been rendered in a browser at all. Every test passed and the mobile and accessibility criteria were untouched by any of them. A gate set can be structurally incapable of testing the clause it is supposed to cover.</p>
+<h2>Where it is</h2>
+<p>The code is at <a href="https://github.com/yolo-maxi/concierge">github.com/yolo-maxi/concierge</a>. A live instance answers on <a href="https://frontier.repo.box">frontier.repo.box</a>, though that deployment is currently running an older build than the one described here — the theming and capability work is merged and not yet shipped to it.</p>
+<p>If you want the short version: decide what your landing-page agent is allowed to do before you decide how clever it is. The clever part is easy. The allowed part is the product.</p>
+
+</article>
+<footer>
+  <span>© 2026 repo.box</span>
+  <span>Built with caffeine and curiosity</span>
+</footer>
+</div>
+</body>
+</html>
