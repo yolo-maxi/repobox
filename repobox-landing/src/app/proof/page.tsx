@@ -18,6 +18,8 @@ export interface CaseStudy {
   }[];
   techStack: string[];
   demoLink?: string;
+  /** Set when the project is no longer running. Explains what happened. */
+  retiredNote?: string;
   details: {
     problem: string;
     solution: string;
@@ -26,116 +28,129 @@ export interface CaseStudy {
   };
 }
 
+// PROVENANCE RULE (REPOBOX-PROOF-001, 2026-09-06).
+//
+// This page previously carried specific figures — "127 verified agents",
+// "2.4k verification tests", "94% success rate", "23 bookings", "$12.4k USDC
+// volume", "18% avg savings", "850+ test cases", "1.2k downloads", "50+ active
+// users", "30% faster iteration" — none of which could be traced to any
+// source available on this host. They have been removed rather than restated,
+// because a proof page whose numbers cannot be checked is worse than one with
+// no numbers.
+//
+// A figure may only appear in `outcomes` if it can be recomputed from
+// something a reader could in principle be shown. Counts of things that exist
+// in a repository qualify; usage, revenue and success-rate claims do not
+// unless there is a published source. When in doubt, describe the work
+// instead of scoring it.
+//
+// Demo links were swept live on 2026-09-06; dead hosts are recorded in
+// `retiredNote` and the link is removed rather than left to 404.
 const CASE_STUDIES: CaseStudy[] = [
   {
     id: "oceangram",
     title: "Oceangram",
-    subtitle: "0 → 76 VS Code services in 2 weeks",
-    timeline: "Feb 2026: Concept → Feb 2026: 76 services shipped",
+    subtitle: "A Telegram control surface for VS Code",
+    timeline: "Feb 2026: concept → Feb 2026: shipped to the VS Code Marketplace",
     before: "Fragmented VS Code development workflow with manual tool switching",
-    after: "Unified Telegram interface controlling 76 integrated VS Code services",
+    after: "A Telegram interface that mirrors VS Code commands and services",
     outcomes: [
-      { label: "Services", value: "76" },
-      { label: "Dev Time", value: "2 weeks" },
-      { label: "Active Users", value: "50+" },
-      { label: "Downloads", value: "1.2k" }
+      { label: "Status", value: "retired" },
+      { label: "Built in", value: "Feb 2026" }
     ],
     techStack: ["TypeScript", "VS Code API", "Telegram Bot API", "Node.js", "GitHub Actions"],
-    demoLink: "https://marketplace.visualstudio.com/items?itemName=ocean.oceangram",
+    retiredNote:
+      "The Marketplace listing returns 404 as of 2026-09-06 and no source checkout remains on the build host, so nothing here can be demonstrated. Adoption figures previously shown on this page had no traceable source and were removed.",
     details: {
       problem: "Developers constantly switch between VS Code and external tools. Each context switch breaks flow state and reduces productivity.",
-      solution: "Built a Telegram bot that mirrors every VS Code command and service. Developers can code, debug, deploy, and manage projects entirely from Telegram.",
+      solution: "Built a Telegram bot that mirrors VS Code commands and services, so a developer can drive the editor from a phone.",
       architecture: "Extension intercepts VS Code commands via API, forwards to Telegram bot, processes natural language requests, executes actions, and streams results back.",
-      impact: "Eliminated tool switching for 76 common developer workflows. Users report 30% faster iteration cycles and improved focus retention."
+      impact: "Proved that an editor can be driven end-to-end from a chat surface. The project is no longer published and no usage data survives, so no adoption claim is made here."
     }
   },
   {
     id: "sss",
     title: "Semi-Sentient Society",
-    subtitle: "AI agent verification on-chain",
-    timeline: "Jan 2026: Research → Mar 2026: Lobster Test deployed",
+    subtitle: "An experiment in verifying agent autonomy on-chain",
+    timeline: "Jan 2026: research → Mar 2026: Lobster Test deployed",
     before: "No reliable way to verify if an AI agent is operating autonomously vs human-controlled",
-    after: "On-chain verification system with cryptographic proof of autonomous behavior",
+    after: "An on-chain challenge/response scheme intended to evidence autonomous behaviour",
     outcomes: [
-      { label: "Verified Agents", value: "127" },
-      { label: "Verification Tests", value: "2.4k" },
-      { label: "Success Rate", value: "94%" },
-      { label: "Gas Costs", value: "$0.02/test" }
+      { label: "Status", value: "retired" },
+      { label: "Chain", value: "Base" }
     ],
     techStack: ["Solidity", "Base", "EVM signatures", "Merkle proofs", "TypeScript"],
-    demoLink: "https://sss.repo.box",
+    retiredNote:
+      "sss.repo.box has stopped responding (no HTTP response on 2026-09-06) and no source checkout remains on the build host. Agent counts, test counts and pass rates previously shown here could not be traced to any surviving source and were removed.",
     details: {
       problem: "AI agents claim autonomy but humans can't verify it. No trusted registry exists for genuinely autonomous agents.",
-      solution: "The Lobster Test: agents must prove they can execute cryptographically complex tasks without human intervention. Pass rate correlates with autonomy level.",
-      architecture: "Smart contracts on Base generate challenges. Agents submit solutions with EVM signatures. Merkle trees aggregate proof history. DAO governs verification standards.",
-      impact: "First trustless system for agent verification. 127 verified agents form the foundation of an autonomous agent collective."
+      solution: "The Lobster Test: agents were asked to execute cryptographically awkward tasks without human intervention, on the theory that pass rate correlates with autonomy.",
+      architecture: "Smart contracts on Base generate challenges. Agents submit solutions with EVM signatures. Merkle trees aggregate proof history. A DAO governs verification standards.",
+      impact: "An early attempt at trustless agent verification. The deployment is gone and its results are not recoverable from this host, so no outcome figures are claimed."
     }
   },
   {
     id: "cabin",
     title: "Cabin",
-    subtitle: "AI travel agent with real bookings",
-    timeline: "Feb 2026: Prototype → Mar 2026: Live crypto payments",
+    subtitle: "A travel agent that could settle in crypto",
+    timeline: "Feb 2026: prototype → Apr 2026: last commit",
     before: "Travel booking requires human-to-human interaction and traditional payment rails",
-    after: "AI agent searches 500+ airlines, books real flights, accepts USDC payments",
+    after: "An agent that searched flights through a GDS and could settle in USDC",
     outcomes: [
-      { label: "Airlines", value: "500+" },
-      { label: "Bookings", value: "23" },
-      { label: "Avg Savings", value: "18%" },
-      { label: "USDC Volume", value: "$12.4k" }
+      { label: "Status", value: "retired" },
+      { label: "Last commit", value: "Apr 2026" }
     ],
     techStack: ["Next.js", "Amadeus API", "USDC", "Base", "Vercel"],
+    retiredNote:
+      "cabin.ai is no longer ours: as of 2026-09-06 it resolves to a Spaceship.com domain-for-sale page. Booking counts, savings percentages and USDC volume previously shown here had no traceable source and were removed.",
     details: {
       problem: "Travel booking is human-gated and crypto-unfriendly. Agents can't complete end-to-end transactions in native web3 workflows.",
-      solution: "Built AI travel agent that integrates directly with airline reservation systems. Accepts crypto payments and issues real boarding passes.",
-      architecture: "Agent queries Amadeus GDS for flights, calculates optimal routes, presents options via chat, processes USDC payments, and confirms bookings through airline APIs.",
-      impact: "Eliminated human intermediaries from travel booking. 23 successful crypto-to-boarding-pass transactions prove the concept."
+      solution: "Built a travel agent that queried airline reservation systems directly and accepted crypto payment for the booking.",
+      architecture: "Agent queries Amadeus GDS for flights, calculates routes, presents options via chat, processes USDC payments, and confirms bookings through airline APIs.",
+      impact: "Demonstrated an agent completing a real-world purchase end to end. The service is retired and its transaction records are not available here, so no volume is claimed."
     }
   },
   {
     id: "repobox",
     title: "repo.box CLI",
-    subtitle: "Server-first git security",
-    timeline: "Mar 2026: Architecture → Mar 2026: 850 tests passing",
+    subtitle: "Server-first git permissions for agents",
+    timeline: "Mar 2026: architecture → still in active development",
     before: "AI agents require full repository access, creating security and audit risks",
-    after: "Granular permission system with cryptographic enforcement and comprehensive testing",
+    after: "Granular permission system with cryptographic enforcement and a large test matrix",
     outcomes: [
-      { label: "Test Cases", value: "850+" },
-      { label: "Policy Types", value: "12" },
-      { label: "Bypass Resistance", value: "100%" },
-      { label: "CLI Commands", value: "28" }
+      { label: "Status", value: "in development" },
+      { label: "Language", value: "Rust" }
     ],
     techStack: ["Rust", "Git internals", "EVM signatures", "YAML config", "Matrix testing"],
     demoLink: "https://repo.box",
     details: {
       problem: "AI agents need repository access but traditional git permissions are all-or-nothing. No way to enforce append-only, signature requirements, or path restrictions.",
       solution: "Server-first permission layer that validates every git operation. Agents get scoped access with cryptographic accountability.",
-      architecture: "Rust server intercepts git operations, validates against YAML policies, enforces signature requirements, and maintains audit logs. Client shim provides UX.",
-      impact: "AI agents can safely contribute to production repositories. 850+ test matrix ensures security properties hold under all bypass attempts."
+      architecture: "Rust server intercepts git operations, validates against YAML policies, enforces signature requirements, and maintains audit logs. A client shim provides the UX.",
+      impact: "The active line of work behind this domain. The repository carries a substantial Rust test matrix covering bypass attempts; the exact count moves with every commit, so it is not quoted as a fixed figure here."
     }
   },
   {
     id: "botfight",
     title: "BotFight",
-    subtitle: "AI social deduction arena",
-    timeline: "Mar 2026: Design → Mar 2026: 10 agent personalities",
+    subtitle: "An arena for watching agents deceive each other",
+    timeline: "Mar 2026: design → Feb 2026 last commit, paused",
     before: "AI behavior testing requires expensive human interaction and lacks systematic evaluation",
-    after: "Automated arena where AI agents develop social strategies through gameplay",
+    after: "An automated Mafia arena where agent strategies evolve across rounds",
     outcomes: [
-      { label: "Agent Types", value: "10" },
-      { label: "Game Scenarios", value: "47" },
-      { label: "Strategy Evolution", value: "3 gens" },
-      { label: "Behavioral Patterns", value: "23" }
+      { label: "Status", value: "paused" },
+      { label: "Last commit", value: "Feb 2026" }
     ],
     techStack: ["Node.js", "WebSocket", "OpenAI", "Game theory", "React"],
     details: {
       problem: "AI social capabilities are hard to measure objectively. No systematic way to test deception, cooperation, and trust dynamics between agents.",
-      solution: "Mafia/Werewolf game arena where AI agents must deceive, cooperate, and survive. Strategies evolve based on win/loss patterns.",
+      solution: "Mafia/Werewolf game arena where agents must deceive, cooperate, and survive. Strategies evolve based on win/loss patterns.",
       architecture: "Game engine manages rounds, WebSocket handles real-time communication, agents submit actions via API, and behavioral analysis tracks strategic evolution.",
-      impact: "Generated 23 distinct behavioral patterns. Agents developed novel deception strategies not seen in training data."
+      impact: "Produced qualitatively novel deception behaviour in play. Counts of scenarios and behavioural patterns previously listed here could not be traced to a surviving artifact and were removed."
     }
   }
 ];
+
 
 interface CaseStudyCardProps {
   study: CaseStudy;
@@ -319,6 +334,24 @@ function CaseStudyCard({ study, index }: CaseStudyCardProps) {
             </div>
           ))}
         </div>
+
+        {/* Retirement note */}
+        {study.retiredNote && (
+          <div
+            style={{
+              fontSize: 12,
+              lineHeight: "18px",
+              color: "var(--bp-dim)",
+              background: "rgba(90, 122, 148, 0.10)",
+              border: "1px solid var(--bp-border)",
+              borderRadius: 4,
+              padding: "10px 12px",
+              marginBottom: 20,
+            }}
+          >
+            {study.retiredNote}
+          </div>
+        )}
 
         {/* Tech Stack */}
         <div style={{ marginBottom: 20 }}>
@@ -623,8 +656,11 @@ export default function ProofPage() {
               maxWidth: 600,
             }}
           >
-            Concrete proof of what we ship. From concept to production in weeks, not months.
-            Each case study shows the before, after, technical decisions, and real outcomes.
+            Case histories, not a scoreboard. Each one gives the before, the
+            after, and the technical decisions. Where a project is retired the
+            page says so and says what happened to it. Figures appear only where
+            they can be traced to something checkable; the rest is described in
+            words rather than scored with a number nobody can verify.
           </p>
         </header>
 
@@ -653,48 +689,27 @@ export default function ProofPage() {
                 marginBottom: 16,
               }}
             >
-              Combined Impact
+              Where this stands today
             </h3>
-            <div
+            <p
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-                gap: 20,
+                fontSize: 13,
+                lineHeight: "20px",
+                color: "var(--bp-dim)",
+                maxWidth: 560,
+                margin: "0 auto",
               }}
             >
-              <div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "var(--bp-accent)" }}>
-                  5
-                </div>
-                <div style={{ fontSize: 12, color: "var(--bp-dim)", textTransform: "uppercase" }}>
-                  Case Studies
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "#4ade80" }}>
-                  850+
-                </div>
-                <div style={{ fontSize: 12, color: "var(--bp-dim)", textTransform: "uppercase" }}>
-                  Tests Written
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "var(--bp-accent)" }}>
-                  $12.4k
-                </div>
-                <div style={{ fontSize: 12, color: "var(--bp-dim)", textTransform: "uppercase" }}>
-                  USDC Processed
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "#fbbf24" }}>
-                  2 wks
-                </div>
-                <div style={{ fontSize: 12, color: "var(--bp-dim)", textTransform: "uppercase" }}>
-                  Avg Ship Time
-                </div>
-              </div>
-            </div>
+              Four of the five case studies above are retired or paused; their
+              hosts no longer answer and their operational data did not survive.
+              They are kept here because the work happened, not because it is
+              running. The one line still in active development is the repo.box
+              git permission layer. For what is live right now, see{" "}
+              <Link href="/" style={{ color: "var(--bp-accent)" }}>
+                the homepage
+              </Link>
+              .
+            </p>
             <Link
               href="/hire"
               style={{

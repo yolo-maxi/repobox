@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-09-06T02:08:50.334Z",
+  "note": "Git activity only. Project identity and outbound links live in src/data/projects.ts. Projects absent from this file have no local checkout on the build host.",
+  "repos": {
+    "repobox": {
+      "commits": 575,
+      "lastCommit": "2026-09-05T23:44:26+00:00",
+      "weeklyCommits": 12
+    },
+    "runyard": {
+      "commits": 1113,
+      "lastCommit": "2026-09-01T15:50:31+00:00",
+      "weeklyCommits": 3
+    },
+    "concierge": {
+      "commits": 21,
+      "lastCommit": "2026-09-05T21:59:51+00:00",
+      "weeklyCommits": 7
+    },
+    "cabin": {
+      "commits": 44,
+      "lastCommit": "2026-04-22T09:08:19+00:00",
+      "weeklyCommits": 0
+    },
+    "botfight": {
+      "commits": 71,
+      "lastCommit": "2026-02-27T16:01:58+00:00",
+      "weeklyCommits": 0
+    },
+    "archipelago": {
+      "commits": 60,
+      "lastCommit": "2026-03-28T19:48:16+00:00",
+      "weeklyCommits": 0
+    }
+  }
+}

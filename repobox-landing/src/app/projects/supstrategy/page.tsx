@@ -74,15 +74,15 @@ export default function SUPStrategyPage() {
               style={{
                 fontSize: 12,
                 lineHeight: "20px",
-                color: "var(--bp-accent)",
-                background: "rgba(79, 195, 247, 0.15)",
+                color: "var(--bp-dim)",
+                background: "rgba(90, 122, 148, 0.15)",
                 padding: "4px 12px",
                 borderRadius: 2,
                 fontWeight: 600,
                 textTransform: "uppercase",
               }}
             >
-              Active
+              Retired
             </span>
           </div>
           <p
@@ -93,7 +93,9 @@ export default function SUPStrategyPage() {
               marginBottom: 24,
             }}
           >
-            AI-powered Superfluid token trading monitor with smart signals and automated insights.
+            A Superfluid token trading monitor with generated signals. This is a
+            case history: supstrategy.repo.box stopped responding and the
+            application is no longer hosted (checked 2026-09-06).
           </p>
           <div
             style={{
@@ -171,22 +173,18 @@ export default function SUPStrategyPage() {
               >
                 💬 Discuss Your Project
               </a>
-              <a
-                href="https://supstrategy.repo.box"
-                target="_blank"
-                rel="noopener noreferrer"
+              <span
                 style={{
                   border: "1px solid var(--bp-border)",
-                  color: "var(--bp-heading)",
+                  color: "var(--bp-dim)",
                   padding: "12px 24px",
                   borderRadius: 6,
-                  textDecoration: "none",
                   fontWeight: 600,
                   fontSize: 14,
                 }}
               >
-                🔍 View Live Demo
-              </a>
+                Demo retired — no longer hosted
+              </span>
             </div>
           </section>
         )}
@@ -342,21 +340,17 @@ export default function SUPStrategyPage() {
               }}
             >
               <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                <a
-                  href="https://supstrategy.repo.box"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <span
                   style={{
-                    color: "var(--bp-accent)",
-                    textDecoration: "none",
+                    color: "var(--bp-dim)",
                     fontSize: 14,
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
                   }}
                 >
-                  🔗 Live Application
-                </a>
+                  Application retired — supstrategy.repo.box stopped responding (checked 2026-09-06)
+                </span>
                 <a
                   href="https://t.me/ocean_king_bot"
                   target="_blank"

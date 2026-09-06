@@ -277,6 +277,20 @@ function ProjectCard({ project }: ProjectCardProps) {
         >
           {project.description}
         </div>
+        {project.retiredNote && (
+          <div
+            style={{
+              fontSize: 11,
+              lineHeight: "16px",
+              color: "var(--bp-dim)",
+              borderLeft: "2px solid var(--bp-border)",
+              paddingLeft: 10,
+              marginBottom: 12,
+            }}
+          >
+            {project.retiredNote}
+          </div>
+        )}
         <ProjectDemo project={project} />
         <div
           style={{
@@ -356,6 +370,7 @@ export default function ProjectsPage() {
   const shippedProjects = projects.filter(p => p.status === "shipped");
   const pausedProjects = projects.filter(p => p.status === "paused");
   const conceptProjects = projects.filter(p => p.status === "concept");
+  const retiredProjects = projects.filter(p => p.status === "retired");
 
   return (
     <>
@@ -439,6 +454,7 @@ export default function ProjectsPage() {
           <ProjectsSection title="Shipped" projects={shippedProjects} />
           <ProjectsSection title="Paused" projects={pausedProjects} />
           <ProjectsSection title="Concept" projects={conceptProjects} />
+          <ProjectsSection title="Retired" projects={retiredProjects} />
           
           {/* Stats */}
           <section

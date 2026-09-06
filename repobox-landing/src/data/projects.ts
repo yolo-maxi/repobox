@@ -1,13 +1,38 @@
-// Live Portfolio Wall Data
-// Auto-generated from kanban projects
+// Portfolio Wall data.
+//
+// MAINTENANCE RULE (REPOBOX-PROOF-001, 2026-09-06): every `link` and every
+// `demo.url` in this file must return a real response for the project it
+// claims to show. Before adding or reviving an entry, fetch the URL. If a host
+// stops answering, move the entry to status "retired" and set `retiredNote`
+// with the date and the observed response — do NOT leave it presented as live
+// work, and do NOT delete the entry, because the work genuinely happened.
+//
+// Link sweep performed 2026-09-06:
+//   https://repo.box                     200
+//   https://runyard.repo.box             200
+//   https://frontier.repo.box            200
+//   https://frontier-pm.repo.box         200
+//   https://github.com/yolo-maxi/frontier-orderbook  200
+//   https://github.com/yolo-maxi/concierge           200
+//   https://sss.repo.box                 000 (no response)
+//   https://archipelago.repo.box         502
+//   https://supstrategy.repo.box         000 (no response)
+//   https://rikai.repo.box               000 (no response)
+//   marketplace.visualstudio.com Oceangram listing   404
+//   https://cabin.ai                     200 but a Spaceship.com parking page
+//
+// `lastActivity` is the last commit date of the local checkout where one
+// exists, not a hand-entered date.
 
 export interface Project {
   id: string;
   name: string;
   description: string;
-  status: "active" | "shipped" | "paused" | "concept";
+  status: "active" | "shipped" | "paused" | "concept" | "retired";
   link?: string;
   lastActivity: string;
+  /** Required for status "retired": what was observed, and when. */
+  retiredNote?: string;
   tags: string[];
   team: "ocean" | "fran" | "both";
   demo?: {
@@ -22,117 +47,134 @@ export interface Project {
 
 export const projects: Project[] = [
   {
+    id: "runyard",
+    name: "RunYard",
+    description:
+      "Control plane for long-running agent work on your own machines: runs, runners, boards and approvals, so an agent's work is durable and reviewable.",
+    status: "active",
+    link: "https://runyard.repo.box",
+    lastActivity: "2026-09-05",
+    tags: ["agents", "orchestration", "infrastructure"],
+    team: "both",
+  },
+  {
+    id: "frontier",
+    name: "Frontier",
+    description:
+      "An on-chain order book plus a prediction-market app built on it. Contracts are source-available under BUSL-1.1.",
+    status: "active",
+    link: "https://frontier.repo.box",
+    lastActivity: "2026-09-05",
+    tags: ["onchain", "orderbook", "defi"],
+    team: "both",
+  },
+  {
+    id: "concierge",
+    name: "Concierge",
+    description:
+      "A deliberately powerless landing-page agent: it answers from one page brief and holds no keys, no tools and no database.",
+    status: "active",
+    link: "https://github.com/yolo-maxi/concierge",
+    lastActivity: "2026-09-05",
+    tags: ["agents", "widget", "sandbox"],
+    team: "ocean",
+  },
+  {
     id: "repobox",
     name: "repo.box",
-    description: "Git permission layer that makes repositories safe for AI agents",
+    description:
+      "Git permission layer that makes a repository safe to hand to an AI agent: signed commits checked against a config that lives in the repo.",
     status: "active",
     link: "https://repo.box",
-    lastActivity: "2026-03-20",
+    lastActivity: "2026-09-05",
     tags: ["git", "security", "infrastructure"],
     team: "both",
     demo: {
       type: "cli",
       cliCommand: "repobox init && repobox check",
-      previewText: "CLI tool that protects git repos from AI agent mistakes"
-    }
-  },
-  {
-    id: "sss",
-    name: "Semi-Sentient Society",
-    description: "Verified agent DAO with on-chain reputation and corvée system",
-    status: "active", 
-    link: "https://sss.repo.box",
-    lastActivity: "2026-03-19",
-    tags: ["dao", "verification", "on-chain"],
-    team: "ocean",
-    demo: {
-      type: "iframe",
-      url: "https://sss.repo.box",
-      previewText: "Live DAO interface with agent verification and corvée task system"
-    }
-  },
-  {
-    id: "oceangram",
-    name: "Oceangram",
-    description: "Telegram surface for VS Code with 76 integrated services",
-    status: "active",
-    link: "https://marketplace.visualstudio.com/items?itemName=ocean.oceangram",
-    lastActivity: "2026-03-19",
-    tags: ["vscode", "telegram", "developer-tools"],
-    team: "ocean",
-    demo: {
-      type: "screenshot",
-      screenshots: ["/api/demo/oceangram-command-palette.png", "/api/demo/oceangram-services.png"],
-      previewText: "76 services integrated into VS Code via Telegram interface"
-    }
-  },
-  {
-    id: "archipelago",
-    name: "Archipelago", 
-    description: "Real-time multi-topic visibility dashboard for Telegram teams",
-    status: "active",
-    link: "https://archipelago.repo.box",
-    lastActivity: "2026-03-13",
-    tags: ["dashboard", "telegram", "collaboration"],
-    team: "ocean",
-    demo: {
-      type: "iframe",
-      url: "https://archipelago.repo.box",
-      previewText: "Live dashboard showing real-time activity across multiple Telegram topics"
-    }
-  },
-  {
-    id: "supstrategy",
-    name: "SUPStrategy",
-    description: "AI-powered Superfluid token trading monitor with smart signals",
-    status: "active",
-    link: "https://supstrategy.repo.box",
-    lastActivity: "2026-03-08",
-    tags: ["trading", "superfluid", "defi"],
-    team: "ocean",
-    demo: {
-      type: "iframe",
-      url: "https://supstrategy.repo.box",
-      previewText: "Live trading dashboard with AI-generated Superfluid token signals"
-    }
-  },
-  {
-    id: "cabin",
-    name: "Cabin",
-    description: "AI group travel agent that finds and books real flights with crypto",
-    status: "active", 
-    lastActivity: "2026-03-07",
-    tags: ["travel", "ai-agent", "crypto"],
-    team: "ocean",
-    demo: {
-      type: "gif",
-      gifUrl: "/api/demo/cabin-booking-flow.gif",
-      previewText: "AI agent searches flights and books with crypto payments"
-    }
+      previewText: "CLI tool that protects git repos from AI agent mistakes",
+    },
   },
   {
     id: "botfight",
     name: "BotFight",
-    description: "AI social deduction arena where agents play Mafia with evolving strategies",
+    description:
+      "AI social deduction arena where agents play Mafia and their strategies evolve between rounds.",
     status: "paused",
-    lastActivity: "2026-03-13",
+    lastActivity: "2026-02-27",
     tags: ["gaming", "ai-behavior", "social"],
     team: "ocean",
-    demo: {
-      type: "screenshot",
-      screenshots: ["/api/demo/botfight-game-lobby.png", "/api/demo/botfight-voting.png"],
-      previewText: "AI agents playing social deduction games with strategic evolution"
-    }
+  },
+  {
+    id: "cabin",
+    name: "Cabin",
+    description:
+      "AI group travel agent that searched flights and settled in crypto.",
+    status: "retired",
+    lastActivity: "2026-04-22",
+    retiredNote:
+      "cabin.ai is no longer ours — as of 2026-09-06 it resolves to a Spaceship.com domain-for-sale page. No hosted instance remains.",
+    tags: ["travel", "ai-agent", "crypto"],
+    team: "ocean",
+  },
+  {
+    id: "sss",
+    name: "Semi-Sentient Society",
+    description:
+      "Verified-agent DAO experiment with on-chain reputation and a corvée task system.",
+    status: "retired",
+    lastActivity: "2026-03-19",
+    retiredNote:
+      "sss.repo.box has not responded since at least 2026-09-05 (no HTTP response on 2026-09-06). No source checkout remains on the build host.",
+    tags: ["dao", "verification", "on-chain"],
+    team: "ocean",
+  },
+  {
+    id: "oceangram",
+    name: "Oceangram",
+    description: "Telegram surface for VS Code.",
+    status: "retired",
+    lastActivity: "2026-03-19",
+    retiredNote:
+      "The VS Code Marketplace listing returns 404 as of 2026-09-06 and no source checkout remains on the build host.",
+    tags: ["vscode", "telegram", "developer-tools"],
+    team: "ocean",
+  },
+  {
+    id: "archipelago",
+    name: "Archipelago",
+    description:
+      "Real-time multi-topic visibility dashboard for Telegram teams.",
+    status: "retired",
+    lastActivity: "2026-03-28",
+    retiredNote:
+      "archipelago.repo.box returns 502 as of 2026-09-06. The source checkout still exists locally; the deployment does not.",
+    tags: ["dashboard", "telegram", "collaboration"],
+    team: "ocean",
+  },
+  {
+    id: "supstrategy",
+    name: "SUPStrategy",
+    description: "Superfluid token trading monitor with generated signals.",
+    status: "retired",
+    lastActivity: "2026-03-08",
+    retiredNote:
+      "supstrategy.repo.box gives no HTTP response as of 2026-09-06 and no source checkout remains on the build host.",
+    tags: ["trading", "superfluid", "defi"],
+    team: "ocean",
   },
   {
     id: "rikai",
     name: "Rikai",
-    description: "Interactive language reading assistant with real-time vocabulary help",
-    status: "paused",
+    description:
+      "Interactive language reading assistant with inline vocabulary help.",
+    status: "retired",
     lastActivity: "2026-03-07",
+    retiredNote:
+      "rikai.repo.box gives no HTTP response as of 2026-09-06 and no source checkout remains on the build host.",
     tags: ["education", "language", "reading"],
-    team: "fran"
-  }
+    team: "fran",
+  },
 ];
 
 export function getProjectsByStatus(status: Project["status"]) {
@@ -150,8 +192,9 @@ export function getActiveProjects() {
 export function getStatusBadgeColor(status: Project["status"]) {
   switch (status) {
     case "active": return "var(--bp-accent)";
-    case "shipped": return "#4ade80"; 
+    case "shipped": return "#4ade80";
     case "paused": return "#fbbf24";
+    case "retired": return "var(--bp-dim)";
     case "concept": return "var(--bp-dim)";
     default: return "var(--bp-dim)";
   }
@@ -162,6 +205,7 @@ export function getStatusBadgeBackground(status: Project["status"]) {
     case "active": return "rgba(79, 195, 247, 0.15)";
     case "shipped": return "rgba(74, 222, 128, 0.15)";
     case "paused": return "rgba(251, 191, 36, 0.15)";
+    case "retired": return "rgba(90, 122, 148, 0.15)";
     case "concept": return "rgba(90, 122, 148, 0.15)";
     default: return "rgba(90, 122, 148, 0.15)";
   }
