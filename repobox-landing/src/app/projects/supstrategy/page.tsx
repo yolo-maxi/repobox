@@ -6,6 +6,12 @@ import { BackgroundCanvas } from "@/components/BackgroundCanvas";
 
 // Note: metadata moved to layout.tsx or _document.tsx for client components
 
+// supstrategy.repo.box gave no HTTP response when swept on this date; the app
+// is no longer hosted. Stated once, rendered wherever the page would otherwise
+// imply the demo is live.
+const RETIRED_NOTE =
+  "Retired: supstrategy.repo.box stopped responding (checked 2026-09-06) and the application is no longer hosted.";
+
 export default function SUPStrategyPage() {
   // Check if this is a contact request from the hire form
   const isContactRequest = typeof window !== 'undefined' ? 
@@ -93,9 +99,7 @@ export default function SUPStrategyPage() {
               marginBottom: 24,
             }}
           >
-            A Superfluid token trading monitor with generated signals. This is a
-            case history: supstrategy.repo.box stopped responding and the
-            application is no longer hosted (checked 2026-09-06).
+            A Superfluid token trading monitor with generated signals. {RETIRED_NOTE}
           </p>
           <div
             style={{
@@ -173,18 +177,6 @@ export default function SUPStrategyPage() {
               >
                 💬 Discuss Your Project
               </a>
-              <span
-                style={{
-                  border: "1px solid var(--bp-border)",
-                  color: "var(--bp-dim)",
-                  padding: "12px 24px",
-                  borderRadius: 6,
-                  fontWeight: 600,
-                  fontSize: 14,
-                }}
-              >
-                Demo retired — no longer hosted
-              </span>
             </div>
           </section>
         )}
@@ -349,7 +341,7 @@ export default function SUPStrategyPage() {
                     gap: 8,
                   }}
                 >
-                  Application retired — supstrategy.repo.box stopped responding (checked 2026-09-06)
+                  {RETIRED_NOTE}
                 </span>
                 <a
                   href="https://t.me/ocean_king_bot"
