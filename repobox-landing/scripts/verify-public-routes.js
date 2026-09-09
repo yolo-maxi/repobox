@@ -70,8 +70,11 @@ const check = (name, ok) => (count++, ok || fails.push(name));
 
       check(`${tag} ${route}: status 200`, resp && resp.status() === 200);
       check(`${tag} ${route}: no JS errors`, errors.length === 0);
+      // /concierge/* is served by Caddy in production (proxied to the
+      // Concierge server), never by this Next app, so against the bare
+      // packaged tree that one request is expected to fail.
       check(`${tag} ${route}: no failed requests`,
-        failed.filter((u) => !u.includes("favicon")).length === 0);
+        failed.filter((u) => !u.includes("favicon") && !/\/concierge\//.test(u)).length === 0);
       check(`${tag} ${route}: no horizontal overflow`,
         !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)));
       check(`${tag} ${route}: no zero-size text leaf`,
