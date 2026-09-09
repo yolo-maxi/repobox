@@ -10,9 +10,10 @@ surface, so the default instance has none. Capabilities were later added as
 named, reviewable, server-side handlers behind a confirmation gate.
 
 Source: https://github.com/yolo-maxi/concierge
-Live instance: https://frontier.repo.box (currently running an older build than
-the one described here; theming and capability-pack work is merged but not yet
-deployed to it).
+Live instance: https://frontier.repo.box (running the build described here).
+Product page: https://concierge.repo.box (widget briefed on Concierge, guided
+interview to a validated brief, configurator over every theming token with a
+live sandboxed preview, export panel).
 
 ## The argument
 A prompt injection is only as dangerous as what the agent can reach. An agent

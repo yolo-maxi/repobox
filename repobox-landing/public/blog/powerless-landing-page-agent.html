@@ -93,7 +93,7 @@ capture_lead(other args + ticket) -> refused (ticket is intent-bound)
 </blockquote>
 <p>Same lesson in the render layer: the component tests ran headless with no DOM, so the widget had never been rendered in a browser at all. Every test passed and the mobile and accessibility criteria were untouched by any of them. A gate set can be structurally incapable of testing the clause it is supposed to cover.</p>
 <h2>Where it is</h2>
-<p>The code is at <a href="https://github.com/yolo-maxi/concierge">github.com/yolo-maxi/concierge</a>. A live instance answers on <a href="https://frontier.repo.box">frontier.repo.box</a>, though that deployment is currently running an older build than the one described here — the theming and capability work is merged and not yet shipped to it.</p>
+<p>The code is at <a href="https://github.com/yolo-maxi/concierge">github.com/yolo-maxi/concierge</a>. A live instance answers on <a href="https://frontier.repo.box">frontier.repo.box</a>, running the build described here. The product's own page is <a href="https://concierge.repo.box">concierge.repo.box</a>: the widget in its corner is briefed on Concierge, a six-question interview produces a brief the server validates, a configurator exposes every theming token with the real widget answering from your brief in a short-lived sandbox, and an export panel emits the script tag.</p>
 <p>If you want the short version: decide what your landing-page agent is allowed to do before you decide how clever it is. The clever part is easy. The allowed part is the product.</p>
 
 </article>

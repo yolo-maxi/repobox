@@ -85,11 +85,20 @@ check(
   "app.ts message filter",
 );
 
-// The post must not claim the live deployment is current — it is not.
-check(
-  "post discloses the live instance runs an older build",
-  /older build/.test(post),
-);
+// The post says the live instance runs the build it describes (theming +
+// capability packs). Check that against what frontier.repo.box actually
+// serves, not against a remembered fact: the themed build mounts a shadow
+// root and exposes 50+ --cc-* tokens; the pre-theming bundle had neither.
+check("post no longer hedges about an older live build", !/older build/.test(post));
+check("post links the product page concierge.repo.box", post.includes("https://concierge.repo.box"));
+try {
+  const res = await fetch("https://frontier.repo.box/concierge/embed.js", { signal: AbortSignal.timeout(15000) });
+  const live = await res.text();
+  const tokens = new Set(live.match(/--cc-[a-z0-9-]+/g) || []).size;
+  check(`live frontier embed is the themed build (attachShadow, ${tokens} tokens)`, res.ok && /attachShadow/.test(live) && tokens >= 50);
+} catch (err) {
+  check(`live frontier embed reachable (${err.message})`, false);
+}
 
 // Error codes the post lists must exist in source.
 for (const code of ["queue_full", "rate_limited_ip", "rate_limited_session", "provider_circuit_open"]) {

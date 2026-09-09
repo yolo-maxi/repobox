@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import ConciergeWidget from "@/components/ConciergeWidget";
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -38,7 +39,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={jetbrainsMono.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <ConciergeWidget />
+      </body>
     </html>
   );
 }
