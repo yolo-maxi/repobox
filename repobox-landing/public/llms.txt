@@ -40,6 +40,7 @@ curl -sSf https://repo.box/install.sh | sh
 
 ## Links
 - Website: https://repo.box
+- Current projects: https://repo.box/projects
 - Playground: https://repo.box/playground
 - SKILL.md: https://repo.box/SKILL.md
 - Blog: https://repo.box/blog/bring-your-own-brain.html

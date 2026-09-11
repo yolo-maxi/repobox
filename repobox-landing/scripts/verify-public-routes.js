@@ -36,7 +36,14 @@ function loadChromium() {
 const chromium = loadChromium();
 
 const B = process.env.BASE || "http://127.0.0.1:3495";
-const ROUTES = ["/projects", "/proof", "/portfolio", "/projects/supstrategy"];
+const ROUTES = ["/projects", "/proof"];
+// Folded into /projects on 2026-09-11: each must answer 308 -> /projects.
+const REDIRECTS = ["/portfolio", "/building", "/repos", "/projects/supstrategy"];
+// The registry both the homepage and /projects render. Read from source so the
+// harness follows the list instead of restating it.
+const REGISTRY = require("fs").readFileSync(require("path").join(__dirname, "..", "src", "data", "projects.ts"), "utf8");
+const PROJECT_NAMES = [...REGISTRY.matchAll(/^\s+name: "([^"]+)",$/gm)].map((m) => m[1]);
+const PROJECT_LINKS = [...REGISTRY.matchAll(/href: "(https?:[^"]+)"/g)].map((m) => m[1]);
 const VIEWPORTS = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
 
 // Hosts verified dead by live sweep on 2026-09-06. None may appear as a link
@@ -112,17 +119,27 @@ const check = (name, ok) => (count++, ok || fails.push(name));
     for (const u of UNSOURCED) check(`${route}: no unsourced '${u}'`, !h.includes(u));
   }
 
-  const S = html["/projects/supstrategy"];
-  check("/projects: has Retired section", html["/projects"].includes("Retired"));
+  // /projects is a curated list of current work: no retired/paused/concept
+  // sections, fewer than ten entries, every registry entry present, and
+  // every external registry link actually rendered as a link target.
+  const P = html["/projects"];
+  check("registry: parsed at least one project", PROJECT_NAMES.length > 0);
+  check(`registry: fewer than ten projects (${PROJECT_NAMES.length})`, PROJECT_NAMES.length < 10);
+  for (const w of ["Retired", "Paused", "Concept", "Kanban", "Total Projects"])
+    check(`/projects: no '${w}'`, !P.includes(w));
+  for (const n of PROJECT_NAMES) check(`/projects: lists ${n}`, P.includes(`>${n}<`));
+  for (const l of PROJECT_LINKS) check(`/projects: links ${l}`, P.includes(`href="${l}"`));
   check("/proof: states retirement", /retired/i.test(html["/proof"]));
-  check("/portfolio: no kanban entries", !html["/portfolio"].includes("Kanban"));
-  check("supstrategy: not badged Active", !S.includes(">Active<"));
-  check("supstrategy: badged Retired", S.includes("Retired"));
-  check("supstrategy: no 'View Live Demo'", !S.includes("View Live Demo"));
-  check("supstrategy: no 'Live Application'", !S.includes("Live Application"));
-  // The retirement fact is one const rendered twice; both sites must show it.
-  check("supstrategy: retirement note rendered twice",
-    (S.match(/stopped responding \(checked 2026-09-06\)/g) || []).length === 2);
+
+  // The folded routes must redirect permanently to /projects, not 200 or 404.
+  const rctx = await (await chromium.launch()).newContext();
+  for (const r of REDIRECTS) {
+    const res = await rctx.request.get(B + r, { maxRedirects: 0 });
+    const loc = res.headers()["location"] || "";
+    check(`${r}: 308 -> /projects (${res.status()} ${loc})`,
+      res.status() === 308 && /\/projects$/.test(loc));
+  }
+  await rctx.browser().close();
 
   console.log(`${count - fails.length}/${count} ad-hoc assertions passed`);
   fails.forEach((f) => console.log("  FAIL:", f));

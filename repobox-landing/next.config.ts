@@ -17,6 +17,19 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [{ source: "/blog", destination: "/blog/index.html" }];
   },
+  // /projects is the one curated list of current work (2026-09-11). The
+  // routes below were overlapping views of the same data, or detail pages for
+  // work that has since been retired; they redirect permanently rather than
+  // 404 so old links and search results still land somewhere useful.
+  async redirects() {
+    return [
+      { source: "/portfolio", destination: "/projects", permanent: true },
+      { source: "/building", destination: "/projects", permanent: true },
+      { source: "/repos", destination: "/projects", permanent: true },
+      { source: "/repos/:path*", destination: "/projects", permanent: true },
+      { source: "/projects/:slug", destination: "/projects", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

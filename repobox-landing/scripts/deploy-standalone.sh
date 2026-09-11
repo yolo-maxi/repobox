@@ -61,10 +61,14 @@ STAMP="$(date -u +%Y%m%d-%H%M%S)"
 # Routes that must answer 200 after the deploy. Same list the packaging step
 # verifies locally, plus the real nav, so a partial tree cannot pass.
 SWEEP_PATHS=(
-  / /agents /building /git /hire /made-by-agents /packages /playground
-  /portfolio /projects /proof /trust /blog
+  / /agents /git /hire /made-by-agents /packages /playground
+  /projects /proof /trust /blog
   /llms.txt /feed.xml /SKILL.md /favicon.svg
 )
+
+# Routes that were folded into /projects on 2026-09-11. They must answer with
+# a permanent redirect whose Location is /projects, never 200 and never 404.
+REDIRECT_PATHS=(/portfolio /building /repos /projects/supstrategy)
 
 log() { printf '\n=== %s ===\n' "$*"; }
 
@@ -191,6 +195,15 @@ for p in "${SWEEP_PATHS[@]}"; do
   fi
   printf '  %-18s %s\n' "$p" "$code"
   [[ "$code" == "200" ]] || fail=1
+done
+for p in "${REDIRECT_PATHS[@]}"; do
+  if [[ -n "${STAGING:-}" ]]; then
+    out=$(ssh -o BatchMode=yes "$HOST" "curl -s -o /dev/null -w '%{http_code} %{redirect_url}' 'http://127.0.0.1:$PROBE_PORT$p'" || echo 000)
+  else
+    out=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "https://repo.box$p" || echo 000)
+  fi
+  printf '  %-18s %s\n' "$p" "$out"
+  [[ "$out" == 308\ */projects ]] || fail=1
 done
 
 # --- 4. roll back if the sweep failed --------------------------------------

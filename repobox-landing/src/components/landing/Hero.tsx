@@ -4,7 +4,7 @@ import Link from "next/link";
 
 const navItems = [
   { href: "/projects", label: "projects" },
-  { href: "/portfolio", label: "portfolio" },
+  // /portfolio merged into /projects on 2026-09-11 (permanent redirect).
   { href: "/proof", label: "proof" },
   // /agents and /packages quarantined from public nav by 2026-08-17 disposition.
   { href: "/blog/", label: "blog" },

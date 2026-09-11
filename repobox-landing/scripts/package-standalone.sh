@@ -153,9 +153,13 @@ A change to those files in public/ will package correctly here and still not
 appear on repo.box until the Caddy static root is updated as a separate step.
 
 After deploying, sweep the live routes before calling the deploy done:
-  for p in / /agents /building /git /hire /made-by-agents /packages /playground \\
-           /portfolio /projects /proof /trust /blog /sitemap.xml /robots.txt \\
+  for p in / /agents /git /hire /made-by-agents /packages /playground \\
+           /projects /proof /trust /blog /sitemap.xml /robots.txt \\
            /llms.txt /feed.xml /SKILL.md; do
     printf '%-18s %s\\n' "\$p" "\$(curl -s -o /dev/null -w '%{http_code}' https://repo.box\$p)"
+  done
+  # and the routes folded into /projects (expect 308 -> https://repo.box/projects):
+  for p in /portfolio /building /repos /projects/supstrategy; do
+    printf '%-18s %s\\n' "\$p" "\$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' https://repo.box\$p)"
   done
 EOF
