@@ -1,0 +1,30 @@
+[package]
+name = "repobox-platform"
+version = "0.1.0"
+edition = "2024"
+description = "repo.box platform control plane: named users, app grants, launch codes, the Caddy edge gate, and operator route rendering"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "repobox-platform"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8"
+base64 = "0.22"
+chrono = "0.4"
+clap = { version = "4", features = ["derive", "env"] }
+rand = "0.8"
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }

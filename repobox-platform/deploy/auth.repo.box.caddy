@@ -1,0 +1,30 @@
+# BEGIN repobox-platform managed
+# auth.repo.box: the platform control plane. Everything except the legacy
+# auth-proxy paths goes to the control plane on 127.0.0.1:3230.
+auth.repo.box {
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		-Server
+	}
+	# Legacy auth-proxy (port 3005, currently not running) keeps its old path so
+	# the uniswap.repo.box forward_auth contract is untouched by this change.
+	handle /set-token* {
+		reverse_proxy 127.0.0.1:3005
+	}
+	handle /login* {
+		reverse_proxy 127.0.0.1:3005
+	}
+	# The gate is only ever reached by Caddy's forward_auth hop on loopback.
+	handle /gate/* {
+		respond 404
+	}
+	handle {
+		request_header -X-RepoBox-*
+		reverse_proxy 127.0.0.1:3230
+	}
+}
+import /etc/caddy/repobox-platform/apps.caddy
+# END repobox-platform managed

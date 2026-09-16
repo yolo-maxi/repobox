@@ -1,3 +1,3 @@
 [workspace]
-members = ["repobox-core", "repobox-cli", "repobox-server"]
+members = ["repobox-core", "repobox-cli", "repobox-server", "repobox-platform"]
 resolver = "3"

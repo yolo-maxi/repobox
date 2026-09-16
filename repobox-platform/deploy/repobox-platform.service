@@ -1,0 +1,27 @@
+# /etc/systemd/system/repobox-platform.service
+# repo.box platform control plane: auth.repo.box UI + the loopback gate that
+# Caddy consults (forward_auth) before serving any managed app.
+[Unit]
+Description=repo.box platform control plane (auth.repo.box + edge gate)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fran
+Group=fran
+Environment=RUST_LOG=info
+Environment=REPOBOX_PLATFORM_DB=/var/lib/repobox-platform/platform.db
+ExecStart=/srv/repobox-platform/bin/repobox-platform serve --bind 127.0.0.1:3230 --public-base https://auth.repo.box --domain repo.box
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/repobox-platform
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+# /etc/systemd/system/repobox-platform-demo-private.service
+# Loopback-only origin for the private demo app. It has no auth code: it
+# renders the identity headers the edge injected after the gate allowed the
+# request.
+[Unit]
+Description=repo.box platform private demo origin (loopback)
+After=network-online.target
+
+[Service]
+Type=simple
+User=fran
+Group=fran
+Environment=RUST_LOG=info
+ExecStart=/srv/repobox-platform/bin/repobox-platform demo-origin --bind 127.0.0.1:3231 --app demo-private --title "Private demo"
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
