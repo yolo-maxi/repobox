@@ -317,6 +317,33 @@ enforces this on both apply and rollback.
   left its counter at 3. The platform journal contains no token or URL. The
   consumed device-link files were deleted.
 
+## Deployment record (2026-09-16, session revocation)
+
+* Commit `ef63ce9b` deployed at 12:31 UTC with `NO_CADDY=1 deploy.sh`; Caddy
+  again untouched (same Caddyfile checksum and mtime, no reload, caddy unit up
+  since 2026-08-05). Pre-deploy backup
+  `/home/fran/backups/repobox-platform/platform-20260916T123151Z.db` (schema 2).
+  After restart `schema_version` is 3 and `sessions.parent_id` /
+  `tokens.session_id` exist; the access counters from the morning survived.
+* Live browser run (Playwright, 1280×900 and 390×844) with throwaway users
+  `review-member3` (grant on demo-private), `review-member4`, `review-admin3`,
+  35 checks, all passed: device A signed in through its CLI link and minted a
+  second device link from `/me`; device B (iOS user agent) signed in with it;
+  both launched demo-private and were identified at the origin; `/me` on A
+  listed 2 devices and 2 app sessions with "this device" on A's rows and no
+  horizontal overflow at 390 px; A signed B out from `/me`, after which B got
+  401 on `/me` and 401 at the demo-private gate on its very next request while
+  A stayed 200 on both; the admin page for the member showed 1 device + 1 app
+  session, "End session" made A's app session 401 at the gate while A's device
+  stayed signed in, and "Sign out everywhere" emptied the page and made A's
+  `/me` 401; a plain member got 403 on the admin page. Audit shows
+  `session.revoke` (`auth`, and `admin app`) and `session.revoke_all` (`admin 1`)
+  with the right actors and subjects. The platform journal has no token or
+  URL. The throwaway users were disabled and their link files shredded.
+* A follow-up commit only changes the relative-time label for very recent
+  timestamps ("just now" instead of "in 0s") and this record; deployed the
+  same way.
+
 ## Current limitations
 
 * One control plane process, one SQLite file, no HA; fine for this scale.

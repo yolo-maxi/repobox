@@ -207,6 +207,9 @@ pub fn fmt_day(day: i64) -> String {
 
 pub fn fmt_rel(now: i64, ts: i64) -> String {
     let d = ts - now;
+    if d.abs() < 5 {
+        return "just now".into();
+    }
     let (abs, suffix, prefix) = if d >= 0 {
         (d, "", "in ")
     } else {
