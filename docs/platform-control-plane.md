@@ -218,6 +218,13 @@ sudo systemctl disable --now repobox-platform repobox-platform-demo-private
 ```
 The registry and backups stay on disk; nothing else on the host was changed.
 
+Exercised live on 2026-09-16: rollback restored the legacy config (auth.repo.box
+502 again, demo hosts unreachable), re-apply brought everything back with
+`caddy validate` + reload OK. The current pre-change backup is
+`/etc/caddy/backups/Caddyfile.pre-repobox-platform-20260916T004359Z`. The live
+Caddyfile must stay 0644 (the `caddy` user reads it on reload); `caddy-apply.py`
+enforces this on both apply and rollback.
+
 ## Current limitations
 
 * One control plane process, one SQLite file, no HA; fine for this scale.
