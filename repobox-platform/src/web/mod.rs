@@ -74,6 +74,18 @@ pub fn router(state: S) -> Router {
             post(pages::admin_user_enabled),
         )
         .route("/admin/users/{name}/enrol", post(pages::admin_user_enrol))
+        .route(
+            "/admin/users/{name}/sessions",
+            get(pages::admin_user_sessions),
+        )
+        .route(
+            "/admin/users/{name}/sessions/revoke-all",
+            post(pages::admin_user_sessions_revoke_all),
+        )
+        .route(
+            "/admin/users/{name}/sessions/{id}/revoke",
+            post(pages::admin_user_session_revoke),
+        )
         .route("/admin/audit", get(pages::admin_audit))
         .route("/apps/{name}", get(pages::app_manage))
         .route("/apps/{name}/analytics", get(pages::app_analytics))

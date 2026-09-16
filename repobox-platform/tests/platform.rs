@@ -103,9 +103,31 @@ impl H {
         let (raw, _) = self
             .state
             .store
-            .create_session(SessionKind::Auth, user.id, None, 86400, "test")
+            .create_session(SessionKind::Auth, user.id, None, None, 86400, "test")
             .unwrap();
         format!("{AUTH_COOKIE}={raw}")
+    }
+
+    /// A device session with its id, so tests can revoke it or find its children.
+    fn device(&self, user: &User, label: &str) -> (String, i64) {
+        let (raw, sess) = self
+            .state
+            .store
+            .create_session(SessionKind::Auth, user.id, None, None, 86400, label)
+            .unwrap();
+        (format!("{AUTH_COOKIE}={raw}"), sess.id)
+    }
+
+    /// Launch `app` from an existing device cookie and redeem the code at the
+    /// gate; returns the app-session cookie.
+    async fn launch_from(&self, device_cookie: &str, app: &str) -> String {
+        let (st, h, _) = self.get(&format!("/{app}"), Some(device_cookie)).await;
+        assert_eq!(st, StatusCode::FOUND);
+        let loc = h.get(header::LOCATION).unwrap().to_str().unwrap();
+        let code = loc.split("token=").nth(1).unwrap().to_string();
+        let (st, hd, _) = self.gate(app, &format!("/?token={code}"), None, &[]).await;
+        assert_eq!(st, StatusCode::FOUND);
+        app_cookie_from(&hd)
     }
 
     async fn send(&self, req: Request<Body>) -> (StatusCode, HeaderMap, String) {
@@ -1203,6 +1225,309 @@ async fn management_is_owner_or_admin_only_and_csrf_protected() {
 }
 
 #[tokio::test]
+async fn own_sessions_are_listed_and_revoking_a_device_ends_its_app_sessions() {
+    let h = H::new();
+    let (dev_a, id_a) = h.device(&h.bob, "laptop");
+    let (dev_b, id_b) = h.device(&h.bob, "phone");
+    let app_a = h.launch_from(&dev_a, "demo-private").await;
+    let app_b = h.launch_from(&dev_b, "demo-private").await;
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&app_a), &[]).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&app_b), &[]).await.0,
+        StatusCode::OK
+    );
+    // The account page lists both devices and both app sessions, marks this device.
+    let (st, _, me) = h.get("/me", Some(&dev_a)).await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(me.contains("id=\"devices\"") && me.contains("id=\"app-sessions\""));
+    assert_eq!(
+        me.matches("this device</span>").count(),
+        2,
+        "device row + its app session"
+    );
+    assert!(me.contains("laptop") && me.contains("phone"));
+    assert!(me.contains("Private demo"));
+    assert!(me.contains(&format!("action=\"/me/sessions/{id_b}/revoke\"")));
+    let app_sessions = h
+        .state
+        .store
+        .list_sessions(h.bob.id, SessionKind::App)
+        .unwrap();
+    assert_eq!(app_sessions.len(), 2);
+    let app_a_id = app_sessions
+        .iter()
+        .find(|x| x.parent_id == Some(id_a))
+        .unwrap()
+        .id;
+    let app_b_id = app_sessions
+        .iter()
+        .find(|x| x.parent_id == Some(id_b))
+        .unwrap()
+        .id;
+    assert!(me.contains(&format!("action=\"/me/sessions/{app_b_id}/revoke\"")));
+    // Sign the phone out from the laptop: phone and its app session die at once.
+    let (st, hd, _) = h
+        .post(
+            &format!("/me/sessions/{id_b}/revoke"),
+            Some(&dev_a),
+            "",
+            true,
+        )
+        .await;
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert!(hdr(&hd, "location").unwrap().contains("ok=session_revoked"));
+    assert_eq!(h.get("/me", Some(&dev_b)).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&app_b), &[]).await.0,
+        StatusCode::UNAUTHORIZED,
+        "app session launched from the phone is gone at the gate"
+    );
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&app_a), &[]).await.0,
+        StatusCode::OK
+    );
+    let (_, _, me) = h.get("/me", Some(&dev_a)).await;
+    assert!(!me.contains("phone"));
+    assert!(!me.contains(&format!("/me/sessions/{app_b_id}/revoke")));
+    // End the laptop's app session only: the device stays signed in.
+    let (st, hd, _) = h
+        .post(
+            &format!("/me/sessions/{app_a_id}/revoke"),
+            Some(&dev_a),
+            "",
+            true,
+        )
+        .await;
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert!(
+        hdr(&hd, "location")
+            .unwrap()
+            .contains("ok=app_session_revoked")
+    );
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&app_a), &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(h.get("/me", Some(&dev_a)).await.0, StatusCode::OK);
+    // Relaunching works and produces a fresh app session tied to the laptop.
+    let app_a2 = h.launch_from(&dev_a, "demo-private").await;
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&app_a2), &[]).await.0,
+        StatusCode::OK
+    );
+    // Signing out here (logout) ends that app session too.
+    let (st, _, _) = h.post("/logout", Some(&dev_a), "", true).await;
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&app_a2), &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+#[tokio::test]
+async fn sessions_of_other_users_cannot_be_revoked_by_members() {
+    let h = H::new();
+    let (owner_dev, owner_id) = h.device(&h.owner, "owner-laptop");
+    let owner_app = h.launch_from(&owner_dev, "demo-private").await;
+    let (bob_dev, _) = h.device(&h.bob, "bob-laptop");
+    // Right id, wrong user: refused, nothing changes.
+    let (st, hd, _) = h
+        .post(
+            &format!("/me/sessions/{owner_id}/revoke"),
+            Some(&bob_dev),
+            "",
+            true,
+        )
+        .await;
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert!(hdr(&hd, "location").unwrap().contains("err=not_found"));
+    assert_eq!(h.get("/me", Some(&owner_dev)).await.0, StatusCode::OK);
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&owner_app), &[]).await.0,
+        StatusCode::OK
+    );
+    // Cross-site POST is bounced even for one's own session.
+    let (_, hd, _) = h
+        .post(
+            &format!("/me/sessions/{owner_id}/revoke"),
+            Some(&owner_dev),
+            "",
+            false,
+        )
+        .await;
+    assert!(hdr(&hd, "location").unwrap().contains("err=csrf"));
+    assert_eq!(h.get("/me", Some(&owner_dev)).await.0, StatusCode::OK);
+    // The admin page is admins only.
+    assert_eq!(
+        h.get("/admin/users/bob/sessions", Some(&h.auth_cookie(&h.eve)))
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        h.get("/admin/users/bob/sessions", None).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.post(
+            "/admin/users/bob/sessions/revoke-all",
+            Some(&bob_dev),
+            "",
+            true
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
+async fn admin_can_revoke_any_users_sessions() {
+    let h = H::new();
+    let fran = h.auth_cookie(&h.fran);
+    let (dev_a, id_a) = h.device(&h.bob, "bob-laptop");
+    let (dev_b, id_b) = h.device(&h.bob, "bob-phone");
+    let app_a = h.launch_from(&dev_a, "demo-private").await;
+    let app_b = h.launch_from(&dev_b, "demo-private").await;
+    let (owner_dev, owner_id) = h.device(&h.owner, "owner-laptop");
+    let app_b_id = h
+        .state
+        .store
+        .list_sessions(h.bob.id, SessionKind::App)
+        .unwrap()
+        .into_iter()
+        .find(|x| x.parent_id == Some(id_b))
+        .unwrap()
+        .id;
+    // Users list links to the per-user page; the page lists everything.
+    let (_, _, users) = h.get("/admin/users", Some(&fran)).await;
+    assert!(users.contains("href=\"/admin/users/bob/sessions\""));
+    let (st, _, page) = h.get("/admin/users/bob/sessions", Some(&fran)).await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(page.contains("Sign out everywhere"));
+    assert!(page.contains("bob-laptop") && page.contains("bob-phone"));
+    assert!(page.contains(&format!(
+        "action=\"/admin/users/bob/sessions/{id_a}/revoke\""
+    )));
+    assert!(page.contains(&format!(
+        "action=\"/admin/users/bob/sessions/{app_b_id}/revoke\""
+    )));
+    assert!(!page.contains("this device"));
+    assert_eq!(
+        h.get("/admin/users/nope/sessions", Some(&fran)).await.0,
+        StatusCode::NOT_FOUND
+    );
+    // Revoke one app session: gate refuses it at once, the device stays.
+    let (st, hd, _) = h
+        .post(
+            &format!("/admin/users/bob/sessions/{app_b_id}/revoke"),
+            Some(&fran),
+            "",
+            true,
+        )
+        .await;
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert!(
+        hdr(&hd, "location")
+            .unwrap()
+            .contains("ok=app_session_revoked")
+    );
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&app_b), &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&app_a), &[]).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(h.get("/me", Some(&dev_b)).await.0, StatusCode::OK);
+    // Revoke a device: it and its app session die.
+    let (_, hd, _) = h
+        .post(
+            &format!("/admin/users/bob/sessions/{id_a}/revoke"),
+            Some(&fran),
+            "",
+            true,
+        )
+        .await;
+    assert!(hdr(&hd, "location").unwrap().contains("ok=session_revoked"));
+    assert_eq!(h.get("/me", Some(&dev_a)).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&app_a), &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    // A session id of another user under bob's path is a no-op.
+    let (_, hd, _) = h
+        .post(
+            &format!("/admin/users/bob/sessions/{owner_id}/revoke"),
+            Some(&fran),
+            "",
+            true,
+        )
+        .await;
+    assert!(hdr(&hd, "location").unwrap().contains("err=not_found"));
+    assert_eq!(h.get("/me", Some(&owner_dev)).await.0, StatusCode::OK);
+    // Sign out everywhere: CSRF-guarded, then total.
+    let (_, hd, _) = h
+        .post(
+            "/admin/users/bob/sessions/revoke-all",
+            Some(&fran),
+            "",
+            false,
+        )
+        .await;
+    assert!(hdr(&hd, "location").unwrap().contains("err=csrf"));
+    assert_eq!(h.get("/me", Some(&dev_b)).await.0, StatusCode::OK);
+    let (_, hd, _) = h
+        .post(
+            "/admin/users/bob/sessions/revoke-all",
+            Some(&fran),
+            "",
+            true,
+        )
+        .await;
+    assert!(
+        hdr(&hd, "location")
+            .unwrap()
+            .contains("ok=sessions_revoked_all")
+    );
+    assert_eq!(h.get("/me", Some(&dev_b)).await.0, StatusCode::UNAUTHORIZED);
+    assert!(
+        h.state
+            .store
+            .list_sessions(h.bob.id, SessionKind::Auth)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        h.state
+            .store
+            .list_sessions(h.bob.id, SessionKind::App)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        h.get("/me", Some(&owner_dev)).await.0,
+        StatusCode::OK,
+        "other users untouched"
+    );
+    let audit = h.state.store.list_audit(10).unwrap();
+    assert!(
+        audit
+            .iter()
+            .any(|e| e.action == "session.revoke_all" && e.subject == "bob")
+    );
+    assert!(
+        audit
+            .iter()
+            .any(|e| e.action == "session.revoke" && e.detail == "admin app")
+    );
+}
+
+#[tokio::test]
 async fn pages_render_for_every_role_and_never_leak_secrets() {
     let h = H::new();
     let fran = h.auth_cookie(&h.fran);
@@ -1218,6 +1543,7 @@ async fn pages_render_for_every_role_and_never_leak_secrets() {
         "/apps/demo-listed",
         "/apps/demo-private/analytics",
         "/apps/demo-listed/analytics",
+        "/admin/users/bob/sessions",
     ] {
         let (st, _, page) = h.get(path, Some(&fran)).await;
         assert_eq!(st, StatusCode::OK, "{path}");

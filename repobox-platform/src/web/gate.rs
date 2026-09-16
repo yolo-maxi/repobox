@@ -139,7 +139,7 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
                 .and_then(|id| s.store.user_by_id(id).ok())
             {
                 Some(user) if user.enabled && s.store.has_access(&user, &app).unwrap_or(false) => {
-                    Ok(user)
+                    Ok((user, tok))
                 }
                 _ => Err("This launch code no longer grants access."),
             },
@@ -147,11 +147,12 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
             Err(e) => Err(e.message()),
         };
         return match outcome {
-            Ok(user) => {
+            Ok((user, tok)) => {
                 let Ok((secret, _)) = s.store.create_session(
                     SessionKind::App,
                     user.id,
                     Some(app.id),
+                    tok.session_id,
                     s.cfg.app_session_ttl,
                     &super::user_agent_label(&headers),
                 ) else {

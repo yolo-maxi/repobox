@@ -27,7 +27,7 @@ browser ──HTTPS──▶ Caddy (repo.box host)
 
 * **Registry**: SQLite (WAL) at `/var/lib/repobox-platform/platform.db`. Tables:
   `users`, `apps`, `grants`, `tokens`, `sessions`, `audit`, `access_daily`,
-  `access_daily_users`, `access_totals`, `meta` (schema version 2). Only
+  `access_daily_users`, `access_totals`, `meta` (schema version 3). Only
   SHA-256 hashes of tokens and session secrets are stored; raw values exist
   once, in the channel that delivers them (a 0600 file for operator-created
   links, a page shown once in the UI, a redirect for launch codes).
@@ -44,6 +44,19 @@ browser ──HTTPS──▶ Caddy (repo.box host)
   `Set-Cookie: __Host-rb_app=…; Path=/; Secure; HttpOnly; SameSite=Lax`
   (host-only by construction: `__Host-` cookies cannot carry `Domain`) →
   subsequent requests are authorised from that cookie for 24 h.
+* **Sessions and revocation**: a device session (`__Host-rb_auth`, 30 d) is
+  one signed-in device; an app session (`__Host-rb_app`, 24 h, one per app
+  host) records the device session that launched it (`sessions.parent_id`,
+  carried by the launch code's `tokens.session_id`). `/me` lists the user's
+  devices and app sessions with a revoke button on every row; "Sign out this
+  device" and revoking a device also revoke the app sessions that device
+  launched. Admins get `/admin/users/<name>/sessions` with the same tables,
+  per-row revoke and "Sign out everywhere". Revocation is scoped by user id
+  in the store, CSRF-guarded like every POST, audited (`session.revoke`,
+  `session.revoke_all`), and effective on the session's next request at
+  auth.repo.box and at every app's edge gate, because each lookup re-reads
+  `revoked_at`; no Caddy change is involved. Sessions that expire or are
+  revoked drop out of the lists.
 * **Sign-in** (auth.repo.box itself): no passwords, no email. A single-use
   **device link** (`/enrol/<token>`, 7 days) is created by an admin, by the
   operator CLI, or by the user from another signed-in device. Opening it shows
@@ -100,7 +113,7 @@ create/deploy/route controls.
 ## Local development
 
 ```bash
-cargo test -p repobox-platform                       # 33 unit + integration tests
+cargo test -p repobox-platform                       # 38 unit + integration tests
 cargo clippy -p repobox-platform --all-targets -- -D warnings
 cargo fmt -p repobox-platform -- --check
 repobox-platform/scripts/edge-e2e.sh                 # real Caddy on loopback, 33 live checks
@@ -183,7 +196,11 @@ $P app stats myapp --days 14                              # access counters, no 
 * **Schema migration**: the schema is applied with `CREATE TABLE IF NOT EXISTS`
   on every open, so upgrading is just installing the new binary and
   restarting. Version 2 (2026-09-16) added the three `access_*` tables; a
-  version-1 backup restores fine and simply starts with empty counters. The
+  version-1 backup restores fine and simply starts with empty counters.
+  Version 3 added `sessions.parent_id` and `tokens.session_id` through a
+  guarded `ALTER TABLE ... ADD COLUMN` on open (`ADDED_COLUMNS`); pre-existing
+  app sessions have no parent and are revoked individually or by "Sign out
+  everywhere". The
   `backup` step of `deploy.sh` runs with the *new* binary against the live
   DB, which creates the new tables before the service restarts; that is safe
   because the old binary ignores tables it does not know.
@@ -204,7 +221,11 @@ $P app stats myapp --days 14                              # access counters, no 
    redemption redirect do not count), unique-user dedup for private apps and
    no identity for public apps, 90-day pruning, counter-only access tables,
    and owner/admin-only analytics (a grant is not ownership; other owners get
-   403).
+   403), own-session listing and revocation (device revoke cascades to its
+   app sessions at the gate, app-session revoke leaves the device signed in,
+   logout cascades), member cannot revoke another user's session even with
+   its id, admin per-user page and per-row revoke, admin "sign out
+   everywhere", admin-only and CSRF guards on all of it.
 2. `repobox-platform/scripts/edge-e2e.sh` — same contract through a real Caddy
    with the generated routes (proves the strip + forward_auth + copy_headers
    mechanics, host-only/HttpOnly cookies, no secrets in logs).
@@ -299,9 +320,12 @@ enforces this on both apply and rollback.
 ## Current limitations
 
 * One control plane process, one SQLite file, no HA; fine for this scale.
-* Sessions: 30 d device sessions, 24 h app sessions, no sliding renewal; no
-  per-app session list in the UI (revoking a grant or disabling the user cuts
-  them anyway).
+* Sessions: 30 d device sessions, 24 h app sessions, no sliding renewal.
+  App sessions created before schema 3 carry no device link, so revoking a
+  device does not cascade to them; they still expire within 24 h and can be
+  ended individually.
+* A revoked session is refused on its next request; a page already rendered
+  in the browser stays on screen until it reloads or fetches.
 * Role changes (member ↔ admin) are CLI-only; the UI creates users, toggles
   enabled, issues device links.
 * The directory lives on `auth.repo.box` (+ `/api/directory`); the main

@@ -116,6 +116,8 @@ pub struct Token {
     pub used_by: Option<i64>,
     pub revoked_at: Option<i64>,
     pub note: String,
+    /// Launch codes only: the device (auth) session that minted the code.
+    pub session_id: Option<i64>,
 }
 
 impl Token {
@@ -143,6 +145,9 @@ pub struct Session {
     pub last_seen_at: i64,
     pub revoked_at: Option<i64>,
     pub label: String,
+    /// App sessions only: the device session that launched them. Revoking
+    /// the device revokes these too.
+    pub parent_id: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -222,7 +227,8 @@ CREATE TABLE IF NOT EXISTS tokens (
     used_at INTEGER,
     used_by INTEGER REFERENCES users(id),
     revoked_at INTEGER,
-    note TEXT NOT NULL DEFAULT ''
+    note TEXT NOT NULL DEFAULT '',
+    session_id INTEGER REFERENCES sessions(id)
 );
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY,
@@ -234,7 +240,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at INTEGER NOT NULL,
     last_seen_at INTEGER NOT NULL,
     revoked_at INTEGER,
-    label TEXT NOT NULL DEFAULT ''
+    label TEXT NOT NULL DEFAULT '',
+    parent_id INTEGER REFERENCES sessions(id)
 );
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS tokens_app ON tokens(app_id);
@@ -268,8 +275,15 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '2');
+INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '3');
 "#;
+
+/// Columns added after the first release. `CREATE TABLE IF NOT EXISTS` does
+/// not touch existing tables, so each is added with a guarded ALTER.
+const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
+    ("tokens", "session_id", "INTEGER REFERENCES sessions(id)"),
+    ("sessions", "parent_id", "INTEGER REFERENCES sessions(id)"),
+];
 
 /// Daily access counters (and the per-day user ids of private apps that
 /// back the unique-user figure) are kept for this many UTC days, today
@@ -335,6 +349,15 @@ impl Store {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "busy_timeout", 5000)?;
         conn.execute_batch(SCHEMA)?;
+        for (table, column, ddl) in ADDED_COLUMNS {
+            let present = conn
+                .prepare(&format!("PRAGMA table_info({table})"))?
+                .query_map([], |r| r.get::<_, String>(1))?
+                .any(|c| c.as_deref() == Ok(column));
+            if !present {
+                conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {ddl}"))?;
+            }
+        }
         Ok(Self {
             conn: Mutex::new(conn),
             clock,
@@ -646,6 +669,30 @@ impl Store {
         Ok((raw, self.token_by_id(id)?))
     }
 
+    /// Mint a one-time launch code bound to a user, an app and the device
+    /// session that asked for it, so the resulting app session can be tied
+    /// back to (and revoked with) that device.
+    pub fn create_launch_code(
+        &self,
+        user_id: i64,
+        app_id: i64,
+        session_id: i64,
+        ttl_secs: i64,
+    ) -> Result<(String, Token)> {
+        let raw = tokens::generate();
+        let hash = tokens::hash(&raw);
+        let now = self.now();
+        let conn = self.lock();
+        conn.execute(
+            "INSERT INTO tokens (kind, token_hash, user_id, app_id, created_by, created_at, expires_at, note, session_id)
+             VALUES ('launch', ?1, ?2, ?3, ?2, ?4, ?5, '', ?6)",
+            params![hash, user_id, app_id, now, now + ttl_secs, session_id],
+        )?;
+        let id = conn.last_insert_rowid();
+        drop(conn);
+        Ok((raw, self.token_by_id(id)?))
+    }
+
     pub fn token_by_id(&self, id: i64) -> Result<Token> {
         let conn = self.lock();
         conn.query_row(
@@ -766,11 +813,14 @@ impl Store {
 
     // -------------------------------------------------------------- sessions
 
+    /// `parent_id` is the device session an app session was launched from
+    /// (None for device sessions themselves).
     pub fn create_session(
         &self,
         kind: SessionKind,
         user_id: i64,
         app_id: Option<i64>,
+        parent_id: Option<i64>,
         ttl_secs: i64,
         label: &str,
     ) -> Result<(String, Session)> {
@@ -779,9 +829,9 @@ impl Store {
         let now = self.now();
         let conn = self.lock();
         conn.execute(
-            "INSERT INTO sessions (kind, token_hash, user_id, app_id, created_at, expires_at, last_seen_at, label)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?5, ?7)",
-            params![kind.as_str(), hash, user_id, app_id, now, now + ttl_secs, label],
+            "INSERT INTO sessions (kind, token_hash, user_id, app_id, created_at, expires_at, last_seen_at, label, parent_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?5, ?7, ?8)",
+            params![kind.as_str(), hash, user_id, app_id, now, now + ttl_secs, label, parent_id],
         )?;
         let id = conn.last_insert_rowid();
         let sess = conn.query_row(
@@ -829,11 +879,31 @@ impl Store {
         Ok(Some((sess, user)))
     }
 
+    pub fn session_by_id(&self, id: i64) -> Result<Option<Session>> {
+        let conn = self.lock();
+        conn.query_row(
+            &format!("{SESSION_SELECT} WHERE id = ?1"),
+            params![id],
+            row_session,
+        )
+        .optional()
+        .map_err(Into::into)
+    }
+
+    /// Revoke one session of `user_id`, plus every app session launched from
+    /// it if it is a device session. Scoped to the user so a caller can never
+    /// revoke somebody else's session by id. Returns whether the session
+    /// itself was live and is now revoked; the gate and the UI see the
+    /// change on the next request because every lookup re-reads `revoked_at`.
     pub fn revoke_session(&self, id: i64, user_id: i64) -> Result<bool> {
         let now = self.now();
         let conn = self.lock();
         let n = conn.execute(
             "UPDATE sessions SET revoked_at = ?3 WHERE id = ?1 AND user_id = ?2 AND revoked_at IS NULL",
+            params![id, user_id, now],
+        )?;
+        conn.execute(
+            "UPDATE sessions SET revoked_at = ?3 WHERE parent_id = ?1 AND user_id = ?2 AND revoked_at IS NULL",
             params![id, user_id, now],
         )?;
         Ok(n == 1)
@@ -995,8 +1065,8 @@ impl Store {
 }
 
 const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at FROM apps";
-const TOKEN_SELECT: &str = "SELECT id, kind, user_id, app_id, created_by, created_at, expires_at, used_at, used_by, revoked_at, note FROM tokens";
-const SESSION_SELECT: &str = "SELECT id, kind, user_id, app_id, created_at, expires_at, last_seen_at, revoked_at, label FROM sessions";
+const TOKEN_SELECT: &str = "SELECT id, kind, user_id, app_id, created_by, created_at, expires_at, used_at, used_by, revoked_at, note, session_id FROM tokens";
+const SESSION_SELECT: &str = "SELECT id, kind, user_id, app_id, created_at, expires_at, last_seen_at, revoked_at, label, parent_id FROM sessions";
 
 fn row_user(r: &Row<'_>) -> rusqlite::Result<User> {
     let role: String = r.get(3)?;
@@ -1042,6 +1112,7 @@ fn row_token(r: &Row<'_>) -> rusqlite::Result<Token> {
         used_by: r.get(8)?,
         revoked_at: r.get(9)?,
         note: r.get(10)?,
+        session_id: r.get(11)?,
     })
 }
 
@@ -1061,6 +1132,7 @@ fn row_session(r: &Row<'_>) -> rusqlite::Result<Session> {
         last_seen_at: r.get(6)?,
         revoked_at: r.get(7)?,
         label: r.get(8)?,
+        parent_id: r.get(9)?,
     })
 }
 
@@ -1130,7 +1202,7 @@ mod tests {
             .create_token(TokenKind::Launch, Some(u.id), None, None, 60, "")
             .unwrap();
         let (raw_s, _) = s
-            .create_session(SessionKind::Auth, u.id, None, 60, "")
+            .create_session(SessionKind::Auth, u.id, None, None, 60, "")
             .unwrap();
         let conn = s.lock();
         let mut stmt = conn
@@ -1154,7 +1226,7 @@ mod tests {
         let (s, clock) = store_with_clock();
         let u = s.create_user("bob", "Bob", Role::Member).unwrap();
         let (raw, sess) = s
-            .create_session(SessionKind::App, u.id, None, 100, "")
+            .create_session(SessionKind::App, u.id, None, None, 100, "")
             .unwrap();
         assert!(s.session_lookup(SessionKind::App, &raw).unwrap().is_some());
         assert!(
@@ -1173,7 +1245,7 @@ mod tests {
             "revoked"
         );
         let (raw2, _) = s
-            .create_session(SessionKind::App, u.id, None, 100, "")
+            .create_session(SessionKind::App, u.id, None, None, 100, "")
             .unwrap();
         clock.fetch_add(101, Ordering::SeqCst);
         assert!(
@@ -1304,6 +1376,127 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM access_daily", [], |r| r.get(0))
             .unwrap();
         assert_eq!(daily_rows, 1);
+    }
+
+    #[test]
+    fn revoking_a_device_session_cascades_and_is_user_scoped() {
+        let (s, _) = store_with_clock();
+        let bob = s.create_user("bob", "Bob", Role::Member).unwrap();
+        let eve = s.create_user("eve", "Eve", Role::Member).unwrap();
+        let (dev_raw, dev) = s
+            .create_session(SessionKind::Auth, bob.id, None, None, 100, "laptop")
+            .unwrap();
+        let (dev2_raw, _) = s
+            .create_session(SessionKind::Auth, bob.id, None, None, 100, "phone")
+            .unwrap();
+        let (app_raw, app) = s
+            .create_session(SessionKind::App, bob.id, None, Some(dev.id), 100, "laptop")
+            .unwrap();
+        let (app2_raw, _) = s
+            .create_session(SessionKind::App, bob.id, None, None, 100, "phone")
+            .unwrap();
+        assert_eq!(
+            s.session_by_id(app.id).unwrap().unwrap().parent_id,
+            Some(dev.id)
+        );
+        // Another user cannot revoke bob's session, even with the right id.
+        assert!(!s.revoke_session(dev.id, eve.id).unwrap());
+        assert!(
+            s.session_lookup(SessionKind::Auth, &dev_raw)
+                .unwrap()
+                .is_some()
+        );
+        // Revoking the device kills its child app session, nothing else.
+        assert!(s.revoke_session(dev.id, bob.id).unwrap());
+        assert!(
+            s.session_lookup(SessionKind::Auth, &dev_raw)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            s.session_lookup(SessionKind::App, &app_raw)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            s.session_lookup(SessionKind::Auth, &dev2_raw)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            s.session_lookup(SessionKind::App, &app2_raw)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            !s.revoke_session(dev.id, bob.id).unwrap(),
+            "already revoked"
+        );
+        assert_eq!(s.list_sessions(bob.id, SessionKind::Auth).unwrap().len(), 1);
+        assert_eq!(s.list_sessions(bob.id, SessionKind::App).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn older_databases_gain_the_session_columns() {
+        // A registry created before schema 3 has no parent_id / session_id.
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            &SCHEMA
+                .replace(",\n    session_id INTEGER REFERENCES sessions(id)", "")
+                .replace(",\n    parent_id INTEGER REFERENCES sessions(id)", "")
+                .replace("'schema_version', '3'", "'schema_version', '2'"),
+        )
+        .unwrap();
+        let cols = |t: &str| -> Vec<String> {
+            conn.prepare(&format!("PRAGMA table_info({t})"))
+                .unwrap()
+                .query_map([], |r| r.get::<_, String>(1))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect()
+        };
+        assert!(!cols("sessions").contains(&"parent_id".to_string()));
+        assert!(!cols("tokens").contains(&"session_id".to_string()));
+        let s = Store::init(conn, system_clock()).unwrap();
+        {
+            let conn = s.lock();
+            let has = |t: &str, c: &str| {
+                conn.prepare(&format!("PRAGMA table_info({t})"))
+                    .unwrap()
+                    .query_map([], |r| r.get::<_, String>(1))
+                    .unwrap()
+                    .any(|r| r.unwrap() == c)
+            };
+            assert!(has("sessions", "parent_id") && has("tokens", "session_id"));
+            let v: String = conn
+                .query_row(
+                    "SELECT value FROM meta WHERE key = 'schema_version'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(v, "3");
+        }
+        // And the upgraded registry works end to end.
+        let u = s.create_user("bob", "Bob", Role::Member).unwrap();
+        let app = s
+            .create_app(
+                "a",
+                "A",
+                "",
+                u.id,
+                AppKind::Proxy,
+                "127.0.0.1:1",
+                Visibility::Private,
+            )
+            .unwrap();
+        let (_, dev) = s
+            .create_session(SessionKind::Auth, u.id, None, None, 10, "")
+            .unwrap();
+        let (_, tok) = s.create_launch_code(u.id, app.id, dev.id, 10).unwrap();
+        assert_eq!(tok.session_id, Some(dev.id));
+        assert_eq!(tok.user_id, Some(u.id));
+        assert_eq!(tok.kind, TokenKind::Launch);
     }
 
     #[test]

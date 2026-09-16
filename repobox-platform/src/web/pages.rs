@@ -33,7 +33,9 @@ fn msg_text(key: &str) -> Option<&'static str> {
         "grant_added" => "Access granted.",
         "grant_removed" => "Access revoked.",
         "invite_revoked" => "Invitation revoked.",
-        "session_revoked" => "Device signed out.",
+        "session_revoked" => "Device signed out. App sessions it launched are ended too.",
+        "app_session_revoked" => "App session ended.",
+        "sessions_revoked_all" => "Every device and app session of that user is revoked.",
         "signed_out" => "Signed out on this device.",
         "user_created" => "User created. Give them a device link to sign in.",
         "user_saved" => "User updated.",
@@ -363,7 +365,8 @@ pub async fn launch(
     Path(name): Path<String>,
     Query(q): Q,
 ) -> Response {
-    let user = current_user(&s, &headers).map(|(_, u)| u);
+    let current = current_user(&s, &headers);
+    let user = current.as_ref().map(|(_, u)| u.clone());
     let app = match load_app(&s, &name, user.as_ref()) {
         Ok(a) => a,
         Err(r) => return r,
@@ -394,7 +397,7 @@ pub async fn launch(
             ),
         );
     }
-    let Some(user) = user else {
+    let Some((sess, user)) = current else {
         if app.visibility.is_public() {
             return redirect(&format!("https://{}{}", app.host(&s.cfg.domain), next));
         }
@@ -424,14 +427,10 @@ pub async fn launch(
         // Public app, no grant: open it without an identity.
         return redirect(&format!("https://{}{}", app.host(&s.cfg.domain), next));
     }
-    let (code, _) = match s.store.create_token(
-        TokenKind::Launch,
-        Some(user.id),
-        Some(app.id),
-        Some(user.id),
-        s.cfg.launch_ttl,
-        "",
-    ) {
+    let (code, _) = match s
+        .store
+        .create_launch_code(user.id, app.id, sess.id, s.cfg.launch_ttl)
+    {
         Ok(v) => v,
         Err(e) => return internal(&s, e),
     };
@@ -459,11 +458,6 @@ pub async fn me(State(s): State<S>, headers: HeaderMap, Query(q): Q) -> Response
         Ok(v) => v,
         Err(r) => return r,
     };
-    let sessions = s
-        .store
-        .list_sessions(user.id, SessionKind::Auth)
-        .unwrap_or_default();
-    let now = s.store.now();
     let mut body = flashes(&q);
     body.push_str(&format!(
         "<h1>{}</h1><p class=\"lead\">Signed in as <code>{}</code> · {}</p>",
@@ -476,27 +470,100 @@ pub async fn me(State(s): State<S>, headers: HeaderMap, Query(q): Q) -> Response
         }
     ));
     body.push_str("<div class=\"two\"><div class=\"panel\"><h3>Sign in another device</h3><p class=\"muted\">Creates a single-use link, valid for 7 days, that signs in whichever device opens it as you. Send it over a channel you trust; it is shown once.</p><form method=\"post\" action=\"/me/enrol-device\"><button class=\"btn primary\" type=\"submit\">Create device link</button></form></div>");
-    body.push_str("<div class=\"panel\"><h3>Sign out here</h3><p class=\"muted\">Ends the session on this device only. App sessions on individual app hosts expire on their own within 24 hours.</p><form method=\"post\" action=\"/logout\"><button class=\"btn danger\" type=\"submit\">Sign out this device</button></form></div></div>");
-    body.push_str(&format!("<h2>Signed-in devices <span class=\"count\">{}</span></h2><div class=\"panel\"><div class=\"table-wrap\"><table><thead><tr><th>Device</th><th>Signed in</th><th>Last seen</th><th>Expires</th><th></th></tr></thead><tbody>", sessions.len()));
-    for x in &sessions {
-        let this = if x.id == sess.id {
-            " <span class=\"badge\">this device</span>"
-        } else {
-            ""
-        };
-        body.push_str(&format!(
-            "<tr><td>{}{}</td><td>{}</td><td>{}</td><td>{}</td><td><form class=\"inline\" method=\"post\" action=\"/me/sessions/{}/revoke\"><button class=\"btn small danger\" type=\"submit\">Sign out</button></form></td></tr>",
-            esc(if x.label.is_empty() { "device" } else { &x.label }),
-            this,
-            fmt_ts(x.created_at),
-            fmt_rel(now, x.last_seen_at),
-            fmt_rel(now, x.expires_at),
-            x.id
-        ));
-    }
-    body.push_str("</tbody></table></div></div>");
+    body.push_str("<div class=\"panel\"><h3>Sign out here</h3><p class=\"muted\">Ends the session on this device, together with the app sessions this device launched. Other devices stay signed in.</p><form method=\"post\" action=\"/logout\"><button class=\"btn danger\" type=\"submit\">Sign out this device</button></form></div></div>");
+    body.push_str(&session_tables(&s, &user, Some(sess.id), "/me/sessions"));
     let sh = shell(&s, "Account", Some(&user), "me");
     html(StatusCode::OK, page(&sh, &body))
+}
+
+/// The two session tables (devices, then app sessions) for `user`, with a
+/// revoke form per row posting to `{action_base}/{id}/revoke`. Shared by the
+/// account page and the admin per-user page. Revocation is effective on the
+/// next request because every session lookup re-reads `revoked_at`.
+fn session_tables(
+    s: &AppState,
+    user: &User,
+    this_session: Option<i64>,
+    action_base: &str,
+) -> String {
+    let now = s.store.now();
+    let devices = s
+        .store
+        .list_sessions(user.id, SessionKind::Auth)
+        .unwrap_or_default();
+    let apps = s
+        .store
+        .list_sessions(user.id, SessionKind::App)
+        .unwrap_or_default();
+    let mut body = String::new();
+    body.push_str(&format!(
+        "<section class=\"section\" aria-labelledby=\"devices\"><div class=\"section-head\"><h2 id=\"devices\">Signed-in devices <span class=\"count\">{}</span></h2><p class=\"sub\">Each row is one device signed in through a device link. Signing a device out also ends every app session it launched, and takes effect on its next request.</p></div><div class=\"panel\">",
+        devices.len()
+    ));
+    if devices.is_empty() {
+        body.push_str("<div class=\"empty\">No signed-in devices.</div>");
+    } else {
+        body.push_str("<div class=\"table-wrap\"><table class=\"sessions\"><thead><tr><th>Device</th><th>Signed in</th><th>Last seen</th><th>Expires</th><th></th></tr></thead><tbody>");
+        for x in &devices {
+            let this = if Some(x.id) == this_session {
+                " <span class=\"badge\">this device</span>"
+            } else {
+                ""
+            };
+            body.push_str(&format!(
+                "<tr><td class=\"primary\">{}{}</td><td data-label=\"Signed in\">{}</td><td data-label=\"Last seen\">{}</td><td data-label=\"Expires\">{}</td><td class=\"actions\"><form class=\"inline\" method=\"post\" action=\"{}/{}/revoke\"><button class=\"btn small danger\" type=\"submit\">Sign out</button></form></td></tr>",
+                esc(if x.label.is_empty() { "device" } else { &x.label }),
+                this,
+                fmt_ts(x.created_at),
+                fmt_rel(now, x.last_seen_at),
+                fmt_rel(now, x.expires_at),
+                action_base,
+                x.id
+            ));
+        }
+        body.push_str("</tbody></table></div>");
+    }
+    body.push_str("</div></section>");
+    body.push_str(&format!(
+        "<section class=\"section\" aria-labelledby=\"app-sessions\"><div class=\"section-head\"><h2 id=\"app-sessions\">App sessions <span class=\"count\">{}</span></h2><p class=\"sub\">Host-only sessions on individual app hosts, created when a device launches a private app. Ending one makes the app's edge gate refuse that session on its next request.</p></div><div class=\"panel\">",
+        apps.len()
+    ));
+    if apps.is_empty() {
+        body.push_str("<div class=\"empty\">No app sessions.</div>");
+    } else {
+        body.push_str("<div class=\"table-wrap\"><table class=\"sessions\"><thead><tr><th>App</th><th>Device</th><th>Started</th><th>Last seen</th><th>Expires</th><th></th></tr></thead><tbody>");
+        for x in &apps {
+            let app = x.app_id.and_then(|id| s.store.app_by_id(id).ok());
+            let app_cell = match &app {
+                Some(a) => format!(
+                    "<a href=\"/{}\">{}</a> <span class=\"mono muted\">{}</span>",
+                    esc(&a.name),
+                    esc(&a.title),
+                    esc(&a.host(&s.cfg.domain))
+                ),
+                None => "—".to_string(),
+            };
+            let from_this = if this_session.is_some() && x.parent_id == this_session {
+                " <span class=\"badge\">this device</span>"
+            } else {
+                ""
+            };
+            body.push_str(&format!(
+                "<tr><td class=\"primary\">{}</td><td data-label=\"Device\">{}{}</td><td data-label=\"Started\">{}</td><td data-label=\"Last seen\">{}</td><td data-label=\"Expires\">{}</td><td class=\"actions\"><form class=\"inline\" method=\"post\" action=\"{}/{}/revoke\"><button class=\"btn small danger\" type=\"submit\">End session</button></form></td></tr>",
+                app_cell,
+                esc(if x.label.is_empty() { "device" } else { &x.label }),
+                from_this,
+                fmt_ts(x.created_at),
+                fmt_rel(now, x.last_seen_at),
+                fmt_rel(now, x.expires_at),
+                action_base,
+                x.id
+            ));
+        }
+        body.push_str("</tbody></table></div>");
+    }
+    body.push_str("</div></section>");
+    body
 }
 
 fn show_link_once(
@@ -569,10 +636,17 @@ pub async fn me_revoke_session(
     if let Err(r) = require_same_origin(&s, &headers, "/me") {
         return r;
     }
+    let kind = match s.store.session_by_id(id) {
+        Ok(Some(x)) if x.user_id == user.id => x.kind,
+        _ => return redirect("/me?err=not_found"),
+    };
     let _ = s.store.revoke_session(id, user.id);
     s.store
-        .audit(Some(user.id), "session.revoke", &user.name, "");
-    redirect("/me?ok=session_revoked")
+        .audit(Some(user.id), "session.revoke", &user.name, kind.as_str());
+    match kind {
+        SessionKind::Auth => redirect("/me?ok=session_revoked"),
+        SessionKind::App => redirect("/me?ok=app_session_revoked"),
+    }
 }
 
 pub async fn logout(State(s): State<S>, headers: HeaderMap) -> Response {
@@ -634,12 +708,13 @@ pub async fn admin_users(State(s): State<S>, headers: HeaderMap, Query(q): Q) ->
             String::new()
         };
         body.push_str(&format!(
-            "<tr><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td class=\"row\" style=\"justify-content:flex-end\">{}{}</td></tr>",
+            "<tr><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td class=\"row\" style=\"justify-content:flex-end\"><a class=\"btn small\" href=\"/admin/users/{}/sessions\">Sessions</a> {}{}</td></tr>",
             esc(&u.name),
             esc(&u.display_name),
             u.role.as_str(),
             status,
             fmt_ts(u.created_at),
+            esc(&u.name),
             enrol,
             toggle
         ));
@@ -768,6 +843,102 @@ pub async fn admin_user_enrol(
         }
         Err(e) => internal(&s, e),
     }
+}
+
+pub async fn admin_user_sessions(
+    State(s): State<S>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    Query(q): Q,
+) -> Response {
+    let admin = match require_admin(&s, &headers) {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
+    let Ok(Some(target)) = s.store.user_by_name(&name) else {
+        return err_page(
+            &s,
+            Some(&admin),
+            StatusCode::NOT_FOUND,
+            "No such user",
+            "Nobody is registered under that handle.",
+        );
+    };
+    let base = format!("/admin/users/{}/sessions", esc(&target.name));
+    let mut body = flashes(&q);
+    body.push_str(&format!(
+        "<div class=\"row\"><h1 style=\"margin:0\">{}</h1><code>{}</code>{}</div><p class=\"lead\">Devices and app sessions of this user. Revoking takes effect on the session's next request, at auth.repo.box and at every app's edge gate.</p>",
+        esc(&target.display_name),
+        esc(&target.name),
+        if target.enabled { "" } else { "<span class=\"badge off\">disabled</span>" }
+    ));
+    body.push_str(&format!(
+        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn\" href=\"/admin/users\">Users</a><form class=\"inline\" method=\"post\" action=\"{base}/revoke-all\"><button class=\"btn danger\" type=\"submit\">Sign out everywhere</button></form></div>"
+    ));
+    body.push_str(&session_tables(&s, &target, None, &base));
+    let title = format!("Sessions · {}", target.name);
+    let sh = shell(&s, &title, Some(&admin), "users");
+    html(StatusCode::OK, page(&sh, &body))
+}
+
+pub async fn admin_user_session_revoke(
+    State(s): State<S>,
+    headers: HeaderMap,
+    Path((name, id)): Path<(String, i64)>,
+) -> Response {
+    let admin = match require_admin(&s, &headers) {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
+    let Ok(Some(target)) = s.store.user_by_name(&name) else {
+        return redirect("/admin/users?err=no_user");
+    };
+    let back = format!("/admin/users/{}/sessions", target.name);
+    if let Err(r) = require_same_origin(&s, &headers, &back) {
+        return r;
+    }
+    // Scoped to the named user: an id belonging to someone else is a no-op.
+    let kind = match s.store.session_by_id(id) {
+        Ok(Some(x)) if x.user_id == target.id => x.kind,
+        _ => return redirect(&format!("{back}?err=not_found")),
+    };
+    let _ = s.store.revoke_session(id, target.id);
+    s.store.audit(
+        Some(admin.id),
+        "session.revoke",
+        &target.name,
+        &format!("admin {}", kind.as_str()),
+    );
+    match kind {
+        SessionKind::Auth => redirect(&format!("{back}?ok=session_revoked")),
+        SessionKind::App => redirect(&format!("{back}?ok=app_session_revoked")),
+    }
+}
+
+pub async fn admin_user_sessions_revoke_all(
+    State(s): State<S>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+) -> Response {
+    let admin = match require_admin(&s, &headers) {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
+    let Ok(Some(target)) = s.store.user_by_name(&name) else {
+        return redirect("/admin/users?err=no_user");
+    };
+    let back = format!("/admin/users/{}/sessions", target.name);
+    if let Err(r) = require_same_origin(&s, &headers, &back) {
+        return r;
+    }
+    let n = s.store.revoke_user_sessions(target.id).unwrap_or(0);
+    s.store.audit(
+        Some(admin.id),
+        "session.revoke_all",
+        &target.name,
+        &format!("admin {n}"),
+    );
+    redirect(&format!("{back}?ok=sessions_revoked_all"))
 }
 
 pub async fn admin_audit(State(s): State<S>, headers: HeaderMap) -> Response {
@@ -1256,6 +1427,7 @@ pub async fn enrol_post(
         SessionKind::Auth,
         target.id,
         None,
+        None,
         s.cfg.auth_session_ttl,
         &user_agent_label(&headers),
     ) {
@@ -1388,6 +1560,7 @@ pub async fn invite_post(
             let secret = match s.store.create_session(
                 SessionKind::Auth,
                 u.id,
+                None,
                 None,
                 s.cfg.auth_session_ttl,
                 &user_agent_label(&headers),
