@@ -26,7 +26,8 @@ browser ──HTTPS──▶ Caddy (repo.box host)
 ```
 
 * **Registry**: SQLite (WAL) at `/var/lib/repobox-platform/platform.db`. Tables:
-  `users`, `apps`, `grants`, `tokens`, `sessions`, `audit`, `meta`. Only
+  `users`, `apps`, `grants`, `tokens`, `sessions`, `audit`, `access_daily`,
+  `access_daily_users`, `access_totals`, `meta` (schema version 2). Only
   SHA-256 hashes of tokens and session secrets are stored; raw values exist
   once, in the channel that delivers them (a 0600 file for operator-created
   links, a page shown once in the UI, a redirect for launch codes).
@@ -55,6 +56,30 @@ browser ──HTTPS──▶ Caddy (repo.box host)
   can open it), `public_unlisted` (no auth, never in the directory),
   `public_listed` (no auth, in the directory and `/api/directory`). Admins and
   owners can always open their apps. Disabled apps answer 404 at the edge.
+* **Directory** (`auth.repo.box/`): signed in, two sections in this order.
+  **Your apps** is the user's access list: apps they own, apps they hold a
+  grant for and, for admins, every app; visibility and enabled state do not
+  filter it (a disabled app shows a badge). **Other apps** is what remains
+  that is `public_listed` and enabled; it is omitted when empty. Anonymous
+  visitors get a **Public directory** with only `public_listed` enabled apps.
+  `public_unlisted` apps therefore appear only inside somebody's access list,
+  never in the public directory or `/api/directory`. The split is
+  `pages::partition_directory`.
+* **Access counting** (`/apps/<name>/analytics`, owner or admin only; CLI
+  `app stats <name>`): the gate increments counters *only* on the 2xx allow
+  path, so 401/403/404 denials, disabled apps or users, rejected codes and the
+  launch-code `302` are never counted. What is stored: one row per app per
+  UTC day with a request count (`access_daily`), one all-time request counter
+  per app (`access_totals`), and for **private** apps only, `(app, day,
+  user_id)` presence rows (`access_daily_users`) so unique signed-in users can
+  be deduplicated. Public apps get counts only: no user id is written even
+  when the visitor holds a session, and no anonymous identity is ever
+  invented. No URL, query string, cookie, IP, user agent, token or body is
+  recorded. Daily rows (and with them the user ids) are deleted after
+  `ACCESS_RETENTION_DAYS` = 90 days; the all-time counter is kept. A count is
+  every allowed request including assets, not page views. The page shows the
+  all-time total, the 90-day total, unique users (private apps) and the last
+  14 days, and states these rules. Owners see only their own apps.
 * **Identity headers** the origin may trust (only ever set by the gate):
   `X-RepoBox-App`, `X-RepoBox-Auth` (`session`|`public`), and for sessions
   `X-RepoBox-User`, `X-RepoBox-User-Id`, `X-RepoBox-Role`.
@@ -75,7 +100,7 @@ create/deploy/route controls.
 ## Local development
 
 ```bash
-cargo test -p repobox-platform                       # 27 unit + integration tests
+cargo test -p repobox-platform                       # 33 unit + integration tests
 cargo clippy -p repobox-platform --all-targets -- -D warnings
 cargo fmt -p repobox-platform -- --check
 repobox-platform/scripts/edge-e2e.sh                 # real Caddy on loopback, 33 live checks
@@ -144,6 +169,7 @@ $P routes render --check-roots --out /tmp/apps.caddy \
   && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
   && sudo systemctl reload caddy
 $P audit --limit 50
+$P app stats myapp --days 14                              # access counters, no identity
 ```
 
 ## Backup and restore
@@ -154,6 +180,13 @@ $P audit --limit 50
   install.
 * **Restore**: `sudo systemctl stop repobox-platform && cp <backup> /var/lib/repobox-platform/platform.db && rm -f /var/lib/repobox-platform/platform.db-wal /var/lib/repobox-platform/platform.db-shm && sudo systemctl start repobox-platform`,
   then `routes render` + Caddy reload if the app set differs.
+* **Schema migration**: the schema is applied with `CREATE TABLE IF NOT EXISTS`
+  on every open, so upgrading is just installing the new binary and
+  restarting. Version 2 (2026-09-16) added the three `access_*` tables; a
+  version-1 backup restores fine and simply starts with empty counters. The
+  `backup` step of `deploy.sh` runs with the *new* binary against the live
+  DB, which creates the new tables before the service restarts; that is safe
+  because the old binary ignores tables it does not know.
 
 ## Test procedure
 
@@ -164,7 +197,14 @@ $P audit --limit 50
    directory, spoofed `X-RepoBox-*` headers never influencing a decision,
    app-session binding to one app, launch requiring sign-in and access,
    open-redirect hardening of `next`, single-use POST-only device links,
-   invitation flow (new and existing users), owner/admin-only management, CSRF.
+   invitation flow (new and existing users), owner/admin-only management, CSRF,
+   directory partitioning (Your apps before Other apps, admin/owner/grantee/
+   anonymous views), public-unlisted absent unless in the access list, access
+   counting only on allowed requests (denials, disabled, replay and the
+   redemption redirect do not count), unique-user dedup for private apps and
+   no identity for public apps, 90-day pruning, counter-only access tables,
+   and owner/admin-only analytics (a grant is not ownership; other owners get
+   403).
 2. `repobox-platform/scripts/edge-e2e.sh` — same contract through a real Caddy
    with the generated routes (proves the strip + forward_auth + copy_headers
    mechanics, host-only/HttpOnly cookies, no secrets in logs).
@@ -175,6 +215,7 @@ $P audit --limit 50
    curl -sI https://demo-unlisted.repo.box/ | head -1               # 200
    curl -sI https://demo-listed.repo.box/ | head -1                 # 200
    curl -s https://auth.repo.box/api/directory                       # demo-listed only
+   curl -s https://auth.repo.box/ | grep -c 'id="public-apps"'      # anonymous: public directory only
    # launch: sign a device in (device link), then
    curl -s -b jar -o /dev/null -w '%{redirect_url}' https://auth.repo.box/demo-private   # ...?token=
    curl -s -c appjar -o /dev/null -w '%{http_code} %{redirect_url}' "<that url>"         # 302 https://demo-private.repo.box/
@@ -225,6 +266,13 @@ Exercised live on 2026-09-16: rollback restored the legacy config (auth.repo.box
 Caddyfile must stay 0644 (the `caddy` user reads it on reload); `caddy-apply.py`
 enforces this on both apply and rollback.
 
+## Deployment record (2026-09-16, directory + access counting)
+
+* Deployed with `NO_CADDY=1 repobox-platform/scripts/deploy.sh` (no route or
+  host changed, so Caddy was neither re-applied nor reloaded). The pre-deploy
+  DB backup and the live checks are recorded in the commit message of this
+  change; see the work log in the project brief for the exact evidence.
+
 ## Current limitations
 
 * One control plane process, one SQLite file, no HA; fine for this scale.
@@ -240,3 +288,9 @@ enforces this on both apply and rollback.
 * No app deletion from the UI (`app remove` via CLI, then re-render).
 * Existing apps on repo.box are not migrated; only the three demo apps use the
   managed route model.
+* Access counting is deliberately coarse: every allowed request (assets
+  included) counts one, days are UTC, there is no per-path or per-user
+  breakdown, unique users exist only for private apps and only inside the
+  90-day window, and an app that flips from private to public keeps its
+  earlier per-day user rows until they age out. Counters are best-effort: a
+  failed increment is logged and never blocks serving.

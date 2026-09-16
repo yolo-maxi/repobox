@@ -17,7 +17,7 @@
 #
 #   ./scripts/deploy.sh                 full deploy
 #   SKIP_TESTS=1 ./scripts/deploy.sh    skip cargo test
-#   NO_CADDY=1 ./scripts/deploy.sh      everything except the Caddy change
+#   NO_CADDY=1 ./scripts/deploy.sh      everything except the Caddy change (sweep still runs)
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -92,17 +92,16 @@ remote "set -e
 "
 
 if [[ -n "${NO_CADDY:-}" ]]; then
-  log "NO_CADDY set: skipping route render + Caddy apply"
-  exit 0
+  log "NO_CADDY set: skipping route render + Caddy apply (routes unchanged)"
+else
+  log "caddy: render routes, apply managed block"
+  remote "set -e
+    P=/srv/repobox-platform/bin/repobox-platform
+    \$P routes render --check-roots --out '$STAGE/apps.caddy'
+    sudo -n install -o root -g root -m 0644 '$STAGE/apps.caddy' /etc/caddy/repobox-platform/apps.caddy
+    sudo -n python3 /srv/repobox-platform/caddy-apply.py apply '$STAGE/auth.repo.box.caddy'
+  "
 fi
-
-log "caddy: render routes, apply managed block"
-remote "set -e
-  P=/srv/repobox-platform/bin/repobox-platform
-  \$P routes render --check-roots --out '$STAGE/apps.caddy'
-  sudo -n install -o root -g root -m 0644 '$STAGE/apps.caddy' /etc/caddy/repobox-platform/apps.caddy
-  sudo -n python3 /srv/repobox-platform/caddy-apply.py apply '$STAGE/auth.repo.box.caddy'
-"
 
 log "live sweep"
 fail=0
@@ -126,5 +125,8 @@ dir=$(curl -s https://auth.repo.box/api/directory)
 echo "  directory: $dir"
 echo "$dir" | command grep -q '"demo-listed"' || fail=1
 echo "$dir" | command grep -q 'demo-unlisted' && fail=1
+anon=$(curl -s https://auth.repo.box/)
+echo "$anon" | command grep -q 'id="public-apps"' || { echo "  anonymous directory is not the public directory" >&2; fail=1; }
+echo "$anon" | command grep -qE 'demo-unlisted|demo-private' && { echo "  anonymous directory leaks a non-listed app" >&2; fail=1; }
 [[ "$fail" -eq 0 ]] || { echo "SWEEP FAILED (Caddy backup path printed above; see docs for rollback)" >&2; exit 1; }
 log "deploy verified"

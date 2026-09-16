@@ -76,6 +76,7 @@ pub fn router(state: S) -> Router {
         .route("/admin/users/{name}/enrol", post(pages::admin_user_enrol))
         .route("/admin/audit", get(pages::admin_audit))
         .route("/apps/{name}", get(pages::app_manage))
+        .route("/apps/{name}/analytics", get(pages::app_analytics))
         .route("/apps/{name}/visibility", post(pages::app_visibility))
         .route("/apps/{name}/enabled", post(pages::app_enabled))
         .route("/apps/{name}/grants", post(pages::app_grant_add))

@@ -13,13 +13,15 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use super::html::{Shell, app_card, esc, flash, fmt_rel, fmt_ts, page, status_page, vis_badge};
+use super::html::{
+    Shell, app_card, esc, flash, fmt_day, fmt_rel, fmt_ts, page, status_page, vis_badge,
+};
 use super::{
     AUTH_COOKIE, AppState, S, clear_cookie, current_user, html, redirect, redirect_with_cookie,
     safe_next, same_origin, set_cookie, urlencode, user_agent_label,
 };
 use crate::model::{App, Role, User, Visibility, validate_display_name, validate_user_name};
-use crate::store::{SessionKind, StoreError, TokenKind};
+use crate::store::{ACCESS_RETENTION_DAYS, SessionKind, Store, StoreError, TokenKind};
 
 type Q = Query<HashMap<String, String>>;
 
@@ -208,6 +210,47 @@ pub async fn not_found(State(s): State<S>, headers: HeaderMap) -> Response {
 
 // --------------------------------------------------------------- directory
 
+/// Split the registry into the two directory sections a signed-in user sees.
+///
+/// * **Your apps**: everything in the user's access list, i.e. apps they own,
+///   apps they hold a grant for, and (for admins) every app. Visibility and
+///   enabled state do not matter here: if you may open it, it is yours to see.
+/// * **Other apps**: the remaining apps that are publicly listed and enabled.
+///
+/// Public-unlisted apps therefore never appear unless they are in the access
+/// list, and private apps never appear outside it. Order is the registry
+/// order (by name) in both halves.
+pub fn partition_directory<'a>(
+    store: &Store,
+    user: &User,
+    apps: &'a [App],
+) -> (Vec<&'a App>, Vec<&'a App>) {
+    let mut yours = Vec::new();
+    let mut others = Vec::new();
+    for a in apps {
+        if store.has_access(user, a).unwrap_or(false) {
+            yours.push(a);
+        } else if a.visibility == Visibility::PublicListed && a.enabled {
+            others.push(a);
+        }
+    }
+    (yours, others)
+}
+
+fn section(body: &mut String, id: &str, heading: &str, count: usize, sub: &str, cards: &str) {
+    body.push_str(&format!(
+        "<section class=\"section\" aria-labelledby=\"{id}\"><div class=\"section-head\"><h2 id=\"{id}\">{heading} <span class=\"count\">{count}</span></h2><p class=\"sub\">{sub}</p></div>{cards}</section>"
+    ));
+}
+
+fn grid(cards: &[String], empty: &str) -> String {
+    if cards.is_empty() {
+        format!("<div class=\"empty\">{empty}</div>")
+    } else {
+        format!("<div class=\"grid\">{}</div>", cards.concat())
+    }
+}
+
 pub async fn index(State(s): State<S>, headers: HeaderMap, Query(q): Q) -> Response {
     let user = current_user(&s, &headers).map(|(_, u)| u);
     let apps = match s.store.list_apps() {
@@ -220,55 +263,64 @@ pub async fn index(State(s): State<S>, headers: HeaderMap, Query(q): Q) -> Respo
 
     match &user {
         None => {
-            body.push_str("<h1>App directory</h1><p class=\"lead\">Public apps on repo.box. Private apps only appear here once this device is signed in.</p>");
-            let listed: Vec<&App> = apps
+            body.push_str("<h1>Public directory</h1><p class=\"lead\">Apps on repo.box that their owners chose to list publicly. Private apps, and the apps you have been granted, appear once this device is signed in.</p>");
+            let cards: Vec<String> = apps
                 .iter()
                 .filter(|a| a.visibility == Visibility::PublicListed && a.enabled)
+                .map(|a| app_card(a, domain, false, false))
                 .collect();
-            if listed.is_empty() {
-                body.push_str("<div class=\"empty\">No public apps are listed right now.</div>");
-            } else {
-                body.push_str("<div class=\"grid\">");
-                for a in listed {
-                    body.push_str(&app_card(a, domain, false, false));
-                }
-                body.push_str("</div>");
-            }
+            section(
+                &mut body,
+                "public-apps",
+                "Publicly listed apps",
+                cards.len(),
+                "Anyone can open these; no sign-in involved.",
+                &grid(&cards, "No public apps are listed right now."),
+            );
             body.push_str("<div class=\"panel\" style=\"margin-top:28px\"><h3>Signing in</h3><p class=\"muted\" style=\"margin:0\">There are no passwords and no email. Someone who is already signed in (or a platform admin) creates a single-use device link for you; opening it signs this device in for 30 days. Private apps are then launched from here with a one-time code, never with a shared cookie.</p></div>");
         }
         Some(u) => {
-            body.push_str(&format!("<h1>Hello, {}</h1><p class=\"lead\">Apps you can open. Launching mints a one-time code for this device, which becomes a session on the app's own host.</p>", esc(&u.display_name)));
-            let mut directory: Vec<&App> = Vec::new();
-            for a in &apps {
-                let visible = match a.visibility {
-                    Visibility::PublicListed => true,
-                    Visibility::Private => s.store.has_access(u, a).unwrap_or(false),
-                    Visibility::PublicUnlisted => false,
-                };
-                if visible {
-                    directory.push(a);
-                }
+            body.push_str(&format!(
+                "<h1>Hello, {}</h1><p class=\"lead\">Opening an app from here mints a one-time code for this device, which becomes a session on the app's own host.</p>",
+                esc(&u.display_name)
+            ));
+            let (yours, others) = partition_directory(&s.store, u, &apps);
+            let manages_any = yours.iter().any(|a| s.store.can_manage(u, a));
+            let cards: Vec<String> = yours
+                .iter()
+                .map(|a| app_card(a, domain, true, s.store.can_manage(u, a)))
+                .collect();
+            section(
+                &mut body,
+                "your-apps",
+                "Your apps",
+                cards.len(),
+                if u.is_admin() {
+                    "As a platform admin you can open and manage every registered app."
+                } else {
+                    "Apps you own or have been granted access to."
+                },
+                &grid(
+                    &cards,
+                    "Nothing yet. An app owner can send you an invitation link or grant your handle directly.",
+                ),
+            );
+            if !others.is_empty() {
+                let cards: Vec<String> = others
+                    .iter()
+                    .map(|a| app_card(a, domain, true, false))
+                    .collect();
+                section(
+                    &mut body,
+                    "other-apps",
+                    "Other apps",
+                    cards.len(),
+                    "Publicly listed apps that are not in your access list. Anyone can open them.",
+                    &grid(&cards, ""),
+                );
             }
-            if directory.is_empty() {
-                body.push_str("<div class=\"empty\">Nothing to show yet. Ask an app owner for an invitation.</div>");
-            } else {
-                body.push_str("<div class=\"grid\">");
-                for a in directory {
-                    body.push_str(&app_card(a, domain, true, s.store.can_manage(u, a)));
-                }
-                body.push_str("</div>");
-            }
-            let managed: Vec<&App> = apps.iter().filter(|a| s.store.can_manage(u, a)).collect();
-            if !managed.is_empty() {
-                body.push_str(&format!(
-                    "<h2>Apps you manage <span class=\"count\">{}</span></h2><div class=\"grid\">",
-                    managed.len()
-                ));
-                for a in managed {
-                    body.push_str(&app_card(a, domain, true, true));
-                }
-                body.push_str("</div>");
-                body.push_str("<p class=\"hint\" style=\"margin-top:10px\">Registering a new app and rendering its route is an operator step (<code>repobox-platform app register</code> + <code>routes render</code>), not something this UI does.</p>");
+            if manages_any {
+                body.push_str("<p class=\"hint\" style=\"margin-top:18px\">Registering a new app and rendering its route is an operator step (<code>repobox-platform app register</code> + <code>routes render</code>), not something this UI does.</p>");
             }
         }
     }
@@ -772,8 +824,8 @@ pub async fn app_manage(
         if app.description.is_empty() { String::new() } else { format!(" · {}", esc(&app.description)) }
     ));
     body.push_str(&format!(
-        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn primary\" href=\"/{}\">Launch</a><a class=\"btn\" href=\"/\">Directory</a></div>",
-        esc(&app.name)
+        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn primary\" href=\"/{name}\">Launch</a><a class=\"btn\" href=\"/apps/{name}/analytics\">Analytics</a><a class=\"btn\" href=\"/\">Directory</a></div>",
+        name = esc(&app.name)
     ));
     body.push_str(&format!(
         "<div class=\"panel\"><dl class=\"kv\"><dt>Route</dt><dd><code>{}</code> → <code>{}</code></dd><dt>Owner</dt><dd>{}</dd><dt>Registered</dt><dd>{}</dd></dl><p class=\"hint\" style=\"margin:10px 0 0\">Route shape and origin are operator-managed (CLI + rendered Caddy config). This page controls who may open the app.</p></div>",
@@ -863,6 +915,90 @@ pub async fn app_manage(
     body.push_str("</div>");
 
     let sh = shell(&s, &app.title, Some(&user), "");
+    html(StatusCode::OK, page(&sh, &body))
+}
+
+pub async fn app_analytics(
+    State(s): State<S>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+) -> Response {
+    let (user, app) = match manageable(&s, &name, &headers) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    const RECENT_DAYS: i64 = 14;
+    let a = match s.store.app_analytics(app.id, RECENT_DAYS) {
+        Ok(a) => a,
+        Err(e) => return internal(&s, e),
+    };
+    let private = app.visibility == Visibility::Private;
+    let mut body = String::new();
+    body.push_str(&format!(
+        "<div class=\"row\"><h1 style=\"margin:0\">{}</h1>{}</div><p class=\"lead\"><span class=\"mono\">{}</span> · access counts</p>",
+        esc(&app.title),
+        vis_badge(app.visibility),
+        esc(&app.host(&s.cfg.domain))
+    ));
+    body.push_str(&format!(
+        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn\" href=\"/apps/{name}\">Manage app</a><a class=\"btn\" href=\"/{name}\">Launch</a><a class=\"btn\" href=\"/\">Directory</a></div>",
+        name = esc(&app.name)
+    ));
+    let since = a
+        .since_day
+        .map(|d| format!("since {}", fmt_day(d)))
+        .unwrap_or_else(|| "nothing counted yet".into());
+    let users_value = if private {
+        a.window_users.to_string()
+    } else {
+        "—".into()
+    };
+    let users_hint = if private {
+        format!("last {} days, deduplicated", a.window_days)
+    } else {
+        "not kept for public apps".into()
+    };
+    body.push_str(&format!(
+        "<div class=\"stats\"><div class=\"stat\"><div class=\"label\">Allowed requests</div><div class=\"value\">{}</div><div class=\"hint\">{}</div></div><div class=\"stat\"><div class=\"label\">Last {} days</div><div class=\"value\">{}</div><div class=\"hint\">allowed requests</div></div><div class=\"stat\"><div class=\"label\">Signed-in users</div><div class=\"value\">{}</div><div class=\"hint\">{}</div></div></div>",
+        a.total_requests,
+        esc(&since),
+        a.window_days,
+        a.window_requests,
+        users_value,
+        esc(&users_hint)
+    ));
+    let max = a
+        .recent
+        .iter()
+        .map(|d| d.requests)
+        .max()
+        .unwrap_or(0)
+        .max(1);
+    body.push_str(&format!(
+        "<h2>Recent days <span class=\"count\">{RECENT_DAYS}</span></h2><div class=\"panel\"><div class=\"table-wrap\"><table class=\"days\"><thead><tr><th>Day (UTC)</th><th class=\"num\">Requests</th><th></th><th class=\"num\">Users</th></tr></thead><tbody>"
+    ));
+    for d in &a.recent {
+        let pct = d.requests * 100 / max;
+        body.push_str(&format!(
+            "<tr><td class=\"mono\">{}</td><td class=\"num\">{}</td><td><div class=\"bar\" aria-hidden=\"true\"><span style=\"width:{}%\"></span></div></td><td class=\"num\">{}</td></tr>",
+            fmt_day(d.day),
+            d.requests,
+            pct,
+            if private { d.users.to_string() } else { "—".into() }
+        ));
+    }
+    body.push_str("</tbody></table></div></div>");
+    body.push_str(&format!(
+        "<h2>What is counted</h2><div class=\"panel\"><ul class=\"notes\"><li>One count per request the edge gate <strong>allowed</strong> for this app, including page assets. Denied requests (no session, no grant, disabled app or user, rejected launch codes) and the launch-code redirect itself are never counted.</li><li>No URL, query string, cookie, IP address, user agent, token or request body is recorded. The registry holds only per-day totals.</li><li>{}</li><li>Daily rows are deleted after {} days. The all-time total is a single counter with no identity attached.</li><li>Only this app's owner and platform admins can see this page; other owners cannot.</li></ul></div>",
+        if private {
+            "For this private app, the signed-in user's id is stored once per day so users can be counted without double counting. That is the only identity kept."
+        } else {
+            "This app is public, so visitors are not identified: no user id is stored even for signed-in visitors, and the users column stays empty."
+        },
+        ACCESS_RETENTION_DAYS
+    ));
+    let title = format!("{} · analytics", app.title);
+    let sh = shell(&s, &title, Some(&user), "");
     html(StatusCode::OK, page(&sh, &body))
 }
 

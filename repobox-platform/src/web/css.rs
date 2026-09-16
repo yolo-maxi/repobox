@@ -28,7 +28,7 @@ p.lead{color:var(--dim);margin:0 0 20px;max-width:64ch}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .card.elevated{background:var(--surface2)}
-.card .title{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.card .title{display:flex;justify-content:space-between;gap:8px 10px;align-items:flex-start;flex-wrap:wrap}
 .card .title a{color:var(--heading);font-weight:600;font-size:1.05rem}
 .card .host{font-family:var(--mono);font-size:.82rem;color:var(--dim);word-break:break-all}
 .card .desc{color:var(--text);font-size:.93rem;margin:0}
@@ -83,6 +83,19 @@ tr:last-child td{border-bottom:0}
 footer{border-top:1px solid var(--border);color:var(--dim);font-size:.82rem;padding:18px 0;font-family:var(--mono)}
 footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .muted{color:var(--dim)}
+.section{margin-top:30px}.section:first-of-type{margin-top:0}
+.section-head{margin:0 0 12px}
+.section-head h2{margin:0}
+.section-head .sub{color:var(--dim);font-size:.9rem;margin:2px 0 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-width:0}
+.stat .label{color:var(--dim);font-size:.78rem;text-transform:uppercase;letter-spacing:.05em}
+.stat .value{color:var(--heading);font-size:1.9rem;font-weight:600;font-family:var(--mono);line-height:1.2;margin:4px 0 2px;overflow-wrap:anywhere}
+table.days td.num,table.days th.num{text-align:right;font-family:var(--mono)}
+table.days td:nth-child(3){width:45%}
+.bar{height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;min-width:100px}
+.bar span{display:block;height:100%;background:var(--accent);border-radius:4px}
+ul.notes{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:.93rem}
 .right{margin-left:auto}
-@media (max-width:600px){main{padding-top:18px}h1{font-size:1.4rem}.card{padding:14px}header.top .wrap{gap:8px}.who{margin-left:auto}nav.main{order:3;width:100%;margin-left:0}}
+@media (max-width:600px){main{padding-top:18px}h1{font-size:1.4rem}.card{padding:14px}header.top .wrap{gap:8px}.who{margin-left:auto}nav.main{order:3;width:100%;margin-left:0}.stats{grid-template-columns:1fr 1fr;gap:10px}.stat{padding:12px}.stat .value{font-size:1.6rem}table.days td:nth-child(3){width:auto}.bar{min-width:56px}table.days td,table.days th{padding-left:6px;padding-right:6px}}
 "#;

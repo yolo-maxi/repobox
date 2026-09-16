@@ -443,10 +443,360 @@ async fn visibility_modes_at_the_gate_and_in_the_directory() {
     let (_, _, body) = h.get("/", Some(&h.auth_cookie(&h.eve))).await;
     assert!(!body.contains("demo-private"));
     assert!(body.contains("demo-listed.repo.box"));
-    // Owner sees their unlisted app only in the manage section.
+    // Owner sees their unlisted app, because it is in their access list.
     let (_, _, body) = h.get("/", Some(&h.auth_cookie(&h.owner))).await;
-    assert!(body.contains("Apps you manage"));
+    assert!(body.contains("id=\"your-apps\""));
     assert!(body.contains("demo-unlisted.repo.box"));
+}
+
+/// Split a directory page into its "Your apps" and "Other apps" sections.
+fn sections(body: &str) -> (Option<&str>, Option<&str>) {
+    let y = body.find("id=\"your-apps\"");
+    let o = body.find("id=\"other-apps\"");
+    let end = body.find("</main>").unwrap_or(body.len());
+    let yours = y.map(|i| &body[i..o.unwrap_or(end)]);
+    let others = o.map(|i| &body[i..end]);
+    (yours, others)
+}
+
+#[tokio::test]
+async fn directory_puts_your_apps_before_other_apps() {
+    let h = H::new();
+    // bob: one grant. Private app under "Your apps", listed public under "Other apps".
+    let (_, _, body) = h.get("/", Some(&h.auth_cookie(&h.bob))).await;
+    let (yours, others) = sections(&body);
+    let (yours, others) = (yours.expect("your apps"), others.expect("other apps"));
+    assert!(body.find("id=\"your-apps\"") < body.find("id=\"other-apps\""));
+    assert!(yours.contains("demo-private.repo.box"));
+    assert!(
+        !yours.contains("demo-listed.repo.box"),
+        "not in bob's access list"
+    );
+    assert!(others.contains("demo-listed.repo.box"));
+    assert!(!others.contains("demo-private"));
+    assert!(!body.contains("other-private"), "no grant");
+    assert!(!body.contains("demo-unlisted"));
+    assert!(!body.contains("Apps you manage"), "old framing removed");
+    assert!(!body.contains("Manage</a>"), "bob manages nothing");
+    // eve: nothing granted. Empty "Your apps" state, public apps below.
+    let (_, _, body) = h.get("/", Some(&h.auth_cookie(&h.eve))).await;
+    let (yours, others) = sections(&body);
+    assert!(yours.unwrap().contains("Nothing yet"));
+    assert!(others.unwrap().contains("demo-listed.repo.box"));
+    // owner: every app they own is theirs (all visibilities), so no "Other apps".
+    let (_, _, body) = h.get("/", Some(&h.auth_cookie(&h.owner))).await;
+    let (yours, others) = sections(&body);
+    let yours = yours.unwrap();
+    assert!(
+        others.is_none(),
+        "everything listed is already in the access list"
+    );
+    for host in [
+        "demo-private.repo.box",
+        "demo-unlisted.repo.box",
+        "demo-listed.repo.box",
+        "other-private.repo.box",
+    ] {
+        assert!(yours.contains(host), "{host}");
+    }
+    assert_eq!(yours.matches("Manage</a>").count(), 4);
+    // admin: access to everything, told so.
+    let (_, _, body) = h.get("/", Some(&h.auth_cookie(&h.fran))).await;
+    let (yours, others) = sections(&body);
+    assert!(others.is_none());
+    assert!(yours.unwrap().contains("platform admin"));
+    // Anonymous: a public directory, no personal sections.
+    let (_, _, body) = h.get("/", None).await;
+    assert!(body.contains("<h1>Public directory</h1>"));
+    assert!(body.contains("id=\"public-apps\""));
+    let (yours, others) = sections(&body);
+    assert!(yours.is_none() && others.is_none());
+    assert!(body.contains("demo-listed.repo.box"));
+    assert!(!body.contains("demo-private"));
+    // A disabled listed app drops out of "Other apps" but stays in its owner's list.
+    let listed = h.state.store.app_by_name("demo-listed").unwrap().unwrap();
+    h.state.store.set_app_enabled(listed.id, false).unwrap();
+    let (_, _, body) = h.get("/", Some(&h.auth_cookie(&h.eve))).await;
+    let (_, others) = sections(&body);
+    assert!(others.is_none());
+    let (_, _, body) = h.get("/", Some(&h.auth_cookie(&h.owner))).await;
+    let (yours, _) = sections(&body);
+    assert!(yours.unwrap().contains("demo-listed.repo.box"));
+    assert!(body.contains("disabled</span>"));
+}
+
+#[tokio::test]
+async fn public_unlisted_stays_absent_unless_in_the_access_list() {
+    let h = H::new();
+    for cookie in [
+        None,
+        Some(h.auth_cookie(&h.eve)),
+        Some(h.auth_cookie(&h.bob)),
+    ] {
+        let (_, _, body) = h.get("/", cookie.as_deref()).await;
+        assert!(!body.contains("demo-unlisted"), "{body}");
+    }
+    let (_, _, json) = h.get("/api/directory", None).await;
+    assert!(!json.contains("demo-unlisted"));
+    // Owner and admin hold it in their access list.
+    for u in [&h.owner, &h.fran] {
+        let (_, _, body) = h.get("/", Some(&h.auth_cookie(u))).await;
+        let (yours, _) = sections(&body);
+        assert!(yours.unwrap().contains("demo-unlisted.repo.box"));
+    }
+    // A grant puts it in eve's "Your apps" (and nowhere else).
+    let unlisted = h.state.store.app_by_name("demo-unlisted").unwrap().unwrap();
+    h.state
+        .store
+        .add_grant(unlisted.id, h.eve.id, None)
+        .unwrap();
+    let (_, _, body) = h.get("/", Some(&h.auth_cookie(&h.eve))).await;
+    let (yours, others) = sections(&body);
+    assert!(yours.unwrap().contains("demo-unlisted.repo.box"));
+    assert!(!others.unwrap().contains("demo-unlisted"));
+    let (_, _, json) = h.get("/api/directory", None).await;
+    assert!(!json.contains("demo-unlisted"), "still not public");
+}
+
+#[tokio::test]
+async fn access_is_counted_only_when_the_gate_allows() {
+    let h = H::new();
+    let stats = |name: &str| {
+        let app = h.state.store.app_by_name(name).unwrap().unwrap();
+        h.state.store.app_analytics(app.id, 2).unwrap()
+    };
+    // Denials: anonymous, spoofed, garbage code, replayed code, revoked grant.
+    assert_eq!(
+        h.gate("demo-private", "/", None, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.gate("demo-private", "/", None, &[("X-RepoBox-User", "bob")])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.gate(
+            "demo-private",
+            "/?token=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            None,
+            &[]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(stats("demo-private").total_requests, 0);
+    // Redemption itself is a redirect, not a served request: not counted.
+    let code = h.mint(&h.bob, "demo-private").await;
+    let (st, hd, _) = h
+        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .await;
+    assert_eq!(st, StatusCode::FOUND);
+    let bob_cookie = app_cookie_from(&hd);
+    assert_eq!(
+        h.gate("demo-private", &format!("/?token={code}"), None, &[])
+            .await
+            .0,
+        StatusCode::FORBIDDEN,
+        "replay"
+    );
+    assert_eq!(stats("demo-private").total_requests, 0);
+    // Allowed requests count, one per request, and bob is one user however often he comes.
+    for uri in ["/", "/assets/app.css", "/api/x"] {
+        assert_eq!(
+            h.gate("demo-private", uri, Some(&bob_cookie), &[]).await.0,
+            StatusCode::OK
+        );
+    }
+    let a = stats("demo-private");
+    assert_eq!(a.total_requests, 3);
+    assert_eq!(a.window_requests, 3);
+    assert_eq!(a.window_users, 1);
+    assert_eq!(a.recent[0].requests, 3);
+    assert_eq!(a.recent[0].users, 1);
+    // A second signed-in user is a second unique.
+    let code = h.mint(&h.owner, "demo-private").await;
+    let (_, hd, _) = h
+        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .await;
+    let owner_cookie = app_cookie_from(&hd);
+    h.gate("demo-private", "/", Some(&owner_cookie), &[]).await;
+    let a = stats("demo-private");
+    assert_eq!((a.total_requests, a.window_users), (4, 2));
+    // Revoked grant and disabled app: denied, counters frozen.
+    let app = h.state.store.app_by_name("demo-private").unwrap().unwrap();
+    h.state.store.remove_grant(app.id, h.bob.id).unwrap();
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&bob_cookie), &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    h.state.store.set_app_enabled(app.id, false).unwrap();
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&owner_cookie), &[])
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    // A code minted before the app was switched off is refused at the edge too.
+    let (code, _) = h
+        .state
+        .store
+        .create_token(
+            repobox_platform::store::TokenKind::Launch,
+            Some(h.owner.id),
+            Some(app.id),
+            Some(h.owner.id),
+            90,
+            "",
+        )
+        .unwrap();
+    let (st, hd, _) = h
+        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .await;
+    assert_eq!(st, StatusCode::NOT_FOUND);
+    assert!(hdr(&hd, "set-cookie").is_none());
+    assert_eq!(stats("demo-private").total_requests, 4);
+    // Disabled user: denied, not counted.
+    h.state.store.set_app_enabled(app.id, true).unwrap();
+    h.state.store.set_user_enabled(h.owner.id, false).unwrap();
+    assert_eq!(
+        h.gate("demo-private", "/", Some(&owner_cookie), &[])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(stats("demo-private").total_requests, 4);
+    h.state.store.set_user_enabled(h.owner.id, true).unwrap();
+
+    // Public apps: every allowed request counts, but nobody is identified,
+    // not even a visitor who launched with a session.
+    assert_eq!(stats("demo-listed").total_requests, 0);
+    assert_eq!(
+        h.gate("demo-listed", "/", None, &[]).await.0,
+        StatusCode::OK
+    );
+    let code = h.mint(&h.fran, "demo-listed").await;
+    let (st, hd, _) = h
+        .gate("demo-listed", &format!("/?token={code}"), None, &[])
+        .await;
+    assert_eq!(st, StatusCode::FOUND);
+    let fran_cookie = app_cookie_from(&hd);
+    let (st, hd, _) = h.gate("demo-listed", "/", Some(&fran_cookie), &[]).await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(
+        hdr(&hd, "x-repobox-user"),
+        Some("fran"),
+        "identity still injected"
+    );
+    let a = stats("demo-listed");
+    assert_eq!(a.total_requests, 2);
+    assert_eq!(a.window_users, 0, "public app keeps no identity");
+    assert_eq!(a.recent[0].users, 0);
+    // A stray code on a public app is a harmless redirect and not a count.
+    let (st, _, _) = h
+        .gate("demo-listed", &format!("/?token={code}"), None, &[])
+        .await;
+    assert_eq!(st, StatusCode::FOUND);
+    assert_eq!(stats("demo-listed").total_requests, 2);
+    // Unlisted is counted like any public app.
+    h.gate("demo-unlisted", "/", None, &[]).await;
+    assert_eq!(stats("demo-unlisted").total_requests, 1);
+    assert_eq!(stats("other-private").total_requests, 0, "untouched app");
+}
+
+#[tokio::test]
+async fn analytics_page_is_owner_or_admin_only() {
+    let h = H::new();
+    let bobs = h
+        .state
+        .store
+        .create_app(
+            "bobs-app",
+            "Bob's app",
+            "",
+            h.bob.id,
+            AppKind::Proxy,
+            "127.0.0.1:3298",
+            Visibility::Private,
+        )
+        .unwrap();
+    h.state
+        .store
+        .record_access(bobs.id, Some(h.bob.id))
+        .unwrap();
+    let app = h.state.store.app_by_name("demo-private").unwrap().unwrap();
+    for _ in 0..5 {
+        h.state.store.record_access(app.id, Some(h.bob.id)).unwrap();
+    }
+    h.state.store.record_access(app.id, Some(h.eve.id)).unwrap();
+
+    assert_eq!(
+        h.get("/apps/demo-private/analytics", None).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.get("/apps/demo-private/analytics", Some(&h.auth_cookie(&h.eve)))
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        h.get("/apps/demo-private/analytics", Some(&h.auth_cookie(&h.bob)))
+            .await
+            .0,
+        StatusCode::FORBIDDEN,
+        "a grant is not ownership"
+    );
+    assert_eq!(
+        h.get("/apps/bobs-app/analytics", Some(&h.auth_cookie(&h.owner)))
+            .await
+            .0,
+        StatusCode::FORBIDDEN,
+        "another owner"
+    );
+    assert_eq!(
+        h.get("/apps/nope/analytics", Some(&h.auth_cookie(&h.fran)))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    // Owner and admin see the numbers; the page never mentions other apps.
+    for u in [&h.owner, &h.fran] {
+        let (st, _, body) = h
+            .get("/apps/demo-private/analytics", Some(&h.auth_cookie(u)))
+            .await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(body.contains("<div class=\"value\">6</div>"), "{body}");
+        assert!(
+            body.contains("<div class=\"value\">2</div>"),
+            "two unique users"
+        );
+        assert!(!body.contains("bobs-app"));
+        assert!(!body.contains("Bob&#39;s app"));
+        assert!(body.contains("Daily rows are deleted after 90 days"));
+    }
+    let (st, _, body) = h
+        .get("/apps/bobs-app/analytics", Some(&h.auth_cookie(&h.bob)))
+        .await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(body.contains("<div class=\"value\">1</div>"));
+    // Public apps say plainly that visitors are not identified.
+    let (st, _, body) = h
+        .get(
+            "/apps/demo-listed/analytics",
+            Some(&h.auth_cookie(&h.owner)),
+        )
+        .await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(body.contains("not kept for public apps"));
+    assert!(body.contains("visitors are not identified"));
+    // The manage page links to it.
+    let (_, _, body) = h
+        .get("/apps/demo-private", Some(&h.auth_cookie(&h.owner)))
+        .await;
+    assert!(body.contains("href=\"/apps/demo-private/analytics\""));
 }
 
 #[tokio::test]
@@ -866,6 +1216,8 @@ async fn pages_render_for_every_role_and_never_leak_secrets() {
         "/admin/audit",
         "/apps/demo-private",
         "/apps/demo-listed",
+        "/apps/demo-private/analytics",
+        "/apps/demo-listed/analytics",
     ] {
         let (st, _, page) = h.get(path, Some(&fran)).await;
         assert_eq!(st, StatusCode::OK, "{path}");

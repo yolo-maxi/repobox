@@ -6,9 +6,14 @@
 //! * single-use tokens are consumed with a conditional UPDATE so a replay
 //!   races cannot redeem twice;
 //! * access checks always re-read user/app state so revocation, disabling and
-//!   visibility changes take effect on the next request.
+//!   visibility changes take effect on the next request;
+//! * access counting stores counters only: per app per UTC day, plus the user
+//!   id of signed-in visitors of *private* apps for unique-user dedup. No URL,
+//!   query, cookie, IP, user agent, token or body is ever written, and daily
+//!   rows are deleted after [`ACCESS_RETENTION_DAYS`].
 
 use std::path::Path;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -242,16 +247,67 @@ CREATE TABLE IF NOT EXISTS audit (
     subject TEXT NOT NULL,
     detail TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS access_daily (
+    app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    day INTEGER NOT NULL,
+    requests INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (app_id, day)
+);
+CREATE TABLE IF NOT EXISTS access_daily_users (
+    app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    day INTEGER NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    PRIMARY KEY (app_id, day, user_id)
+);
+CREATE TABLE IF NOT EXISTS access_totals (
+    app_id INTEGER PRIMARY KEY REFERENCES apps(id) ON DELETE CASCADE,
+    requests INTEGER NOT NULL DEFAULT 0,
+    since_day INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', '1');
+INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '2');
 "#;
+
+/// Daily access counters (and the per-day user ids of private apps that
+/// back the unique-user figure) are kept for this many UTC days, today
+/// included. The all-time request total carries no identity and is kept.
+pub const ACCESS_RETENTION_DAYS: i64 = 90;
+
+/// UTC day number of a unix timestamp.
+pub fn day_of(ts: i64) -> i64 {
+    ts.div_euclid(86400)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DayAccess {
+    pub day: i64,
+    pub requests: i64,
+    /// Distinct signed-in users that day. Always 0 for public apps, whose
+    /// visitors are never identified.
+    pub users: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppAnalytics {
+    /// Allowed requests since `since_day` (all time, no identity).
+    pub total_requests: i64,
+    pub since_day: Option<i64>,
+    pub window_days: i64,
+    pub window_requests: i64,
+    /// Distinct signed-in users over the retention window (private apps).
+    pub window_users: i64,
+    /// Newest first; one entry per day, zero days included.
+    pub recent: Vec<DayAccess>,
+}
 
 pub struct Store {
     conn: Mutex<Connection>,
     clock: Clock,
+    /// Day on which expired access counters were last pruned (0 = never).
+    access_pruned_day: AtomicI64,
 }
 
 impl Store {
@@ -282,6 +338,7 @@ impl Store {
         Ok(Self {
             conn: Mutex::new(conn),
             clock,
+            access_pruned_day: AtomicI64::new(0),
         })
     }
 
@@ -834,6 +891,96 @@ impl Store {
             .map_err(Into::into)
     }
 
+    // ---------------------------------------------------------------- access
+
+    /// Count one request the gate allowed through for `app_id`. `user_id` is
+    /// the signed-in visitor of a *private* app (callers pass `None` for
+    /// public apps, so no identity is ever attached to public traffic). Only
+    /// counters are written; nothing about the request itself is stored.
+    pub fn record_access(&self, app_id: i64, user_id: Option<i64>) -> Result<()> {
+        let day = day_of(self.now());
+        let conn = self.lock();
+        let tx = conn.unchecked_transaction()?;
+        tx.execute(
+            "INSERT INTO access_totals (app_id, requests, since_day) VALUES (?1, 1, ?2)
+             ON CONFLICT(app_id) DO UPDATE SET requests = requests + 1",
+            params![app_id, day],
+        )?;
+        tx.execute(
+            "INSERT INTO access_daily (app_id, day, requests) VALUES (?1, ?2, 1)
+             ON CONFLICT(app_id, day) DO UPDATE SET requests = requests + 1",
+            params![app_id, day],
+        )?;
+        if let Some(uid) = user_id {
+            tx.execute(
+                "INSERT OR IGNORE INTO access_daily_users (app_id, day, user_id) VALUES (?1, ?2, ?3)",
+                params![app_id, day, uid],
+            )?;
+        }
+        if self.access_pruned_day.swap(day, Ordering::Relaxed) != day {
+            let cutoff = day - ACCESS_RETENTION_DAYS;
+            tx.execute("DELETE FROM access_daily WHERE day <= ?1", params![cutoff])?;
+            tx.execute(
+                "DELETE FROM access_daily_users WHERE day <= ?1",
+                params![cutoff],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Aggregate counters for one app: all-time total, the retention window,
+    /// and `recent_days` per-day rows (today first).
+    pub fn app_analytics(&self, app_id: i64, recent_days: i64) -> Result<AppAnalytics> {
+        let today = day_of(self.now());
+        let cutoff = today - ACCESS_RETENTION_DAYS;
+        let conn = self.lock();
+        let (total_requests, since_day) = conn
+            .query_row(
+                "SELECT requests, since_day FROM access_totals WHERE app_id = ?1",
+                params![app_id],
+                |r| Ok((r.get::<_, i64>(0)?, Some(r.get::<_, i64>(1)?))),
+            )
+            .optional()?
+            .unwrap_or((0, None));
+        let window_requests: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(requests), 0) FROM access_daily WHERE app_id = ?1 AND day > ?2",
+            params![app_id, cutoff],
+            |r| r.get(0),
+        )?;
+        let window_users: i64 = conn.query_row(
+            "SELECT COUNT(DISTINCT user_id) FROM access_daily_users WHERE app_id = ?1 AND day > ?2",
+            params![app_id, cutoff],
+            |r| r.get(0),
+        )?;
+        let mut by_day =
+            conn.prepare("SELECT requests FROM access_daily WHERE app_id = ?1 AND day = ?2")?;
+        let mut users_by_day =
+            conn.prepare("SELECT COUNT(*) FROM access_daily_users WHERE app_id = ?1 AND day = ?2")?;
+        let mut recent = Vec::with_capacity(recent_days.max(0) as usize);
+        for i in 0..recent_days.max(0) {
+            let day = today - i;
+            let requests: i64 = by_day
+                .query_row(params![app_id, day], |r| r.get(0))
+                .optional()?
+                .unwrap_or(0);
+            let users: i64 = users_by_day.query_row(params![app_id, day], |r| r.get(0))?;
+            recent.push(DayAccess {
+                day,
+                requests,
+                users,
+            });
+        }
+        Ok(AppAnalytics {
+            total_requests,
+            since_day,
+            window_days: ACCESS_RETENTION_DAYS,
+            window_requests,
+            window_users,
+            recent,
+        })
+    }
+
     // ---------------------------------------------------------------- backup
 
     /// Consistent online backup using SQLite's backup API (safe while the
@@ -1087,5 +1234,98 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn access_counters_dedupe_users_and_expire() {
+        let (s, clock) = store_with_clock();
+        let owner = s.create_user("owner", "Owner", Role::Member).unwrap();
+        let bob = s.create_user("bob", "Bob", Role::Member).unwrap();
+        let app = s
+            .create_app(
+                "demo",
+                "Demo",
+                "",
+                owner.id,
+                AppKind::Proxy,
+                "127.0.0.1:3231",
+                Visibility::Private,
+            )
+            .unwrap();
+        let empty = s.app_analytics(app.id, 3).unwrap();
+        assert_eq!(empty.total_requests, 0);
+        assert_eq!(empty.since_day, None);
+        assert_eq!(empty.recent.len(), 3);
+        assert!(empty.recent.iter().all(|d| d.requests == 0 && d.users == 0));
+
+        let day0 = day_of(s.now());
+        s.record_access(app.id, Some(bob.id)).unwrap();
+        s.record_access(app.id, Some(bob.id)).unwrap();
+        s.record_access(app.id, Some(owner.id)).unwrap();
+        s.record_access(app.id, None).unwrap();
+        let a = s.app_analytics(app.id, 2).unwrap();
+        assert_eq!(a.total_requests, 4);
+        assert_eq!(a.since_day, Some(day0));
+        assert_eq!(a.window_requests, 4);
+        assert_eq!(a.window_users, 2, "bob counted once");
+        assert_eq!(
+            a.recent[0],
+            DayAccess {
+                day: day0,
+                requests: 4,
+                users: 2
+            }
+        );
+        assert_eq!(a.recent[1].requests, 0);
+
+        // Next day: bob again is a new unique for that day but still one user overall.
+        clock.fetch_add(86400, Ordering::SeqCst);
+        s.record_access(app.id, Some(bob.id)).unwrap();
+        let a = s.app_analytics(app.id, 2).unwrap();
+        assert_eq!(a.total_requests, 5);
+        assert_eq!(a.window_users, 2);
+        assert_eq!(a.recent[0].users, 1);
+        assert_eq!(a.recent[1].users, 2);
+
+        // Past the retention window the daily rows (and user ids) are gone,
+        // while the all-time total survives.
+        clock.fetch_add(86400 * ACCESS_RETENTION_DAYS, Ordering::SeqCst);
+        s.record_access(app.id, None).unwrap();
+        let a = s.app_analytics(app.id, 1).unwrap();
+        assert_eq!(a.total_requests, 6);
+        assert_eq!(a.window_requests, 1);
+        assert_eq!(a.window_users, 0);
+        let conn = s.lock();
+        let users_rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM access_daily_users", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(users_rows, 0, "identity rows pruned");
+        let daily_rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM access_daily", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(daily_rows, 1);
+    }
+
+    #[test]
+    fn access_tables_hold_only_counters() {
+        let (s, _) = store_with_clock();
+        let conn = s.lock();
+        for table in ["access_daily", "access_daily_users", "access_totals"] {
+            let mut stmt = conn
+                .prepare(&format!("PRAGMA table_info({table})"))
+                .unwrap();
+            let cols: Vec<(String, String)> = stmt
+                .query_map([], |r| Ok((r.get(1)?, r.get(2)?)))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect();
+            for (name, ty) in &cols {
+                assert_eq!(ty, "INTEGER", "{table}.{name} must be a counter or id");
+                assert!(
+                    ["app_id", "day", "requests", "user_id", "since_day"].contains(&name.as_str()),
+                    "unexpected column {table}.{name}"
+                );
+            }
+        }
     }
 }

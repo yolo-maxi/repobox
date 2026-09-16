@@ -188,6 +188,12 @@ enum AppCmd {
     Remove {
         name: String,
     },
+    /// Print the access counters of an app (allowed requests only, no identity)
+    Stats {
+        name: String,
+        #[arg(long, default_value_t = 14)]
+        days: i64,
+    },
 }
 
 #[derive(Subcommand)]
@@ -608,6 +614,47 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
             store.delete_app(&a.name)?;
             store.audit(None, "app.remove", &a.name, "cli");
             println!("removed '{}'; re-render routes and reload Caddy", a.name);
+        }
+        AppCmd::Stats { name, days } => {
+            let a = need_app(store, &name)?;
+            let st = store.app_analytics(a.id, days)?;
+            let private = a.visibility == Visibility::Private;
+            println!(
+                "{}: {} allowed request(s) {}",
+                a.name,
+                st.total_requests,
+                st.since_day
+                    .map(|d| format!("since {}", web::html::fmt_day(d)))
+                    .unwrap_or_else(|| "(nothing counted yet)".into())
+            );
+            println!(
+                "last {} days: {} request(s), {} signed-in user(s){}",
+                st.window_days,
+                st.window_requests,
+                if private {
+                    st.window_users.to_string()
+                } else {
+                    "-".into()
+                },
+                if private {
+                    ""
+                } else {
+                    " (public app: visitors are not identified)"
+                }
+            );
+            println!("DAY         REQUESTS  USERS");
+            for d in &st.recent {
+                println!(
+                    "{}  {:>8}  {}",
+                    web::html::fmt_day(d.day),
+                    d.requests,
+                    if private {
+                        d.users.to_string()
+                    } else {
+                        "-".into()
+                    }
+                );
+            }
         }
     }
     Ok(())

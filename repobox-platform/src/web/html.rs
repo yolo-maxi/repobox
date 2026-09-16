@@ -198,6 +198,13 @@ pub fn fmt_ts(ts: i64) -> String {
         .unwrap_or_else(|| ts.to_string())
 }
 
+/// Format a UTC day number (see `store::day_of`) as `YYYY-MM-DD`.
+pub fn fmt_day(day: i64) -> String {
+    chrono::DateTime::from_timestamp(day * 86400, 0)
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| day.to_string())
+}
+
 pub fn fmt_rel(now: i64, ts: i64) -> String {
     let d = ts - now;
     let (abs, suffix, prefix) = if d >= 0 {

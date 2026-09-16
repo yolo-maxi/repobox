@@ -233,7 +233,17 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
         );
     }
 
-    // 4. Allow. Only these headers reach the origin (Caddy copy_headers list).
+    // 4. Allow. This is the only place an access is counted: nothing above
+    //    (denials, disabled apps, code redemption redirects) touches the
+    //    counters. Private apps keep the signed-in user id for unique-user
+    //    dedup; public traffic is counted without any identity.
+    let counted_user = match (&session, app.visibility) {
+        (Some((_, user)), Visibility::Private) => Some(user.id),
+        _ => None,
+    };
+    if let Err(e) = s.store.record_access(app.id, counted_user) {
+        tracing::warn!("access count for {} failed: {e}", app.name);
+    }
     let mut resp = StatusCode::OK.into_response();
     let h = resp.headers_mut();
     let put = |h: &mut HeaderMap, k: &'static str, v: &str| {
