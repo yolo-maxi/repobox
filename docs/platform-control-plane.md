@@ -268,10 +268,33 @@ enforces this on both apply and rollback.
 
 ## Deployment record (2026-09-16, directory + access counting)
 
-* Deployed with `NO_CADDY=1 repobox-platform/scripts/deploy.sh` (no route or
-  host changed, so Caddy was neither re-applied nor reloaded). The pre-deploy
-  DB backup and the live checks are recorded in the commit message of this
-  change; see the work log in the project brief for the exact evidence.
+* Commit `1be2af84` deployed with `NO_CADDY=1 repobox-platform/scripts/deploy.sh`
+  at 10:38 UTC. No route or host changed, so Caddy was neither re-applied nor
+  reloaded: the Caddyfile still carries its 00:43 UTC mtime and the caddy unit
+  has been up since 2026-08-05 with no reload event in its journal. The deploy
+  restarted only the two platform units, which came back active with `/healthz`
+  OK and both listeners bound to 127.0.0.1 only.
+* Pre-deploy registry backup: `/home/fran/backups/repobox-platform/platform-20260916T103827Z.db`
+  (schema 1). After the restart `meta.schema_version` is `2` and the three
+  `access_*` tables exist.
+* Live evidence: the deploy sweep itself counted one allowed request each on
+  `demo-listed` and `demo-unlisted` while `demo-private` (401 in the sweep)
+  stayed at zero. Two short-lived throwaway users (`review-member` with a grant
+  on `demo-private`, `review-admin2`) were enrolled through their device links
+  in a real browser at 1280×900 and 390×844: the member's directory shows
+  *Your apps* (demo-private) above *Other apps* (demo-listed) with no unlisted
+  app and no Manage button; the admin's directory shows all three under *Your
+  apps* only; launching `demo-private` landed on the clean app URL with
+  `x-repobox-user=review-member` at the origin and a host-only HttpOnly
+  `__Host-rb_app` cookie; the member got 403 on the analytics page; the
+  admin's analytics page showed 3 allowed requests / 1 signed-in user for
+  `demo-private` and "not kept for public apps" for `demo-listed`; no page had
+  horizontal overflow at 390 px. Anonymous curl: *Public directory* with the
+  listed demo only, `/api/directory` unchanged, private 401 with and without
+  spoofed `X-RepoBox-*` headers, analytics 401, gate 404 via the public host.
+  After disabling both throwaway users, three anonymous 401s on `demo-private`
+  left its counter at 3. The platform journal contains no token or URL. The
+  consumed device-link files were deleted.
 
 ## Current limitations
 
