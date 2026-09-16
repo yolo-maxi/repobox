@@ -34,6 +34,19 @@ LEGACY_BLOCK = (
 )
 
 
+# The live Caddyfile must stay world-readable: `caddy reload` runs as the
+# caddy user, while backups are root-only (0640). Copying a backup's mode onto
+# the live file breaks every subsequent reload with "permission denied".
+LIVE_MODE = 0o644
+
+
+def install_live(src):
+    tmp = CADDYFILE + ".restore"
+    shutil.copyfile(src, tmp)
+    os.chmod(tmp, LIVE_MODE)
+    os.replace(tmp, CADDYFILE)
+
+
 def run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True)
 
@@ -93,11 +106,11 @@ def apply(block_path):
     if not validate(tmp):
         os.unlink(tmp)
         sys.exit(f"candidate rejected; live Caddyfile untouched (backup at {backup})")
-    shutil.copymode(CADDYFILE, tmp)
+    os.chmod(tmp, LIVE_MODE)
     os.replace(tmp, CADDYFILE)
     print(mode)
     if not reload():
-        shutil.copy2(backup, CADDYFILE)
+        install_live(backup)
         reload()
         sys.exit("reload failed; restored previous Caddyfile")
     print(f"backup: {backup}")
@@ -109,7 +122,7 @@ def rollback(backup):
         sys.exit(f"no such backup {backup}")
     if not validate(backup):
         sys.exit("backup does not validate; not applying")
-    shutil.copy2(backup, CADDYFILE)
+    install_live(backup)
     if not reload():
         sys.exit("reload failed after restore")
     print(f"restored {backup}")
