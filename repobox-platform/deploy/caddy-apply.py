@@ -76,6 +76,12 @@ def apply(block_path):
         block = f.read()
     if not (block.startswith(BEGIN) and block.endswith(END)):
         sys.exit("managed block file must start/end with the markers")
+    # `routes render` deliberately uses the same outer markers for its generated
+    # app fragment. Never accept that fragment as the control-plane block: doing
+    # so would remove auth.repo.box while leaving superficially valid Caddy.
+    required = ("auth.repo.box {", "import /etc/caddy/repobox-platform/apps.caddy")
+    if not all(item in block for item in required):
+        sys.exit("refusing non-control-plane managed block; auth route/import required")
 
     if BEGIN in current:
         start = current.index(BEGIN)
