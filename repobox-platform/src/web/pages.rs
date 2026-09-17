@@ -437,10 +437,11 @@ pub async fn launch(
     s.store.audit(Some(user.id), "launch.mint", &app.name, "");
     let sep = if next.contains('?') { '&' } else { '?' };
     let location = format!(
-        "https://{}{}{}token={}",
+        "https://{}{}{}{}={}",
         app.host(&s.cfg.domain),
         next,
         sep,
+        super::LAUNCH_PARAM,
         code
     );
     let mut resp = (StatusCode::FOUND, "").into_response();

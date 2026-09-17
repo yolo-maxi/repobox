@@ -124,8 +124,10 @@ impl H {
         let (st, h, _) = self.get(&format!("/{app}"), Some(device_cookie)).await;
         assert_eq!(st, StatusCode::FOUND);
         let loc = h.get(header::LOCATION).unwrap().to_str().unwrap();
-        let code = loc.split("token=").nth(1).unwrap().to_string();
-        let (st, hd, _) = self.gate(app, &format!("/?token={code}"), None, &[]).await;
+        let code = loc.split("rb_launch=").nth(1).unwrap().to_string();
+        let (st, hd, _) = self
+            .gate(app, &format!("/?rb_launch={code}"), None, &[])
+            .await;
         assert_eq!(st, StatusCode::FOUND);
         app_cookie_from(&hd)
     }
@@ -203,10 +205,10 @@ impl H {
             .unwrap()
             .to_string();
         assert!(
-            loc.starts_with(&format!("https://{app}.repo.box/?token=")),
+            loc.starts_with(&format!("https://{app}.repo.box/?rb_launch=")),
             "{loc}"
         );
-        loc.split("token=").nth(1).unwrap().to_string()
+        loc.split("rb_launch=").nth(1).unwrap().to_string()
     }
 }
 
@@ -237,7 +239,7 @@ async fn launch_code_redeems_into_host_only_session_and_clean_redirect() {
     let (st, hd, _) = h
         .gate(
             "demo-private",
-            &format!("/dash?x=1&token={code}&y=2"),
+            &format!("/dash?x=1&rb_launch={code}&y=2"),
             None,
             &[],
         )
@@ -271,11 +273,11 @@ async fn launch_code_replay_is_rejected() {
     let h = H::new();
     let code = h.mint(&h.bob, "demo-private").await;
     let (st, _, _) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     assert_eq!(st, StatusCode::FOUND);
     let (st, hd, body) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     assert_eq!(st, StatusCode::FORBIDDEN);
     assert!(hdr(&hd, "set-cookie").is_none());
@@ -289,7 +291,7 @@ async fn launch_code_expires() {
     h.clock
         .fetch_add(h.state.cfg.launch_ttl + 1, Ordering::SeqCst);
     let (st, hd, body) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     assert_eq!(st, StatusCode::FORBIDDEN);
     assert!(hdr(&hd, "set-cookie").is_none());
@@ -302,20 +304,20 @@ async fn launch_code_is_bound_to_its_app() {
     let code = h.mint(&h.bob, "demo-private").await;
     // Using a private-app code on a public app: harmless, code stripped, no cookie.
     let (st, hd, _) = h
-        .gate("demo-listed", &format!("/?token={code}"), None, &[])
+        .gate("demo-listed", &format!("/?rb_launch={code}"), None, &[])
         .await;
     assert_eq!(st, StatusCode::FOUND);
     assert_eq!(hdr(&hd, "location"), Some("/"));
     assert!(hdr(&hd, "set-cookie").is_none());
     // The code was consumed by that attempt, so it cannot be used afterwards either.
     let (st, _, _) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     assert_eq!(st, StatusCode::FORBIDDEN);
     // A public-app code presented to a private app is refused.
     let code2 = h.mint(&h.owner, "demo-listed").await;
     let (st, hd, _) = h
-        .gate("demo-private", &format!("/?token={code2}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code2}"), None, &[])
         .await;
     assert_eq!(st, StatusCode::FORBIDDEN);
     assert!(hdr(&hd, "set-cookie").is_none());
@@ -326,7 +328,7 @@ async fn revoking_a_grant_kills_live_sessions_and_launch() {
     let h = H::new();
     let code = h.mint(&h.bob, "demo-private").await;
     let (_, hd, _) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     let cookie = app_cookie_from(&hd);
     assert_eq!(
@@ -351,7 +353,7 @@ async fn disabled_app_is_denied_for_everyone() {
     let h = H::new();
     let code = h.mint(&h.bob, "demo-private").await;
     let (_, hd, _) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     let cookie = app_cookie_from(&hd);
     for name in ["demo-private", "demo-listed", "demo-unlisted"] {
@@ -379,7 +381,7 @@ async fn disabled_app_is_denied_for_everyone() {
     let (st, hd, _) = h
         .gate(
             "demo-private",
-            "/?token=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "/?rb_launch=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             None,
             &[],
         )
@@ -397,7 +399,7 @@ async fn disabled_user_is_denied_everywhere() {
     let auth = h.auth_cookie(&h.bob);
     let code = h.mint(&h.bob, "demo-private").await;
     let (_, hd, _) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     let cookie = app_cookie_from(&hd);
     let code2 = h.mint(&h.bob, "demo-private").await;
@@ -408,7 +410,7 @@ async fn disabled_user_is_denied_everywhere() {
         "live app session"
     );
     assert_eq!(
-        h.gate("demo-private", &format!("/?token={code2}"), None, &[])
+        h.gate("demo-private", &format!("/?rb_launch={code2}"), None, &[])
             .await
             .0,
         StatusCode::FORBIDDEN,
@@ -601,7 +603,7 @@ async fn access_is_counted_only_when_the_gate_allows() {
     assert_eq!(
         h.gate(
             "demo-private",
-            "/?token=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "/?rb_launch=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             None,
             &[]
         )
@@ -613,12 +615,12 @@ async fn access_is_counted_only_when_the_gate_allows() {
     // Redemption itself is a redirect, not a served request: not counted.
     let code = h.mint(&h.bob, "demo-private").await;
     let (st, hd, _) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     assert_eq!(st, StatusCode::FOUND);
     let bob_cookie = app_cookie_from(&hd);
     assert_eq!(
-        h.gate("demo-private", &format!("/?token={code}"), None, &[])
+        h.gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
             .await
             .0,
         StatusCode::FORBIDDEN,
@@ -641,7 +643,7 @@ async fn access_is_counted_only_when_the_gate_allows() {
     // A second signed-in user is a second unique.
     let code = h.mint(&h.owner, "demo-private").await;
     let (_, hd, _) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     let owner_cookie = app_cookie_from(&hd);
     h.gate("demo-private", "/", Some(&owner_cookie), &[]).await;
@@ -675,7 +677,7 @@ async fn access_is_counted_only_when_the_gate_allows() {
         )
         .unwrap();
     let (st, hd, _) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     assert_eq!(st, StatusCode::NOT_FOUND);
     assert!(hdr(&hd, "set-cookie").is_none());
@@ -701,7 +703,7 @@ async fn access_is_counted_only_when_the_gate_allows() {
     );
     let code = h.mint(&h.fran, "demo-listed").await;
     let (st, hd, _) = h
-        .gate("demo-listed", &format!("/?token={code}"), None, &[])
+        .gate("demo-listed", &format!("/?rb_launch={code}"), None, &[])
         .await;
     assert_eq!(st, StatusCode::FOUND);
     let fran_cookie = app_cookie_from(&hd);
@@ -718,7 +720,7 @@ async fn access_is_counted_only_when_the_gate_allows() {
     assert_eq!(a.recent[0].users, 0);
     // A stray code on a public app is a harmless redirect and not a count.
     let (st, _, _) = h
-        .gate("demo-listed", &format!("/?token={code}"), None, &[])
+        .gate("demo-listed", &format!("/?rb_launch={code}"), None, &[])
         .await;
     assert_eq!(st, StatusCode::FOUND);
     assert_eq!(stats("demo-listed").total_requests, 2);
@@ -836,7 +838,7 @@ async fn spoofed_identity_headers_never_reach_the_decision() {
     // Real session + spoof: gate answers with the real identity.
     let code = h.mint(&h.bob, "demo-private").await;
     let (_, hd, _) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &spoof)
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &spoof)
         .await;
     let cookie = app_cookie_from(&hd);
     let (st, hd, _) = h.gate("demo-private", "/", Some(&cookie), &spoof).await;
@@ -866,7 +868,7 @@ async fn app_session_is_bound_to_one_app() {
     let h = H::new();
     let code = h.mint(&h.bob, "demo-private").await;
     let (_, hd, _) = h
-        .gate("demo-private", &format!("/?token={code}"), None, &[])
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
     let cookie = app_cookie_from(&hd);
     let app = h.state.store.app_by_name("other-private").unwrap().unwrap();
@@ -1564,4 +1566,111 @@ async fn pages_render_for_every_role_and_never_leak_secrets() {
     let (st, _, hz) = h.get("/healthz", None).await;
     assert_eq!(st, StatusCode::OK);
     assert!(hz.starts_with("ok apps="));
+}
+
+// ---------------------------------------------------------------- handoff
+
+/// Ellie's apps (study-diary, ellies-japanese, academicweapon) use `?token=`
+/// for their own setup and invite links. The first live launch failed because
+/// the gate took the app's `token` for a launch code and answered 403 on the
+/// app's very next request. The launch code now travels as `rb_launch`, and
+/// `token` belongs to the app.
+#[tokio::test]
+async fn apps_own_token_parameter_passes_through_the_gate() {
+    let h = H::new();
+    let cookie = h.auth_cookie(&h.bob);
+    let app_cookie = h.launch_from(&cookie, "demo-private").await;
+    let before = h.state.store.list_audit(100).unwrap().len();
+
+    // signed in: the app's own token link is served, identity injected
+    let (st, hd, _) = h
+        .gate(
+            "demo-private",
+            "/api/setup/check?token=app-owned-secret",
+            Some(&app_cookie),
+            &[],
+        )
+        .await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(hdr(&hd, "x-repobox-user"), Some("bob"));
+    assert!(hdr(&hd, "location").is_none(), "no redirect, no rewrite");
+
+    // anonymous: an app token link on a private app is a plain sign-in, not a
+    // rejected launch code
+    let (st, _, body) = h
+        .gate("demo-private", "/invite?token=app-owned-secret", None, &[])
+        .await;
+    assert_eq!(st, StatusCode::UNAUTHORIZED);
+    assert!(!body.contains("Launch code not accepted"), "{body}");
+
+    // public app: same, served without any identity
+    let (st, hd, _) = h
+        .gate("demo-listed", "/?token=app-owned-secret", None, &[])
+        .await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(hdr(&hd, "x-repobox-auth"), Some("public"));
+
+    let audit = h.state.store.list_audit(100).unwrap();
+    assert!(
+        audit[..audit.len() - before]
+            .iter()
+            .all(|e| e.action != "launch.reject"),
+        "an app token must never be audited as a rejected launch code"
+    );
+}
+
+/// A browser that already holds the app session and re-presents a used code
+/// (back button, duplicated tab, reload of the launch URL) keeps its session
+/// and lands on the clean URL instead of a 403.
+#[tokio::test]
+async fn stale_code_on_a_signed_in_browser_is_dropped_not_rejected() {
+    let h = H::new();
+    let code = h.mint(&h.bob, "demo-private").await;
+    let (st, hd, _) = h
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
+        .await;
+    assert_eq!(st, StatusCode::FOUND);
+    let app_cookie = app_cookie_from(&hd);
+
+    let (st, hd, _) = h
+        .gate(
+            "demo-private",
+            &format!("/notes?rb_launch={code}&tab=2"),
+            Some(&app_cookie),
+            &[],
+        )
+        .await;
+    assert_eq!(st, StatusCode::FOUND);
+    assert_eq!(hdr(&hd, "location"), Some("/notes?tab=2"));
+    assert!(
+        hdr(&hd, "set-cookie").is_none(),
+        "existing session kept as is"
+    );
+    assert_eq!(hdr(&hd, "cache-control"), Some("no-store"));
+    let (st, hd, _) = h
+        .gate("demo-private", "/notes?tab=2", Some(&app_cookie), &[])
+        .await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(hdr(&hd, "x-repobox-user"), Some("bob"));
+
+    // without a session the same replay is still refused
+    let (st, _, _) = h
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
+        .await;
+    assert_eq!(st, StatusCode::FORBIDDEN);
+    // a session for a *different* app does not rescue a bad code either
+    let other = h
+        .launch_from(&h.auth_cookie(&h.owner), "other-private")
+        .await;
+    let (st, _, _) = h
+        .gate(
+            "demo-private",
+            &format!("/?rb_launch={code}"),
+            Some(&other),
+            &[],
+        )
+        .await;
+    assert_eq!(st, StatusCode::FORBIDDEN);
+    let last = &h.state.store.list_audit(1).unwrap()[0];
+    assert_eq!(last.action, "launch.reject");
 }

@@ -16,7 +16,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
 use super::html::{Shell, status_page};
-use super::{APP_COOKIE, S, html, set_cookie, urlencode};
+use super::{APP_COOKIE, LAUNCH_PARAM, S, html, set_cookie, urlencode};
 use crate::model::{Visibility, validate_app_name};
 use crate::render::{GATE_APP_HEADER, GATE_MARKER_HEADER};
 use crate::store::{SessionKind, TokenKind};
@@ -25,8 +25,10 @@ fn hdr<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers.get(name).and_then(|v| v.to_str().ok())
 }
 
-/// Split a request URI into (path, query pairs) and drop the `token` pair,
-/// returning the clean URI to redirect to plus the token if there was one.
+/// Split a request URI into (path, query pairs) and drop the launch-code
+/// pair (`LAUNCH_PARAM`), returning the clean URI to redirect to plus the code
+/// if there was one. Every other query parameter, including an app's own
+/// `token=`, is passed through untouched.
 fn split_token(uri: &str) -> (String, Option<String>) {
     let (path, query) = match uri.split_once('?') {
         Some((p, q)) => (p, Some(q)),
@@ -49,7 +51,7 @@ fn split_token(uri: &str) -> (String, Option<String>) {
                 continue;
             }
             match pair.split_once('=') {
-                Some(("token", v)) => token = Some(v.to_string()),
+                Some((k, v)) if k == LAUNCH_PARAM => token = Some(v.to_string()),
                 _ => keep.push(pair),
             }
         }
@@ -127,6 +129,17 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
         )
     };
 
+    // The host-only app session this browser already holds, if any.
+    let session = super::cookie_value(&headers, APP_COOKIE)
+        .and_then(|raw| {
+            s.store
+                .session_lookup(SessionKind::App, &raw)
+                .ok()
+                .flatten()
+        })
+        .filter(|(sess, _)| sess.app_id == Some(app.id))
+        .filter(|(_, user)| s.store.has_access(user, &app).unwrap_or(false));
+
     // 1. One-time launch code redemption (only on navigations).
     if let Some(raw) = token.filter(|_| method == "GET" || method == "HEAD") {
         if !app.enabled {
@@ -186,6 +199,25 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
                 );
                 resp
             }
+            Err(msg) if session.is_some() => {
+                // A stale or replayed code on a browser that is already signed
+                // in to this app (back button, duplicated tab): keep the
+                // session, drop the code from the URL, carry on.
+                s.store.audit(
+                    None,
+                    "launch.reject",
+                    &app.name,
+                    &format!("{msg} (session kept)"),
+                );
+                let mut resp = (StatusCode::FOUND, "").into_response();
+                resp.headers_mut().insert(
+                    header::LOCATION,
+                    HeaderValue::from_str(&clean_uri).unwrap_or(HeaderValue::from_static("/")),
+                );
+                resp.headers_mut()
+                    .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+                resp
+            }
             Err(msg) => {
                 s.store.audit(None, "launch.reject", &app.name, msg);
                 html(
@@ -209,18 +241,7 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
         return disabled_page(&shell);
     }
 
-    // 2. Existing host-only app session?
-    let session = super::cookie_value(&headers, APP_COOKIE)
-        .and_then(|raw| {
-            s.store
-                .session_lookup(SessionKind::App, &raw)
-                .ok()
-                .flatten()
-        })
-        .filter(|(sess, _)| sess.app_id == Some(app.id))
-        .filter(|(_, user)| s.store.has_access(user, &app).unwrap_or(false));
-
-    // 3. Private apps require a session; public apps do not.
+    // 2./3. Private apps require a session; public apps do not.
     if app.visibility == Visibility::Private && session.is_none() {
         return html(
             StatusCode::UNAUTHORIZED,
@@ -287,19 +308,39 @@ mod tests {
     #[test]
     fn token_splitting_keeps_other_params() {
         assert_eq!(split_token("/"), ("/".into(), None));
-        assert_eq!(split_token("/?token=abc"), ("/".into(), Some("abc".into())));
         assert_eq!(
-            split_token("/p/q?a=1&token=abc&b=2"),
+            split_token("/?rb_launch=abc"),
+            ("/".into(), Some("abc".into()))
+        );
+        assert_eq!(
+            split_token("/p/q?a=1&rb_launch=abc&b=2"),
             ("/p/q?a=1&b=2".into(), Some("abc".into()))
         );
         assert_eq!(
-            split_token("/p?token=abc&token=def"),
+            split_token("/p?rb_launch=abc&rb_launch=def"),
             ("/p".into(), Some("def".into()))
         );
         assert_eq!(
-            split_token("//evil.com/?token=x"),
+            split_token("//evil.com/?rb_launch=x"),
             ("/evil.com/".into(), Some("x".into()))
         );
-        assert_eq!(split_token("/x?tokens=1"), ("/x?tokens=1".into(), None));
+        assert_eq!(
+            split_token("/x?rb_launchs=1"),
+            ("/x?rb_launchs=1".into(), None)
+        );
+    }
+
+    #[test]
+    fn apps_own_token_parameter_is_never_treated_as_a_launch_code() {
+        // Ellie's apps use `?token=` for their own setup/invite links; the
+        // gate must pass those through untouched.
+        assert_eq!(
+            split_token("/api/setup/check?token=abc"),
+            ("/api/setup/check?token=abc".into(), None)
+        );
+        assert_eq!(
+            split_token("/invite?token=abc&rb_launch=code"),
+            ("/invite?token=abc".into(), Some("code".into()))
+        );
     }
 }

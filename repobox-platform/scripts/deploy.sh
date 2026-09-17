@@ -18,6 +18,14 @@
 #   ./scripts/deploy.sh                 full deploy
 #   SKIP_TESTS=1 ./scripts/deploy.sh    skip cargo test
 #   NO_CADDY=1 ./scripts/deploy.sh      everything except the Caddy change (sweep still runs)
+#   RETIRE_HOSTS="a.repo.box b.repo.box" ./scripts/deploy.sh
+#                                       also remove those hosts' standalone legacy
+#                                       Caddy blocks, in the same validated apply as
+#                                       the rendered routes that replace them
+#   CADDY_DRY_RUN=1 ./scripts/deploy.sh validate the Caddy change, install nothing
+#
+# STATIC_ROOTS lists the directories a registered static app may live under
+# (space separated); the rendered routes are refused otherwise.
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -30,6 +38,8 @@ TARGET=x86_64-unknown-linux-musl
 BIN="$REPO/target/$TARGET/release/repobox-platform"
 STAGE=/home/fran/repobox-platform-stage
 ADMIN_NAME="${ADMIN_NAME:-fran}"
+STATIC_ROOTS="${STATIC_ROOTS:-/srv/repobox-platform/apps /var/www/repo.box/subdomains}"
+RETIRE_HOSTS="${RETIRE_HOSTS:-}"
 
 log() { printf '\n=== %s ===\n' "$*"; }
 remote() { ssh -o BatchMode=yes "$HOST" "$@"; }
@@ -94,13 +104,16 @@ remote "set -e
 if [[ -n "${NO_CADDY:-}" ]]; then
   log "NO_CADDY set: skipping route render + Caddy apply (routes unchanged)"
 else
-  log "caddy: render routes, apply managed block"
+  log "caddy: render routes, apply managed block + routes${RETIRE_HOSTS:+, retire: $RETIRE_HOSTS}"
+  roots_args=""; for r in $STATIC_ROOTS; do roots_args="$roots_args --apps-root '$r'"; done
+  retire_args=""; for h in $RETIRE_HOSTS; do retire_args="$retire_args --retire '$h'"; done
   remote "set -e
     P=/srv/repobox-platform/bin/repobox-platform
-    \$P routes render --check-roots --out '$STAGE/apps.caddy'
-    sudo -n install -o root -g root -m 0644 '$STAGE/apps.caddy' /etc/caddy/repobox-platform/apps.caddy
-    sudo -n python3 /srv/repobox-platform/caddy-apply.py apply '$STAGE/auth.repo.box.caddy'
+    \$P routes render --check-roots $roots_args --out '$STAGE/apps.caddy'
+    sudo -n python3 /srv/repobox-platform/caddy-apply.py apply '$STAGE/auth.repo.box.caddy' \
+      --apps '$STAGE/apps.caddy' $retire_args ${CADDY_DRY_RUN:+--dry-run}
   "
+  if [[ -n "${CADDY_DRY_RUN:-}" ]]; then log "CADDY_DRY_RUN set: stopping before the live sweep"; exit 0; fi
 fi
 
 log "live sweep"
@@ -118,13 +131,29 @@ check() { # url expected-code  (retries while the TLS cert is still being issued
 check https://auth.repo.box/healthz 200
 check https://auth.repo.box/ 200
 check https://auth.repo.box/gate/verify 404
-check https://demo-private.repo.box/ 401
-check https://demo-unlisted.repo.box/ 200
-check https://demo-listed.repo.box/ 200
+# Every registered app, expectation derived from the registry: anonymous gets
+# 401 on private, 200 on public, 404 on disabled; a spoofed identity header
+# never changes a private answer.
+apps_json=$(remote "/srv/repobox-platform/bin/repobox-platform app list --json")
+while read -r name vis enabled; do
+  if [[ "$enabled" != "true" ]]; then want=404
+  elif [[ "$vis" == "private" ]]; then want=401
+  else want=200; fi
+  check "https://$name.repo.box/" "$want"
+  if [[ "$want" == "401" ]]; then
+    code=$(curl -s -o /dev/null -w '%{http_code}' -H 'X-RepoBox-User: fran' -H 'X-RepoBox-Role: admin' -H 'X-RepoBox-Auth: session' "https://$name.repo.box/" || true)
+    printf '  %-45s %s (want 401, spoofed identity)\n' "https://$name.repo.box/" "$code"
+    [[ "$code" == "401" ]] || fail=1
+  fi
+done < <(printf '%s' "$apps_json" | python3 -c 'import json,sys; [print(a["name"], a["visibility"], str(a["enabled"]).lower()) for a in json.load(sys.stdin)]')
 dir=$(curl -s https://auth.repo.box/api/directory)
 echo "  directory: $dir"
-echo "$dir" | command grep -q '"demo-listed"' || fail=1
-echo "$dir" | command grep -q 'demo-unlisted' && fail=1
+while read -r name vis enabled; do
+  n=$(printf '%s' "$dir" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(sum(1 for a in d.get("apps", d if isinstance(d, list) else []) if a.get("name")==sys.argv[1]))' "$name")
+  if [[ "$vis" == "public_listed" && "$enabled" == "true" ]]; then want=1; else want=0; fi
+  printf '  %-45s listed %s time(s) (want %s)\n' "$name" "$n" "$want"
+  [[ "$n" == "$want" ]] || fail=1
+done < <(printf '%s' "$apps_json" | python3 -c 'import json,sys; [print(a["name"], a["visibility"], str(a["enabled"]).lower()) for a in json.load(sys.stdin)]')
 anon=$(curl -s https://auth.repo.box/)
 echo "$anon" | command grep -q 'id="public-apps"' || { echo "  anonymous directory is not the public directory" >&2; fail=1; }
 echo "$anon" | command grep -qE 'demo-unlisted|demo-private' && { echo "  anonymous directory leaks a non-listed app" >&2; fail=1; }

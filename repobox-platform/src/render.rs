@@ -22,8 +22,8 @@ pub struct RenderConfig {
     pub domain: String,
     /// Loopback address of the control plane gate.
     pub gate: String,
-    /// Directory every static root must live under.
-    pub apps_root: String,
+    /// Directories a static root may live under (any one of them).
+    pub apps_roots: Vec<String>,
 }
 
 /// Identity headers the gate may issue. The generated `copy_headers` list and
@@ -45,11 +45,16 @@ pub fn validate_for_render(app: &App, cfg: &RenderConfig) -> Result<(), String> 
     let target =
         validate_target(app.kind, &app.target).map_err(|e| format!("app '{}': {e}", app.name))?;
     if app.kind == AppKind::Static {
-        let root = cfg.apps_root.trim_end_matches('/');
-        if root.is_empty() || !target.starts_with(&format!("{root}/")) {
+        let under_allowed_root = cfg.apps_roots.iter().any(|r| {
+            let root = r.trim_end_matches('/');
+            !root.is_empty() && target.starts_with(&format!("{root}/"))
+        });
+        if !under_allowed_root {
             return Err(format!(
-                "app '{}': static root {} must be under {}",
-                app.name, target, cfg.apps_root
+                "app '{}': static root {} must be under one of: {}",
+                app.name,
+                target,
+                cfg.apps_roots.join(", ")
             ));
         }
     }
@@ -147,7 +152,7 @@ mod tests {
         RenderConfig {
             domain: "repo.box".into(),
             gate: "127.0.0.1:3230".into(),
-            apps_root: "/srv/repobox-platform/apps".into(),
+            apps_roots: vec!["/srv/repobox-platform/apps".into()],
         }
     }
 
@@ -200,6 +205,56 @@ mod tests {
         assert!(
             render(&[app("x", AppKind::Static, "/etc")], &cfg()).is_err(),
             "outside apps root"
+        );
+        // a second allowed root admits exactly that subtree, nothing else
+        let mut multi = cfg();
+        multi.apps_roots.push("/var/www/repo.box/subdomains".into());
+        let ok = render(
+            &[app(
+                "puzzlenest",
+                AppKind::Static,
+                "/var/www/repo.box/subdomains/circuit",
+            )],
+            &multi,
+        )
+        .unwrap();
+        assert!(ok.contains("root * /var/www/repo.box/subdomains/circuit\n\t\tfile_server"));
+        assert!(
+            render(
+                &[app("x", AppKind::Static, "/var/www/repo.box/subdomains")],
+                &multi
+            )
+            .is_err(),
+            "the root itself is not under the root"
+        );
+        assert!(
+            render(
+                &[app("x", AppKind::Static, "/var/www/repo.box/other")],
+                &multi
+            )
+            .is_err()
+        );
+        assert!(
+            render(
+                &[app(
+                    "x",
+                    AppKind::Static,
+                    "/var/www/repo.box/subdomains/circuit"
+                )],
+                &cfg()
+            )
+            .is_err(),
+            "not allowed when the root is not configured"
+        );
+        let mut none = cfg();
+        none.apps_roots.clear();
+        assert!(
+            render(
+                &[app("s", AppKind::Static, "/srv/repobox-platform/apps/s")],
+                &none
+            )
+            .is_err(),
+            "no roots means no static apps"
         );
         assert!(
             render(

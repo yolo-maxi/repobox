@@ -21,6 +21,10 @@ use crate::store::{Session, SessionKind, Store};
 /// exactly the "no domain-wide bearer cookie" rule enforced by construction.
 pub const AUTH_COOKIE: &str = "__Host-rb_auth";
 pub const APP_COOKIE: &str = "__Host-rb_app";
+/// Query parameter that carries the one-time launch code from the launcher to
+/// the app host. Deliberately not `token`: apps use that name for their own
+/// invite/setup links, and the gate must never swallow those.
+pub const LAUNCH_PARAM: &str = "rb_launch";
 
 #[derive(Debug, Clone)]
 pub struct Config {

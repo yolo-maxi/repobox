@@ -132,6 +132,26 @@ enum UserCmd {
     Logout {
         name: String,
     },
+    /// List a user's live device and app sessions (no secrets)
+    Sessions {
+        name: String,
+    },
+    /// Fold one user into another. The kept user keeps its id and therefore
+    /// every device/app session; it takes over the retired user's apps and
+    /// grants and may be renamed. The retired user is disabled, renamed
+    /// `retired-<id>-<name>`, and all of its sessions and unused links are
+    /// revoked. One transaction, one audit row.
+    Consolidate {
+        /// User to keep (must be enabled)
+        #[arg(long)]
+        keep: String,
+        /// User to retire into it (must not be an admin)
+        #[arg(long)]
+        retire: String,
+        /// New name for the kept user (defaults to its current name)
+        #[arg(long)]
+        name: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -184,6 +204,13 @@ enum AppCmd {
     Disable {
         name: String,
     },
+    /// Move an app to another (enabled) user. Route, visibility, enabled
+    /// state and grants are kept; the transition is audited.
+    TransferOwner {
+        name: String,
+        #[arg(long)]
+        owner: String,
+    },
     /// Remove an app from the registry (re-render routes afterwards)
     Remove {
         name: String,
@@ -206,8 +233,9 @@ enum RoutesCmd {
         domain: String,
         #[arg(long, default_value = "127.0.0.1:3230")]
         gate: String,
-        #[arg(long, default_value = "/srv/repobox-platform/apps")]
-        apps_root: String,
+        /// Directory static roots must live under; repeat to allow several
+        #[arg(long = "apps-root", default_value = "/srv/repobox-platform/apps")]
+        apps_roots: Vec<String>,
         /// Fail if a static root directory does not exist on this machine
         #[arg(long)]
         check_roots: bool,
@@ -440,6 +468,60 @@ fn user_cmd(store: &Store, cmd: UserCmd) -> Result<(), Box<dyn std::error::Error
             store.audit(None, "session.revoke_all", &u.name, "cli");
             println!("revoked {n} session(s) for '{}'", u.name);
         }
+        UserCmd::Sessions { name } => {
+            let u = need_user(store, &name)?;
+            println!(
+                "user {} (id {}, {}, {})",
+                u.name,
+                u.id,
+                u.role.as_str(),
+                if u.enabled { "active" } else { "disabled" }
+            );
+            println!(
+                "ID     KIND  APP                    CREATED             EXPIRES             LAST SEEN           DEVICE  LABEL"
+            );
+            for kind in [store::SessionKind::Auth, store::SessionKind::App] {
+                for sess in store.list_sessions(u.id, kind)? {
+                    let app = match sess.app_id {
+                        Some(id) => store
+                            .app_by_id(id)
+                            .map(|a| a.name)
+                            .unwrap_or_else(|_| "?".into()),
+                        None => "-".into(),
+                    };
+                    println!(
+                        "{:<6} {:<5} {:<22} {:<19} {:<19} {:<19} {:<7} {}",
+                        sess.id,
+                        kind.as_str(),
+                        app,
+                        web::html::fmt_ts(sess.created_at),
+                        web::html::fmt_ts(sess.expires_at),
+                        web::html::fmt_ts(sess.last_seen_at),
+                        sess.parent_id
+                            .map(|p| p.to_string())
+                            .unwrap_or_else(|| "-".into()),
+                        sess.label
+                    );
+                }
+            }
+        }
+        UserCmd::Consolidate { keep, retire, name } => {
+            let k = need_user(store, &keep)?;
+            let r = need_user(store, &retire)?;
+            let c = store.consolidate_users(&k, &r, name.as_deref(), "cli")?;
+            println!(
+                "consolidated '{}' into '{}' (id {}): now named '{}'; {} app(s) and {} grant(s) moved; retired user renamed '{}' and disabled, {} session(s) and {} unused link(s) revoked",
+                r.name,
+                k.name,
+                k.id,
+                c.kept_name,
+                c.apps,
+                c.grants,
+                c.retired_name,
+                c.sessions_revoked,
+                c.tokens_revoked
+            );
+        }
     }
     Ok(())
 }
@@ -609,6 +691,22 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
             store.audit(None, "app.disable", &a.name, "cli");
             println!("'{}' disabled", a.name);
         }
+        AppCmd::TransferOwner { name, owner } => {
+            let a = need_app(store, &name)?;
+            let from = store.user_by_id(a.owner_id)?;
+            let to = need_user(store, &owner)?;
+            if store.transfer_app_owner(&a, &to, "cli")? {
+                println!(
+                    "'{}' owner: {} -> {}; route, visibility, enabled state and grants unchanged",
+                    a.name, from.name, to.name
+                );
+            } else {
+                println!(
+                    "'{}' is already owned by {}; nothing changed",
+                    a.name, to.name
+                );
+            }
+        }
         AppCmd::Remove { name } => {
             let a = need_app(store, &name)?;
             store.delete_app(&a.name)?;
@@ -666,14 +764,14 @@ fn routes_cmd(store: &Store, cmd: RoutesCmd) -> Result<(), Box<dyn std::error::E
             out,
             domain,
             gate,
-            apps_root,
+            apps_roots,
             check_roots,
         } => {
             let apps = store.list_apps()?;
             let cfg = render::RenderConfig {
                 domain,
                 gate,
-                apps_root,
+                apps_roots,
             };
             if check_roots {
                 for a in apps.iter().filter(|a| a.kind == AppKind::Static) {

@@ -103,14 +103,14 @@ expect "directory shows private app to bob" "$(curl -s "${R[@]}" -b "$JAR" "$A/"
 
 echo "== launch flow"
 LOC=$(curl -s "${R[@]}" -b "$JAR" -o /dev/null -w '%{redirect_url}' "$A/demo-private")
-case "$LOC" in https://demo-private.repo.box/?token=*) printf '  ok   %-55s %s\n' "launch redirects to app with one-time code" "(token elided)";; *) echo "  FAIL launch redirect: $LOC"; fail=1;; esac
-TOKEN=${LOC#*token=}
+case "$LOC" in https://demo-private.repo.box/?rb_launch=*) printf '  ok   %-55s %s\n' "launch redirects to app with one-time code" "(token elided)";; *) echo "  FAIL launch redirect: $LOC"; fail=1;; esac
+TOKEN=${LOC#*rb_launch=}
 AJAR="$W/appjar"
-out=$(curl -s "${R[@]}" -c "$AJAR" -o /dev/null -w '%{http_code} %{redirect_url}' "$PRIV/dashboard?a=1&token=$TOKEN")
+out=$(curl -s "${R[@]}" -c "$AJAR" -o /dev/null -w '%{http_code} %{redirect_url}' "$PRIV/dashboard?a=1&rb_launch=$TOKEN")
 expect "gate redeems code -> clean redirect" "$out" "302 https://demo-private.repo.box:$HTTPS/dashboard?a=1"
 expect "app cookie is host-only (__Host-)" "$(command grep -c '__Host-rb_app' "$AJAR")" 1
 expect "app cookie is HttpOnly" "$(command grep -c '#HttpOnly_demo-private.repo.box' "$AJAR")" 1
-expect "code replay rejected" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$PRIV/?token=$TOKEN")" 403
+expect "code replay rejected" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$PRIV/?rb_launch=$TOKEN")" 403
 who=$(curl -s "${R[@]}" -b "$AJAR" "$PRIV/whoami.json")
 expect "origin sees X-RepoBox-User=bob" "$(echo "$who" | command grep -c '"x-repobox-user":"bob"')" 1
 expect "origin sees X-RepoBox-Auth=session" "$(echo "$who" | command grep -c '"x-repobox-auth":"session"')" 1
@@ -118,6 +118,9 @@ who=$(curl -s "${R[@]}" -b "$AJAR" -H 'X-RepoBox-User: mallory' -H 'X-RepoBox-Ro
 expect "spoof with session still shows bob" "$(echo "$who" | command grep -c '"x-repobox-user":"bob"')" 1
 expect "spoof with session: role stays member" "$(echo "$who" | command grep -c '"x-repobox-role":"member"')" 1
 expect "private page renders" "$(curl -s "${R[@]}" -b "$AJAR" "$PRIV/" | command grep -c 'Authenticated identity')" 1
+who=$(curl -s "${R[@]}" -b "$AJAR" "$PRIV/whoami.json?token=app-owned-value")
+expect "app's own ?token= passes the gate untouched" "$(echo "$who" | command grep -c '"x-repobox-user":"bob"')" 1
+expect "stale code on a signed-in browser -> clean redirect" "$(curl -s "${R[@]}" -b "$AJAR" -o /dev/null -w '%{http_code} %{redirect_url}' "$PRIV/x?rb_launch=$TOKEN")" "302 https://demo-private.repo.box:$HTTPS/x"
 expect "public page: no identity at origin (via gate)" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "https://demo-listed.repo.box:$HTTPS/")" 200
 
 echo "== revocation / disable"

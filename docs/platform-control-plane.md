@@ -39,7 +39,7 @@ browser ──HTTPS──▶ Caddy (repo.box host)
   disabled/unknown apps, 302 redemption redirect).
 * **Launch flow** (private apps):
   `auth.repo.box/<app>` (signed-in device) → mints a one-time launch code
-  (90 s) bound to user+app → `302 https://<app>.repo.box/?token=<code>` →
+  (90 s) bound to user+app → `302 https://<app>.repo.box/?rb_launch=<code>` →
   gate consumes the code atomically → `302` to the clean URL with
   `Set-Cookie: __Host-rb_app=…; Path=/; Secure; HttpOnly; SameSite=Lax`
   (host-only by construction: `__Host-` cookies cannot carry `Domain`) →
@@ -157,11 +157,14 @@ repobox-platform/scripts/deploy.sh          # gates → build → ship → insta
 NO_CADDY=1 repobox-platform/scripts/deploy.sh   # everything except the Caddy change
 ```
 
-The Caddy step (`caddy-apply.py apply`) backs up the Caddyfile, swaps either
-the existing managed block or the exact legacy `auth.repo.box → 127.0.0.1:3005`
-block, runs `caddy validate` on the candidate, and only then installs and
-reloads; a failed reload restores the backup automatically. If neither block
-matches exactly it aborts and changes nothing.
+The Caddy step (`caddy-apply.py apply --apps <rendered>`) backs up the
+Caddyfile and `apps.caddy`, swaps either the existing managed block or the
+exact legacy `auth.repo.box → 127.0.0.1:3005` block, installs the rendered
+routes, runs `caddy validate` on the candidate, and only then installs and
+reloads; a failed validation or reload restores both files automatically. If
+neither block matches exactly, or the block is a route-only fragment, or a
+hostname would be defined both by the Caddyfile and by the rendered routes, it
+aborts and changes nothing.
 
 Legacy note: the old auth-proxy on port 3005 (a domain-wide `media_auth`
 cookie) is not running; `auth.repo.box` returned 502 before this change.
@@ -183,7 +186,33 @@ $P routes render --check-roots --out /tmp/apps.caddy \
   && sudo systemctl reload caddy
 $P audit --limit 50
 $P app stats myapp --days 14                              # access counters, no identity
+$P app transfer-owner myapp --owner ocean                # audited; route/visibility/enabled/grants kept
+$P user sessions ocean                                    # live device + app sessions, no secrets
+$P user consolidate --keep ocean-2 --retire ocean --name ocean
+#   folds `ocean` into `ocean-2` (which keeps its id and therefore its sessions),
+#   moves apps + grants, revokes the retired user's sessions and unused links,
+#   renames the retired row `retired-<id>-ocean`, renames the kept user `ocean`;
+#   one transaction, one `user.consolidate` audit row
 ```
+
+Static app roots must live under one of the directories given to
+`routes render --apps-root` (repeatable; `deploy.sh` passes `STATIC_ROOTS`,
+default `/srv/repobox-platform/apps /var/www/repo.box/subdomains`).
+
+Retiring a legacy standalone site block once its generated route exists:
+
+```bash
+RETIRE_HOSTS="myapp.repo.box" repobox-platform/scripts/deploy.sh
+# = caddy-apply.py apply <block> --apps <rendered> --retire myapp.repo.box
+```
+
+`--retire` removes exactly one top-level `myapp.repo.box { ... }` block (plus
+the comment lines glued directly above it). It refuses when the host is
+defined by zero or several blocks, when the block also serves a host that is
+not being retired, or when the rendered routes do not define the host exactly
+once; the Caddyfile and `apps.caddy` are backed up, validated and reloaded as
+one change and restored together on failure. `CADDY_DRY_RUN=1` validates the
+whole change and installs nothing.
 
 ## Backup and restore
 
@@ -238,7 +267,7 @@ $P app stats myapp --days 14                              # access counters, no 
    curl -s https://auth.repo.box/api/directory                       # demo-listed only
    curl -s https://auth.repo.box/ | grep -c 'id="public-apps"'      # anonymous: public directory only
    # launch: sign a device in (device link), then
-   curl -s -b jar -o /dev/null -w '%{redirect_url}' https://auth.repo.box/demo-private   # ...?token=
+   curl -s -b jar -o /dev/null -w '%{redirect_url}' https://auth.repo.box/demo-private   # ...?rb_launch=
    curl -s -c appjar -o /dev/null -w '%{http_code} %{redirect_url}' "<that url>"         # 302 https://demo-private.repo.box/
    curl -s -b appjar https://demo-private.repo.box/whoami.json                            # x-repobox-user
    ```
@@ -343,6 +372,108 @@ enforces this on both apply and rollback.
 * A follow-up commit only changes the relative-time label for very recent
   timestamps ("just now" instead of "in 0s") and this record; deployed the
   same way.
+
+## Deployment record (2026-09-17, Ellie Beaumont migration)
+
+Scope, authorised by Fran: bring Ellie's existing repo.box apps under the
+platform with a single Ellie identity, fix the launch handoff that failed on
+her first live launch, and retire the standalone legacy Caddy blocks for
+exactly those hostnames. Fieldwork (Fran's) was not touched.
+
+* **Launch handoff bug.** The first live launch (13:43 UTC) minted and
+  redeemed a code correctly, then the app's very next request was answered
+  403 "This link is not valid" by the gate. Cause: the gate treated *every*
+  `?token=` query parameter as a launch code, and all three of Ellie's apps
+  use `?token=` for their own setup/invite links (`/api/setup/check?token=`,
+  `/invite?token=`). Fix: the code now travels as `?rb_launch=` (shared
+  constant `LAUNCH_PARAM`), `token` is passed through untouched, and a stale
+  or replayed code presented by a browser that already holds the app session
+  redirects to the clean URL instead of 403 (audited as `launch.reject …
+  (session kept)`). Regression tests: `apps_own_token_parameter_passes_through_the_gate`,
+  `stale_code_on_a_signed_in_browser_is_dropped_not_rejected`, plus two new
+  checks in `edge-e2e.sh`.
+* **Identity.** Live inspection (read-only) showed the enrolled device
+  belonged to user id 10 `ellie-beaumont-study-diary` (device sessions 24 and
+  28, "Chrome on Windows PC", three study-diary app sessions 25–27), while id 9
+  `ellie-beaumont` had no session and one unredeemed enrolment link. Per
+  Fran's decision the enrolled row was kept: new CLI
+  `user consolidate --keep ellie-beaumont-study-diary --retire ellie-beaumont --name ellie-beaumont`
+  ran on the host at 14:26 UTC in one transaction: id 10 is now named
+  `ellie-beaumont` (sessions untouched and verified live with
+  `user sessions`), id 9 became `retired-9-ellie-beaumont`, disabled, its
+  unused link revoked (`tokens_revoked=1`), audit row `user.consolidate`.
+  No device link was generated or sent.
+* **New CLI**: `app transfer-owner <app> --owner <user>` (atomic owner +
+  `updated_at`, audited `app.transfer_owner`, refuses unknown/disabled users
+  and stale snapshots; route/visibility/enabled/grants untouched),
+  `user consolidate`, `user sessions` (no secrets). `routes render
+  --apps-root` is repeatable so registry static roots may live under
+  `/var/www/repo.box/subdomains` as well as `/srv/repobox-platform/apps`.
+  45 tests (21 unit, 24 integration), clippy `-D warnings`, rustfmt clean.
+* **Caddy helper**: `caddy-apply.py apply --apps <rendered> --retire <host>…`
+  installs the rendered routes and removes exact legacy site blocks in the
+  same backed-up, validated, reloaded change (restores both files on
+  failure); the route-fragment guard from 137f7ff3 is kept; `--dry-run`.
+  `deploy.sh` gained `STATIC_ROOTS`, `RETIRE_HOSTS`, `CADDY_DRY_RUN` and a
+  registry-driven sweep (every registered app: 401/200/404 by visibility and
+  state, spoofed identity headers still 401, directory count per app).
+* **Origins.** `ellies-japanese` ran as a host-network container binding
+  `0.0.0.0:3417` (the app hardcodes `0.0.0.0` in production; ufw already
+  blocked it externally, confirmed by timeout from Hetzner). Service
+  configuration only, originals in `/root/backups/ellies-japanese-20260917/`:
+  the unit now runs the container on the bridge with
+  `-p 127.0.0.1:3417:3417 --add-host=host.docker.internal:host-gateway`, and
+  `AI_BRIDGE_URL` points at `host.docker.internal:3429` (the pattern
+  uni-kitchen already uses). The restart exposed an unrelated latent fault:
+  the app refuses to boot when `SETUP_TOKEN_EXPIRES_AT` is in the past, and
+  it had expired on 2026-09-16 (any restart since then would have failed).
+  The owner account is already set up, so that token is inert; the expiry
+  was moved to `2030-01-01T00:00:00Z` to let the service start. Follow-up for
+  the app itself: accept an expired setup token once an owner exists. After
+  the change: unit active, `127.0.0.1:3417` via docker-proxy only, `200`
+  through Caddy, AI bridge reachable from inside the container. All six
+  origins now bind loopback (3417, 3022, 4184, 3025 checked with `ss`); none
+  answers from outside (3417/3022/4184/3025 time out from Hetzner).
+* **Registry** (all owner `ellie-beaumont`): `ellies-japanese` proxy 3417
+  private; `academicweapon` proxy 3022 private; `uni-kitchen` proxy 4184
+  private; `study-diary` proxy 3025 private (already registered, owner
+  unchanged by the consolidation); `puzzlenest` static
+  `/var/www/repo.box/subdomains/circuit` public_listed; `circuit` same root,
+  public_unlisted (reachable alias, not a second directory entry).
+* **Deploy.** 14:23 UTC `NO_CADDY=1` (binary + helper; DB backup
+  `platform-20260917T142328Z.db`), then 14:26 UTC full deploy with
+  `RETIRE_HOSTS="ellies-japanese.repo.box academicweapon.repo.box uni-kitchen.repo.box circuit.repo.box puzzlenest.repo.box"`
+  after a `CADDY_DRY_RUN=1` pass (DB backup `platform-20260917T142643Z.db`).
+  Caddy backups `/etc/caddy/backups/Caddyfile.pre-repobox-platform-20260917T142646Z`
+  and `apps.caddy.pre-repobox-platform-20260917T142646Z`. Retired blocks
+  (old line numbers): ellies-japanese 1258–1267, academicweapon 1268–1275
+  (with its two glued comment lines), uni-kitchen 1302–1304,
+  `circuit.repo.box, puzzlenest.repo.box` 1305–1317. Afterwards the Caddyfile
+  defines none of the five hosts, `apps.caddy` defines all ten managed apps
+  once, `caddy validate` is clean, the live file is 0644.
+* **Live results.** Anonymous: ellies-japanese, academicweapon, uni-kitchen,
+  study-diary → 401 with the platform "is private / Sign in and launch" page
+  (origins untouched), also 401 with spoofed `X-RepoBox-*` headers;
+  puzzlenest and circuit → 200 with byte-identical HTML, CSS asset 200;
+  `/api/directory` lists Puzzle Nest once and not circuit. Handoff retest
+  on production with throwaway `review-handoff-142911` (granted on
+  demo-private and ellies-japanese, then revoked, disabled and its link file
+  shredded): enrol via curl 200/303, launcher redirects with `rb_launch`,
+  gate 302 to the clean URL, origin sees the throwaway identity, an
+  app-owned `?token=` reaches the origin with identity intact, replay without
+  a session 403, and on the real ellies-japanese app `/api/setup/check?token=probe`
+  is answered by the app (`200 {"valid":false}`), not by the gate. The
+  stale-code-with-session fallback was verified locally against a real
+  Caddy and by the integration tests (the live script's copy of that check
+  had a shell-quoting bug and is not counted). Platform journal since the
+  deploy contains no launch code.
+* **Behaviour differences vs. the legacy blocks, accepted:** Puzzle Nest no
+  longer has the `try_files … /index.html` fallback, so unknown paths return
+  404 instead of the index (its bundle has no history routing);
+  `academicweapon.repo.box/healthz` is now gated (401) instead of the legacy
+  404 rule; `encode zstd gzip` is not emitted by the renderer.
+* **Deferred:** none of the six legacy routes remain; the app-side fix for
+  the ellies-japanese startup check is a follow-up in that app's repository.
 
 ## Current limitations
 

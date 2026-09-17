@@ -127,7 +127,7 @@ async fn index(
 <div class="panel"><h3>Why this proves the edge did it</h3><ul style="margin:0;padding-left:18px"><li>The origin has no login code and reads only request headers.</li><li>The generated route runs <code>request_header -X-RepoBox-*</code> before the gate, so a browser cannot smuggle these headers in. Try: <code>curl -H 'X-RepoBox-User: mallory' https://{host}/</code> — anonymous gets 401, and with a valid session the page still shows the real user.</li><li>The origin listens on loopback only; it is unreachable from the internet except through this Caddy route.</li></ul></div>
 <div class="panel"><h3>Request as seen by the origin</h3><dl class="kv"><dt>Path</dt><dd><code>{path}</code></dd><dt>X-Forwarded-For</dt><dd>{xff}</dd><dt>X-Forwarded-Host</dt><dd>{xfh}</dd><dt>X-Forwarded-Proto</dt><dd>{xfp}</dd></dl><pre class="mono" style="white-space:pre-wrap;color:var(--dim);margin:12px 0 0;font-size:.8rem">{raw}</pre><p class="hint" style="margin:8px 0 0">Machine-readable: <a href="/whoami.json">/whoami.json</a></p></div>
 </div>
-<p class="hint" style="margin-top:18px">Launch flow: auth.repo.box/{app_name} → https://{host}/?token=… → gate redeems the one-time code → host-only session cookie → redirect to the clean URL you are on now.</p>
+<p class="hint" style="margin-top:18px">Launch flow: auth.repo.box/{app_name} → https://{host}/?rb_launch=… → gate redeems the one-time code → host-only session cookie → redirect to the clean URL you are on now.</p>
 </div></main>
 <footer><div class="wrap"><span>repo.box platform · demo origin</span><span class="muted">no tokens in this page, no browser storage</span></div></footer></body></html>"#,
         title = esc(&d.title),

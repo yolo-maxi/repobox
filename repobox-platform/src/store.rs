@@ -317,6 +317,17 @@ pub struct AppAnalytics {
     pub recent: Vec<DayAccess>,
 }
 
+/// What `Store::consolidate_users` did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Consolidation {
+    pub kept_name: String,
+    pub retired_name: String,
+    pub apps: usize,
+    pub grants: usize,
+    pub sessions_revoked: usize,
+    pub tokens_revoked: usize,
+}
+
 pub struct Store {
     conn: Mutex<Connection>,
     clock: Clock,
@@ -456,6 +467,132 @@ impl Store {
         Ok(())
     }
 
+    /// Fold `retire` into `keep` in one transaction. `keep` retains its row,
+    /// id and therefore every device and app session it holds; it receives
+    /// every app `retire` owned and every grant `retire` had, and is renamed
+    /// to `new_name` when given. `retire` loses its name (it becomes
+    /// `retired-<id>-<old name>`), is disabled, and every session and every
+    /// unused token that pointed at it is revoked, so nothing can sign in as
+    /// the retired identity afterwards. The audit row is written in the same
+    /// transaction. `keep` must be enabled and must not be `retire`; an admin
+    /// cannot be retired implicitly (demote first).
+    pub fn consolidate_users(
+        &self,
+        keep: &User,
+        retire: &User,
+        new_name: Option<&str>,
+        note: &str,
+    ) -> Result<Consolidation> {
+        if keep.id == retire.id {
+            return Err(StoreError::Invalid(
+                "keep and retire are the same user".into(),
+            ));
+        }
+        if !keep.enabled {
+            return Err(StoreError::Invalid(format!(
+                "user '{}' is disabled; the kept identity must be enabled",
+                keep.name
+            )));
+        }
+        if retire.is_admin() {
+            return Err(StoreError::Invalid(format!(
+                "user '{}' is an admin; demote it before retiring it",
+                retire.name
+            )));
+        }
+        if let Some(n) = new_name {
+            crate::model::validate_user_name(n).map_err(StoreError::Invalid)?;
+        }
+        let retired_name = {
+            let prefix = format!("retired-{}-", retire.id);
+            let room = 32 - prefix.len();
+            let mut base = retire.name.clone();
+            base.truncate(room);
+            let base = base.trim_end_matches(['.', '_', '-']).to_string();
+            format!("{prefix}{base}")
+        };
+        let now = self.now();
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        // the snapshots must still describe the rows we are about to change
+        let cur: (String, i64) = tx.query_row(
+            "SELECT name, enabled FROM users WHERE id = ?1",
+            params![keep.id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        if cur.0 != keep.name || cur.1 != 1 {
+            return Err(StoreError::Conflict(format!(
+                "user '{}' changed while consolidating; retry",
+                keep.name
+            )));
+        }
+        let cur: String = tx.query_row(
+            "SELECT name FROM users WHERE id = ?1",
+            params![retire.id],
+            |r| r.get(0),
+        )?;
+        if cur != retire.name {
+            return Err(StoreError::Conflict(format!(
+                "user '{}' changed while consolidating; retry",
+                retire.name
+            )));
+        }
+        let apps = tx.execute(
+            "UPDATE apps SET owner_id = ?2, updated_at = ?3 WHERE owner_id = ?1",
+            params![retire.id, keep.id, now],
+        )?;
+        let grants = tx.execute(
+            "INSERT OR IGNORE INTO grants (app_id, user_id, granted_by, created_at)
+             SELECT app_id, ?2, granted_by, created_at FROM grants WHERE user_id = ?1",
+            params![retire.id, keep.id],
+        )?;
+        tx.execute("DELETE FROM grants WHERE user_id = ?1", params![retire.id])?;
+        let sessions = tx.execute(
+            "UPDATE sessions SET revoked_at = ?2 WHERE user_id = ?1 AND revoked_at IS NULL",
+            params![retire.id, now],
+        )?;
+        let tokens = tx.execute(
+            "UPDATE tokens SET revoked_at = ?2
+             WHERE (user_id = ?1 OR created_by = ?1) AND used_at IS NULL AND revoked_at IS NULL",
+            params![retire.id, now],
+        )?;
+        // free the old name first so `keep` may take it
+        tx.execute(
+            "UPDATE users SET name = ?2, enabled = 0 WHERE id = ?1",
+            params![retire.id, retired_name],
+        )?;
+        if let Some(n) = new_name {
+            tx.execute(
+                "UPDATE users SET name = ?2 WHERE id = ?1",
+                params![keep.id, n],
+            )
+            .map_err(|e| match StoreError::from(e) {
+                StoreError::Conflict(_) => {
+                    StoreError::Conflict(format!("user name '{n}' is already taken"))
+                }
+                other => other,
+            })?;
+        }
+        let final_name = new_name.unwrap_or(&keep.name).to_string();
+        let detail = format!(
+            "absorbed={} retired_as={} renamed_from={} apps={apps} grants={grants} sessions_revoked={sessions} tokens_revoked={tokens} {note}",
+            retire.name, retired_name, keep.name
+        );
+        tx.execute(
+            "INSERT INTO audit (at, actor_id, action, subject, detail) VALUES (?1, NULL, 'user.consolidate', ?2, ?3)",
+            params![now, final_name, detail],
+        )?;
+        tx.commit()?;
+        Ok(Consolidation {
+            kept_name: final_name,
+            retired_name,
+            apps,
+            grants,
+            sessions_revoked: sessions,
+            tokens_revoked: tokens,
+        })
+    }
+
     // ------------------------------------------------------------------ apps
 
     #[allow(clippy::too_many_arguments)]
@@ -513,6 +650,48 @@ impl Store {
             return Err(StoreError::NotFound);
         }
         self.app_by_name(name)?.ok_or(StoreError::NotFound)
+    }
+
+    /// Move an app to a new owner in one transaction: the owner and
+    /// `updated_at` change together with the audit row that records the
+    /// transition, so the log can never disagree with the registry. Route,
+    /// visibility, enabled state and grants are deliberately untouched. The
+    /// new owner must exist and be enabled; transferring to the current owner
+    /// is a no-op (`Ok(false)`) and writes no audit entry.
+    pub fn transfer_app_owner(&self, app: &App, new_owner: &User, note: &str) -> Result<bool> {
+        if !new_owner.enabled {
+            return Err(StoreError::Invalid(format!(
+                "user '{}' is disabled; enable them before transferring an app",
+                new_owner.name
+            )));
+        }
+        if app.owner_id == new_owner.id {
+            return Ok(false);
+        }
+        let old_owner = self.user_by_id(app.owner_id)?;
+        let now = self.now();
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        let n = tx.execute(
+            "UPDATE apps SET owner_id = ?2, updated_at = ?3 WHERE id = ?1 AND owner_id = ?4",
+            params![app.id, new_owner.id, now, app.owner_id],
+        )?;
+        if n == 0 {
+            return Err(StoreError::Conflict(format!(
+                "app '{}' changed while transferring; re-run `app show` and retry",
+                app.name
+            )));
+        }
+        tx.execute(
+            "INSERT INTO audit (at, actor_id, action, subject, detail) VALUES (?1, NULL, 'app.transfer_owner', ?2, ?3)",
+            params![
+                now,
+                app.name,
+                format!("from={} to={} {}", old_owner.name, new_owner.name, note)
+            ],
+        )?;
+        tx.commit()?;
+        Ok(true)
     }
 
     pub fn app_by_id(&self, id: i64) -> Result<App> {
@@ -1305,6 +1484,361 @@ mod tests {
                 Visibility::Private
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn transfer_owner_moves_ownership_and_keeps_everything_else() {
+        let (s, clock) = store_with_clock();
+        let dup = s.create_user("ellie-dup", "Ellie", Role::Member).unwrap();
+        let ellie = s.create_user("ellie", "Ellie", Role::Member).unwrap();
+        let bob = s.create_user("bob", "Bob", Role::Member).unwrap();
+        let app = s
+            .create_app(
+                "diary",
+                "Diary",
+                "desc",
+                dup.id,
+                AppKind::Proxy,
+                "127.0.0.1:3025",
+                Visibility::PublicUnlisted,
+            )
+            .unwrap();
+        s.set_app_enabled(app.id, false).unwrap();
+        let app = s.app_by_id(app.id).unwrap();
+        assert!(s.add_grant(app.id, bob.id, Some(dup.id)).unwrap());
+        assert!(s.add_grant(app.id, dup.id, None).unwrap());
+        let before = s.list_audit(10).unwrap().len();
+
+        clock.fetch_add(100, Ordering::SeqCst);
+        assert!(s.transfer_app_owner(&app, &ellie, "cli").unwrap());
+        let after = s.app_by_id(app.id).unwrap();
+        assert_eq!(after.owner_id, ellie.id);
+        assert_eq!(after.updated_at, app.updated_at + 100);
+        // untouched: route, title, description, visibility, enabled, grants
+        assert_eq!(after.kind, app.kind);
+        assert_eq!(after.target, app.target);
+        assert_eq!(after.title, app.title);
+        assert_eq!(after.description, app.description);
+        assert_eq!(after.visibility, Visibility::PublicUnlisted);
+        assert!(!after.enabled);
+        assert_eq!(after.created_at, app.created_at);
+        let grants: Vec<String> = s
+            .list_grants(app.id)
+            .unwrap()
+            .into_iter()
+            .map(|g| g.user.name)
+            .collect();
+        assert!(grants.contains(&"bob".to_string()));
+        assert!(grants.contains(&"ellie-dup".to_string()));
+        // access follows ownership
+        assert!(s.has_access(&ellie, &after).unwrap());
+        assert!(s.can_manage(&ellie, &after));
+        assert!(!s.can_manage(&s.user_by_id(dup.id).unwrap(), &after));
+        assert!(
+            s.has_access(&s.user_by_id(dup.id).unwrap(), &after)
+                .unwrap(),
+            "the former owner keeps only its explicit grant"
+        );
+        // exactly one audit row, describing the transition
+        let audit = s.list_audit(10).unwrap();
+        assert_eq!(audit.len(), before + 1);
+        let e = &audit[0];
+        assert_eq!(e.action, "app.transfer_owner");
+        assert_eq!(e.subject, "diary");
+        assert_eq!(e.detail, "from=ellie-dup to=ellie cli");
+        assert_eq!(e.at, app.updated_at + 100);
+
+        // same owner: no-op, no audit
+        assert!(!s.transfer_app_owner(&after, &ellie, "cli").unwrap());
+        assert_eq!(s.list_audit(10).unwrap().len(), before + 1);
+    }
+
+    #[test]
+    fn transfer_owner_refuses_disabled_owner_and_stale_app() {
+        let (s, _) = store_with_clock();
+        let a = s.create_user("a", "A", Role::Member).unwrap();
+        let b = s.create_user("b", "B", Role::Member).unwrap();
+        let c = s.create_user("c", "C", Role::Member).unwrap();
+        let d = s.create_user("d", "D", Role::Member).unwrap();
+        let app = s
+            .create_app(
+                "x",
+                "X",
+                "",
+                a.id,
+                AppKind::Static,
+                "/srv/repobox-platform/apps/x",
+                Visibility::Private,
+            )
+            .unwrap();
+        s.set_user_enabled(b.id, false).unwrap();
+        let b = s.user_by_id(b.id).unwrap();
+        let err = s.transfer_app_owner(&app, &b, "cli").unwrap_err();
+        assert!(matches!(err, StoreError::Invalid(_)), "{err}");
+        assert_eq!(s.app_by_id(app.id).unwrap().owner_id, a.id);
+        assert!(
+            s.list_audit(10)
+                .unwrap()
+                .iter()
+                .all(|e| e.action != "app.transfer_owner")
+        );
+
+        // a stale App snapshot (owner already changed underneath) is rejected
+        assert!(s.transfer_app_owner(&app, &c, "cli").unwrap());
+        let err = s.transfer_app_owner(&app, &d, "cli").unwrap_err();
+        assert!(matches!(err, StoreError::Conflict(_)), "{err}");
+        assert_eq!(s.app_by_id(app.id).unwrap().owner_id, c.id);
+        // a deleted app is rejected the same way
+        let fresh = s.app_by_id(app.id).unwrap();
+        s.delete_app("x").unwrap();
+        assert!(s.transfer_app_owner(&fresh, &a, "cli").is_err());
+    }
+
+    #[test]
+    fn consolidate_keeps_sessions_of_kept_user_and_retires_the_other() {
+        let (s, clock) = store_with_clock();
+        // the enrolled identity (kept) and the unused duplicate (retired)
+        let keep = s
+            .create_user("ellie-beaumont-study-diary", "Ellie Beaumont", Role::Member)
+            .unwrap();
+        let retire = s
+            .create_user("ellie-beaumont", "Ellie Beaumont", Role::Member)
+            .unwrap();
+        let fran = s.create_user("fran", "Fran", Role::Admin).unwrap();
+        let diary = s
+            .create_app(
+                "study-diary",
+                "Study Diary",
+                "",
+                keep.id,
+                AppKind::Proxy,
+                "127.0.0.1:3025",
+                Visibility::Private,
+            )
+            .unwrap();
+        let kitchen = s
+            .create_app(
+                "uni-kitchen",
+                "Uni Kitchen",
+                "",
+                retire.id,
+                AppKind::Proxy,
+                "127.0.0.1:4184",
+                Visibility::Private,
+            )
+            .unwrap();
+        let shared = s
+            .create_app(
+                "shared",
+                "Shared",
+                "",
+                fran.id,
+                AppKind::Proxy,
+                "127.0.0.1:1",
+                Visibility::Private,
+            )
+            .unwrap();
+        // grants: retire has one on `shared` and one on `diary`; keep already has `shared`
+        assert!(s.add_grant(shared.id, retire.id, Some(fran.id)).unwrap());
+        assert!(s.add_grant(diary.id, retire.id, None).unwrap());
+        assert!(s.add_grant(shared.id, keep.id, Some(fran.id)).unwrap());
+        // sessions: keep has a device + a launched app session, retire has a device session
+        let (dev_raw, dev) = s
+            .create_session(SessionKind::Auth, keep.id, None, None, 3600, "Chrome")
+            .unwrap();
+        let (app_raw, _) = s
+            .create_session(
+                SessionKind::App,
+                keep.id,
+                Some(diary.id),
+                Some(dev.id),
+                3600,
+                "Chrome",
+            )
+            .unwrap();
+        let (r_raw, _) = s
+            .create_session(SessionKind::Auth, retire.id, None, None, 3600, "Other")
+            .unwrap();
+        // tokens: an unredeemed enrol link for retire, a used one for keep, a link issued by retire
+        let (r_link, _) = s
+            .create_token(TokenKind::Enrol, Some(retire.id), None, None, 3600, "")
+            .unwrap();
+        let (k_link, _) = s
+            .create_token(TokenKind::Enrol, Some(keep.id), None, None, 3600, "")
+            .unwrap();
+        s.consume_token(TokenKind::Enrol, &k_link, Some(keep.id))
+            .unwrap();
+        let (issued, _) = s
+            .create_token(
+                TokenKind::Invite,
+                None,
+                Some(shared.id),
+                Some(retire.id),
+                3600,
+                "",
+            )
+            .unwrap();
+        let before = s.list_audit(50).unwrap().len();
+
+        clock.fetch_add(10, Ordering::SeqCst);
+        let c = s
+            .consolidate_users(&keep, &retire, Some("ellie-beaumont"), "cli")
+            .unwrap();
+        assert_eq!(c.kept_name, "ellie-beaumont");
+        assert_eq!(c.retired_name, "retired-2-ellie-beaumont");
+        assert_eq!(
+            (c.apps, c.grants, c.sessions_revoked, c.tokens_revoked),
+            (1, 1, 1, 2)
+        );
+
+        // one identity named ellie-beaumont, same id as before, still enabled
+        let k = s.user_by_name("ellie-beaumont").unwrap().unwrap();
+        assert_eq!(k.id, keep.id);
+        assert!(k.enabled);
+        assert_eq!(k.display_name, "Ellie Beaumont");
+        assert!(
+            s.user_by_name("ellie-beaumont-study-diary")
+                .unwrap()
+                .is_none()
+        );
+        let r = s.user_by_id(retire.id).unwrap();
+        assert_eq!(r.name, "retired-2-ellie-beaumont");
+        assert!(!r.enabled);
+
+        // ownership and grants unified under the kept id
+        assert_eq!(s.app_by_id(diary.id).unwrap().owner_id, keep.id);
+        assert_eq!(s.app_by_id(kitchen.id).unwrap().owner_id, keep.id);
+        assert_eq!(
+            s.app_by_id(kitchen.id).unwrap().updated_at,
+            kitchen.updated_at + 10
+        );
+        assert!(s.has_grant(diary.id, keep.id).unwrap(), "grant moved");
+        assert!(
+            s.has_grant(shared.id, keep.id).unwrap(),
+            "existing grant kept"
+        );
+        assert!(!s.has_grant(shared.id, retire.id).unwrap());
+        assert!(!s.has_grant(diary.id, retire.id).unwrap());
+        assert_eq!(s.list_grants(shared.id).unwrap().len(), 1);
+
+        // the kept user's device and app sessions still work, the other's do not
+        let (dsess, duser) = s
+            .session_lookup(SessionKind::Auth, &dev_raw)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (dsess.id, duser.id, duser.name.as_str()),
+            (dev.id, keep.id, "ellie-beaumont")
+        );
+        let (asess, _) = s
+            .session_lookup(SessionKind::App, &app_raw)
+            .unwrap()
+            .unwrap();
+        assert_eq!(asess.parent_id, Some(dev.id));
+        assert!(
+            s.session_lookup(SessionKind::Auth, &r_raw)
+                .unwrap()
+                .is_none()
+        );
+
+        // the retired identity's links are dead; the kept user's history is intact
+        assert_eq!(
+            s.peek_token(TokenKind::Enrol, &r_link).unwrap_err(),
+            RedeemError::Revoked
+        );
+        assert_eq!(
+            s.peek_token(TokenKind::Invite, &issued).unwrap_err(),
+            RedeemError::Revoked
+        );
+        assert_eq!(
+            s.peek_token(TokenKind::Enrol, &k_link).unwrap_err(),
+            RedeemError::Used
+        );
+
+        // exactly one audit row, in the same transaction
+        let audit = s.list_audit(50).unwrap();
+        assert_eq!(audit.len(), before + 1);
+        assert_eq!(audit[0].action, "user.consolidate");
+        assert_eq!(audit[0].subject, "ellie-beaumont");
+        assert_eq!(
+            audit[0].detail,
+            "absorbed=ellie-beaumont retired_as=retired-2-ellie-beaumont renamed_from=ellie-beaumont-study-diary apps=1 grants=1 sessions_revoked=1 tokens_revoked=2 cli"
+        );
+    }
+
+    #[test]
+    fn consolidate_refuses_unsafe_requests_and_leaves_no_trace() {
+        let (s, _) = store_with_clock();
+        let keep = s.create_user("keep", "Keep", Role::Member).unwrap();
+        let retire = s.create_user("gone", "Gone", Role::Member).unwrap();
+        let admin = s.create_user("boss", "Boss", Role::Admin).unwrap();
+        let other = s.create_user("taken", "Taken", Role::Member).unwrap();
+        let snapshot = |s: &Store| {
+            let conn = s.lock();
+            let mut st = conn
+                .prepare("SELECT id, name, enabled FROM users ORDER BY id")
+                .unwrap();
+            st.query_map([], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            })
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect::<Vec<_>>()
+        };
+        let before = snapshot(&s);
+        let audit_before = s.list_audit(50).unwrap().len();
+        // same user
+        assert!(matches!(
+            s.consolidate_users(&keep, &keep, None, "cli").unwrap_err(),
+            StoreError::Invalid(_)
+        ));
+        // retiring an admin implicitly
+        assert!(matches!(
+            s.consolidate_users(&keep, &admin, None, "cli").unwrap_err(),
+            StoreError::Invalid(_)
+        ));
+        // kept user disabled
+        s.set_user_enabled(keep.id, false).unwrap();
+        let disabled = s.user_by_id(keep.id).unwrap();
+        assert!(matches!(
+            s.consolidate_users(&disabled, &retire, None, "cli")
+                .unwrap_err(),
+            StoreError::Invalid(_)
+        ));
+        s.set_user_enabled(keep.id, true).unwrap();
+        // bad new name
+        assert!(matches!(
+            s.consolidate_users(&keep, &retire, Some("Bad Name"), "cli")
+                .unwrap_err(),
+            StoreError::Invalid(_)
+        ));
+        // new name taken by a third user: the transaction rolls back completely
+        let err = s
+            .consolidate_users(&keep, &retire, Some("taken"), "cli")
+            .unwrap_err();
+        assert!(matches!(err, StoreError::Conflict(_)), "{err}");
+        assert_eq!(
+            snapshot(&s),
+            before,
+            "rolled back: names and enabled flags untouched"
+        );
+        assert_eq!(s.user_by_id(other.id).unwrap().name, "taken");
+        // stale snapshot (retire renamed underneath) is refused
+        let stale = retire.clone();
+        s.consolidate_users(&other, &retire, None, "cli").unwrap();
+        assert!(matches!(
+            s.consolidate_users(&keep, &stale, None, "cli").unwrap_err(),
+            StoreError::Conflict(_) | StoreError::NotFound
+        ));
+        assert_eq!(
+            s.list_audit(50).unwrap().len(),
+            audit_before + 1,
+            "only the successful call is audited"
         );
     }
 
