@@ -98,6 +98,7 @@ table.days td.num,table.days th.num{text-align:right;font-family:var(--mono)}
 table.days td:nth-child(3){width:45%}
 .bar{height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;min-width:100px}
 .bar span{display:block;height:100%;background:var(--accent);border-radius:4px}
+.picker{position:relative}.suggest{position:absolute;left:0;right:0;top:100%;z-index:20;margin:2px 0 0;padding:4px 0;list-style:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.35);max-height:240px;overflow-y:auto}.suggest[hidden]{display:none}.suggest li{padding:7px 12px;cursor:pointer;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.suggest li.active,.suggest li:hover{background:var(--surface2)}.suggest li.none{color:var(--dim);cursor:default;background:none}table.people td.num,table.people th.num{text-align:right;font-family:var(--mono)}
 ul.notes{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:.93rem}
 .right{margin-left:auto}
 @media (max-width:600px){main{padding-top:18px}h1{font-size:1.4rem}.card{padding:14px}header.top .wrap{gap:8px}.who{margin-left:auto}nav.main{order:3;width:100%;margin-left:0}.stats{grid-template-columns:1fr 1fr;gap:10px}.stat{padding:12px}.stat .value{font-size:1.6rem}table.days td:nth-child(3){width:auto}.bar{min-width:56px}table.days td,table.days th{padding-left:6px;padding-right:6px}}

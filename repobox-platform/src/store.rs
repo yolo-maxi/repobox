@@ -271,11 +271,24 @@ CREATE TABLE IF NOT EXISTS access_totals (
     requests INTEGER NOT NULL DEFAULT 0,
     since_day INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS app_opens (
+    app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    opened_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS app_opens_app_time ON app_opens(app_id, opened_at);
+CREATE TABLE IF NOT EXISTS app_visits (
+    app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    opened_at INTEGER NOT NULL,
+    last_nav_at INTEGER NOT NULL,
+    PRIMARY KEY (app_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '3');
+INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '4');
 "#;
 
 /// Columns added after the first release. `CREATE TABLE IF NOT EXISTS` does
@@ -317,6 +330,48 @@ pub struct AppAnalytics {
     pub recent: Vec<DayAccess>,
 }
 
+/// Identity-based *opens* (schema 4). An open is the first allowed HTML
+/// document navigation a signed-in user makes into an app after
+/// `VISIT_WINDOW_SECS` of not navigating it: repeated page loads inside a
+/// visit are one open, a return after the window is a new one. Only
+/// `(app_id, user_id, opened_at)` is stored per open (`app_opens`), plus one
+/// `(app_id, user_id)` row with the current visit's last navigation time
+/// (`app_visits`) so the window can be applied. Nothing about the request
+/// itself is kept. Open rows are deleted after `OPENS_RETENTION_DAYS`.
+pub const VISIT_WINDOW_SECS: i64 = 30 * 60;
+pub const OPENS_RETENTION_DAYS: i64 = 90;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DayOpens {
+    pub day: i64,
+    pub opens: i64,
+    /// Distinct signed-in people who opened the app that day.
+    pub people: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersonOpens {
+    pub name: String,
+    pub display_name: String,
+    pub enabled: bool,
+    pub opens: i64,
+    pub last_opened_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppVisits {
+    /// Length of the range in UTC days, today included.
+    pub days: i64,
+    /// First unix second of the range.
+    pub since: i64,
+    pub opens: i64,
+    pub people: i64,
+    /// Newest first; one entry per day of the range, zero days included.
+    pub daily: Vec<DayOpens>,
+    /// Most opens first.
+    pub by_person: Vec<PersonOpens>,
+}
+
 /// What `Store::consolidate_users` did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Consolidation {
@@ -333,6 +388,8 @@ pub struct Store {
     clock: Clock,
     /// Day on which expired access counters were last pruned (0 = never).
     access_pruned_day: AtomicI64,
+    /// Day on which expired open rows were last pruned (0 = never).
+    opens_pruned_day: AtomicI64,
 }
 
 impl Store {
@@ -373,6 +430,7 @@ impl Store {
             conn: Mutex::new(conn),
             clock,
             access_pruned_day: AtomicI64::new(0),
+            opens_pruned_day: AtomicI64::new(0),
         })
     }
 
@@ -433,6 +491,34 @@ impl Store {
         let rows = stmt.query_map([], row_user)?;
         rows.collect::<std::result::Result<Vec<_>, _>>()
             .map_err(Into::into)
+    }
+
+    /// Enabled users who could be granted `app_id` right now: not its owner
+    /// and not already granted. Filtered by `q` (case-insensitive substring
+    /// of the handle or the display name; blank matches everyone), ordered
+    /// by handle, at most `limit` rows. Backs the grant typeahead, so it
+    /// returns nothing about sessions, devices or links.
+    pub fn grantable_users(&self, app_id: i64, q: &str, limit: usize) -> Result<Vec<User>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT u.id, u.name, u.display_name, u.role, u.enabled, u.created_at FROM users u
+             WHERE u.enabled = 1
+               AND u.id != (SELECT owner_id FROM apps WHERE id = ?1)
+               AND NOT EXISTS (SELECT 1 FROM grants g WHERE g.app_id = ?1 AND g.user_id = u.id)
+             ORDER BY u.name",
+        )?;
+        let rows = stmt.query_map(params![app_id], row_user)?;
+        let mut out = Vec::new();
+        for u in rows {
+            let u = u?;
+            if user_matches(q, &u) {
+                out.push(u);
+                if out.len() >= limit {
+                    break;
+                }
+            }
+        }
+        Ok(out)
     }
 
     pub fn count_admins(&self) -> Result<i64> {
@@ -1230,6 +1316,123 @@ impl Store {
         })
     }
 
+    // ----------------------------------------------------------------- opens
+
+    /// Note that `user_id` navigated to an HTML document of `app_id` (the
+    /// caller has already classified the request and confirmed the gate
+    /// allowed it). Returns `true` when this started a new visit, i.e. an
+    /// open was recorded; `false` when it extended a visit still inside
+    /// `VISIT_WINDOW_SECS` of the user's previous navigation.
+    pub fn record_open(&self, app_id: i64, user_id: i64) -> Result<bool> {
+        let now = self.now();
+        let day = day_of(now);
+        let conn = self.lock();
+        let tx = conn.unchecked_transaction()?;
+        let last_nav: Option<i64> = tx
+            .query_row(
+                "SELECT last_nav_at FROM app_visits WHERE app_id = ?1 AND user_id = ?2",
+                params![app_id, user_id],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let new_open = !matches!(last_nav, Some(t) if now - t < VISIT_WINDOW_SECS);
+        if new_open {
+            tx.execute(
+                "INSERT INTO app_opens (app_id, user_id, opened_at) VALUES (?1, ?2, ?3)",
+                params![app_id, user_id, now],
+            )?;
+            tx.execute(
+                "INSERT INTO app_visits (app_id, user_id, opened_at, last_nav_at) VALUES (?1, ?2, ?3, ?3)
+                 ON CONFLICT(app_id, user_id) DO UPDATE SET opened_at = excluded.opened_at, last_nav_at = excluded.last_nav_at",
+                params![app_id, user_id, now],
+            )?;
+        } else {
+            tx.execute(
+                "UPDATE app_visits SET last_nav_at = ?3 WHERE app_id = ?1 AND user_id = ?2",
+                params![app_id, user_id, now],
+            )?;
+        }
+        if self.opens_pruned_day.swap(day, Ordering::Relaxed) != day {
+            // Same rule as the request counters: keep OPENS_RETENTION_DAYS
+            // UTC days including today. A visit row is only needed while a
+            // visit can still be extended; anything older than a day is dead.
+            let cutoff_day = day - OPENS_RETENTION_DAYS;
+            tx.execute(
+                "DELETE FROM app_opens WHERE opened_at < ?1",
+                params![(cutoff_day + 1) * 86400],
+            )?;
+            tx.execute(
+                "DELETE FROM app_visits WHERE last_nav_at < ?1",
+                params![now - 86400],
+            )?;
+        }
+        tx.commit()?;
+        Ok(new_open)
+    }
+
+    /// Opens of one app over the last `days` UTC days (today included, clamped
+    /// to 1..=OPENS_RETENTION_DAYS): totals, per day, and per person.
+    pub fn app_visits(&self, app_id: i64, days: i64) -> Result<AppVisits> {
+        let days = days.clamp(1, OPENS_RETENTION_DAYS);
+        let today = day_of(self.now());
+        let since = (today - days + 1) * 86400;
+        let conn = self.lock();
+        let (opens, people): (i64, i64) = conn.query_row(
+            "SELECT COUNT(*), COUNT(DISTINCT user_id) FROM app_opens WHERE app_id = ?1 AND opened_at >= ?2",
+            params![app_id, since],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        let mut per_day = std::collections::HashMap::new();
+        {
+            let mut stmt = conn.prepare(
+                "SELECT opened_at / 86400 AS d, COUNT(*), COUNT(DISTINCT user_id) FROM app_opens
+                 WHERE app_id = ?1 AND opened_at >= ?2 GROUP BY d",
+            )?;
+            let rows = stmt.query_map(params![app_id, since], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?,
+                ))
+            })?;
+            for row in rows {
+                let (d, o, p) = row?;
+                per_day.insert(d, (o, p));
+            }
+        }
+        let daily = (0..days)
+            .map(|i| {
+                let day = today - i;
+                let (opens, people) = per_day.get(&day).copied().unwrap_or((0, 0));
+                DayOpens { day, opens, people }
+            })
+            .collect();
+        let mut stmt = conn.prepare(
+            "SELECT u.name, u.display_name, u.enabled, COUNT(*) AS n, MAX(o.opened_at) AS last
+             FROM app_opens o JOIN users u ON u.id = o.user_id
+             WHERE o.app_id = ?1 AND o.opened_at >= ?2
+             GROUP BY o.user_id ORDER BY n DESC, last DESC, u.name",
+        )?;
+        let rows = stmt.query_map(params![app_id, since], |r| {
+            Ok(PersonOpens {
+                name: r.get(0)?,
+                display_name: r.get(1)?,
+                enabled: r.get::<_, i64>(2)? != 0,
+                opens: r.get(3)?,
+                last_opened_at: r.get(4)?,
+            })
+        })?;
+        let by_person = rows.collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(AppVisits {
+            days,
+            since,
+            opens,
+            people,
+            daily,
+            by_person,
+        })
+    }
+
     // ---------------------------------------------------------------- backup
 
     /// Consistent online backup using SQLite's backup API (safe while the
@@ -1246,6 +1449,13 @@ impl Store {
 const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at FROM apps";
 const TOKEN_SELECT: &str = "SELECT id, kind, user_id, app_id, created_by, created_at, expires_at, used_at, used_by, revoked_at, note, session_id FROM tokens";
 const SESSION_SELECT: &str = "SELECT id, kind, user_id, app_id, created_at, expires_at, last_seen_at, revoked_at, label, parent_id FROM sessions";
+
+/// Typeahead match: case-insensitive substring of the handle or the display
+/// name; a blank query matches everyone.
+pub fn user_matches(q: &str, u: &User) -> bool {
+    let q = q.trim().to_lowercase();
+    q.is_empty() || u.name.contains(&q) || u.display_name.to_lowercase().contains(&q)
+}
 
 fn row_user(r: &Row<'_>) -> rusqlite::Result<User> {
     let role: String = r.get(3)?;
@@ -1972,15 +2182,29 @@ mod tests {
 
     #[test]
     fn older_databases_gain_the_session_columns() {
-        // A registry created before schema 3 has no parent_id / session_id.
+        // A registry created before schema 3 has no parent_id / session_id,
+        // and before schema 4 no opens tables.
         let conn = Connection::open_in_memory().unwrap();
+        let opens_start = SCHEMA.find("CREATE TABLE IF NOT EXISTS app_opens").unwrap();
+        let opens_end = SCHEMA.find("CREATE TABLE IF NOT EXISTS meta").unwrap();
+        let old = format!("{}{}", &SCHEMA[..opens_start], &SCHEMA[opens_end..]);
+        assert!(!old.contains("app_opens") && !old.contains("app_visits"));
         conn.execute_batch(
-            &SCHEMA
-                .replace(",\n    session_id INTEGER REFERENCES sessions(id)", "")
+            &old.replace(",\n    session_id INTEGER REFERENCES sessions(id)", "")
                 .replace(",\n    parent_id INTEGER REFERENCES sessions(id)", "")
-                .replace("'schema_version', '3'", "'schema_version', '2'"),
+                .replace("'schema_version', '4'", "'schema_version', '2'"),
         )
         .unwrap();
+        let table_exists = |c: &Connection, t: &str| -> bool {
+            c.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                params![t],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap()
+                == 1
+        };
+        assert!(!table_exists(&conn, "app_opens") && !table_exists(&conn, "app_visits"));
         let cols = |t: &str| -> Vec<String> {
             conn.prepare(&format!("PRAGMA table_info({t})"))
                 .unwrap()
@@ -2002,6 +2226,7 @@ mod tests {
                     .any(|r| r.unwrap() == c)
             };
             assert!(has("sessions", "parent_id") && has("tokens", "session_id"));
+            assert!(table_exists(&conn, "app_opens") && table_exists(&conn, "app_visits"));
             let v: String = conn
                 .query_row(
                     "SELECT value FROM meta WHERE key = 'schema_version'",
@@ -2009,7 +2234,7 @@ mod tests {
                     |r| r.get(0),
                 )
                 .unwrap();
-            assert_eq!(v, "3");
+            assert_eq!(v, "4");
         }
         // And the upgraded registry works end to end.
         let u = s.create_user("bob", "Bob", Role::Member).unwrap();
@@ -2031,13 +2256,184 @@ mod tests {
         assert_eq!(tok.session_id, Some(dev.id));
         assert_eq!(tok.user_id, Some(u.id));
         assert_eq!(tok.kind, TokenKind::Launch);
+        assert!(s.record_open(app.id, u.id).unwrap());
+        assert_eq!(s.app_visits(app.id, 7).unwrap().opens, 1);
+    }
+
+    #[test]
+    fn opens_dedupe_per_visit_window_and_expire() {
+        let (s, clock) = store_with_clock();
+        let owner = s.create_user("owner", "Owner", Role::Member).unwrap();
+        let bob = s.create_user("bob", "Bob Builder", Role::Member).unwrap();
+        let app = s
+            .create_app(
+                "demo",
+                "Demo",
+                "",
+                owner.id,
+                AppKind::Proxy,
+                "127.0.0.1:3231",
+                Visibility::Private,
+            )
+            .unwrap();
+        let other = s
+            .create_app(
+                "other",
+                "Other",
+                "",
+                owner.id,
+                AppKind::Proxy,
+                "127.0.0.1:3232",
+                Visibility::Private,
+            )
+            .unwrap();
+        let empty = s.app_visits(app.id, 7).unwrap();
+        assert_eq!((empty.opens, empty.people, empty.daily.len()), (0, 0, 7));
+        assert!(empty.by_person.is_empty());
+        assert_eq!(s.app_visits(app.id, 0).unwrap().days, 1, "clamped low");
+        assert_eq!(
+            s.app_visits(app.id, 400).unwrap().days,
+            OPENS_RETENTION_DAYS,
+            "clamped high"
+        );
+
+        // First navigation opens; more navigations inside the window extend the visit.
+        let t0 = s.now();
+        assert!(s.record_open(app.id, bob.id).unwrap());
+        assert!(!s.record_open(app.id, bob.id).unwrap());
+        clock.fetch_add(VISIT_WINDOW_SECS - 60, Ordering::SeqCst);
+        assert!(
+            !s.record_open(app.id, bob.id).unwrap(),
+            "29 min after the last load"
+        );
+        clock.fetch_add(VISIT_WINDOW_SECS - 60, Ordering::SeqCst);
+        assert!(
+            !s.record_open(app.id, bob.id).unwrap(),
+            "the window is inactivity, not open-anchored"
+        );
+        clock.fetch_add(VISIT_WINDOW_SECS, Ordering::SeqCst);
+        let t1 = s.now();
+        assert!(
+            s.record_open(app.id, bob.id).unwrap(),
+            "exactly the window after the last load is a new open"
+        );
+        // Other app and other person are independent visits.
+        assert!(s.record_open(other.id, bob.id).unwrap());
+        assert!(s.record_open(app.id, owner.id).unwrap());
+        let v = s.app_visits(app.id, 7).unwrap();
+        assert_eq!((v.opens, v.people), (3, 2));
+        assert_eq!(
+            v.daily[0],
+            DayOpens {
+                day: day_of(t1),
+                opens: 3,
+                people: 2
+            }
+        );
+        assert_eq!(
+            v.by_person,
+            vec![
+                PersonOpens {
+                    name: "bob".into(),
+                    display_name: "Bob Builder".into(),
+                    enabled: true,
+                    opens: 2,
+                    last_opened_at: t1
+                },
+                PersonOpens {
+                    name: "owner".into(),
+                    display_name: "Owner".into(),
+                    enabled: true,
+                    opens: 1,
+                    last_opened_at: t1
+                },
+            ]
+        );
+        assert_eq!(s.app_visits(other.id, 7).unwrap().opens, 1, "per app");
+        let _ = t0;
+
+        // A range shorter than the history only sees its days.
+        clock.fetch_add(3 * 86400, Ordering::SeqCst);
+        assert!(s.record_open(app.id, bob.id).unwrap());
+        let v = s.app_visits(app.id, 1).unwrap();
+        assert_eq!((v.opens, v.people, v.by_person[0].opens), (1, 1, 1));
+        let v = s.app_visits(app.id, 7).unwrap();
+        assert_eq!((v.opens, v.people), (4, 2));
+        assert_eq!(v.daily[3].opens, 3);
+
+        // Past retention the raw rows are gone; a dead visit row is pruned too.
+        clock.fetch_add(OPENS_RETENTION_DAYS * 86400, Ordering::SeqCst);
+        assert!(s.record_open(app.id, owner.id).unwrap());
+        let v = s.app_visits(app.id, OPENS_RETENTION_DAYS).unwrap();
+        assert_eq!((v.opens, v.people), (1, 1));
+        let conn = s.lock();
+        let rows: i64 = conn
+            .query_row("SELECT COUNT(*) FROM app_opens", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 1, "old open rows deleted");
+        let visits: i64 = conn
+            .query_row("SELECT COUNT(*) FROM app_visits", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(visits, 1, "stale visit rows deleted");
+    }
+
+    #[test]
+    fn grantable_users_are_enabled_ungranted_non_owners_matched_by_handle_or_name() {
+        let (s, _) = store_with_clock();
+        let owner = s.create_user("owner", "Owner", Role::Member).unwrap();
+        let bob = s.create_user("bob", "Bob Builder", Role::Member).unwrap();
+        s.create_user("bo.peep", "Little Bo", Role::Member).unwrap();
+        s.create_user("carol", "Carol", Role::Admin).unwrap();
+        let gone = s.create_user("gone", "Bob Gone", Role::Member).unwrap();
+        s.set_user_enabled(gone.id, false).unwrap();
+        let app = s
+            .create_app(
+                "demo",
+                "Demo",
+                "",
+                owner.id,
+                AppKind::Proxy,
+                "127.0.0.1:3231",
+                Visibility::Private,
+            )
+            .unwrap();
+        let names = |q: &str, limit: usize| -> Vec<String> {
+            s.grantable_users(app.id, q, limit)
+                .unwrap()
+                .into_iter()
+                .map(|u| u.name)
+                .collect()
+        };
+        assert_eq!(
+            names("", 50),
+            ["bo.peep", "bob", "carol"],
+            "owner and disabled excluded"
+        );
+        assert_eq!(
+            names("BO", 50),
+            ["bo.peep", "bob"],
+            "case-insensitive handle"
+        );
+        assert_eq!(names("builder", 50), ["bob"], "display name");
+        assert_eq!(names("little", 50), ["bo.peep"]);
+        assert_eq!(names("  Car ", 50), ["carol"], "trimmed");
+        assert!(names("zzz", 50).is_empty());
+        assert_eq!(names("", 1), ["bo.peep"], "limit");
+        s.add_grant(app.id, bob.id, Some(owner.id)).unwrap();
+        assert_eq!(names("bo", 50), ["bo.peep"], "already granted drops out");
     }
 
     #[test]
     fn access_tables_hold_only_counters() {
         let (s, _) = store_with_clock();
         let conn = s.lock();
-        for table in ["access_daily", "access_daily_users", "access_totals"] {
+        for table in [
+            "access_daily",
+            "access_daily_users",
+            "access_totals",
+            "app_opens",
+            "app_visits",
+        ] {
             let mut stmt = conn
                 .prepare(&format!("PRAGMA table_info({table})"))
                 .unwrap();
@@ -2049,7 +2445,16 @@ mod tests {
             for (name, ty) in &cols {
                 assert_eq!(ty, "INTEGER", "{table}.{name} must be a counter or id");
                 assert!(
-                    ["app_id", "day", "requests", "user_id", "since_day"].contains(&name.as_str()),
+                    [
+                        "app_id",
+                        "day",
+                        "requests",
+                        "user_id",
+                        "since_day",
+                        "opened_at",
+                        "last_nav_at"
+                    ]
+                    .contains(&name.as_str()),
                     "unexpected column {table}.{name}"
                 );
             }

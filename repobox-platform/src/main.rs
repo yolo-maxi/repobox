@@ -221,6 +221,13 @@ enum AppCmd {
         #[arg(long, default_value_t = 14)]
         days: i64,
     },
+    /// Print opens by signed-in people (first page load per 30-minute visit)
+    Visits {
+        name: String,
+        /// Range in UTC days, today included (1-90)
+        #[arg(long, default_value_t = 30)]
+        days: i64,
+    },
 }
 
 #[derive(Subcommand)]
@@ -752,6 +759,49 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                         "-".into()
                     }
                 );
+            }
+        }
+        AppCmd::Visits { name, days } => {
+            let a = need_app(store, &name)?;
+            let v = store.app_visits(a.id, days)?;
+            println!(
+                "{}: {} open(s) by {} signed-in {} in the last {} day(s) (since {} UTC)",
+                a.name,
+                v.opens,
+                v.people,
+                if v.people == 1 { "person" } else { "people" },
+                v.days,
+                web::html::fmt_day(store::day_of(v.since))
+            );
+            println!(
+                "an open is the first HTML page load of a visit; a visit ends after {} minutes without a page load",
+                store::VISIT_WINDOW_SECS / 60
+            );
+            println!("DAY         OPENS  PEOPLE");
+            for d in v.daily.iter().filter(|d| d.opens > 0) {
+                println!(
+                    "{}  {:>5}  {}",
+                    web::html::fmt_day(d.day),
+                    d.opens,
+                    d.people
+                );
+            }
+            if v.by_person.is_empty() {
+                println!("(no opens in range)");
+            } else {
+                println!(
+                    "HANDLE                            OPENS  LAST OPENED        DISPLAY NAME"
+                );
+                for p in &v.by_person {
+                    println!(
+                        "{:<32}  {:>5}  {}  {}{}",
+                        p.name,
+                        p.opens,
+                        web::html::fmt_ts(p.last_opened_at),
+                        p.display_name,
+                        if p.enabled { "" } else { " (disabled)" }
+                    );
+                }
             }
         }
     }

@@ -93,6 +93,11 @@ pub fn router(state: S) -> Router {
         .route("/admin/audit", get(pages::admin_audit))
         .route("/apps/{name}", get(pages::app_manage))
         .route("/apps/{name}/analytics", get(pages::app_analytics))
+        .route("/apps/{name}/visits", get(pages::app_visits))
+        .route(
+            "/apps/{name}/grantable-users",
+            get(pages::app_grantable_users),
+        )
         .route("/apps/{name}/visibility", post(pages::app_visibility))
         .route("/apps/{name}/enabled", post(pages::app_enabled))
         .route("/apps/{name}/grants", post(pages::app_grant_add))

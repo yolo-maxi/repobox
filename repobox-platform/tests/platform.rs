@@ -177,11 +177,33 @@ impl H {
         cookie: Option<&str>,
         extra: &[(&str, &str)],
     ) -> (StatusCode, HeaderMap, String) {
+        self.gate_req(app, "GET", uri, cookie, extra).await
+    }
+
+    /// A browser navigating to a page of `app` (what Caddy forwards for a
+    /// top-level document load).
+    async fn navigate(
+        &self,
+        app: &str,
+        uri: &str,
+        cookie: Option<&str>,
+    ) -> (StatusCode, HeaderMap, String) {
+        self.gate_req(app, "GET", uri, cookie, NAV).await
+    }
+
+    async fn gate_req(
+        &self,
+        app: &str,
+        method: &str,
+        uri: &str,
+        cookie: Option<&str>,
+        extra: &[(&str, &str)],
+    ) -> (StatusCode, HeaderMap, String) {
         let mut b = Request::builder()
             .uri("/gate/verify")
             .header("X-RepoBox-Gate", "1")
             .header("X-RepoBox-Gate-App", app)
-            .header("X-Forwarded-Method", "GET")
+            .header("X-Forwarded-Method", method)
             .header("X-Forwarded-Uri", uri)
             .header("X-Forwarded-Host", format!("{app}.repo.box"));
         if let Some(c) = cookie {
@@ -215,6 +237,13 @@ impl H {
 fn hdr<'a>(h: &'a HeaderMap, k: &str) -> Option<&'a str> {
     h.get(k).and_then(|v| v.to_str().ok())
 }
+
+/// Headers a browser sends on a top-level page navigation.
+const NAV: &[(&str, &str)] = &[
+    ("Accept", "text/html,application/xhtml+xml,*/*;q=0.8"),
+    ("Sec-Fetch-Dest", "document"),
+    ("Sec-Fetch-Mode", "navigate"),
+];
 
 fn app_cookie_from(h: &HeaderMap) -> String {
     let sc = hdr(h, "set-cookie").expect("set-cookie");
@@ -728,6 +757,433 @@ async fn access_is_counted_only_when_the_gate_allows() {
     h.gate("demo-unlisted", "/", None, &[]).await;
     assert_eq!(stats("demo-unlisted").total_requests, 1);
     assert_eq!(stats("other-private").total_requests, 0, "untouched app");
+}
+
+#[tokio::test]
+async fn opens_are_counted_only_for_signed_in_document_navigations() {
+    let h = H::new();
+    let visits = |name: &str| {
+        let app = h.state.store.app_by_name(name).unwrap().unwrap();
+        h.state.store.app_visits(app.id, 7).unwrap()
+    };
+    // Denied navigations: anonymous, spoofed, bad code. Nothing opens.
+    assert_eq!(
+        h.navigate("demo-private", "/", None).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    let mut spoof = NAV.to_vec();
+    spoof.push(("X-RepoBox-User", "bob"));
+    assert_eq!(
+        h.gate("demo-private", "/", None, &spoof).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(visits("demo-private").opens, 0);
+    // Launch-code redemption is a redirect, not an open; the clean-URL
+    // navigation that follows is the open.
+    let code = h.mint(&h.bob, "demo-private").await;
+    let (st, hd, _) = h
+        .gate_req(
+            "demo-private",
+            "GET",
+            &format!("/?rb_launch={code}"),
+            None,
+            NAV,
+        )
+        .await;
+    assert_eq!(st, StatusCode::FOUND);
+    let bob_cookie = app_cookie_from(&hd);
+    assert_eq!(visits("demo-private").opens, 0);
+    assert_eq!(
+        h.navigate("demo-private", "/", Some(&bob_cookie)).await.0,
+        StatusCode::OK
+    );
+    let v = visits("demo-private");
+    assert_eq!((v.opens, v.people), (1, 1));
+    assert_eq!(v.by_person[0].name, "bob");
+    // Everything a page then loads is allowed (and counted as requests) but
+    // is not an open, and neither is a non-GET or a WebSocket.
+    type Probe<'a> = (&'a str, &'a str, &'a [(&'a str, &'a str)]);
+    let not_opens: &[Probe] = &[
+        (
+            "GET",
+            "/app.css",
+            &[
+                ("Accept", "text/css,*/*;q=0.1"),
+                ("Sec-Fetch-Dest", "style"),
+            ],
+        ),
+        (
+            "GET",
+            "/app.js",
+            &[("Accept", "*/*"), ("Sec-Fetch-Dest", "script")],
+        ),
+        (
+            "GET",
+            "/api/x",
+            &[
+                ("Accept", "application/json"),
+                ("Sec-Fetch-Dest", "empty"),
+                ("Sec-Fetch-Mode", "cors"),
+            ],
+        ),
+        ("GET", "/api/x", &[("Accept", "*/*")]),
+        (
+            "GET",
+            "/ws",
+            &[("Upgrade", "websocket"), ("Connection", "Upgrade")],
+        ),
+        (
+            "GET",
+            "/frame",
+            &[
+                ("Accept", "text/html"),
+                ("Sec-Fetch-Dest", "iframe"),
+                ("Sec-Fetch-Mode", "navigate"),
+            ],
+        ),
+        ("GET", "/data.json", NAV),
+        ("HEAD", "/", NAV),
+        ("POST", "/submit", NAV),
+    ];
+    let before = h
+        .state
+        .store
+        .app_analytics(
+            h.state
+                .store
+                .app_by_name("demo-private")
+                .unwrap()
+                .unwrap()
+                .id,
+            1,
+        )
+        .unwrap()
+        .total_requests;
+    for (method, uri, extra) in not_opens {
+        assert_eq!(
+            h.gate_req("demo-private", method, uri, Some(&bob_cookie), extra)
+                .await
+                .0,
+            StatusCode::OK,
+            "{method} {uri}"
+        );
+    }
+    let after = h
+        .state
+        .store
+        .app_analytics(
+            h.state
+                .store
+                .app_by_name("demo-private")
+                .unwrap()
+                .unwrap()
+                .id,
+            1,
+        )
+        .unwrap()
+        .total_requests;
+    assert_eq!(
+        after - before,
+        not_opens.len() as i64,
+        "all counted as requests"
+    );
+    assert_eq!(visits("demo-private").opens, 1, "none counted as opens");
+    // More page loads inside the visit window: still one open.
+    h.navigate("demo-private", "/dash", Some(&bob_cookie)).await;
+    h.clock.fetch_add(20 * 60, Ordering::SeqCst);
+    h.navigate("demo-private", "/dash?x=1", Some(&bob_cookie))
+        .await;
+    assert_eq!(visits("demo-private").opens, 1);
+    // 30 minutes of silence, then a return: a second open. A browser without
+    // Sec-Fetch headers is recognised by its Accept header.
+    h.clock.fetch_add(31 * 60, Ordering::SeqCst);
+    let (st, _, _) = h
+        .gate(
+            "demo-private",
+            "/",
+            Some(&bob_cookie),
+            &[("Accept", "text/html")],
+        )
+        .await;
+    assert_eq!(st, StatusCode::OK);
+    let v = visits("demo-private");
+    assert_eq!((v.opens, v.people), (2, 1));
+    assert_eq!(v.by_person[0].opens, 2);
+    // A second person is a second visit and a second unique.
+    let code = h.mint(&h.owner, "demo-private").await;
+    let (_, hd, _) = h
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
+        .await;
+    let owner_cookie = app_cookie_from(&hd);
+    h.navigate("demo-private", "/", Some(&owner_cookie)).await;
+    let v = visits("demo-private");
+    assert_eq!((v.opens, v.people), (3, 2));
+    assert_eq!(v.daily[0].opens, 3);
+    assert_eq!(v.daily[0].people, 2);
+    assert_eq!(visits("other-private").opens, 0, "per app");
+    // Revoked grant: denied navigation, no open.
+    let app = h.state.store.app_by_name("demo-private").unwrap().unwrap();
+    h.state.store.remove_grant(app.id, h.bob.id).unwrap();
+    h.clock.fetch_add(31 * 60, Ordering::SeqCst);
+    assert_eq!(
+        h.navigate("demo-private", "/", Some(&bob_cookie)).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(visits("demo-private").opens, 3);
+    // Public app: anonymous page loads are allowed but never an open; a
+    // person who launched it signed in is.
+    assert_eq!(h.navigate("demo-listed", "/", None).await.0, StatusCode::OK);
+    assert_eq!(visits("demo-listed").opens, 0);
+    let code = h.mint(&h.fran, "demo-listed").await;
+    let (_, hd, _) = h
+        .gate("demo-listed", &format!("/?rb_launch={code}"), None, &[])
+        .await;
+    let fran_cookie = app_cookie_from(&hd);
+    h.navigate("demo-listed", "/", Some(&fran_cookie)).await;
+    let v = visits("demo-listed");
+    assert_eq!((v.opens, v.people), (1, 1));
+    assert_eq!(v.by_person[0].name, "fran");
+}
+
+#[tokio::test]
+async fn visits_page_is_owner_or_admin_only_and_names_people() {
+    let h = H::new();
+    let bobs = h
+        .state
+        .store
+        .create_app(
+            "bobs-app",
+            "Bob's app",
+            "",
+            h.bob.id,
+            AppKind::Proxy,
+            "127.0.0.1:3298",
+            Visibility::Private,
+        )
+        .unwrap();
+    h.state.store.record_open(bobs.id, h.bob.id).unwrap();
+    let app = h.state.store.app_by_name("demo-private").unwrap().unwrap();
+    h.state.store.record_open(app.id, h.bob.id).unwrap();
+    h.clock.fetch_add(3600, Ordering::SeqCst);
+    h.state.store.record_open(app.id, h.bob.id).unwrap();
+    h.state.store.record_open(app.id, h.eve.id).unwrap();
+
+    assert_eq!(
+        h.get("/apps/demo-private/visits", None).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.get("/apps/demo-private/visits", Some(&h.auth_cookie(&h.eve)))
+            .await
+            .0,
+        StatusCode::FORBIDDEN,
+        "a member who opened it"
+    );
+    assert_eq!(
+        h.get("/apps/demo-private/visits", Some(&h.auth_cookie(&h.bob)))
+            .await
+            .0,
+        StatusCode::FORBIDDEN,
+        "a grant is not ownership"
+    );
+    assert_eq!(
+        h.get("/apps/bobs-app/visits", Some(&h.auth_cookie(&h.owner)))
+            .await
+            .0,
+        StatusCode::FORBIDDEN,
+        "another owner"
+    );
+    assert_eq!(
+        h.get("/apps/nope/visits", Some(&h.auth_cookie(&h.fran)))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    for u in [&h.owner, &h.fran] {
+        let (st, _, body) = h
+            .get("/apps/demo-private/visits", Some(&h.auth_cookie(u)))
+            .await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(
+            body.contains("<div class=\"value\">3</div>"),
+            "3 opens: {body}"
+        );
+        assert!(body.contains("<div class=\"value\">2</div>"), "2 people");
+        assert!(
+            body.contains("Bob <code>bob</code>"),
+            "handle + display name"
+        );
+        assert!(body.contains("Eve <code>eve</code>"));
+        assert!(body.contains("<td class=\"num\">2</td>"), "bob's opens");
+        assert!(!body.contains("bobs-app") && !body.contains("Bob&#39;s app"));
+        assert!(
+            body.contains("aria-current=\"true\">30 days"),
+            "default range"
+        );
+        assert!(body.contains("Open rows are deleted after 90 days"));
+        assert!(!body.contains("rb_launch") && !body.contains("__Host-"));
+    }
+    let (_, _, body) = h
+        .get(
+            "/apps/demo-private/visits?days=7",
+            Some(&h.auth_cookie(&h.owner)),
+        )
+        .await;
+    assert!(body.contains("aria-current=\"true\">7 days"));
+    let (_, _, body) = h
+        .get(
+            "/apps/demo-private/visits?days=999",
+            Some(&h.auth_cookie(&h.owner)),
+        )
+        .await;
+    assert!(
+        body.contains("aria-current=\"true\">30 days"),
+        "bad range falls back"
+    );
+    let (st, _, body) = h
+        .get("/apps/bobs-app/visits", Some(&h.auth_cookie(&h.bob)))
+        .await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(body.contains("<div class=\"value\">1</div>"));
+    // Cross-links and labels: Requests stays requests, Visits is separate.
+    let (_, _, body) = h
+        .get("/apps/demo-private", Some(&h.auth_cookie(&h.owner)))
+        .await;
+    assert!(body.contains("href=\"/apps/demo-private/visits\">Visits"));
+    assert!(body.contains("href=\"/apps/demo-private/analytics\">Requests"));
+    let (_, _, body) = h
+        .get(
+            "/apps/demo-private/analytics",
+            Some(&h.auth_cookie(&h.owner)),
+        )
+        .await;
+    assert!(body.contains("allowed requests (edge traffic, not visits)"));
+    assert!(body.contains("href=\"/apps/demo-private/visits\">Visits"));
+}
+
+#[tokio::test]
+async fn grant_typeahead_suggestions_are_owner_or_admin_only() {
+    let h = H::new();
+    h.state
+        .store
+        .create_app(
+            "bobs-app",
+            "Bob's app",
+            "",
+            h.bob.id,
+            AppKind::Proxy,
+            "127.0.0.1:3298",
+            Visibility::Private,
+        )
+        .unwrap();
+    let url = "/apps/demo-private/grantable-users";
+    assert_eq!(h.get(url, None).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        h.get(url, Some(&h.auth_cookie(&h.eve))).await.0,
+        StatusCode::FORBIDDEN,
+        "member"
+    );
+    assert_eq!(
+        h.get(url, Some(&h.auth_cookie(&h.bob))).await.0,
+        StatusCode::FORBIDDEN,
+        "grantee"
+    );
+    assert_eq!(
+        h.get(
+            "/apps/bobs-app/grantable-users",
+            Some(&h.auth_cookie(&h.owner))
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN,
+        "another owner"
+    );
+    assert_eq!(
+        h.get("/apps/nope/grantable-users", Some(&h.auth_cookie(&h.fran)))
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    let names = |body: &str| -> Vec<String> {
+        let v: serde_json::Value = serde_json::from_str(body).unwrap();
+        v["users"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|u| u["name"].as_str().unwrap().to_string())
+            .collect()
+    };
+    for u in [&h.owner, &h.fran] {
+        let (st, hd, body) = h.get(url, Some(&h.auth_cookie(u))).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(hdr(&hd, "content-type"), Some("application/json"));
+        assert_eq!(hdr(&hd, "cache-control"), Some("no-store"));
+        assert_eq!(
+            names(&body),
+            ["eve", "fran"],
+            "not the owner, not bob (granted)"
+        );
+        let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let keys: Vec<&String> = v["users"][0].as_object().unwrap().keys().collect();
+        assert_eq!(
+            keys,
+            ["display_name", "name"],
+            "handle and display name only"
+        );
+        assert!(!body.contains("session") && !body.contains("token") && !body.contains("\"id\""));
+    }
+    let owner = h.auth_cookie(&h.owner);
+    let (_, _, body) = h.get(&format!("{url}?q=EV"), Some(&owner)).await;
+    assert_eq!(names(&body), ["eve"], "handle, case-insensitive");
+    let (_, _, body) = h.get(&format!("{url}?q=Fra"), Some(&owner)).await;
+    assert_eq!(names(&body), ["fran"], "display name");
+    let (_, _, body) = h.get(&format!("{url}?q=zzz"), Some(&owner)).await;
+    assert_eq!(body, "{\"users\":[]}", "no match is an empty list");
+    h.state.store.set_user_enabled(h.eve.id, false).unwrap();
+    let (_, _, body) = h.get(url, Some(&owner)).await;
+    assert_eq!(names(&body), ["fran"], "disabled users are never suggested");
+    h.state.store.set_user_enabled(h.eve.id, true).unwrap();
+    // The manage page carries the combobox over the same text input, and a
+    // picked (or typed) handle posts to the unchanged grant endpoint.
+    let (_, _, body) = h.get("/apps/demo-private", Some(&owner)).await;
+    for needle in [
+        "id=\"grant-user\" name=\"user\"",
+        "role=\"combobox\"",
+        "aria-autocomplete=\"list\"",
+        "aria-expanded=\"false\"",
+        "aria-controls=\"grant-user-list\"",
+        "data-suggest=\"/apps/demo-private/grantable-users\"",
+        "id=\"grant-user-list\" class=\"suggest\" role=\"listbox\"",
+        "e.key==='ArrowDown'",
+        "e.key==='ArrowUp'",
+        "e.key==='Enter'",
+        "e.key==='Escape'",
+        "aria-activedescendant",
+        "textContent=u.display_name",
+    ] {
+        assert!(body.contains(needle), "missing {needle}");
+    }
+    assert!(
+        !body.contains("innerHTML=u."),
+        "suggestions are never injected as HTML"
+    );
+    let (st, hd, _) = h
+        .post("/apps/demo-private/grants", Some(&owner), "user=eve", true)
+        .await;
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert_eq!(
+        hdr(&hd, "location"),
+        Some("/apps/demo-private?ok=grant_added")
+    );
+    let (_, _, body) = h.get(url, Some(&owner)).await;
+    assert_eq!(names(&body), ["fran"], "eve is granted now");
+    // Members see no suggestion control anywhere: the manage page itself is 403.
+    assert_eq!(
+        h.get("/apps/demo-private", Some(&h.auth_cookie(&h.eve)))
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
 }
 
 #[tokio::test]

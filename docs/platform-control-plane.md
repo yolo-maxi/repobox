@@ -27,7 +27,8 @@ browser ──HTTPS──▶ Caddy (repo.box host)
 
 * **Registry**: SQLite (WAL) at `/var/lib/repobox-platform/platform.db`. Tables:
   `users`, `apps`, `grants`, `tokens`, `sessions`, `audit`, `access_daily`,
-  `access_daily_users`, `access_totals`, `meta` (schema version 3). Only
+  `access_daily_users`, `access_totals`, `app_opens`, `app_visits`, `meta`
+  (schema version 4). Only
   SHA-256 hashes of tokens and session secrets are stored; raw values exist
   once, in the channel that delivers them (a 0600 file for operator-created
   links, a page shown once in the UI, a redirect for launch codes).
@@ -90,9 +91,60 @@ browser ──HTTPS──▶ Caddy (repo.box host)
   invented. No URL, query string, cookie, IP, user agent, token or body is
   recorded. Daily rows (and with them the user ids) are deleted after
   `ACCESS_RETENTION_DAYS` = 90 days; the all-time counter is kept. A count is
-  every allowed request including assets, not page views. The page shows the
-  all-time total, the 90-day total, unique users (private apps) and the last
-  14 days, and states these rules. Owners see only their own apps.
+  every allowed request including assets, not page views. The page (linked
+  as **Requests** from the manage page) shows the all-time total, the 90-day
+  total, unique users (private apps) and the last 14 days, and states these
+  rules. Owners see only their own apps.
+* **Visits / opens** (`/apps/<name>/visits`, owner or admin only; CLI
+  `app visits <name> --days N`): the product question "how often do people
+  open this app", answered from the platform identity rather than from
+  traffic. An **open** is the first allowed HTML document navigation by a
+  **signed-in** person into an app after `VISIT_WINDOW_SECS` = 30 minutes
+  without a page load of that app (an inactivity window, so a two-hour
+  session of clicking around is one open, and coming back after lunch is a
+  second). The gate classifies each allowed request with
+  `gate::is_document_navigation`: `GET` only; no `Upgrade` (WebSockets); if
+  the browser sends `Sec-Fetch-Dest` it must be `document` (so scripts,
+  styles, images, fonts, `fetch`/XHR (`empty`), iframes and manifests are
+  out) and `Sec-Fetch-Mode`, when present, `navigate`; without `Sec-Fetch-*`
+  (old browsers, curl) `Accept` must list `text/html`/`application/xhtml+xml`;
+  prefetch/prerender (`Sec-Purpose`/`Purpose`) is out; a path ending in a
+  plain-file extension (`.js`, `.json`, `.png`, `.pdf`, …) is out. Denied
+  requests, the launch-code `302`, and anonymous visitors of public apps are
+  never opens; a person who launched a public app signed in is (that is the
+  only case where a public app's visitor is identified, and it is stated on
+  both pages). Caddy's `forward_auth` hop forwards `Accept`, `Sec-Fetch-*`
+  and `Upgrade` unchanged (verified against Caddy 2.10 locally and 2.11 on
+  the host), so no route change was needed. Storage: `app_opens(app_id,
+  user_id, opened_at)` one row per open, and `app_visits(app_id, user_id,
+  opened_at, last_nav_at)` one row per person and app holding the current
+  visit's last navigation time so the window can be applied. Nothing else:
+  no URL, query, cookie, IP, user agent, token or body. Open rows are deleted
+  after `OPENS_RETENTION_DAYS` = 90 days (pruned once per UTC day on the
+  first open of the day, like the request counters; dead visit rows older
+  than a day go with them). The page offers 7/30/90-day ranges and shows
+  total opens, unique people, today's opens, a per-day table (opens, people)
+  and a per-person table (display name, handle, opens in range, last opened,
+  disabled badge if the account is off). Members and other owners get 403,
+  exactly like the Requests page (`pages::manageable`). The Requests page is
+  explicitly labelled "allowed requests (edge traffic, not visits)" and
+  links to Visits.
+* **Grant typeahead** (manage page, owner or admin only): the "Grant a user"
+  text input is upgraded by a small inline script into an ARIA combobox
+  (`role=combobox`, `aria-autocomplete=list`, `aria-expanded`,
+  `aria-activedescendant`; ArrowDown/ArrowUp move, Enter selects, Escape
+  closes; mouse works too) over `GET /apps/<name>/grantable-users?q=`, which
+  returns `{name, display_name}` for **enabled** users who are not the
+  app's owner and not already granted, matched case-insensitively on the
+  handle or the display name (`store::user_matches`), at most 12,
+  `Cache-Control: no-store`. The endpoint is guarded by the same
+  `manageable` check as the page (401 anonymous, 403 member/grantee/other
+  owner, 404 unknown app) and carries no ids, roles, sessions, devices or
+  links. Suggestions are rendered with `textContent`, never as HTML.
+  Selecting fills the input with the canonical handle and the form still
+  posts to the unchanged `/apps/<name>/grants` endpoint; a handle typed in
+  full without JavaScript works exactly as before. Invitations and access
+  semantics are untouched.
 * **Identity headers** the origin may trust (only ever set by the gate):
   `X-RepoBox-App`, `X-RepoBox-Auth` (`session`|`public`), and for sessions
   `X-RepoBox-User`, `X-RepoBox-User-Id`, `X-RepoBox-Role`.
@@ -250,14 +302,37 @@ whole change and installs nothing.
    redemption redirect do not count), unique-user dedup for private apps and
    no identity for public apps, 90-day pruning, counter-only access tables,
    and owner/admin-only analytics (a grant is not ownership; other owners get
-   403), own-session listing and revocation (device revoke cascades to its
+   403), opens: the document-navigation classifier (unit tests over
+   `Sec-Fetch-Dest`/`Sec-Fetch-Mode`/`Accept`/`Upgrade`/`Sec-Purpose`/methods/
+   file extensions), end to end at the gate (redemption redirect, assets,
+   fetches, WebSocket, iframe, HEAD/POST and `.json` navigations are counted
+   as requests but never as opens; page loads inside the 30-minute window
+   are one open, a return after it a second; per app, per person; revoked
+   grant denied; anonymous public page loads never, signed-in public launches
+   yes), 30-minute inactivity dedup, range clamping and 90-day pruning in
+   the store, schema 3 → 4 migration (opens tables appear, version bumps),
+   opens tables hold only ids and timestamps, the visits page
+   (401/403/404/200 matrix, handle + display name, other apps absent, range
+   picker fallback, cross-links and the "not visits" label on Requests), the
+   grant typeahead endpoint (401/403/404/200 matrix, `{name, display_name}`
+   only, owner and granted users excluded, disabled users never suggested,
+   handle and display-name matching, empty result for no match, the combobox
+   markup and key handlers present on the manage page, suggestions never
+   injected as HTML, a picked handle posts to the unchanged grant endpoint),
+   own-session listing and revocation (device revoke cascades to its
    app sessions at the gate, app-session revoke leaves the device signed in,
    logout cascades), member cannot revoke another user's session even with
    its id, admin per-user page and per-row revoke, admin "sign out
    everywhere", admin-only and CSRF guards on all of it.
 2. `repobox-platform/scripts/edge-e2e.sh` — same contract through a real Caddy
    with the generated routes (proves the strip + forward_auth + copy_headers
-   mechanics, host-only/HttpOnly cookies, no secrets in logs).
+   mechanics, host-only/HttpOnly cookies, no secrets in logs), plus opens:
+   curl's `*/*` requests through the launch flow leave zero opens, one
+   browser-style page load then a second one in the same visit plus an
+   asset and an API fetch leave exactly one open by `bob` in
+   `app visits demo-private`, an anonymous browser-style load of the public
+   app leaves zero, and the visits page / suggestion endpoint answer 401
+   anonymous and 403 to a member.
 3. Live (after deploy):
    ```bash
    curl -sI https://demo-private.repo.box/ | head -1                # 401
@@ -499,3 +574,12 @@ exactly those hostnames. Fieldwork (Fran's) was not touched.
   90-day window, and an app that flips from private to public keeps its
   earlier per-day user rows until they age out. Counters are best-effort: a
   failed increment is logged and never blocks serving.
+* Opens are a browser-side notion read from request headers: a client that
+  sends `Accept: text/html` without `Sec-Fetch-*` (scripted HTML fetches,
+  very old browsers) looks like a navigation, and a browser that navigates
+  to an HTML path with an unlisted file extension counts. Opens are
+  best-effort like the counters; a person is one identity per platform
+  user, so two people sharing a device look like one. Opens exist only
+  inside the 90-day window (no all-time total). Since only signed-in people
+  are recorded, a public app's opens describe launches from auth.repo.box,
+  not its audience.

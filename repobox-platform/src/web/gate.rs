@@ -64,6 +64,106 @@ fn split_token(uri: &str) -> (String, Option<String>) {
     (clean, token)
 }
 
+/// File extensions that are plainly not a page even when a browser navigates
+/// to them directly (an image opened in a tab, a JSON file, a download).
+const NON_PAGE_EXTENSIONS: &[&str] = &[
+    "js",
+    "mjs",
+    "cjs",
+    "css",
+    "map",
+    "json",
+    "xml",
+    "txt",
+    "ico",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "svg",
+    "webp",
+    "avif",
+    "bmp",
+    "woff",
+    "woff2",
+    "ttf",
+    "otf",
+    "eot",
+    "mp3",
+    "mp4",
+    "webm",
+    "ogg",
+    "wav",
+    "wasm",
+    "pdf",
+    "zip",
+    "gz",
+    "csv",
+    "md",
+    "webmanifest",
+    "manifest",
+];
+
+/// Is this request a person's browser navigating to an HTML document of the
+/// app? This is what an *open* is built on (see `store::record_open`), so it
+/// is deliberately strict; when in doubt it answers `false`:
+///
+/// * `GET` only: `HEAD`, `POST` and friends are never navigations;
+/// * no `Upgrade` (WebSocket handshakes are `GET`s);
+/// * if the browser says what it is fetching (`Sec-Fetch-Dest`), it must be
+///   `document` (not `iframe`, `empty` for fetch/XHR, `script`, `image`, …)
+///   and `Sec-Fetch-Mode`, when present, must be `navigate`;
+/// * without `Sec-Fetch-Dest` the `Accept` header must ask for HTML;
+/// * prefetch/prerender speculation is not a person opening a page;
+/// * the path must not end in a non-page file extension.
+///
+/// Caddy's `forward_auth` hop forwards these request headers unchanged
+/// (verified against Caddy 2.10/2.11), and nothing here is stored: the
+/// answer is a boolean.
+pub fn is_document_navigation(method: &str, uri: &str, headers: &HeaderMap) -> bool {
+    if method != "GET" {
+        return false;
+    }
+    if hdr(headers, "upgrade").is_some() {
+        return false;
+    }
+    let purpose = hdr(headers, "sec-purpose")
+        .or_else(|| hdr(headers, "purpose"))
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if purpose.contains("prefetch") || purpose.contains("prerender") {
+        return false;
+    }
+    match hdr(headers, "sec-fetch-dest").map(|v| v.trim().to_ascii_lowercase()) {
+        Some(dest) if dest == "document" => {
+            if let Some(mode) = hdr(headers, "sec-fetch-mode")
+                && !mode.trim().eq_ignore_ascii_case("navigate")
+            {
+                return false;
+            }
+        }
+        Some(_) => return false,
+        None => {
+            let accepts_html = hdr(headers, "accept").unwrap_or("").split(',').any(|part| {
+                let mime = part.split(';').next().unwrap_or("").trim();
+                mime.eq_ignore_ascii_case("text/html")
+                    || mime.eq_ignore_ascii_case("application/xhtml+xml")
+            });
+            if !accepts_html {
+                return false;
+            }
+        }
+    }
+    let path = uri.split('?').next().unwrap_or("/");
+    let last = path.rsplit('/').next().unwrap_or("");
+    if let Some((_, ext)) = last.rsplit_once('.')
+        && NON_PAGE_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str())
+    {
+        return false;
+    }
+    true
+}
+
 pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
     let shell = Shell {
         title: "Gate",
@@ -266,6 +366,15 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
     if let Err(e) = s.store.record_access(app.id, counted_user) {
         tracing::warn!("access count for {} failed: {e}", app.name);
     }
+    // An *open* is narrower than a counted request: a signed-in person's
+    // browser navigating to an HTML document, deduplicated per visit by the
+    // store. Anonymous traffic (public apps) is never an open.
+    if let Some((_, user)) = &session
+        && is_document_navigation(method, &clean_uri, &headers)
+        && let Err(e) = s.store.record_open(app.id, user.id)
+    {
+        tracing::warn!("open count for {} failed: {e}", app.name);
+    }
     let mut resp = StatusCode::OK.into_response();
     let h = resp.headers_mut();
     let put = |h: &mut HeaderMap, k: &'static str, v: &str| {
@@ -303,7 +412,120 @@ fn disabled_page(shell: &Shell<'_>) -> Response {
 
 #[cfg(test)]
 mod tests {
-    use super::split_token;
+    use super::{is_document_navigation, split_token};
+    use axum::http::HeaderMap;
+
+    fn headers(pairs: &[(&str, &str)]) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        for (k, v) in pairs {
+            h.insert(
+                axum::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
+                v.parse().unwrap(),
+            );
+        }
+        h
+    }
+
+    #[test]
+    fn document_navigations_are_recognised() {
+        let nav = headers(&[
+            ("accept", "text/html,application/xhtml+xml,*/*;q=0.8"),
+            ("sec-fetch-dest", "document"),
+            ("sec-fetch-mode", "navigate"),
+        ]);
+        assert!(is_document_navigation("GET", "/", &nav));
+        assert!(is_document_navigation("GET", "/dash?x=1", &nav));
+        assert!(is_document_navigation("GET", "/page.html", &nav));
+        assert!(is_document_navigation("GET", "/user/john.doe", &nav));
+        assert!(
+            is_document_navigation("GET", "/api/setup", &nav),
+            "no path guessing"
+        );
+        // Old browser or curl: no Sec-Fetch headers, Accept decides.
+        assert!(is_document_navigation(
+            "GET",
+            "/",
+            &headers(&[("accept", "text/html;q=0.9, */*;q=0.1")])
+        ));
+        assert!(is_document_navigation(
+            "GET",
+            "/",
+            &headers(&[("accept", "application/xhtml+xml")])
+        ));
+    }
+
+    #[test]
+    fn everything_else_is_not_an_open() {
+        let nav = headers(&[
+            ("accept", "text/html"),
+            ("sec-fetch-dest", "document"),
+            ("sec-fetch-mode", "navigate"),
+        ]);
+        for m in ["HEAD", "POST", "PUT", "OPTIONS"] {
+            assert!(!is_document_navigation(m, "/", &nav), "{m}");
+        }
+        // Assets and fetches announce themselves.
+        for dest in [
+            "script",
+            "style",
+            "image",
+            "font",
+            "empty",
+            "iframe",
+            "manifest",
+            "websocket",
+        ] {
+            let h = headers(&[("accept", "*/*"), ("sec-fetch-dest", dest)]);
+            assert!(!is_document_navigation("GET", "/", &h), "{dest}");
+        }
+        // A fetch that happens to accept HTML is still not a navigation.
+        let h = headers(&[
+            ("accept", "text/html"),
+            ("sec-fetch-dest", "empty"),
+            ("sec-fetch-mode", "cors"),
+        ]);
+        assert!(!is_document_navigation("GET", "/", &h));
+        let h = headers(&[
+            ("accept", "text/html"),
+            ("sec-fetch-dest", "document"),
+            ("sec-fetch-mode", "cors"),
+        ]);
+        assert!(!is_document_navigation("GET", "/", &h));
+        // WebSocket handshake.
+        let h = headers(&[("upgrade", "websocket"), ("connection", "Upgrade")]);
+        assert!(!is_document_navigation("GET", "/ws", &h));
+        // No Sec-Fetch and a non-HTML Accept (curl default, JSON clients).
+        assert!(!is_document_navigation(
+            "GET",
+            "/",
+            &headers(&[("accept", "*/*")])
+        ));
+        assert!(!is_document_navigation(
+            "GET",
+            "/",
+            &headers(&[("accept", "application/json")])
+        ));
+        assert!(!is_document_navigation("GET", "/", &headers(&[])));
+        // Speculative loads.
+        let h = headers(&[
+            ("accept", "text/html"),
+            ("sec-fetch-dest", "document"),
+            ("sec-purpose", "prefetch;prerender"),
+        ]);
+        assert!(!is_document_navigation("GET", "/", &h));
+        let h = headers(&[("accept", "text/html"), ("purpose", "prefetch")]);
+        assert!(!is_document_navigation("GET", "/", &h));
+        // Direct routes to plain files.
+        for p in [
+            "/app.js",
+            "/data.json",
+            "/logo.PNG",
+            "/x/y.css?v=2",
+            "/report.pdf",
+        ] {
+            assert!(!is_document_navigation("GET", p, &nav), "{p}");
+        }
+    }
 
     #[test]
     fn token_splitting_keeps_other_params() {

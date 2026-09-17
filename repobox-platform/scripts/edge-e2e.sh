@@ -123,6 +123,21 @@ expect "app's own ?token= passes the gate untouched" "$(echo "$who" | command gr
 expect "stale code on a signed-in browser -> clean redirect" "$(curl -s "${R[@]}" -b "$AJAR" -o /dev/null -w '%{http_code} %{redirect_url}' "$PRIV/x?rb_launch=$TOKEN")" "302 https://demo-private.repo.box:$HTTPS/x"
 expect "public page: no identity at origin (via gate)" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "https://demo-listed.repo.box:$HTTPS/")" 200
 
+echo "== opens (visits): only a signed-in browser page load counts"
+NAV=(-H 'Accept: text/html,application/xhtml+xml,*/*;q=0.8' -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Mode: navigate')
+expect "no open yet (curl's */* requests above were not page loads)" "$("$P" --db "$DB" app visits demo-private | command grep -c '^demo-private: 0 open(s)')" 1
+expect "browser page load -> 200" "$(curl -s "${R[@]}" -b "$AJAR" "${NAV[@]}" -o /dev/null -w '%{http_code}' "$PRIV/")" 200
+expect "second page load in the same visit -> 200" "$(curl -s "${R[@]}" -b "$AJAR" "${NAV[@]}" -o /dev/null -w '%{http_code}' "$PRIV/dashboard?a=1")" 200
+expect "asset + api fetch -> 200" "$(curl -s "${R[@]}" -b "$AJAR" -H 'Accept: */*' -H 'Sec-Fetch-Dest: script' -o /dev/null -w '%{http_code}' "$PRIV/app.js")$(curl -s "${R[@]}" -b "$AJAR" -H 'Accept: application/json' -H 'Sec-Fetch-Dest: empty' -H 'Sec-Fetch-Mode: cors' -o /dev/null -w '%{http_code}' "$PRIV/whoami.json")" 200200
+VIS=$("$P" --db "$DB" app visits demo-private)
+expect "exactly one open by one person" "$(echo "$VIS" | command grep -c '^demo-private: 1 open(s) by 1 signed-in person')" 1
+expect "the person is bob" "$(echo "$VIS" | command grep -c '^bob ')" 1
+expect "anonymous public page load -> 200" "$(curl -s "${R[@]}" "${NAV[@]}" -o /dev/null -w '%{http_code}' "https://demo-listed.repo.box:$HTTPS/")" 200
+expect "anonymous public page load is not an open" "$("$P" --db "$DB" app visits demo-listed | command grep -c '^demo-listed: 0 open(s)')" 1
+expect "visits page needs sign-in" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$A/apps/demo-private/visits")" 401
+expect "visits page: member (bob) is refused" "$(curl -s "${R[@]}" -b "$JAR" -o /dev/null -w '%{http_code}' "$A/apps/demo-private/visits")" 403
+expect "grant suggestions: member (bob) is refused" "$(curl -s "${R[@]}" -b "$JAR" -o /dev/null -w '%{http_code}' "$A/apps/demo-private/grantable-users")" 403
+
 echo "== revocation / disable"
 "$P" --db "$DB" app revoke demo-private --user bob >/dev/null
 expect "grant revoked -> live session denied" "$(curl -s "${R[@]}" -b "$AJAR" -o /dev/null -w '%{http_code}' "$PRIV/")" 401

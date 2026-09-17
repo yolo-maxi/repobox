@@ -21,7 +21,10 @@ use super::{
     safe_next, same_origin, set_cookie, urlencode, user_agent_label,
 };
 use crate::model::{App, Role, User, Visibility, validate_display_name, validate_user_name};
-use crate::store::{ACCESS_RETENTION_DAYS, SessionKind, Store, StoreError, TokenKind};
+use crate::store::{
+    ACCESS_RETENTION_DAYS, OPENS_RETENTION_DAYS, SessionKind, Store, StoreError, TokenKind,
+    VISIT_WINDOW_SECS,
+};
 
 type Q = Query<HashMap<String, String>>;
 
@@ -996,7 +999,7 @@ pub async fn app_manage(
         if app.description.is_empty() { String::new() } else { format!(" · {}", esc(&app.description)) }
     ));
     body.push_str(&format!(
-        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn primary\" href=\"/{name}\">Launch</a><a class=\"btn\" href=\"/apps/{name}/analytics\">Analytics</a><a class=\"btn\" href=\"/\">Directory</a></div>",
+        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn primary\" href=\"/{name}\">Launch</a><a class=\"btn\" href=\"/apps/{name}/visits\">Visits</a><a class=\"btn\" href=\"/apps/{name}/analytics\">Requests</a><a class=\"btn\" href=\"/\">Directory</a></div>",
         name = esc(&app.name)
     ));
     body.push_str(&format!(
@@ -1032,7 +1035,12 @@ pub async fn app_manage(
         "<h2>Access <span class=\"count\">{}</span></h2><div class=\"panel\">",
         grants.len()
     ));
-    body.push_str(&format!("<form method=\"post\" action=\"{base}/grants\" class=\"row\" style=\"margin-bottom:14px\"><div class=\"field\"><label for=\"grant-user\">Grant a user by handle</label><input type=\"text\" id=\"grant-user\" name=\"user\" placeholder=\"handle\" required autocomplete=\"off\" autocapitalize=\"none\"></div><div class=\"field\" style=\"flex:0 0 auto\"><label>&nbsp;</label><button class=\"btn primary\" type=\"submit\">Grant</button></div></form>"));
+    // The grant control is a plain text input (the handle) that a small
+    // script upgrades into a combobox over `/apps/<name>/grantable-users`.
+    // Without JavaScript it is the same form as before.
+    body.push_str(&format!(
+        "<form method=\"post\" action=\"{base}/grants\" class=\"row\" style=\"margin-bottom:14px\"><div class=\"field picker\"><label for=\"grant-user\">Grant a user</label><input type=\"text\" id=\"grant-user\" name=\"user\" placeholder=\"handle\" required autocomplete=\"off\" autocapitalize=\"none\" spellcheck=\"false\" role=\"combobox\" aria-autocomplete=\"list\" aria-expanded=\"false\" aria-controls=\"grant-user-list\" aria-describedby=\"grant-user-hint\" data-suggest=\"{base}/grantable-users\"><ul id=\"grant-user-list\" class=\"suggest\" role=\"listbox\" aria-label=\"Matching users\" hidden></ul><div class=\"hint\" id=\"grant-user-hint\">Type a handle or a name to pick an active user; arrow keys move, Enter selects, Escape closes. A handle typed in full works too.</div></div><div class=\"field\" style=\"flex:0 0 auto\"><label>&nbsp;</label><button class=\"btn primary\" type=\"submit\">Grant</button></div></form>"
+    ));
     if grants.is_empty() {
         body.push_str("<div class=\"empty\">No grants yet. Admins and the owner can always open the app.</div>");
     } else {
@@ -1085,8 +1093,187 @@ pub async fn app_manage(
         body.push_str("</tbody></table></div>");
     }
     body.push_str("</div>");
+    body.push_str(GRANT_PICKER_JS);
 
     let sh = shell(&s, &app.title, Some(&user), "");
+    html(StatusCode::OK, page(&sh, &body))
+}
+
+/// Progressive enhancement for the grant form: an ARIA combobox that asks
+/// the owner/admin-only suggestion endpoint as the person types. Suggestions
+/// are rendered with `textContent`, never as HTML. Selecting fills the input
+/// with the canonical handle; the form still posts to the same endpoint.
+const GRANT_PICKER_JS: &str = r#"<script>
+(function(){
+var input=document.getElementById('grant-user');if(!input)return;
+var list=document.getElementById('grant-user-list');var url=input.getAttribute('data-suggest');
+var items=[],active=-1,timer=null,seq=0;
+function close(){list.hidden=true;list.innerHTML='';items=[];active=-1;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');}
+function render(){
+  list.innerHTML='';
+  if(!items.length){var li=document.createElement('li');li.className='none';li.setAttribute('role','presentation');li.textContent='No matching active user';list.appendChild(li);}
+  items.forEach(function(u,i){
+    var li=document.createElement('li');li.id='grant-opt-'+i;li.setAttribute('role','option');li.setAttribute('aria-selected',i===active?'true':'false');if(i===active)li.className='active';
+    var n=document.createElement('strong');n.textContent=u.display_name;var c=document.createElement('code');c.textContent=u.name;
+    li.appendChild(n);li.appendChild(document.createTextNode(' '));li.appendChild(c);
+    li.addEventListener('mousedown',function(e){e.preventDefault();choose(i);});
+    list.appendChild(li);
+  });
+  list.hidden=false;input.setAttribute('aria-expanded','true');
+  if(active>=0)input.setAttribute('aria-activedescendant','grant-opt-'+active);else input.removeAttribute('aria-activedescendant');
+}
+function choose(i){if(i<0||i>=items.length)return;input.value=items[i].name;close();input.focus();}
+function ask(){
+  var my=++seq;
+  fetch(url+'?q='+encodeURIComponent(input.value.trim()),{credentials:'same-origin',headers:{'Accept':'application/json'}})
+    .then(function(r){return r.ok?r.json():{users:[]};})
+    .then(function(d){if(my!==seq)return;items=d.users||[];active=-1;render();})
+    .catch(function(){close();});
+}
+input.addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(ask,120);});
+input.addEventListener('focus',function(){if(list.hidden)ask();});
+input.addEventListener('blur',function(){setTimeout(close,120);});
+input.addEventListener('keydown',function(e){
+  if(e.key==='ArrowDown'){e.preventDefault();if(list.hidden){ask();return;}if(items.length){active=(active+1)%items.length;render();}}
+  else if(e.key==='ArrowUp'){e.preventDefault();if(items.length){active=(active-1+items.length)%items.length;render();}}
+  else if(e.key==='Enter'){if(!list.hidden&&active>=0){e.preventDefault();choose(active);}}
+  else if(e.key==='Escape'){if(!list.hidden){e.preventDefault();close();}}
+});
+})();
+</script>"#;
+
+/// Owner/admin-only suggestions for the grant form: enabled users that can
+/// still be granted this app, as `{name, display_name}` only.
+pub async fn app_grantable_users(
+    State(s): State<S>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    Query(q): Q,
+) -> Response {
+    let (_, app) = match manageable(&s, &name, &headers) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let query = q.get("q").map(String::as_str).unwrap_or("");
+    let users = match s.store.grantable_users(app.id, query, 12) {
+        Ok(u) => u,
+        Err(e) => return internal(&s, e),
+    };
+    let items: Vec<serde_json::Value> = users
+        .iter()
+        .map(|u| serde_json::json!({ "name": u.name, "display_name": u.display_name }))
+        .collect();
+    (
+        [
+            (header::CONTENT_TYPE, "application/json"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        serde_json::json!({ "users": items }).to_string(),
+    )
+        .into_response()
+}
+
+/// Visits: opens by signed-in people. Owner or admin only, like the request
+/// counters, but a different measure (see `store::record_open`).
+pub async fn app_visits(
+    State(s): State<S>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    Query(q): Q,
+) -> Response {
+    let (user, app) = match manageable(&s, &name, &headers) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    const RANGES: [i64; 3] = [7, 30, 90];
+    let days = q
+        .get("days")
+        .and_then(|d| d.parse::<i64>().ok())
+        .filter(|d| RANGES.contains(d))
+        .unwrap_or(30);
+    let v = match s.store.app_visits(app.id, days) {
+        Ok(v) => v,
+        Err(e) => return internal(&s, e),
+    };
+    let now = s.store.now();
+    let mut body = String::new();
+    body.push_str(&format!(
+        "<div class=\"row\"><h1 style=\"margin:0\">{}</h1>{}</div><p class=\"lead\"><span class=\"mono\">{}</span> · visits by signed-in people</p>",
+        esc(&app.title),
+        vis_badge(app.visibility),
+        esc(&app.host(&s.cfg.domain))
+    ));
+    body.push_str(&format!(
+        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn\" href=\"/apps/{name}\">Manage app</a><a class=\"btn\" href=\"/apps/{name}/analytics\">Requests</a><a class=\"btn\" href=\"/{name}\">Launch</a><a class=\"btn\" href=\"/\">Directory</a></div>",
+        name = esc(&app.name)
+    ));
+    body.push_str("<div class=\"row\" style=\"margin-bottom:14px\" role=\"group\" aria-label=\"Range\"><span class=\"hint\">Range</span>");
+    for r in RANGES {
+        body.push_str(&format!(
+            "<a class=\"btn small{}\" href=\"/apps/{}/visits?days={r}\"{}>{r} days</a>",
+            if r == days { " primary" } else { "" },
+            esc(&app.name),
+            if r == days {
+                " aria-current=\"true\""
+            } else {
+                ""
+            }
+        ));
+    }
+    body.push_str("</div>");
+    let today = v.daily.first().map(|d| d.opens).unwrap_or(0);
+    body.push_str(&format!(
+        "<div class=\"stats\"><div class=\"stat\"><div class=\"label\">Opens</div><div class=\"value\">{}</div><div class=\"hint\">last {} days</div></div><div class=\"stat\"><div class=\"label\">People</div><div class=\"value\">{}</div><div class=\"hint\">signed-in, deduplicated</div></div><div class=\"stat\"><div class=\"label\">Today</div><div class=\"value\">{}</div><div class=\"hint\">opens (UTC day)</div></div></div>",
+        v.opens, v.days, v.people, today
+    ));
+    let max = v.daily.iter().map(|d| d.opens).max().unwrap_or(0).max(1);
+    body.push_str(&format!(
+        "<h2>By day <span class=\"count\">{}</span></h2><div class=\"panel\"><div class=\"table-wrap\"><table class=\"days\"><thead><tr><th>Day (UTC)</th><th class=\"num\">Opens</th><th></th><th class=\"num\">People</th></tr></thead><tbody>",
+        v.days
+    ));
+    for d in &v.daily {
+        let pct = d.opens * 100 / max;
+        body.push_str(&format!(
+            "<tr><td class=\"mono\">{}</td><td class=\"num\">{}</td><td><div class=\"bar\" aria-hidden=\"true\"><span style=\"width:{}%\"></span></div></td><td class=\"num\">{}</td></tr>",
+            fmt_day(d.day),
+            d.opens,
+            pct,
+            d.people
+        ));
+    }
+    body.push_str("</tbody></table></div></div>");
+    body.push_str(&format!(
+        "<h2>By person <span class=\"count\">{}</span></h2><div class=\"panel\">",
+        v.by_person.len()
+    ));
+    if v.by_person.is_empty() {
+        body.push_str(
+            "<div class=\"empty\">Nobody signed in has opened this app in this range.</div>",
+        );
+    } else {
+        body.push_str("<div class=\"table-wrap\"><table class=\"people\"><thead><tr><th>Person</th><th class=\"num\">Opens</th><th>Last opened</th></tr></thead><tbody>");
+        for p in &v.by_person {
+            body.push_str(&format!(
+                "<tr><td>{} <code>{}</code>{}</td><td class=\"num\">{}</td><td>{} <span class=\"hint\">({})</span></td></tr>",
+                esc(&p.display_name),
+                esc(&p.name),
+                if p.enabled { "" } else { " <span class=\"badge off\">disabled</span>" },
+                p.opens,
+                fmt_ts(p.last_opened_at),
+                esc(&fmt_rel(now, p.last_opened_at))
+            ));
+        }
+        body.push_str("</tbody></table></div>");
+    }
+    body.push_str("</div>");
+    body.push_str(&format!(
+        "<h2>What is an open</h2><div class=\"panel\"><ul class=\"notes\"><li>An <strong>open</strong> is the first HTML page load a <strong>signed-in</strong> person makes in this app after {} minutes without loading a page of it. Reloads and navigation inside a visit are one open; coming back later is a new one.</li><li>Not opens: page assets (scripts, styles, images, fonts), API and fetch calls, WebSockets, prefetches, anything the gate denied, the launch-code redirect itself, and anonymous visitors of public apps.</li><li>Per open the registry stores the app, the person's user id and the time. No URL, query string, cookie, IP address, user agent, token or request body is recorded.</li><li>Open rows are deleted after {} days, so the widest range is {} days. The Requests page counts every allowed request instead and is a different measure.</li><li>Only this app's owner and platform admins can see this page; members and other owners cannot.</li></ul></div>",
+        VISIT_WINDOW_SECS / 60,
+        OPENS_RETENTION_DAYS,
+        OPENS_RETENTION_DAYS
+    ));
+    let title = format!("{} · visits", app.title);
+    let sh = shell(&s, &title, Some(&user), "");
     html(StatusCode::OK, page(&sh, &body))
 }
 
@@ -1107,13 +1294,13 @@ pub async fn app_analytics(
     let private = app.visibility == Visibility::Private;
     let mut body = String::new();
     body.push_str(&format!(
-        "<div class=\"row\"><h1 style=\"margin:0\">{}</h1>{}</div><p class=\"lead\"><span class=\"mono\">{}</span> · access counts</p>",
+        "<div class=\"row\"><h1 style=\"margin:0\">{}</h1>{}</div><p class=\"lead\"><span class=\"mono\">{}</span> · allowed requests (edge traffic, not visits)</p>",
         esc(&app.title),
         vis_badge(app.visibility),
         esc(&app.host(&s.cfg.domain))
     ));
     body.push_str(&format!(
-        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn\" href=\"/apps/{name}\">Manage app</a><a class=\"btn\" href=\"/{name}\">Launch</a><a class=\"btn\" href=\"/\">Directory</a></div>",
+        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn\" href=\"/apps/{name}\">Manage app</a><a class=\"btn\" href=\"/apps/{name}/visits\">Visits</a><a class=\"btn\" href=\"/{name}\">Launch</a><a class=\"btn\" href=\"/\">Directory</a></div>",
         name = esc(&app.name)
     ));
     let since = a
@@ -1161,11 +1348,12 @@ pub async fn app_analytics(
     }
     body.push_str("</tbody></table></div></div>");
     body.push_str(&format!(
-        "<h2>What is counted</h2><div class=\"panel\"><ul class=\"notes\"><li>One count per request the edge gate <strong>allowed</strong> for this app, including page assets. Denied requests (no session, no grant, disabled app or user, rejected launch codes) and the launch-code redirect itself are never counted.</li><li>No URL, query string, cookie, IP address, user agent, token or request body is recorded. The registry holds only per-day totals.</li><li>{}</li><li>Daily rows are deleted after {} days. The all-time total is a single counter with no identity attached.</li><li>Only this app's owner and platform admins can see this page; other owners cannot.</li></ul></div>",
+        "<h2>What is counted</h2><div class=\"panel\"><ul class=\"notes\"><li>One count per request the edge gate <strong>allowed</strong> for this app, including page assets. Denied requests (no session, no grant, disabled app or user, rejected launch codes) and the launch-code redirect itself are never counted.</li><li>This is traffic, not people: a single page view can be many requests. For how often people open the app, see <a href=\"/apps/{}/visits\">Visits</a>.</li><li>No URL, query string, cookie, IP address, user agent, token or request body is recorded. The registry holds only per-day totals.</li><li>{}</li><li>Daily rows are deleted after {} days. The all-time total is a single counter with no identity attached.</li><li>Only this app's owner and platform admins can see this page; other owners cannot.</li></ul></div>",
+        esc(&app.name),
         if private {
-            "For this private app, the signed-in user's id is stored once per day so users can be counted without double counting. That is the only identity kept."
+            "For this private app, the signed-in user's id is stored once per day so users can be counted without double counting. That is the only identity kept by these counters."
         } else {
-            "This app is public, so visitors are not identified: no user id is stored even for signed-in visitors, and the users column stays empty."
+            "This app is public, so its request counters never identify anyone: visitors are not identified here even when they hold a session, and the users column stays empty. (People who launch it signed in appear on the Visits page only.)"
         },
         ACCESS_RETENTION_DAYS
     ));
