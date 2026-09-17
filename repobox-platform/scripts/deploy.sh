@@ -95,7 +95,7 @@ remote "set -e
     \$P bootstrap-admin --name '$ADMIN_NAME' --display-name 'Fran' --out /home/fran/secrets/repobox-platform-$ADMIN_NAME-\$(date -u +%Y%m%dT%H%M%SZ).url
   fi
   reg() { \$P app show \"\$1\" >/dev/null 2>&1 || \$P app register \"\$@\"; }
-  reg demo-private  --title 'Private demo'  --description 'Private by default: needs a grant, shows the edge-injected identity.' --owner '$ADMIN_NAME' --kind proxy  --target 127.0.0.1:3231 --visibility private
+  reg demo-private  --title 'Private demo'  --description 'Private by default: needs a grant, shows the edge-injected identity.' --owner '$ADMIN_NAME' --kind proxy  --target 127.0.0.1:3231 --visibility private --identity platform
   reg demo-unlisted --title 'Unlisted demo' --description 'Public, but absent from the directory.' --owner '$ADMIN_NAME' --kind static --target /srv/repobox-platform/apps/demo-unlisted --visibility public_unlisted
   reg demo-listed   --title 'Listed demo'   --description 'Public and listed in the directory.'     --owner '$ADMIN_NAME' --kind static --target /srv/repobox-platform/apps/demo-listed   --visibility public_listed
   \$P app list

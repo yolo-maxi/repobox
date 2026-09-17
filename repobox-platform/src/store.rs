@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use crate::model::{App, AppKind, Role, User, Visibility};
+use crate::model::{App, AppKind, IdentityContract, Role, User, Visibility};
 use crate::tokens;
 
 pub type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
@@ -206,7 +206,8 @@ CREATE TABLE IF NOT EXISTS apps (
         CHECK (visibility IN ('private', 'public_unlisted', 'public_listed')),
     enabled INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    identity TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending'))
 );
 CREATE TABLE IF NOT EXISTS grants (
     app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
@@ -288,7 +289,7 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '4');
+INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '5');
 "#;
 
 /// Columns added after the first release. `CREATE TABLE IF NOT EXISTS` does
@@ -296,6 +297,13 @@ INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '4');
 const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
     ("tokens", "session_id", "INTEGER REFERENCES sessions(id)"),
     ("sessions", "parent_id", "INTEGER REFERENCES sessions(id)"),
+    // Schema 5: apps registered before the identity policy are 'pending'
+    // until an operator reviews them (`app attest`).
+    (
+        "apps",
+        "identity",
+        "TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending'))",
+    ),
 ];
 
 /// Daily access counters (and the per-day user ids of private apps that
@@ -691,6 +699,7 @@ impl Store {
         kind: AppKind,
         target: &str,
         visibility: Visibility,
+        identity: IdentityContract,
     ) -> Result<App> {
         crate::model::validate_app_name(name).map_err(StoreError::Invalid)?;
         let target = crate::model::validate_target(kind, target).map_err(StoreError::Invalid)?;
@@ -698,12 +707,15 @@ impl Store {
         if title.is_empty() || title.chars().count() > 80 {
             return Err(StoreError::Invalid("title must be 1-80 characters".into()));
         }
+        if visibility == Visibility::Private && !identity.is_platform() {
+            return Err(StoreError::Invalid(PRIVATE_NEEDS_PLATFORM_IDENTITY.into()));
+        }
         let now = self.now();
         let conn = self.lock();
         conn.execute(
-            "INSERT INTO apps (name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?8)",
-            params![name, title, description.trim(), owner_id, kind.as_str(), target, visibility.as_str(), now],
+            "INSERT INTO apps (name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?8, ?9)",
+            params![name, title, description.trim(), owner_id, kind.as_str(), target, visibility.as_str(), now, identity.as_str()],
         )
         .map_err(|e| match StoreError::from(e) {
             StoreError::Conflict(_) => StoreError::Conflict(format!("app '{name}' already exists")),
@@ -805,17 +817,51 @@ impl Store {
             .map_err(Into::into)
     }
 
+    /// Change visibility. Switching to `private` is refused unless the app
+    /// carries the platform identity contract (policy: a private app must
+    /// authenticate nobody itself).
     pub fn set_app_visibility(&self, id: i64, visibility: Visibility) -> Result<()> {
         let now = self.now();
         let conn = self.lock();
-        let n = conn.execute(
+        let identity: String = conn
+            .query_row(
+                "SELECT identity FROM apps WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .optional()?
+            .ok_or(StoreError::NotFound)?;
+        if visibility == Visibility::Private
+            && !IdentityContract::parse(&identity).is_some_and(|i| i.is_platform())
+        {
+            return Err(StoreError::Invalid(PRIVATE_NEEDS_PLATFORM_IDENTITY.into()));
+        }
+        conn.execute(
             "UPDATE apps SET visibility = ?2, updated_at = ?3 WHERE id = ?1",
             params![id, visibility.as_str(), now],
         )?;
-        if n == 0 {
+        Ok(())
+    }
+
+    /// Operator attestation after review: the app has no login of its own
+    /// and uses only the gate-injected identity. One-way; audited by the caller.
+    pub fn attest_app(&self, id: i64) -> Result<bool> {
+        let now = self.now();
+        let conn = self.lock();
+        let exists: bool = conn
+            .query_row("SELECT 1 FROM apps WHERE id = ?1", params![id], |_| {
+                Ok(true)
+            })
+            .optional()?
+            .unwrap_or(false);
+        if !exists {
             return Err(StoreError::NotFound);
         }
-        Ok(())
+        let n = conn.execute(
+            "UPDATE apps SET identity = 'platform', updated_at = ?2 WHERE id = ?1 AND identity != 'platform'",
+            params![id, now],
+        )?;
+        Ok(n == 1)
     }
 
     pub fn set_app_enabled(&self, id: i64, enabled: bool) -> Result<()> {
@@ -1446,7 +1492,10 @@ impl Store {
     }
 }
 
-const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at FROM apps";
+const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity FROM apps";
+
+/// Why a private registration or a switch to private is refused.
+pub const PRIVATE_NEEDS_PLATFORM_IDENTITY: &str = "private apps must declare the platform identity contract (`--identity platform`: the app has no password, login, setup link or session of its own and scopes records by the gate-injected identity); an existing app is attested with `app attest <name>` after review";
 const TOKEN_SELECT: &str = "SELECT id, kind, user_id, app_id, created_by, created_at, expires_at, used_at, used_by, revoked_at, note, session_id FROM tokens";
 const SESSION_SELECT: &str = "SELECT id, kind, user_id, app_id, created_at, expires_at, last_seen_at, revoked_at, label, parent_id FROM sessions";
 
@@ -1484,6 +1533,8 @@ fn row_app(r: &Row<'_>) -> rusqlite::Result<App> {
         enabled: r.get::<_, i64>(8)? != 0,
         created_at: r.get(9)?,
         updated_at: r.get(10)?,
+        identity: IdentityContract::parse(&r.get::<_, String>(11)?)
+            .unwrap_or(IdentityContract::Pending),
     })
 }
 
@@ -1658,6 +1709,7 @@ mod tests {
                 AppKind::Proxy,
                 "127.0.0.1:3231",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         assert!(s.has_access(&admin, &app).unwrap());
@@ -1679,7 +1731,8 @@ mod tests {
                 owner.id,
                 AppKind::Proxy,
                 "127.0.0.1:1",
-                Visibility::Private
+                Visibility::Private,
+                IdentityContract::Platform
             )
             .is_err()
         );
@@ -1691,7 +1744,8 @@ mod tests {
                 owner.id,
                 AppKind::Proxy,
                 "10.0.0.1:80",
-                Visibility::Private
+                Visibility::Private,
+                IdentityContract::Platform
             )
             .is_err()
         );
@@ -1712,6 +1766,7 @@ mod tests {
                 AppKind::Proxy,
                 "127.0.0.1:3025",
                 Visibility::PublicUnlisted,
+                IdentityContract::Platform,
             )
             .unwrap();
         s.set_app_enabled(app.id, false).unwrap();
@@ -1780,6 +1835,7 @@ mod tests {
                 AppKind::Static,
                 "/srv/repobox-platform/apps/x",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         s.set_user_enabled(b.id, false).unwrap();
@@ -1825,6 +1881,7 @@ mod tests {
                 AppKind::Proxy,
                 "127.0.0.1:3025",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         let kitchen = s
@@ -1836,6 +1893,7 @@ mod tests {
                 AppKind::Proxy,
                 "127.0.0.1:4184",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         let shared = s
@@ -1847,6 +1905,7 @@ mod tests {
                 AppKind::Proxy,
                 "127.0.0.1:1",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         // grants: retire has one on `shared` and one on `diary`; keep already has `shared`
@@ -2066,6 +2125,7 @@ mod tests {
                 AppKind::Proxy,
                 "127.0.0.1:3231",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         let empty = s.app_analytics(app.id, 3).unwrap();
@@ -2192,7 +2252,18 @@ mod tests {
         conn.execute_batch(
             &old.replace(",\n    session_id INTEGER REFERENCES sessions(id)", "")
                 .replace(",\n    parent_id INTEGER REFERENCES sessions(id)", "")
-                .replace("'schema_version', '4'", "'schema_version', '2'"),
+                .replace(
+                    ",\n    identity TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending'))",
+                    "",
+                )
+                .replace("'schema_version', '5'", "'schema_version', '2'"),
+        )
+        .unwrap();
+        // A private app registered before the identity policy.
+        conn.execute_batch(
+            "INSERT INTO users (name, display_name, role, enabled, created_at) VALUES ('old', 'Old', 'member', 1, 0);
+             INSERT INTO apps (name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at)
+             VALUES ('legacy', 'Legacy', '', 1, 'proxy', '127.0.0.1:9', 'private', 1, 0, 0);",
         )
         .unwrap();
         let table_exists = |c: &Connection, t: &str| -> bool {
@@ -2226,6 +2297,7 @@ mod tests {
                     .any(|r| r.unwrap() == c)
             };
             assert!(has("sessions", "parent_id") && has("tokens", "session_id"));
+            assert!(has("apps", "identity"));
             assert!(table_exists(&conn, "app_opens") && table_exists(&conn, "app_visits"));
             let v: String = conn
                 .query_row(
@@ -2234,8 +2306,26 @@ mod tests {
                     |r| r.get(0),
                 )
                 .unwrap();
-            assert_eq!(v, "4");
+            assert_eq!(v, "5");
         }
+        // The pre-policy private app keeps serving as it was, but is pending
+        // review and cannot be (re)declared private until attested.
+        let legacy = s.app_by_name("legacy").unwrap().unwrap();
+        assert_eq!(legacy.identity, IdentityContract::Pending);
+        assert_eq!(legacy.visibility, Visibility::Private);
+        assert!(legacy.enabled);
+        assert!(
+            s.set_app_visibility(legacy.id, Visibility::Private)
+                .is_err()
+        );
+        assert!(s.attest_app(legacy.id).unwrap());
+        assert!(
+            s.app_by_name("legacy")
+                .unwrap()
+                .unwrap()
+                .identity
+                .is_platform()
+        );
         // And the upgraded registry works end to end.
         let u = s.create_user("bob", "Bob", Role::Member).unwrap();
         let app = s
@@ -2247,6 +2337,7 @@ mod tests {
                 AppKind::Proxy,
                 "127.0.0.1:1",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         let (_, dev) = s
@@ -2274,6 +2365,7 @@ mod tests {
                 AppKind::Proxy,
                 "127.0.0.1:3231",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         let other = s
@@ -2285,6 +2377,7 @@ mod tests {
                 AppKind::Proxy,
                 "127.0.0.1:3232",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         let empty = s.app_visits(app.id, 7).unwrap();
@@ -2378,6 +2471,87 @@ mod tests {
     }
 
     #[test]
+    fn private_apps_require_the_platform_identity_contract() {
+        let (s, _) = store_with_clock();
+        let owner = s.create_user("owner", "Owner", Role::Member).unwrap();
+        let err = s
+            .create_app(
+                "p",
+                "P",
+                "",
+                owner.id,
+                AppKind::Proxy,
+                "127.0.0.1:1",
+                Visibility::Private,
+                IdentityContract::Pending,
+            )
+            .unwrap_err();
+        assert!(
+            matches!(err, StoreError::Invalid(ref m) if m.contains("platform identity contract")),
+            "{err}"
+        );
+        assert!(s.app_by_name("p").unwrap().is_none(), "nothing registered");
+        // A public app may be registered undeclared, but cannot become private until attested.
+        let pub_app = s
+            .create_app(
+                "q",
+                "Q",
+                "",
+                owner.id,
+                AppKind::Proxy,
+                "127.0.0.1:2",
+                Visibility::PublicListed,
+                IdentityContract::Pending,
+            )
+            .unwrap();
+        assert_eq!(pub_app.identity, IdentityContract::Pending);
+        assert!(matches!(
+            s.set_app_visibility(pub_app.id, Visibility::Private)
+                .unwrap_err(),
+            StoreError::Invalid(_)
+        ));
+        assert_eq!(
+            s.app_by_id(pub_app.id).unwrap().visibility,
+            Visibility::PublicListed
+        );
+        s.set_app_visibility(pub_app.id, Visibility::PublicUnlisted)
+            .unwrap();
+        assert!(s.attest_app(pub_app.id).unwrap());
+        assert!(!s.attest_app(pub_app.id).unwrap(), "one-way and idempotent");
+        assert_eq!(
+            s.app_by_id(pub_app.id).unwrap().identity,
+            IdentityContract::Platform
+        );
+        s.set_app_visibility(pub_app.id, Visibility::Private)
+            .unwrap();
+        assert_eq!(
+            s.app_by_id(pub_app.id).unwrap().visibility,
+            Visibility::Private
+        );
+        assert!(matches!(
+            s.attest_app(999).unwrap_err(),
+            StoreError::NotFound
+        ));
+        assert!(matches!(
+            s.set_app_visibility(999, Visibility::Private).unwrap_err(),
+            StoreError::NotFound
+        ));
+        let ok = s
+            .create_app(
+                "r",
+                "R",
+                "",
+                owner.id,
+                AppKind::Proxy,
+                "127.0.0.1:3",
+                Visibility::Private,
+                IdentityContract::Platform,
+            )
+            .unwrap();
+        assert!(ok.identity.is_platform());
+    }
+
+    #[test]
     fn grantable_users_are_enabled_ungranted_non_owners_matched_by_handle_or_name() {
         let (s, _) = store_with_clock();
         let owner = s.create_user("owner", "Owner", Role::Member).unwrap();
@@ -2395,6 +2569,7 @@ mod tests {
                 AppKind::Proxy,
                 "127.0.0.1:3231",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         let names = |q: &str, limit: usize| -> Vec<String> {

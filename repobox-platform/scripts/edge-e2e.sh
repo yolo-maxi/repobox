@@ -30,9 +30,11 @@ cp demo/demo-unlisted/index.html "$APPS/demo-unlisted/"
 cp demo/demo-listed/index.html "$APPS/demo-listed/"
 
 echo "== registry"
+expect_fail() { if "$@" >/dev/null 2>&1; then echo "  FAIL expected refusal: $*"; exit 1; else echo "  ok   refused: private app without --identity platform"; fi; }
+expect_fail "$P" --db "$DB" app register undeclared --title "Undeclared" --owner fran --kind proxy --target "$ORIGIN" --visibility private
 "$P" --db "$DB" user create fran --display-name Fran --admin
 "$P" --db "$DB" user create bob --display-name Bob
-"$P" --db "$DB" app register demo-private  --title "Private demo"  --owner fran --kind proxy  --target "$ORIGIN" --visibility private
+"$P" --db "$DB" app register demo-private  --title "Private demo"  --owner fran --kind proxy  --target "$ORIGIN" --visibility private --identity platform
 "$P" --db "$DB" app register demo-unlisted --title "Unlisted demo" --owner fran --kind static --target "$APPS/demo-unlisted" --visibility public_unlisted
 "$P" --db "$DB" app register demo-listed   --title "Listed demo"   --owner fran --kind static --target "$APPS/demo-listed"   --visibility public_listed
 "$P" --db "$DB" app grant demo-private --user bob
@@ -137,6 +139,15 @@ expect "anonymous public page load is not an open" "$("$P" --db "$DB" app visits
 expect "visits page needs sign-in" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$A/apps/demo-private/visits")" 401
 expect "visits page: member (bob) is refused" "$(curl -s "${R[@]}" -b "$JAR" -o /dev/null -w '%{http_code}' "$A/apps/demo-private/visits")" 403
 expect "grant suggestions: member (bob) is refused" "$(curl -s "${R[@]}" -b "$JAR" -o /dev/null -w '%{http_code}' "$A/apps/demo-private/grantable-users")" 403
+
+echo "== identity contract in the manifest"
+expect "rendered routes: the private app carries the contract" "$(command grep -c '^# identity: platform' "$W/apps.caddy")" 1
+expect "rendered routes: undeclared public apps are marked pending" "$(command grep -c '^# identity: pending (public app' "$W/apps.caddy")" 2
+expect "app show states the contract" "$("$P" --db "$DB" app show demo-private | command grep -c '^identity:    platform')" 1
+"$P" --db "$DB" app register legacy-pub --title "Legacy public" --owner fran --kind static --target "$APPS/demo-listed" --visibility public_listed >/dev/null
+expect "pending public app cannot be made private (CLI)" "$("$P" --db "$DB" app visibility legacy-pub private >/dev/null 2>&1; echo $?)" 1
+expect "attest, then private is allowed" "$("$P" --db "$DB" app attest legacy-pub --note e2e >/dev/null && "$P" --db "$DB" app visibility legacy-pub private >/dev/null && echo ok)" ok
+"$P" --db "$DB" app remove legacy-pub >/dev/null
 
 echo "== revocation / disable"
 "$P" --db "$DB" app revoke demo-private --user bob >/dev/null

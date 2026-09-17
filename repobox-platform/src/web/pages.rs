@@ -48,6 +48,9 @@ fn msg_text(key: &str) -> Option<&'static str> {
         "bad_name" => "That name is not valid.",
         "exists" => "That name is already taken.",
         "bad_visibility" => "Unknown visibility value.",
+        "identity_pending" => {
+            "This app has not been attested for the platform identity contract, so it cannot be made private. Remove any app-level login, then ask the operator to run `app attest`."
+        }
         "not_allowed" => "You do not have access to that.",
         "not_found" => "Not found.",
         _ => return None,
@@ -1003,23 +1006,39 @@ pub async fn app_manage(
         name = esc(&app.name)
     ));
     body.push_str(&format!(
-        "<div class=\"panel\"><dl class=\"kv\"><dt>Route</dt><dd><code>{}</code> → <code>{}</code></dd><dt>Owner</dt><dd>{}</dd><dt>Registered</dt><dd>{}</dd></dl><p class=\"hint\" style=\"margin:10px 0 0\">Route shape and origin are operator-managed (CLI + rendered Caddy config). This page controls who may open the app.</p></div>",
+        "<div class=\"panel\"><dl class=\"kv\"><dt>Route</dt><dd><code>{}</code> → <code>{}</code></dd><dt>Owner</dt><dd>{}</dd><dt>Registered</dt><dd>{}</dd><dt>Identity</dt><dd>{} <span class=\"hint\">{}</span></dd></dl><p class=\"hint\" style=\"margin:10px 0 0\">Route shape and origin are operator-managed (CLI + rendered Caddy config). This page controls who may open the app. The edge strips any identity header a browser sends and injects only the gate-issued one; the app's own authorisation is record scoping by that identity, never a second login.</p></div>",
         app.kind.as_str(),
         esc(&app.target),
         owner.map(|o| format!("{} (<code>{}</code>)", esc(&o.display_name), esc(&o.name))).unwrap_or_else(|| "—".into()),
-        fmt_ts(app.created_at)
+        fmt_ts(app.created_at),
+        if app.identity.is_platform() {
+            format!("<span class=\"badge public_listed\">{}</span>", esc(app.identity.label()))
+        } else {
+            format!("<span class=\"badge off\">{}</span>", esc(app.identity.label()))
+        },
+        esc(app.identity.help())
     ));
 
     body.push_str("<div class=\"two\" style=\"margin-top:14px\">");
     body.push_str(&format!("<div class=\"panel\"><h3>Visibility</h3><form method=\"post\" action=\"{base}/visibility\" class=\"stack\"><div class=\"radios\">"));
     for v in Visibility::ALL {
+        // Policy: only an app with the platform identity contract may be private.
+        let blocked = v == Visibility::Private && !app.identity.is_platform();
         body.push_str(&format!(
-            "<label><input type=\"radio\" name=\"visibility\" value=\"{}\"{}><span><strong>{}</strong><span class=\"hint\">{}</span></span></label>",
+            "<label><input type=\"radio\" name=\"visibility\" value=\"{}\"{}{}><span><strong>{}</strong><span class=\"hint\">{}</span></span></label>",
             v.as_str(),
             if v == app.visibility { " checked" } else { "" },
+            if blocked { " disabled aria-describedby=\"identity-pending\"" } else { "" },
             esc(v.label()),
-            esc(v.help())
+            if blocked {
+                "Needs the platform identity contract first (see Identity above).".to_string()
+            } else {
+                esc(v.help())
+            }
         ));
+    }
+    if !app.identity.is_platform() {
+        body.push_str("<p class=\"hint\" id=\"identity-pending\">Private is unavailable until an operator attests the platform identity contract for this app.</p>");
     }
     body.push_str("</div><div><button class=\"btn primary\" type=\"submit\">Save visibility</button></div></form></div>");
     body.push_str(&format!(
@@ -1390,8 +1409,10 @@ pub async fn app_visibility(
     let Some(v) = Visibility::parse(&f.visibility) else {
         return redirect(&format!("{back}?err=bad_visibility"));
     };
-    if let Err(e) = s.store.set_app_visibility(app.id, v) {
-        return internal(&s, e);
+    match s.store.set_app_visibility(app.id, v) {
+        Ok(()) => {}
+        Err(StoreError::Invalid(_)) => return redirect(&format!("{back}?err=identity_pending")),
+        Err(e) => return internal(&s, e),
     }
     s.store
         .audit(Some(user.id), "app.visibility", &app.name, v.as_str());

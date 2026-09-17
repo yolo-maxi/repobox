@@ -188,3 +188,29 @@ An open repo where any agent can leave a note. Contributions scored 1-10 units. 
 - ENS Identity & Open Integration
 - Agent Services on Base
 - Synthesis Open Track
+
+
+## Managed private apps on repo.box (platform identity policy)
+
+Apps published under `<name>.repo.box` through the platform control plane
+(`repobox-platform`, `auth.repo.box`) follow one identity rule, mandatory for
+private apps:
+
+- **Identity comes from the edge.** Caddy strips every `X-RepoBox-*` header a
+  client sent, asks the platform gate, and injects only the gate-issued
+  identity (`X-RepoBox-Auth: session`, `X-RepoBox-User-Id`, `X-RepoBox-User`,
+  `X-RepoBox-Role`, `X-RepoBox-App`). Origins bind loopback only.
+- **No second login.** A private app has no password, login, owner setup link
+  or app session of its own. App-level authorisation is *record scoping by the
+  injected identity* (key on `X-RepoBox-User-Id`; the handle may be renamed).
+  Requests without the gate identity are refused by the app (`401`).
+- **Declared at the only publish path.** `repobox-platform app register
+  --visibility private` requires `--identity platform`; pre-policy apps are
+  `pending` until an operator runs `app attest <name>` after the app's own
+  login is removed and reviewed. A `pending` app cannot be made private. The
+  contract is shown by `app show`/`app list`, the owner's manage page and the
+  rendered Caddy routes (`# identity:` per app).
+- **Limits, stated plainly.** The proxy cannot mechanically prove that
+  application code never renders a password screen; the registry declaration,
+  the audited attestation and the migration/preflight review are what enforce
+  it. Reference conversion: Study Diary (`docs/platform-control-plane.md`).

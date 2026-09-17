@@ -28,7 +28,7 @@ browser ──HTTPS──▶ Caddy (repo.box host)
 * **Registry**: SQLite (WAL) at `/var/lib/repobox-platform/platform.db`. Tables:
   `users`, `apps`, `grants`, `tokens`, `sessions`, `audit`, `access_daily`,
   `access_daily_users`, `access_totals`, `app_opens`, `app_visits`, `meta`
-  (schema version 4). Only
+  (schema version 5; `apps.identity` since 5). Only
   SHA-256 hashes of tokens and session secrets are stored; raw values exist
   once, in the channel that delivers them (a 0600 file for operator-created
   links, a page shown once in the UI, a redirect for launch codes).
@@ -154,6 +154,57 @@ browser ──HTTPS──▶ Caddy (repo.box host)
   reserved list (`auth`, `git`, `ens`, `api`, `www`, …). CSRF on all POSTs:
   `Origin` must match `https://auth.repo.box` (or `Sec-Fetch-Site: same-origin`).
 
+### Platform identity contract (repo.box policy, mandatory for private apps)
+
+**Rule.** Every managed private app uses the platform identity at ingress
+and receives only the centrally injected identity. No app-specific password,
+login, owner setup link or app session is part of the supported private-app
+contract. App-level authorisation is **record scoping by the injected
+identity** (`X-RepoBox-User-Id` is the stable key; `X-RepoBox-User` is the
+handle and may be renamed), never a second login.
+
+**Where it is enforced.**
+
+* *Edge (mechanical, every request):* the rendered route strips every
+  `X-RepoBox-*` header a client sent, asks the gate, and copies only the
+  gate-issued identity (`copy_headers`); an origin therefore never sees a
+  browser-supplied identity. Origins bind loopback only. This part holds for
+  every managed app regardless of what its code does.
+* *Publish path (declarative, non-optional):* `apps.identity` is part of the
+  registry manifest. `app register --visibility private` is refused unless
+  `--identity platform` is given; that flag is the only accepted value and
+  it is the operator's declaration that the app has no login of its own.
+  An existing app carries `pending` until an operator runs
+  `app attest <name> [--note …]` after the migration/preflight review
+  (audited `app.attest`, one-way). A `pending` app cannot be made private,
+  neither by the CLI (`app visibility`) nor by the owner's visibility form
+  (the private radio is disabled and the POST is refused with a message).
+  `app show`, `app list` (IDENTITY column, WARNING line for pending private
+  apps, `identity` in `--json`), the owner's manage page (Identity row with
+  the rule stated) and the rendered `apps.caddy` (`# identity:` line per
+  app) all show the contract, so the route file doubles as the manifest
+  operators review. `routes render` prints a WARNING per pending private
+  app (deploy logs carry it).
+* *Migration/preflight review (human):* before attesting, the app's own
+  password/login/setup/session code is removed and the app is verified to
+  refuse requests without the gate identity and to scope records by it (the
+  Study Diary conversion below is the reference).
+
+**What the proxy cannot prove.** Caddy and the gate cannot mechanically
+verify that arbitrary application code never renders a password screen or
+keeps its own session; only the declaration at the publish path plus the
+review can. That is why the contract is a registry field with an audited
+attestation, not a header the route could enforce. Pre-policy private apps
+keep serving while `pending` so that nothing goes dark; the manifest and the
+deploy log call them out until they are converted and attested.
+
+**Status at the 2026-09-17 deploy.** `platform`: demo-private,
+demo-unlisted, demo-listed (platform-owned demos; the private one shows the
+injected identity and has no login), study-diary (converted, below).
+`pending`: ellies-japanese, academicweapon, uni-kitchen, fieldwork (each has
+its own login/setup flow to remove: follow-ups per app), puzzlenest and
+circuit (public static, undeclared; irrelevant unless made private).
+
 ### Route model
 
 `repobox-platform routes render` is a pure function of the sorted registry: the
@@ -238,6 +289,11 @@ $P routes render --check-roots --out /tmp/apps.caddy \
   && sudo systemctl reload caddy
 $P audit --limit 50
 $P app stats myapp --days 14                              # access counters, no identity
+$P app visits myapp --days 30                             # opens by signed-in people (see Visits)
+$P app register myapp --title T --owner u --kind proxy --target 127.0.0.1:PORT \
+   --visibility private --identity platform                # private needs the declaration
+$P app attest myapp --note "login removed, verified …"    # pre-policy app, after review
+$P app list                                               # IDENTITY column + WARNING for pending private apps
 $P app transfer-owner myapp --owner ocean                # audited; route/visibility/enabled/grants kept
 $P user sessions ocean                                    # live device + app sessions, no secrets
 $P user consolidate --keep ocean-2 --retire ocean --name ocean
@@ -550,6 +606,74 @@ exactly those hostnames. Fieldwork (Fran's) was not touched.
 * **Deferred:** none of the six legacy routes remain; the app-side fix for
   the ellies-japanese startup check is a follow-up in that app's repository.
 
+## Study Diary conversion (2026-09-17, reference for the identity policy)
+
+Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
+`127.0.0.1:3025`, container `study-diary`, owner `ellie-beaumont`) drops its
+app-specific password, owner setup link and internal login/session flow and
+trusts only the identity the repo.box edge injects, using it to scope
+records. No link was generated or sent; no email flow exists.
+
+* **Code** (source of record on the host: `/srv/study-diary`, staged from
+  `/home/fran/study-diary-stage`; there is no git repository for it on the
+  host or on Hetzner). `server/index.mjs`: `platformIdentity(headers)`
+  accepts exactly `X-RepoBox-Auth: session` + numeric `X-RepoBox-User-Id` +
+  a valid handle in `X-RepoBox-User`, else `401 {"error":"Open Study Diary
+  from auth.repo.box."}` (also for `X-RepoBox-Auth: public`, a handle without
+  the marker, malformed ids, or the old `sd_session` cookie). Accounts are
+  found or created by platform user id; handles follow renames. Removed:
+  `/api/auth/{status,setup,setup/exchange,login,logout}` (now 404),
+  `scripts/create-owner-setup.mjs`, scrypt/session/setup-token code, the
+  `STUDY_DIARY_OWNER_EMAIL` requirement, the `sessions`, `setup_tokens` and
+  `setup_credentials` tables. Same-origin checks on PUT/POST and the
+  TimeEdit preview guards are unchanged. Frontend: the password/setup screens
+  are replaced by an "open from auth.repo.box" page shown only when the
+  identity is absent; Settings names the signed-in handle and links to
+  `auth.repo.box/me` for devices/sign-out. `README.md` states the contract.
+* **Data.** `openDatabase` migrates a password-era database in place
+  (`migrateLegacyAuth`, foreign keys off during the table swap and
+  `foreign_key_check` afterwards): account rows and `planner_data` kept,
+  credential/session tables dropped, each old account becomes `legacy-<id>`
+  with no platform identity, so its records are unreachable until
+  `scripts/bind-legacy-owner.mjs --legacy-id N --platform-user-id N --handle H`
+  binds it (one-way; refuses to merge if that identity already holds
+  records here; replaces an empty interim account). Tests (8, `node --test`):
+  absent/partial/forged/public identity refused on every route without
+  creating an account, identity selects the record scope and nobody else's
+  (incl. renamed handle and same-handle-different-id), old endpoints and
+  tables gone, migration + bind, timetable guards.
+* **Host change** (15:51–15:52 UTC). Backup
+  `/home/fran/backups/study-diary/study-diary-pre-identity-20260917T155108Z.db`
+  (`quick_check` ok, 1 user, 1 planner row, payload 2610 bytes) and the old
+  unit at `study-diary.service.pre-identity`. Image `study-diary:identity-20260917T155017Z`
+  built on the host from the staged source (frontend built on Hetzner with
+  pnpm; lint clean). Unit: image tag updated, `STUDY_DIARY_OWNER_EMAIL`
+  removed; restart at 15:51 UTC, container on `127.0.0.1:3025` only. After
+  start: tables `planner_data`, `users` only; account 1 `legacy-1` with the
+  2610-byte payload intact; bind → account 1 = platform user 10
+  `ellie-beaumont` (bound_at 15:52:03 UTC). Ellie's existing platform app
+  sessions stay valid; her old `sd_session` cookie is ignored.
+* **Boundary evidence.** Loopback origin: no headers, `X-RepoBox-Auth:
+  public`, handle-only, old cookie → all `401` with the gate message;
+  `POST /api/auth/login` and `GET /api/auth/status` → 404; `/` → the static
+  shell (its UI shows the gate page without identity). Through the edge:
+  anonymous → 401 (gate page), spoofed `X-RepoBox-*` → 401. Isolation with
+  throwaway platform user `sdprobe-155235` (id 14; granted, enrolled via
+  curl, launched, redeemed 302): `/api/auth/me` returned that handle and id,
+  `/api/planner` was empty (not Ellie's), the same request with forged
+  Ellie headers stayed empty (stripped at the edge), its own PUT was stored
+  under its own account, Ellie's payload length stayed 2610, after `app
+  revoke` the edge answered 401. Cleanup: grant revoked, user disabled, link
+  shredded, the probe's account and its orphaned planner row deleted (the
+  sqlite CLI does not cascade; `foreign_key_check` clean), leaving account 1
+  only. A process on the host can still speak to loopback with forged
+  headers: that is the host trust boundary (same as the SQLite file), stated
+  in the README.
+* **Follow-ups (not done):** ellies-japanese, academicweapon, uni-kitchen and
+  fieldwork keep their own login/setup flows and are `pending` in the
+  manifest; each needs the same conversion and `app attest`. Study Diary has
+  no git repository; consider importing `/srv/study-diary` into one.
+
 ## Current limitations
 
 * One control plane process, one SQLite file, no HA; fine for this scale.
@@ -574,6 +698,10 @@ exactly those hostnames. Fieldwork (Fran's) was not touched.
   90-day window, and an app that flips from private to public keeps its
   earlier per-day user rows until they age out. Counters are best-effort: a
   failed increment is logged and never blocks serving.
+* The identity contract is declarative beyond the edge: the route strips
+  and injects mechanically, but whether an origin still renders its own
+  login can only be established by review and attestation. Four pre-policy
+  private apps are `pending` (see the policy section) and keep serving.
 * Opens are a browser-side notion read from request headers: a client that
   sends `Accept: text/html` without `Sec-Fetch-*` (scripted HTML fetches,
   very old browsers) looks like a navigation, and a browser that navigates

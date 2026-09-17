@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 
-use model::{AppKind, Role, Visibility};
+use model::{AppKind, IdentityContract, Role, Visibility};
 use store::{Store, TokenKind};
 
 const DEFAULT_DB: &str = "/var/lib/repobox-platform/platform.db";
@@ -172,9 +172,23 @@ enum AppCmd {
         target: String,
         #[arg(long, default_value = "private", value_parser = ["private", "public_unlisted", "public_listed"])]
         visibility: String,
+        /// Platform identity contract. Required for private apps: the app has
+        /// no password/login/setup link/session of its own and scopes records
+        /// by the identity the edge injects (X-RepoBox-*). The only value is
+        /// `platform`; registering a private app without it is refused.
+        #[arg(long, value_parser = ["platform"])]
+        identity: Option<String>,
         /// If the app exists, update title/description/kind/target only
         #[arg(long)]
         replace_route: bool,
+    },
+    /// Attest, after review, that an app uses only the gate-injected identity
+    /// (no app-level password, login, setup link or session). One-way, audited.
+    Attest {
+        name: String,
+        /// What was reviewed/removed (recorded in the audit row)
+        #[arg(long, default_value = "")]
+        note: String,
     },
     List {
         #[arg(long)]
@@ -555,10 +569,18 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
             kind,
             target,
             visibility,
+            identity,
             replace_route,
         } => {
             let kind = AppKind::parse(&kind).ok_or("bad kind")?;
             let vis = Visibility::parse(&visibility).ok_or("bad visibility")?;
+            let identity = match identity.as_deref() {
+                Some("platform") => IdentityContract::Platform,
+                _ => IdentityContract::Pending,
+            };
+            if vis == Visibility::Private && !identity.is_platform() {
+                return Err(store::PRIVATE_NEEDS_PLATFORM_IDENTITY.into());
+            }
             if let Some(existing) = store.app_by_name(&name)? {
                 if !replace_route {
                     return Err(format!(
@@ -582,12 +604,27 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 );
             } else {
                 let o = need_user(store, &owner)?;
-                let a = store.create_app(&name, &title, &description, o.id, kind, &target, vis)?;
+                let a = store.create_app(
+                    &name,
+                    &title,
+                    &description,
+                    o.id,
+                    kind,
+                    &target,
+                    vis,
+                    identity,
+                )?;
                 store.audit(
                     None,
                     "app.register",
                     &a.name,
-                    &format!("{} {} owner={}", a.kind.as_str(), a.target, o.name),
+                    &format!(
+                        "{} {} owner={} identity={}",
+                        a.kind.as_str(),
+                        a.target,
+                        o.name,
+                        a.identity.as_str()
+                    ),
                 );
                 println!(
                     "registered '{}' ({} -> {}), owner {}, visibility {}",
@@ -609,23 +646,37 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                         serde_json::json!({
                             "name": a.name, "title": a.title, "kind": a.kind.as_str(), "target": a.target,
                             "visibility": a.visibility.as_str(), "enabled": a.enabled, "owner_id": a.owner_id,
+                            "identity": a.identity.as_str(),
                         })
                     })
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&v)?);
             } else {
                 println!(
-                    "NAME                   KIND    TARGET                               VISIBILITY       STATE    TITLE"
+                    "NAME                   KIND    TARGET                               VISIBILITY       STATE    IDENTITY  TITLE"
                 );
-                for a in apps {
+                for a in &apps {
                     println!(
-                        "{:<22} {:<7} {:<36} {:<16} {:<8} {}",
+                        "{:<22} {:<7} {:<36} {:<16} {:<8} {:<9} {}",
                         a.name,
                         a.kind.as_str(),
                         a.target,
                         a.visibility.as_str(),
                         if a.enabled { "on" } else { "off" },
+                        a.identity.as_str(),
                         a.title
+                    );
+                }
+                let pending = render::pending_private(&apps);
+                if !pending.is_empty() {
+                    eprintln!(
+                        "WARNING: {} private app(s) without the platform identity contract (app-level login must be removed, then `app attest`): {}",
+                        pending.len(),
+                        pending
+                            .iter()
+                            .map(|a| a.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     );
                 }
             }
@@ -640,6 +691,11 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
             println!("owner:       {} ({})", owner.name, owner.display_name);
             println!("visibility:  {}", a.visibility.as_str());
             println!("enabled:     {}", a.enabled);
+            println!(
+                "identity:    {} — {}",
+                a.identity.as_str(),
+                a.identity.help()
+            );
             let grants = store.list_grants(a.id)?;
             println!("grants:      {}", grants.len());
             for g in grants {
@@ -673,6 +729,22 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 u.name,
                 a.name
             );
+        }
+        AppCmd::Attest { name, note } => {
+            let a = need_app(store, &name)?;
+            let changed = store.attest_app(a.id)?;
+            if changed {
+                store.audit(None, "app.attest", &a.name, &format!("cli {note}"));
+                println!(
+                    "'{}' identity contract -> platform (no app login; gate-injected identity only)",
+                    a.name
+                );
+            } else {
+                println!(
+                    "'{}' already carries the platform identity contract",
+                    a.name
+                );
+            }
         }
         AppCmd::Visibility { name, visibility } => {
             let a = need_app(store, &name)?;
@@ -835,6 +907,12 @@ fn routes_cmd(store: &Store, cmd: RoutesCmd) -> Result<(), Box<dyn std::error::E
                 }
             }
             let text = render::render(&apps, &cfg)?;
+            for a in render::pending_private(&apps) {
+                eprintln!(
+                    "WARNING: private app '{}' is served without the platform identity contract (registered before the policy); remove its app-level login, then `app attest {}`",
+                    a.name, a.name
+                );
+            }
             match out {
                 Some(p) => {
                     let tmp = p.with_extension("tmp");

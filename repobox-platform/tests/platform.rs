@@ -11,7 +11,7 @@ use axum::http::{HeaderMap, Request, StatusCode, header};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use repobox_platform::model::{AppKind, Role, User, Visibility};
+use repobox_platform::model::{AppKind, IdentityContract, Role, User, Visibility};
 use repobox_platform::store::{SessionKind, Store};
 use repobox_platform::web::{self, APP_COOKIE, AUTH_COOKIE, AppState, Config};
 
@@ -45,6 +45,7 @@ impl H {
                 AppKind::Proxy,
                 "127.0.0.1:3231",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         store
@@ -56,6 +57,7 @@ impl H {
                 AppKind::Static,
                 "/srv/repobox-platform/apps/demo-unlisted",
                 Visibility::PublicUnlisted,
+                IdentityContract::Platform,
             )
             .unwrap();
         store
@@ -67,6 +69,7 @@ impl H {
                 AppKind::Static,
                 "/srv/repobox-platform/apps/demo-listed",
                 Visibility::PublicListed,
+                IdentityContract::Platform,
             )
             .unwrap();
         store
@@ -78,6 +81,7 @@ impl H {
                 AppKind::Proxy,
                 "127.0.0.1:3299",
                 Visibility::Private,
+                IdentityContract::Platform,
             )
             .unwrap();
         store.add_grant(private.id, bob.id, Some(owner.id)).unwrap();
@@ -959,6 +963,7 @@ async fn visits_page_is_owner_or_admin_only_and_names_people() {
             AppKind::Proxy,
             "127.0.0.1:3298",
             Visibility::Private,
+            IdentityContract::Platform,
         )
         .unwrap();
     h.state.store.record_open(bobs.id, h.bob.id).unwrap();
@@ -1074,6 +1079,7 @@ async fn grant_typeahead_suggestions_are_owner_or_admin_only() {
             AppKind::Proxy,
             "127.0.0.1:3298",
             Visibility::Private,
+            IdentityContract::Platform,
         )
         .unwrap();
     let url = "/apps/demo-private/grantable-users";
@@ -1187,6 +1193,103 @@ async fn grant_typeahead_suggestions_are_owner_or_admin_only() {
 }
 
 #[tokio::test]
+async fn private_visibility_needs_the_platform_identity_contract() {
+    let h = H::new();
+    let legacy = h
+        .state
+        .store
+        .create_app(
+            "legacy-pub",
+            "Legacy",
+            "",
+            h.owner.id,
+            AppKind::Proxy,
+            "127.0.0.1:3297",
+            Visibility::PublicListed,
+            IdentityContract::Pending,
+        )
+        .unwrap();
+    let owner = h.auth_cookie(&h.owner);
+    let (st, _, body) = h.get("/apps/legacy-pub", Some(&owner)).await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(body.contains("pending review"), "{body}");
+    assert!(body.contains("value=\"private\" disabled"));
+    assert!(body.contains("id=\"identity-pending\""));
+    // The store refuses even if the form is forced.
+    let (st, hd, _) = h
+        .post(
+            "/apps/legacy-pub/visibility",
+            Some(&owner),
+            "visibility=private",
+            true,
+        )
+        .await;
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert_eq!(
+        hdr(&hd, "location"),
+        Some("/apps/legacy-pub?err=identity_pending")
+    );
+    assert_eq!(
+        h.state.store.app_by_id(legacy.id).unwrap().visibility,
+        Visibility::PublicListed
+    );
+    let (_, _, body) = h
+        .get("/apps/legacy-pub?err=identity_pending", Some(&owner))
+        .await;
+    assert!(body.contains("cannot be made private"));
+    // Other visibilities are unaffected.
+    let (_, hd, _) = h
+        .post(
+            "/apps/legacy-pub/visibility",
+            Some(&owner),
+            "visibility=public_unlisted",
+            true,
+        )
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some("/apps/legacy-pub?ok=saved"));
+    // Attested (operator, after review): the contract shows and private is allowed.
+    assert!(h.state.store.attest_app(legacy.id).unwrap());
+    let (_, _, body) = h.get("/apps/legacy-pub", Some(&owner)).await;
+    assert!(body.contains("platform identity"));
+    assert!(!body.contains("value=\"private\" disabled"));
+    let (_, hd, _) = h
+        .post(
+            "/apps/legacy-pub/visibility",
+            Some(&owner),
+            "visibility=private",
+            true,
+        )
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some("/apps/legacy-pub?ok=saved"));
+    assert_eq!(
+        h.state.store.app_by_id(legacy.id).unwrap().visibility,
+        Visibility::Private
+    );
+    // Apps registered with the contract say so, and the page states the rule.
+    let (_, _, body) = h.get("/apps/demo-private", Some(&owner)).await;
+    assert!(body.contains("platform identity"));
+    assert!(body.contains("never a second login"));
+    // The edge contract itself is unchanged: strip, gate, inject only what the gate issued.
+    let code = h.mint(&h.bob, "demo-private").await;
+    let (_, hd, _) = h
+        .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
+        .await;
+    let cookie = app_cookie_from(&hd);
+    let (st, hd, _) = h
+        .gate(
+            "demo-private",
+            "/",
+            Some(&cookie),
+            &[("X-RepoBox-User", "mallory"), ("X-RepoBox-Role", "admin")],
+        )
+        .await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(hdr(&hd, "x-repobox-user"), Some("bob"));
+    assert_eq!(hdr(&hd, "x-repobox-role"), Some("member"));
+    assert_eq!(hdr(&hd, "x-repobox-auth"), Some("session"));
+}
+
+#[tokio::test]
 async fn analytics_page_is_owner_or_admin_only() {
     let h = H::new();
     let bobs = h
@@ -1200,6 +1303,7 @@ async fn analytics_page_is_owner_or_admin_only() {
             AppKind::Proxy,
             "127.0.0.1:3298",
             Visibility::Private,
+            IdentityContract::Platform,
         )
         .unwrap();
     h.state

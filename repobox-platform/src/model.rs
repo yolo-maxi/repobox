@@ -60,6 +60,62 @@ impl Visibility {
     }
 }
 
+/// The platform identity contract of a managed app (repo.box policy).
+///
+/// `Platform`: the app authenticates nobody itself. It receives the identity
+/// the edge gate injects (`X-RepoBox-*`, browser copies stripped) and uses
+/// it only to scope records; there is no app password, login, setup link or
+/// app session. Registering a *private* app requires this declaration, and
+/// only an app that carries it may be switched to private.
+///
+/// `Pending`: registered before the policy (or public and undeclared); its
+/// own login, if any, has not been removed and reviewed. It keeps serving,
+/// is flagged everywhere the manifest is shown, and cannot become private.
+///
+/// The proxy cannot prove what application code renders; the declaration is
+/// enforced at the only supported publish path (`app register`, `app
+/// attest`) and by migration/preflight review.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdentityContract {
+    Platform,
+    Pending,
+}
+
+impl IdentityContract {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            IdentityContract::Platform => "platform",
+            IdentityContract::Pending => "pending",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "platform" => Some(IdentityContract::Platform),
+            "pending" => Some(IdentityContract::Pending),
+            _ => None,
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            IdentityContract::Platform => "platform identity",
+            IdentityContract::Pending => "pending review",
+        }
+    }
+    pub fn help(self) -> &'static str {
+        match self {
+            IdentityContract::Platform => {
+                "The app trusts only the identity the edge injects and has no login of its own; app-level authorisation is record scoping by platform user."
+            }
+            IdentityContract::Pending => {
+                "Not yet reviewed for the platform identity contract: any app-level password, login, setup link or session must be removed, then an operator runs `app attest`. Until then it cannot be made private."
+            }
+        }
+    }
+    pub fn is_platform(self) -> bool {
+        matches!(self, IdentityContract::Platform)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppKind {
     Static,
@@ -133,6 +189,7 @@ pub struct App {
     pub enabled: bool,
     pub created_at: i64,
     pub updated_at: i64,
+    pub identity: IdentityContract,
 }
 
 impl App {

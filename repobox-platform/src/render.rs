@@ -14,7 +14,9 @@
 //! gate evaluates them per request, so toggling them in the UI takes effect
 //! immediately without re-rendering.
 
-use crate::model::{App, AppKind, validate_app_name, validate_target};
+use crate::model::{
+    App, AppKind, IdentityContract, Visibility, validate_app_name, validate_target,
+};
 
 #[derive(Debug, Clone)]
 pub struct RenderConfig {
@@ -64,6 +66,27 @@ pub fn validate_for_render(app: &App, cfg: &RenderConfig) -> Result<(), String> 
     Ok(())
 }
 
+/// Apps that are private without the platform identity contract: they keep
+/// serving, but the manifest and the renderer call them out.
+pub fn pending_private(apps: &[App]) -> Vec<&App> {
+    let mut v: Vec<&App> = apps
+        .iter()
+        .filter(|a| a.visibility == Visibility::Private && !a.identity.is_platform())
+        .collect();
+    v.sort_by(|a, b| a.name.cmp(&b.name));
+    v
+}
+
+fn identity_note(app: &App) -> String {
+    match (app.identity, app.visibility) {
+        (IdentityContract::Platform, _) => "platform (gate-injected identity only; no app login)".into(),
+        (IdentityContract::Pending, Visibility::Private) => {
+            "PENDING REVIEW (private app registered before the identity policy; app-level login must be removed, then `app attest`)".into()
+        }
+        (IdentityContract::Pending, _) => "pending (public app; declaration required before it can become private)".into(),
+    }
+}
+
 pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
     let mut sorted: Vec<&App> = apps.iter().collect();
     sorted.sort_by(|a, b| a.name.cmp(&b.name));
@@ -92,6 +115,10 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
             app.kind.as_str(),
             target
         ));
+        // The route shape is identical for every app: strip, gate, inject,
+        // serve. The comment records the declared identity contract so the
+        // rendered file doubles as the publish manifest operators review.
+        out.push_str(&format!("# identity: {}\n", identity_note(app)));
         out.push_str(&format!("{} {{\n", app.host(&cfg.domain)));
         out.push_str("\theader {\n");
         out.push_str("\t\tX-Content-Type-Options \"nosniff\"\n");
@@ -130,7 +157,6 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Visibility;
 
     fn app(name: &str, kind: AppKind, target: &str) -> App {
         App {
@@ -145,6 +171,7 @@ mod tests {
             enabled: true,
             created_at: 0,
             updated_at: 0,
+            identity: IdentityContract::Platform,
         }
     }
 
@@ -195,6 +222,37 @@ mod tests {
         )
         .unwrap();
         assert!(s.contains("root * /srv/repobox-platform/apps/s\n\t\tfile_server"));
+    }
+
+    #[test]
+    fn manifest_names_the_identity_contract_and_flags_pending_private_apps() {
+        let ok = app("ok", AppKind::Proxy, "127.0.0.1:1");
+        let mut legacy = app("legacy", AppKind::Proxy, "127.0.0.1:2");
+        legacy.identity = IdentityContract::Pending;
+        let mut public = app("pub", AppKind::Proxy, "127.0.0.1:3");
+        public.identity = IdentityContract::Pending;
+        public.visibility = Visibility::PublicListed;
+        let out = render(&[ok.clone(), legacy.clone(), public.clone()], &cfg()).unwrap();
+        assert!(out.contains("# app: ok (proxy -> 127.0.0.1:1)\n# identity: platform (gate-injected identity only; no app login)\n"));
+        assert!(out.contains("# app: legacy (proxy -> 127.0.0.1:2)\n# identity: PENDING REVIEW"));
+        assert!(out.contains("# app: pub (proxy -> 127.0.0.1:3)\n# identity: pending (public app"));
+        // The route itself is the same either way: strip, gate, inject, serve.
+        assert_eq!(out.matches("request_header -X-RepoBox-*").count(), 3);
+        assert_eq!(out.matches("forward_auth 127.0.0.1:3230 {").count(), 3);
+        assert_eq!(
+            out.matches("copy_headers X-RepoBox-User X-RepoBox-User-Id X-RepoBox-Role X-RepoBox-Auth X-RepoBox-App").count(),
+            3
+        );
+        let all = [public, legacy, ok];
+        let pending: Vec<&str> = pending_private(&all)
+            .iter()
+            .map(|a| a.name.as_str())
+            .collect();
+        assert_eq!(
+            pending,
+            ["legacy"],
+            "only private apps without the contract"
+        );
     }
 
     #[test]
