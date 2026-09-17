@@ -606,6 +606,72 @@ exactly those hostnames. Fieldwork (Fran's) was not touched.
 * **Deferred:** none of the six legacy routes remain; the app-side fix for
   the ellies-japanese startup check is a follow-up in that app's repository.
 
+## Deployment record (2026-09-17, visits/opens, grant typeahead, identity policy)
+
+Scope, per Fran: owner/admin stats for how often people *open* an app,
+built on the platform identity and privacy-conscious; a typeahead for the
+Grant control; then the platform identity contract as mandatory policy
+with Study Diary converted (recorded in the next section). Three
+`NO_CADDY=1` deploys, no Caddy change, routes untouched (live `apps.caddy`
+still dated 14:26:46 UTC).
+
+* **Deploys.** `56f16f86` at 15:33 UTC (visits + typeahead; DB backup
+  `platform-20260917T153348Z.db`, schema 3 → 4 on start); `9cc0a161` at 15:44
+  UTC (typeahead selection fixes found in a real browser; backup
+  `platform-20260917T154403Z.db`); `03051fdb` at 15:56 UTC (identity
+  policy; backup `platform-20260917T155609Z.db`, schema 4 → 5 on start:
+  `apps.identity` added with default `pending`). Each deploy: fmt, clippy
+  `-D warnings`, 27 unit + 28 integration tests, static musl build, host
+  binary SHA-256 matched the local build (`a5eae4d8…`, then `4e5c3d00…`),
+  service restart, registry-driven live sweep green (all private hosts 401
+  incl. spoofed identity, public 200, disabled 404, directory counts).
+* **Local proof.** `edge-e2e.sh` through a real Caddy 2.10.2: curl's `*/*`
+  requests through the whole launch flow leave zero opens; one browser-style
+  page load, a second one in the same visit, an asset and an API fetch leave
+  exactly one open by `bob`; an anonymous browser-style load of the public
+  app leaves none; visits page and suggestion endpoint answer 401/403 to
+  anonymous/member; the CLI refuses an undeclared private registration; the
+  manifest lines appear; attest → private works. Playwright (Chromium,
+  behind a local `local_certs` Caddy so `__Host-` cookies apply): 28 checks
+  on the combobox: `role=combobox`, `aria-expanded` toggling, ArrowDown sets
+  `aria-activedescendant` and `aria-selected`, Enter fills the canonical
+  handle without submitting, the pick survives a suggestion response that
+  lands after the key press, no-match row, disabled account never suggested,
+  Escape closes, ArrowUp from nothing goes to the last option, mouse pick,
+  a second Enter posts to the unchanged grant endpoint and the grants table
+  shows exactly the picked person, a granted person disappears from
+  suggestions, and with JavaScript off the typed handle still grants.
+* **Live evidence, opens** (throwaway `vprobe-a-153442`, granted on
+  demo-private, enrolled via curl; plus `vprobe-b-…` as a typeahead target
+  and throwaway-owned `vprobe-app-…` registered without a route): the
+  launch redirect left no open; one browser-style page load through the
+  real edge, then a second load, an API fetch and a `*/*` curl left exactly
+  **1 open** in `app visits demo-private --days 1`; visits page 401
+  anonymous / 403 for the member (also 403 on suggestions and Requests); the
+  throwaway owner's own visits page rendered with the empty state and named
+  no other app; suggestions for `?q=<probe-b>` returned exactly
+  `{"display_name":"Visits Probe B","name":"vprobe-b-…"}`, the owner itself
+  and a nonsense query returned `{"users":[]}`, the payload carried no ids,
+  sessions or tokens, `Cache-Control: no-store`; granting through the
+  unchanged endpoint (303 `ok=grant_added`) removed the person from the
+  suggestions. Journal since the deploy: 1 line, no `rb_launch=`. Teardown:
+  grant revoked, app removed (its opens cascade), both users disabled, link
+  shredded. The probe's single open on demo-private remains as a 90-day row
+  (`app_opens`: 1 row, `app_visits`: 1 row at the time).
+* **Live evidence, policy** (15:56 UTC): after the deploy `app list`
+  warned about 6 pending private apps; `app attest` run for study-diary
+  (converted), demo-private, demo-unlisted, demo-listed (platform demos
+  without any login) → 4 audit rows `app.attest`; `app list` now shows
+  IDENTITY `platform` for those four and warns about the remaining four
+  (`academicweapon, ellies-japanese, fieldwork, uni-kitchen`); a private
+  registration without `--identity platform` is refused and leaves no app;
+  `app visibility ellies-japanese private` is refused with the policy
+  message; `routes render` to the staging file prints one WARNING per
+  pending private app and the file carries `# identity:` for all 10 apps
+  (4 platform, 4 PENDING REVIEW, 2 pending public) while differing from the
+  live `apps.caddy` by nothing but those comment lines. Live Caddy was not
+  touched.
+
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
 
 Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
