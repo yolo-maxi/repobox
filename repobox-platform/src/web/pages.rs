@@ -1127,7 +1127,13 @@ function ask(){
   var my=++seq;
   fetch(url+'?q='+encodeURIComponent(input.value.trim()),{credentials:'same-origin',headers:{'Accept':'application/json'}})
     .then(function(r){return r.ok?r.json():{users:[]};})
-    .then(function(d){if(my!==seq)return;items=d.users||[];active=-1;render();})
+    .then(function(d){
+      if(my!==seq)return;
+      var keep=active>=0&&items[active]?items[active].name:null;
+      items=d.users||[];active=-1;
+      for(var i=0;keep&&i<items.length;i++){if(items[i].name===keep){active=i;break;}}
+      render();
+    })
     .catch(function(){close();});
 }
 input.addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(ask,120);});
@@ -1135,7 +1141,7 @@ input.addEventListener('focus',function(){if(list.hidden)ask();});
 input.addEventListener('blur',function(){setTimeout(close,120);});
 input.addEventListener('keydown',function(e){
   if(e.key==='ArrowDown'){e.preventDefault();if(list.hidden){ask();return;}if(items.length){active=(active+1)%items.length;render();}}
-  else if(e.key==='ArrowUp'){e.preventDefault();if(items.length){active=(active-1+items.length)%items.length;render();}}
+  else if(e.key==='ArrowUp'){e.preventDefault();if(items.length){active=active<0?items.length-1:(active-1+items.length)%items.length;render();}}
   else if(e.key==='Enter'){if(!list.hidden&&active>=0){e.preventDefault();choose(active);}}
   else if(e.key==='Escape'){if(!list.hidden){e.preventDefault();close();}}
 });
