@@ -56,7 +56,8 @@ LIVE_MODE = 0o644
 HOST_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
 
 
-def install_live(src, dest=CADDYFILE):
+def install_live(src, dest=None):
+    dest = dest or CADDYFILE
     tmp = dest + ".restore"
     shutil.copyfile(src, tmp)
     os.chmod(tmp, LIVE_MODE)
