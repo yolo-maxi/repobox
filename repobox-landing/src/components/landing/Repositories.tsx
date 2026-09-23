@@ -26,7 +26,7 @@ const repositories = [
 export function LandingRepositories() {
   return (
     <section id="repositories" style={{ marginBottom: 24 }}>
-      <h2 style={sectionTitleStyle}>Public repositories</h2>
+      <h2 style={sectionTitleStyle}>Public source</h2>
       <div style={{ display: "grid", gap: 12 }}>
         {repositories.map((repository) => (
           <a

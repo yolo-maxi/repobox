@@ -3,8 +3,9 @@
 import Link from "next/link";
 
 const navItems = [
+  { href: "#focus", label: "focus" },
   { href: "#values", label: "values" },
-  { href: "#repositories", label: "repositories" },
+  { href: "#repositories", label: "open source" },
   { href: "/blog/", label: "blog" },
 ];
 

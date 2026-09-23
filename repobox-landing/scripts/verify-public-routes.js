@@ -38,6 +38,10 @@ const chromium = loadChromium();
 const B = process.env.BASE || "http://127.0.0.1:3495";
 const ROUTES = ["/", "/projects", "/proof"];
 const HOMEPAGE_VALUES = ["Privacy", "Self Sovereignty", "Freedom", "Open Source", "Human Flourishing"];
+const HOMEPAGE_FOCUS = [
+  { name: "Synclave", href: "https://synclave.net" },
+  { name: "Superfluid", href: "https://superfluid.org" },
+];
 const HOMEPAGE_REPOS = [
   "https://github.com/yolo-maxi/repobox",
   "https://github.com/yolo-maxi/concierge",
@@ -131,6 +135,11 @@ const check = (name, ok) => (count++, ok || fails.push(name));
   // every external registry link actually rendered as a link target.
   const P = html["/projects"];
   const H = html["/"];
+  check("/: labels the focus section", H.includes("focused on"));
+  for (const focus of HOMEPAGE_FOCUS) {
+    check(`/: lists focus ${focus.name}`, H.includes(focus.name));
+    check(`/: links focus ${focus.href}`, H.includes(`href="${focus.href}"`));
+  }
   for (const value of HOMEPAGE_VALUES) check(`/: lists ${value}`, H.includes(`>${value}<`));
   for (const repository of HOMEPAGE_REPOS)
     check(`/: links ${repository}`, H.includes(`href="${repository}"`));
