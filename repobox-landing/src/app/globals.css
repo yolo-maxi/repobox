@@ -179,6 +179,16 @@ a:hover {
   pointer-events: none;
 }
 
+.background-canvas {
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+  .background-canvas {
+    opacity: 0.3;
+  }
+}
+
 /* Agent glow */
 .agent-glow {
   position: relative;

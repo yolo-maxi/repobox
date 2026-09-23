@@ -174,24 +174,8 @@ export function LandingFooter() {
             repo.box
           </h3>
           <p style={{ fontSize: 12, lineHeight: "20px", color: "var(--bp-dim)", marginBottom: 16 }}>
-            Git permission layer for AI agents. Built for the Synthesis Hackathon.
-            Shipping March 2026.
+            A small independent team making things we think should exist.
           </p>
-          <code
-            style={{
-              display: "block",
-              fontSize: 11,
-              lineHeight: "18px",
-              color: "var(--bp-accent2)",
-              background: "rgba(79,195,247,0.06)",
-              padding: "8px 12px",
-              borderRadius: 4,
-              border: "1px solid var(--bp-border)",
-              wordBreak: "break-all",
-            }}
-          >
-            <span style={{ color: "var(--bp-accent)" }}>$</span> curl -sSf https://repo.box/install.sh | sh
-          </code>
         </div>
       </div>
 
@@ -213,7 +197,7 @@ export function LandingFooter() {
         }}
       >
         <span>© 2026 repo.box</span>
-        <span>five agents, five keys, one repo, zero risk</span>
+        <span>built with curiosity</span>
       </div>
     </footer>
   );

@@ -36,7 +36,14 @@ function loadChromium() {
 const chromium = loadChromium();
 
 const B = process.env.BASE || "http://127.0.0.1:3495";
-const ROUTES = ["/projects", "/proof"];
+const ROUTES = ["/", "/projects", "/proof"];
+const HOMEPAGE_VALUES = ["Privacy", "Self Sovereignty", "Freedom", "Open Source", "Human Flourishing"];
+const HOMEPAGE_REPOS = [
+  "https://github.com/yolo-maxi/repobox",
+  "https://github.com/yolo-maxi/concierge",
+  "https://github.com/yolo-maxi/frontier-orderbook",
+  "https://github.com/yolo-maxi/oceangram",
+];
 // Folded into /projects on 2026-09-11: each must answer 308 -> /projects.
 const REDIRECTS = ["/portfolio", "/building", "/repos", "/projects/supstrategy"];
 // The registry both the homepage and /projects render. Read from source so the
@@ -123,6 +130,14 @@ const check = (name, ok) => (count++, ok || fails.push(name));
   // sections, fewer than ten entries, every registry entry present, and
   // every external registry link actually rendered as a link target.
   const P = html["/projects"];
+  const H = html["/"];
+  for (const value of HOMEPAGE_VALUES) check(`/: lists ${value}`, H.includes(`>${value}<`));
+  for (const repository of HOMEPAGE_REPOS)
+    check(`/: links ${repository}`, H.includes(`href="${repository}"`));
+  for (const removed of ["What we&#x27;re building", "Everything below is running", "Right now that means", "All current projects"])
+    check(`/: omits '${removed}'`, !H.includes(removed));
+  check("/: avoids a full-time work claim", !/full.?time/i.test(H));
+
   check("registry: parsed at least one project", PROJECT_NAMES.length > 0);
   check(`registry: fewer than ten projects (${PROJECT_NAMES.length})`, PROJECT_NAMES.length < 10);
   for (const w of ["Retired", "Paused", "Concept", "Kanban", "Total Projects"])

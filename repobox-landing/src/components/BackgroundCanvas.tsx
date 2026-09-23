@@ -399,6 +399,7 @@ export function BackgroundCanvas() {
   return (
     <canvas
       ref={canvasRef}
+      className="background-canvas"
       style={{
         position: "absolute",
         top: 0,
@@ -406,7 +407,6 @@ export function BackgroundCanvas() {
         width: "100%",
         zIndex: 1,
         pointerEvents: "none",
-        opacity: 0.8,
       }}
     />
   );

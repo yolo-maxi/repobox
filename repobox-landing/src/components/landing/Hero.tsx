@@ -3,26 +3,39 @@
 import Link from "next/link";
 
 const navItems = [
-  { href: "/projects", label: "projects" },
-  // /portfolio merged into /projects on 2026-09-11 (permanent redirect).
-  { href: "/proof", label: "proof" },
-  // /agents and /packages quarantined from public nav by 2026-08-17 disposition.
+  { href: "#values", label: "values" },
+  { href: "#repositories", label: "repositories" },
   { href: "/blog/", label: "blog" },
-  { href: "/hire", label: "hire us" },
 ];
 
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const isAnchor = href.startsWith("#");
+  const style = {
+    color: "var(--bp-dim)",
+    transition: "color 0.2s",
+    minHeight: 44,
+    padding: "12px 8px",
+    display: "inline-flex",
+    alignItems: "center",
+  };
+
+  if (isAnchor) {
+    return (
+      <a
+        href={href}
+        style={style}
+        onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
+        onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
+      >
+        {children}
+      </a>
+    );
+  }
+
   return (
     <Link
       href={href}
-      style={{
-        color: "var(--bp-dim)",
-        transition: "color 0.2s",
-        minHeight: 44,
-        padding: "12px 8px",
-        display: "inline-flex",
-        alignItems: "center",
-      }}
+      style={style}
       onMouseOver={(e) => (e.currentTarget.style.color = "var(--bp-accent)")}
       onMouseOut={(e) => (e.currentTarget.style.color = "var(--bp-dim)")}
     >
@@ -67,61 +80,26 @@ export function LandingHero() {
 
       <p
         style={{
-          fontSize: 18,
-          lineHeight: "28px",
-          color: "var(--bp-dim)",
+          fontSize: 22,
+          lineHeight: "32px",
+          color: "var(--bp-heading)",
           maxWidth: 520,
-          marginBottom: 32,
+          marginBottom: 12,
         }}
       >
-        An independent team building infrastructure for software that runs
-        itself.
+        We build cool stuff.
       </p>
 
       <p
         style={{
           fontSize: 15,
           lineHeight: "24px",
-          color: "#8eafc4",
-          maxWidth: 580,
+          color: "var(--bp-dim)",
+          maxWidth: 560,
         }}
       >
-        Right now that means a control plane for long-running agent work, an
-        on-chain order book, a landing-page agent that is deliberately powerless,
-        and a permission layer that makes a git repo safe to hand to a machine.
-        Everything below is running somewhere you can click.
+        Small experiments, useful tools, strange systems, and the occasional big idea.
       </p>
-
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 32 }}>
-        <a
-          href="#work"
-          style={{
-            border: "1px solid var(--bp-border)",
-            borderRadius: 8,
-            color: "var(--bp-heading)",
-            padding: "12px 18px",
-            textDecoration: "none",
-            background: "rgba(6, 14, 26, 0.72)",
-            fontSize: 13,
-          }}
-        >
-          see the work
-        </a>
-        <Link
-          href="/hire"
-          style={{
-            border: "1px solid var(--bp-border)",
-            borderRadius: 8,
-            color: "var(--bp-heading)",
-            padding: "12px 18px",
-            textDecoration: "none",
-            background: "rgba(6, 14, 26, 0.72)",
-            fontSize: 13,
-          }}
-        >
-          work with us
-        </Link>
-      </div>
 
       <div
         style={{
