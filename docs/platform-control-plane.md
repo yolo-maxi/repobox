@@ -1,5 +1,9 @@
 # repo.box platform control plane (`auth.repo.box`)
 
+## Open PWA Runtime public handoffs
+
+`auth.repo.box` also serves two fixed public Android Runtime handoffs: `https://auth.repo.box/runtime/secure-vault` and `https://auth.repo.box/runtime/hyperliquid-positions`, plus `/.well-known/assetlinks.json` for package `box.openpwa.runtime`. They are static public association/handoff responses, not registry app routes: they do not inspect platform identity, create sessions, issue or redeem `rb_launch`, or disclose platform data. Query-bearing handoff URLs return 404. Keep these routes ahead of the generic `/{name}` private-app launcher route. Private app launcher behavior remains exclusively `https://auth.repo.box/{app-name}` and continues to mint one-time `rb_launch` codes.
+
 First slice of the platform control plane: named users, apps with owners and
 per-app grants, three visibility modes, enable/disable, one-time launch codes,
 single-use device links, owner-created invitation links, and the Caddy edge

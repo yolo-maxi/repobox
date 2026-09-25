@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use axum::Form;
-use axum::extract::{Path, Query, State};
+use axum::extract::{OriginalUri, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
@@ -203,6 +203,61 @@ pub async fn healthz(State(s): State<S>) -> Response {
         Ok(apps) => (StatusCode::OK, format!("ok apps={}\n", apps.len())).into_response(),
         Err(e) => (StatusCode::SERVICE_UNAVAILABLE, format!("db error: {e}\n")).into_response(),
     }
+}
+
+/// Fixed public Android App Link association for the checked-in Runtime debug
+/// APK. It is neither registry data nor an identity/launch endpoint.
+pub async fn android_assetlinks() -> Response {
+    const ASSETLINKS: &str = r#"[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "box.openpwa.runtime",
+      "sha256_cert_fingerprints": ["66:BF:A6:12:1E:72:2F:B9:AC:21:A0:E9:AC:F6:CF:10:92:CA:42:11:73:F0:52:3E:72:BE:55:40:AA:BD:09:FC"]
+    }
+  }
+]"#;
+    (
+        [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+        ASSETLINKS,
+    )
+        .into_response()
+}
+
+/// Public, fixed-path Runtime handoff. It has no store or header input, so it
+/// cannot use platform identity, mint/redeem `rb_launch`, or disclose user data.
+fn runtime_handoff(uri: &OriginalUri, title: &str, origin: &str, capability: &str) -> Response {
+    if uri.0.query().is_some() {
+        return (StatusCode::NOT_FOUND, "Not found.\n").into_response();
+    }
+    let body = format!(
+        r#"<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>{title} · Open PWA Runtime</title></head>
+<body><main><h1>Open {title} in Open PWA Runtime</h1><p>This public handoff identifies one compiled Runtime app. It does not sign you in, create a repo.box platform session, or grant access to private apps.</p><dl><dt>Web app origin</dt><dd><code>{origin}</code></dd><dt>Requested capability</dt><dd><code>{capability}</code></dd></dl><p>Open this exact link with the Android Open PWA Runtime app. The app validates the fixed path locally before it creates a WebView.</p></main></body></html>"#,
+        title = esc(title),
+        origin = esc(origin),
+        capability = esc(capability),
+    );
+    ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], body).into_response()
+}
+
+pub async fn runtime_secure_vault(uri: OriginalUri) -> Response {
+    runtime_handoff(
+        &uri,
+        "Proof Vault",
+        "https://secure-vault.repo.box/",
+        "deviceCredentialSign.v1",
+    )
+}
+
+pub async fn runtime_hyperliquid_positions(uri: OriginalUri) -> Response {
+    runtime_handoff(
+        &uri,
+        "Hyperliquid Positions",
+        "https://hyperliquid-positions.repo.box/",
+        "backgroundWidgetMonitor.v1",
+    )
 }
 
 pub async fn not_found(State(s): State<S>, headers: HeaderMap) -> Response {

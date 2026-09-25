@@ -63,6 +63,18 @@ pub fn router(state: S) -> Router {
         .route("/", get(pages::index))
         .route("/assets/app.css", get(pages::css))
         .route("/healthz", get(pages::healthz))
+        // These public Android endpoints are intentionally outside the
+        // identity and private-app launch-code surfaces. Keep them before the
+        // generic `/{name}` launcher route below.
+        .route(
+            "/.well-known/assetlinks.json",
+            get(pages::android_assetlinks),
+        )
+        .route("/runtime/secure-vault", get(pages::runtime_secure_vault))
+        .route(
+            "/runtime/hyperliquid-positions",
+            get(pages::runtime_hyperliquid_positions),
+        )
         .route("/api/directory", get(pages::api_directory))
         .route("/gate/verify", get(gate::verify))
         .route("/me", get(pages::me))

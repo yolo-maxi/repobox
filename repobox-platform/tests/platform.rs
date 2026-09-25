@@ -2234,3 +2234,74 @@ async fn stale_code_on_a_signed_in_browser_is_dropped_not_rejected() {
     let last = &h.state.store.list_audit(1).unwrap()[0];
     assert_eq!(last.action, "launch.reject");
 }
+
+#[tokio::test]
+async fn public_runtime_handoffs_are_exact_and_never_touch_private_launch_state() {
+    let h = H::new();
+    let audit_before = h.state.store.list_audit(100).unwrap().len();
+    for (path, origin, capability) in [
+        (
+            "/runtime/secure-vault",
+            "https://secure-vault.repo.box/",
+            "deviceCredentialSign.v1",
+        ),
+        (
+            "/runtime/hyperliquid-positions",
+            "https://hyperliquid-positions.repo.box/",
+            "backgroundWidgetMonitor.v1",
+        ),
+    ] {
+        let (st, headers, body) = h.get(path, None).await;
+        assert_eq!(st, StatusCode::OK, "{path}");
+        assert_eq!(
+            hdr(&headers, "content-type"),
+            Some("text/html; charset=utf-8")
+        );
+        assert!(hdr(&headers, "set-cookie").is_none());
+        assert!(body.contains(origin), "{body}");
+        assert!(body.contains(capability), "{body}");
+        assert!(!body.contains("rb_launch"), "{body}");
+        assert!(!body.contains("__Host-rb_auth"), "{body}");
+        assert!(!body.contains("__Host-rb_app"), "{body}");
+    }
+    assert_eq!(h.state.store.list_audit(100).unwrap().len(), audit_before);
+    for path in [
+        "/runtime/secure-vault?rb_launch=not-a-launch-code",
+        "/runtime/hyperliquid-positions?anything=else",
+        "/runtime/not-registered",
+        "/runtime/secure-vault/",
+    ] {
+        let (st, headers, _) = h.get(path, None).await;
+        assert_eq!(st, StatusCode::NOT_FOUND, "{path}");
+        assert!(hdr(&headers, "set-cookie").is_none());
+    }
+    // Existing private launchers retain their one-time-code contract.
+    let (st, headers, _) = h.get("/demo-private", Some(&h.auth_cookie(&h.bob))).await;
+    assert_eq!(st, StatusCode::FOUND);
+    assert!(
+        hdr(&headers, "location")
+            .expect("private launcher location")
+            .starts_with("https://demo-private.repo.box/?rb_launch=")
+    );
+}
+
+#[tokio::test]
+async fn public_android_assetlinks_is_the_exact_runtime_debug_association() {
+    let h = H::new();
+    let (st, headers, body) = h.get("/.well-known/assetlinks.json", None).await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(
+        hdr(&headers, "content-type"),
+        Some("application/json; charset=utf-8")
+    );
+    assert!(hdr(&headers, "set-cookie").is_none());
+    let association: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        association[0]["target"]["package_name"],
+        "box.openpwa.runtime"
+    );
+    assert_eq!(
+        association[0]["target"]["sha256_cert_fingerprints"][0],
+        "66:BF:A6:12:1E:72:2F:B9:AC:21:A0:E9:AC:F6:CF:10:92:CA:42:11:73:F0:52:3E:72:BE:55:40:AA:BD:09:FC"
+    );
+}
