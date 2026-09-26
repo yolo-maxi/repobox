@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# /usr/local/bin/repobox-platform — operator entry point on the repo.box host.
+#
+# The registry belongs to the non-login system user `repobox-platform`, so
+# the CLI runs as that user (via sudo + runuser). A file requested with
+# `--out PATH` is produced in a private spool by the service user and then
+# written to PATH *as the calling user* (0600, refusing to overwrite or follow
+# an existing file), so link/token files keep landing where operators ask.
+# Nothing secret is printed.
+set -euo pipefail
+umask 077
+BIN=/srv/repobox-platform/bin/repobox-platform
+SVC=repobox-platform
+SPOOL=/var/lib/repobox-platform/spool
+
+if [[ $(id -u) -ne 0 ]]; then
+  exec sudo -n -- "$0" "$@"
+fi
+caller_uid=${SUDO_UID:-0}
+caller_gid=${SUDO_GID:-0}
+
+args=()
+out=""
+while (($#)); do
+  case $1 in
+    --out)
+      [[ $# -ge 2 ]] || { echo "error: --out needs a path" >&2; exit 2; }
+      out=$2; args+=(--out __RBP_SPOOL__); shift 2 ;;
+    --out=*)
+      out=${1#--out=}; args+=(--out __RBP_SPOOL__); shift ;;
+    *)
+      args+=("$1"); shift ;;
+  esac
+done
+
+tmp=""
+cleanup() { if [[ -n $tmp && -e $tmp ]]; then shred -u "$tmp" 2>/dev/null || rm -f "$tmp"; fi; }
+trap cleanup EXIT
+
+if [[ -n $out ]]; then
+  [[ $out == /* ]] || out="$PWD/$out"
+  if [[ -e $out || -L $out ]]; then
+    echo "error: $out already exists; choose a new file" >&2; exit 1
+  fi
+  [[ -d $(dirname -- "$out") ]] || { echo "error: $(dirname -- "$out") does not exist" >&2; exit 1; }
+  install -d -o "$SVC" -g "$SVC" -m 0700 "$SPOOL"
+  tmp="$SPOOL/out.$$.$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+  for i in "${!args[@]}"; do
+    if [[ ${args[$i]} == __RBP_SPOOL__ ]]; then args[$i]=$tmp; fi
+  done
+fi
+
+set +e
+(cd / && runuser -u "$SVC" -- env ${out:+REPOBOX_PLATFORM_OUT_DISPLAY="$out"} "$BIN" "${args[@]}")
+rc=$?
+set -e
+
+if [[ -n $out && $rc -eq 0 && -f $tmp ]]; then
+  # Written by the caller (not root), O_EXCL via noclobber: no overwrite, no
+  # symlink following into somebody else's file.
+  setpriv --reuid="$caller_uid" --regid="$caller_gid" --clear-groups \
+    bash -c 'umask 077; set -C; cat > "$1"' _ "$out" < "$tmp"
+fi
+exit "$rc"

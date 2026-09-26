@@ -306,18 +306,21 @@ Layout on the host:
 
 | Path | Purpose |
 |---|---|
-| `/srv/repobox-platform/bin/repobox-platform` | static musl binary (CLI + services) |
+| `/srv/repobox-platform/bin/repobox-platform` | static musl binary (CLI + services); `.prev-<stamp>` copies kept by each deploy |
+| `/usr/local/bin/repobox-platform` | operator CLI wrapper (root via sudo; runs the binary as `repobox-platform`, hands `--out` files back to the caller 0600) |
 | `/srv/repobox-platform/apps/<name>/` | static app roots (root-owned, world-readable) |
 | `/srv/repobox-platform/caddy-apply.py` | Caddyfile apply/rollback helper |
-| `/var/lib/repobox-platform/platform.db` | registry (owner `fran`, 0700 dir) |
+| `/var/lib/repobox-platform/platform.db` | registry (owner `repobox-platform`, dir 0700, files 0600; `spool/` is the wrapper's private hand-off dir) |
+| `/etc/repobox-platform/ai-bridge.secret` | AI bridge secret (root 0600), loaded via `LoadCredential=` |
 | `/etc/caddy/repobox-platform/apps.caddy` | rendered managed routes |
 | `/etc/caddy/Caddyfile` | contains the `# BEGIN/END repobox-platform managed` block |
 | `/etc/caddy/backups/Caddyfile.pre-repobox-platform-<stamp>` | pre-change backups |
 | `/home/fran/backups/repobox-platform/platform-<stamp>.db` | DB backups taken by every deploy |
 | `/home/fran/secrets/repobox-platform-<user>-<stamp>.url` | operator-created device links (0600) |
 
-Services: `repobox-platform.service` (127.0.0.1:3230) and
-`repobox-platform-demo-private.service` (127.0.0.1:3231). Ports are claimed in
+Services: `repobox-platform.service` (127.0.0.1:3230, user
+`repobox-platform`, non-login system user; `IPAddressAllow=localhost`) and
+`repobox-platform-demo-private.service` (127.0.0.1:3231, `DynamicUser`). Ports are claimed in
 `~/clawd/PORT-REGISTRY.md`.
 
 ```bash
@@ -343,7 +346,7 @@ modified; `/set-token*` and `/login*` on `auth.repo.box` are kept pointing at
 ### Operator tasks
 
 ```bash
-P=/srv/repobox-platform/bin/repobox-platform            # runs as fran, uses /var/lib/repobox-platform/platform.db
+P=/usr/local/bin/repobox-platform   # sudo + runuser as repobox-platform; --out files land 0600, owned by you
 $P bootstrap-admin --name fran --out /home/fran/secrets/repobox-platform-fran-$(date -u +%s).url
 $P user create ocean --display-name Ocean               # then: $P user enrol ocean --out <0600 file>
 $P app register myapp --title "My app" --owner fran --kind proxy --target 127.0.0.1:3299

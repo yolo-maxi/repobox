@@ -8,8 +8,8 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=fran
-Group=fran
+# No state, no secrets: an ephemeral user is enough.
+DynamicUser=yes
 Environment=RUST_LOG=info
 ExecStart=/srv/repobox-platform/bin/repobox-platform demo-origin --bind 127.0.0.1:3231 --app demo-private --title "Private demo"
 Restart=always
@@ -18,6 +18,9 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
+PrivateDevices=true
+IPAddressDeny=any
+IPAddressAllow=localhost
 CapabilityBoundingSet=
 AmbientCapabilities=
 

@@ -451,7 +451,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             if !bind.ip().is_loopback() {
                 return Err(format!("serve must bind to loopback, got {bind}").into());
             }
-            let store = Store::open(&cli.db)?;
+            let store = open_store(&cli.db)?;
             let mut cfg = web::Config::defaults(&public_base, &domain);
             cfg.routes.gate = bind.to_string();
             if let Some(url) = ai_upstream {
@@ -498,7 +498,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             print!("{}", web::api::SKILL_MD);
             Ok(())
         }
-        Cmd::ServiceToken { cmd } => service_token_cmd(&Store::open(&cli.db)?, cmd),
+        Cmd::ServiceToken { cmd } => service_token_cmd(&open_store(&cli.db)?, cmd),
         Cmd::DemoOrigin { bind, app, title } => {
             init_tracing();
             let rt = tokio::runtime::Runtime::new()?;
@@ -510,7 +510,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             out,
             ttl_hours,
         } => {
-            let store = Store::open(&cli.db)?;
+            let store = open_store(&cli.db)?;
             let user = match store.user_by_name(&name)? {
                 Some(u) if u.is_admin() => u,
                 Some(u) => {
@@ -541,16 +541,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             println!(
                 "admin '{}' ready; single-use device link written to {} (expires in {}h)",
                 user.name,
-                out.display(),
+                shown(&out),
                 ttl_hours
             );
             Ok(())
         }
-        Cmd::User { cmd } => user_cmd(&Store::open(&cli.db)?, cmd),
-        Cmd::App { cmd } => app_cmd(&Store::open(&cli.db)?, cmd),
-        Cmd::Routes { cmd } => routes_cmd(&Store::open(&cli.db)?, cmd),
+        Cmd::User { cmd } => user_cmd(&open_store(&cli.db)?, cmd),
+        Cmd::App { cmd } => app_cmd(&open_store(&cli.db)?, cmd),
+        Cmd::Routes { cmd } => routes_cmd(&open_store(&cli.db)?, cmd),
         Cmd::Backup { out } => {
-            let store = Store::open(&cli.db)?;
+            let store = open_store(&cli.db)?;
             if out.exists() {
                 return Err(format!(
                     "{} already exists; refusing to overwrite a backup",
@@ -561,11 +561,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             store.backup_to(&out)?;
             let _ =
                 std::fs::set_permissions(&out, std::os::unix::fs::PermissionsExt::from_mode(0o600));
-            println!("backup written to {}", out.display());
+            println!("backup written to {}", shown(&out));
             Ok(())
         }
         Cmd::Audit { limit } => {
-            let store = Store::open(&cli.db)?;
+            let store = open_store(&cli.db)?;
             for e in store.list_audit(limit)? {
                 println!(
                     "{}  {:<12} {:<16} {:<20} {}",
@@ -581,13 +581,54 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
+/// `RUST_LOG` tunes this crate's logging, but HTTP/transport crates are
+/// capped at `info` whatever the environment says: at debug/trace they can
+/// log request lines and headers (URIs with launch codes, cookies, the bridge
+/// secret). Our own log lines never contain secrets, URIs or bodies.
+/// How an `--out` path is shown to the operator. The host wrapper
+/// (/usr/local/bin/repobox-platform) has the service user write into a
+/// private spool and passes the path the operator asked for here.
+fn shown(out: &Path) -> String {
+    std::env::var("REPOBOX_PLATFORM_OUT_DISPLAY").unwrap_or_else(|_| out.display().to_string())
+}
+
+/// Open the registry, with a pointer to the wrapper when the caller lacks
+/// access (on the host the registry belongs to the `repobox-platform` user).
+fn open_store(db: &Path) -> Result<Store, Box<dyn std::error::Error>> {
+    Store::open(db).map_err(|e| {
+        let denied = std::fs::File::open(db)
+            .err()
+            .is_some_and(|io| io.kind() == std::io::ErrorKind::PermissionDenied)
+            || db.parent().is_some_and(|d| {
+                std::fs::read_dir(d)
+                    .err()
+                    .is_some_and(|io| io.kind() == std::io::ErrorKind::PermissionDenied)
+            });
+        if denied {
+            format!("{e}\nhint: the registry belongs to the `repobox-platform` service user; run the CLI as `/usr/local/bin/repobox-platform …` (it uses sudo + runuser)").into()
+        } else {
+            e.into()
+        }
+    })
+}
+
 fn init_tracing() {
     use tracing_subscriber::EnvFilter;
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
+    let mut filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    for target in [
+        "hyper",
+        "hyper_util",
+        "h2",
+        "axum",
+        "tower",
+        "tower_http",
+        "rustls",
+    ] {
+        if let Ok(d) = format!("{target}=info").parse() {
+            filter = filter.add_directive(d);
+        }
+    }
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 }
 
 fn write_link(
@@ -678,7 +719,7 @@ fn user_cmd(store: &Store, cmd: UserCmd) -> Result<(), Box<dyn std::error::Error
             println!(
                 "single-use device link for '{}' written to {} (expires in {}h)",
                 u.name,
-                out.display(),
+                shown(&out),
                 ttl_hours
             );
         }
@@ -1406,7 +1447,7 @@ fn service_token_cmd(
             println!(
                 "service token '{}' written to {} (owner {}, expires {})",
                 tok.name,
-                out.display(),
+                shown(&out),
                 o.name,
                 web::html::fmt_ts(tok.expires_at)
             );
@@ -1493,7 +1534,7 @@ fn routes_cmd(store: &Store, cmd: RoutesCmd) -> Result<(), Box<dyn std::error::E
                     let tmp = p.with_extension("tmp");
                     std::fs::write(&tmp, &text)?;
                     std::fs::rename(&tmp, &p)?;
-                    eprintln!("rendered {} app route(s) to {}", apps.len(), p.display());
+                    eprintln!("rendered {} app route(s) to {}", apps.len(), shown(&p));
                 }
                 None => print!("{text}"),
             }

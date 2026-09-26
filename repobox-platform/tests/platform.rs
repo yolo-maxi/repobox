@@ -238,6 +238,34 @@ impl H {
     }
 }
 
+/// A rejected launch code: body-less 303 to the launcher's explanation page,
+/// which carries no code and explains the reason.
+async fn assert_launch_rejected(
+    h: &H,
+    st: StatusCode,
+    hd: &HeaderMap,
+    body: &str,
+    kind: &str,
+    says: &str,
+) {
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert!(
+        body.is_empty(),
+        "code-bearing responses have no body: {body}"
+    );
+    assert!(hdr(hd, "set-cookie").is_none());
+    let loc = hdr(hd, "location").unwrap();
+    assert_eq!(
+        loc,
+        format!("https://auth.repo.box/demo-private?launch_error={kind}&next=/")
+    );
+    assert!(!loc.contains("rb_launch"));
+    let (st, _, page) = h.get(loc.trim_start_matches(BASE), None).await;
+    assert_eq!(st, StatusCode::FORBIDDEN);
+    assert!(page.contains(says), "{page}");
+    assert!(page.contains("Launch again"));
+}
+
 fn hdr<'a>(h: &'a HeaderMap, k: &str) -> Option<&'a str> {
     h.get(k).and_then(|v| v.to_str().ok())
 }
@@ -312,9 +340,7 @@ async fn launch_code_replay_is_rejected() {
     let (st, hd, body) = h
         .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
-    assert_eq!(st, StatusCode::FORBIDDEN);
-    assert!(hdr(&hd, "set-cookie").is_none());
-    assert!(body.contains("already been used"), "{body}");
+    assert_launch_rejected(&h, st, &hd, &body, "used", "already been used").await;
 }
 
 #[tokio::test]
@@ -326,9 +352,7 @@ async fn launch_code_expires() {
     let (st, hd, body) = h
         .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
-    assert_eq!(st, StatusCode::FORBIDDEN);
-    assert!(hdr(&hd, "set-cookie").is_none());
-    assert!(body.contains("expired"), "{body}");
+    assert_launch_rejected(&h, st, &hd, &body, "expired", "has expired").await;
 }
 
 #[tokio::test]
@@ -346,13 +370,13 @@ async fn launch_code_is_bound_to_its_app() {
     let (st, _, _) = h
         .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
-    assert_eq!(st, StatusCode::FORBIDDEN);
+    assert_eq!(st, StatusCode::SEE_OTHER);
     // A public-app code presented to a private app is refused.
     let code2 = h.mint(&h.owner, "demo-listed").await;
     let (st, hd, _) = h
         .gate("demo-private", &format!("/?rb_launch={code2}"), None, &[])
         .await;
-    assert_eq!(st, StatusCode::FORBIDDEN);
+    assert_eq!(st, StatusCode::SEE_OTHER);
     assert!(hdr(&hd, "set-cookie").is_none());
 }
 
@@ -419,7 +443,11 @@ async fn disabled_app_is_denied_for_everyone() {
             &[],
         )
         .await;
-    assert_eq!(st, StatusCode::NOT_FOUND);
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert_eq!(
+        hdr(&hd, "location"),
+        Some("https://auth.repo.box/demo-private?launch_error=disabled&next=/")
+    );
     assert!(hdr(&hd, "set-cookie").is_none());
     // Disabled apps drop out of the public directory.
     let (_, _, body) = h.get("/api/directory", None).await;
@@ -446,7 +474,7 @@ async fn disabled_user_is_denied_everywhere() {
         h.gate("demo-private", &format!("/?rb_launch={code2}"), None, &[])
             .await
             .0,
-        StatusCode::FORBIDDEN,
+        StatusCode::SEE_OTHER,
         "unredeemed code"
     );
     assert_eq!(
@@ -642,7 +670,7 @@ async fn access_is_counted_only_when_the_gate_allows() {
         )
         .await
         .0,
-        StatusCode::FORBIDDEN
+        StatusCode::SEE_OTHER
     );
     assert_eq!(stats("demo-private").total_requests, 0);
     // Redemption itself is a redirect, not a served request: not counted.
@@ -656,7 +684,7 @@ async fn access_is_counted_only_when_the_gate_allows() {
         h.gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
             .await
             .0,
-        StatusCode::FORBIDDEN,
+        StatusCode::SEE_OTHER,
         "replay"
     );
     assert_eq!(stats("demo-private").total_requests, 0);
@@ -712,7 +740,11 @@ async fn access_is_counted_only_when_the_gate_allows() {
     let (st, hd, _) = h
         .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
-    assert_eq!(st, StatusCode::NOT_FOUND);
+    assert_eq!(
+        st,
+        StatusCode::SEE_OTHER,
+        "body-less redirect to the launcher"
+    );
     assert!(hdr(&hd, "set-cookie").is_none());
     assert_eq!(stats("demo-private").total_requests, 4);
     // Disabled user: denied, not counted.
@@ -2217,7 +2249,7 @@ async fn stale_code_on_a_signed_in_browser_is_dropped_not_rejected() {
     let (st, _, _) = h
         .gate("demo-private", &format!("/?rb_launch={code}"), None, &[])
         .await;
-    assert_eq!(st, StatusCode::FORBIDDEN);
+    assert_eq!(st, StatusCode::SEE_OTHER);
     // a session for a *different* app does not rescue a bad code either
     let other = h
         .launch_from(&h.auth_cookie(&h.owner), "other-private")
@@ -2230,7 +2262,7 @@ async fn stale_code_on_a_signed_in_browser_is_dropped_not_rejected() {
             &[],
         )
         .await;
-    assert_eq!(st, StatusCode::FORBIDDEN);
+    assert_eq!(st, StatusCode::SEE_OTHER);
     let last = &h.state.store.list_audit(1).unwrap()[0];
     assert_eq!(last.action, "launch.reject");
 }
@@ -2304,4 +2336,53 @@ async fn public_android_assetlinks_is_the_exact_runtime_debug_association() {
         association[0]["target"]["sha256_cert_fingerprints"][0],
         "66:BF:A6:12:1E:72:2F:B9:AC:21:A0:E9:AC:F6:CF:10:92:CA:42:11:73:F0:52:3E:72:BE:55:40:AA:BD:09:FC"
     );
+}
+
+#[tokio::test]
+async fn every_code_bearing_gate_response_is_body_less() {
+    // Caddy logs reverse_proxy copy failures with the request URI (which
+    // carries the code); an empty body leaves nothing to fail on.
+    let h = H::new();
+    let code = h.mint(&h.bob, "demo-private").await;
+    let (st, _, body) = h
+        .navigate("demo-private", &format!("/?rb_launch={code}"), None)
+        .await;
+    assert_eq!((st, body.as_str()), (StatusCode::FOUND, ""), "redeem");
+    for (app, uri, cookie) in [
+        ("demo-private", format!("/?rb_launch={code}"), None), // replay
+        (
+            "demo-private",
+            "/?rb_launch=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+            None,
+        ), // unknown
+        (
+            "demo-listed",
+            "/?rb_launch=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+            None,
+        ), // public
+    ] {
+        let (st, _, body) = h.navigate(app, &uri, cookie).await;
+        assert!(st.is_redirection(), "{app} {st}");
+        assert_eq!(body, "", "{app}");
+    }
+    h.state
+        .store
+        .set_app_enabled(
+            h.state
+                .store
+                .app_by_name("demo-private")
+                .unwrap()
+                .unwrap()
+                .id,
+            false,
+        )
+        .unwrap();
+    let (st, _, body) = h
+        .navigate(
+            "demo-private",
+            "/?rb_launch=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            None,
+        )
+        .await;
+    assert_eq!((st, body.as_str()), (StatusCode::SEE_OTHER, ""), "disabled");
 }

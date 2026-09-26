@@ -458,6 +458,30 @@ pub async fn launch(
             ),
         );
     }
+    // The gate sends a rejected launch code here (body-less 303, no code in
+    // the URL). Explain and offer a fresh launch; never auto-relaunch, so a
+    // persistent failure cannot loop between gate and launcher.
+    if let Some(kind) = q.get("launch_error") {
+        let sh = shell(&s, &app.title, user.as_ref(), "");
+        return html(
+            StatusCode::FORBIDDEN,
+            status_page(
+                &sh,
+                "⏱",
+                "Launch code not accepted",
+                &format!(
+                    "{} Launch codes are single-use and expire after {} seconds.",
+                    super::gate::launch_error_message(kind),
+                    s.cfg.launch_ttl
+                ),
+                &format!(
+                    "<a class=\"btn primary\" href=\"/{}?next={}\">Launch again</a>",
+                    esc(&app.name),
+                    super::urlencode(&next)
+                ),
+            ),
+        );
+    }
     let Some((sess, user)) = current else {
         if app.visibility.is_public() {
             return redirect(&format!("https://{}{}", app.host(&s.cfg.domain), next));

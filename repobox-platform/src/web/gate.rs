@@ -20,7 +20,7 @@ use super::{APP_COOKIE, LAUNCH_PARAM, S, html, set_cookie, urlencode};
 use crate::ai::AiError;
 use crate::model::{RESERVED_PATH_PREFIX, Visibility, validate_app_name};
 use crate::render::{GATE_APP_HEADER, GATE_MARKER_HEADER};
-use crate::store::{SessionKind, TokenKind};
+use crate::store::{RedeemError, SessionKind, TokenKind};
 
 fn hdr<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers.get(name).and_then(|v| v.to_str().ok())
@@ -262,9 +262,16 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
         .filter(|(_, user)| s.store.has_access(user, &app).unwrap_or(false));
 
     // 1. One-time launch code redemption (only on navigations).
+    //
+    // Every answer to a request that carries a launch code is a body-less
+    // redirect. Caddy logs `reverse_proxy` failures (e.g. "aborting with
+    // incomplete response" when the client disconnects while the body is
+    // copied) together with the request URI, which here contains the code;
+    // with an empty body there is nothing to copy, so that log line cannot
+    // happen. Rejections go to a clean launcher URL (no code) that explains.
     if let Some(raw) = token.filter(|_| method == "GET" || method == "HEAD") {
         if !app.enabled {
-            return disabled_page(&shell);
+            return launch_error_redirect(&s.cfg.public_base, &app.name, "disabled", &clean_uri);
         }
         let redeemed = s.store.consume_token(TokenKind::Launch, &raw, None);
         let outcome = match redeemed {
@@ -275,10 +282,13 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
                 Some(user) if user.enabled && s.store.has_access(&user, &app).unwrap_or(false) => {
                     Ok((user, tok))
                 }
-                _ => Err("This launch code no longer grants access."),
+                _ => Err("no_access"),
             },
-            Ok(_) => Err("This launch code belongs to a different app."),
-            Err(e) => Err(e.message()),
+            Ok(_) => Err("other_app"),
+            Err(RedeemError::Unknown) => Err("invalid"),
+            Err(RedeemError::Expired) => Err("expired"),
+            Err(RedeemError::Used) => Err("used"),
+            Err(RedeemError::Revoked) => Err("revoked"),
         };
         return match outcome {
             Ok((user, tok)) => {
@@ -290,9 +300,11 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
                     s.cfg.app_session_ttl,
                     &super::user_agent_label(&headers),
                 ) else {
-                    return html(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        status_page(&shell, "!", "Gate error", "Could not create a session.", ""),
+                    return launch_error_redirect(
+                        &s.cfg.public_base,
+                        &app.name,
+                        "internal",
+                        &clean_uri,
                     );
                 };
                 s.store.audit(Some(user.id), "launch.redeem", &app.name, "");
@@ -328,7 +340,7 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
                     None,
                     "launch.reject",
                     &app.name,
-                    &format!("{msg} (session kept)"),
+                    &format!("{} (session kept)", launch_error_message(msg)),
                 );
                 let mut resp = (StatusCode::FOUND, "").into_response();
                 resp.headers_mut().insert(
@@ -340,20 +352,9 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
                 resp
             }
             Err(msg) => {
-                s.store.audit(None, "launch.reject", &app.name, msg);
-                html(
-                    StatusCode::FORBIDDEN,
-                    status_page(
-                        &shell,
-                        "⏱",
-                        "Launch code not accepted",
-                        &format!(
-                            "{msg} Launch codes are single-use and expire after {} seconds.",
-                            s.cfg.launch_ttl
-                        ),
-                        &sign_in("Launch again"),
-                    ),
-                )
+                s.store
+                    .audit(None, "launch.reject", &app.name, launch_error_message(msg));
+                launch_error_redirect(&s.cfg.public_base, &app.name, msg, &clean_uri)
             }
         };
     }
@@ -423,6 +424,37 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
             put(h, "X-RepoBox-Auth", "public");
         }
     }
+    resp
+}
+
+/// Why a launch code was not accepted, as shown by the launcher's
+/// `?launch_error=` page. Unknown kinds get a generic message.
+pub fn launch_error_message(kind: &str) -> &'static str {
+    match kind {
+        "no_access" => "This launch code no longer grants access.",
+        "other_app" => "This launch code belongs to a different app.",
+        "invalid" => "This launch code is not valid.",
+        "expired" => "This launch code has expired.",
+        "used" => "This launch code has already been used.",
+        "revoked" => "This launch code was revoked.",
+        "disabled" => "This app is switched off.",
+        _ => "The launch could not be completed.",
+    }
+}
+
+/// Body-less 303 to the launcher's explanation page. The launch code is
+/// never part of the target (only the clean path the user wanted).
+fn launch_error_redirect(public_base: &str, app: &str, kind: &str, clean_uri: &str) -> Response {
+    let mut resp = (StatusCode::SEE_OTHER, "").into_response();
+    let loc = format!(
+        "{public_base}/{app}?launch_error={kind}&next={}",
+        urlencode(clean_uri)
+    );
+    let h = resp.headers_mut();
+    if let Ok(v) = HeaderValue::from_str(&loc) {
+        h.insert(header::LOCATION, v);
+    }
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     resp
 }
 

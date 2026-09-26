@@ -21,7 +21,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 cargo build -p repobox-platform 2>/dev/null
-P="$PWD/../target/debug/repobox-platform"
+P="${E2E_BIN:-$PWD/../target/debug/repobox-platform}"
 W="${E2E_DIR:-$(mktemp -d)}"
 export XDG_DATA_HOME="$W/caddy-data" XDG_CONFIG_HOME="$W/caddy-config"
 DB="$W/platform.db"
@@ -146,7 +146,8 @@ out=$(curl -s "${R[@]}" -c "$AJAR" -o /dev/null -w '%{http_code} %{redirect_url}
 expect "gate redeems code -> clean redirect" "$out" "302 https://demo-private.repo.box:$HTTPS/dashboard?a=1"
 expect "app cookie is host-only (__Host-)" "$(command grep -c '__Host-rb_app' "$AJAR")" 1
 expect "app cookie is HttpOnly" "$(command grep -c '#HttpOnly_demo-private.repo.box' "$AJAR")" 1
-expect "code replay rejected" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$PRIV/?rb_launch=$TOKEN")" 403
+expect "code replay rejected (body-less redirect, no code in target)" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' "$PRIV/?rb_launch=$TOKEN")" "303 0 https://auth.repo.box/demo-private?launch_error=used&next=/"
+expect "launcher explains the rejected code" "$(curl -s "${R[@]}" -w ' %{http_code}' "$A/demo-private?launch_error=used&next=/" | command grep -o 'already been used\| 403' | tr -d '\n')" "already been used 403"
 who=$(curl -s "${R[@]}" -b "$AJAR" "$PRIV/whoami.json")
 expect "origin sees X-RepoBox-User=bob" "$(echo "$who" | command grep -c '"x-repobox-user":"bob"')" 1
 expect "origin sees X-RepoBox-Auth=session" "$(echo "$who" | command grep -c '"x-repobox-auth":"session"')" 1
@@ -229,11 +230,35 @@ expect "disabled app -> 404 without re-render" "$(curl -s "${R[@]}" -o /dev/null
 expect "disabled user -> app session denied" "$(curl -s "${R[@]}" -b "$AJAR" -o /dev/null -w '%{http_code}' "$PRIV/")" 401
 expect "disabled user -> auth session denied" "$(curl -s "${R[@]}" -b "$JAR" -o /dev/null -w '%{http_code}' "$A/me")" 401
 
+echo "== abrupt clients on code-bearing requests (Caddy logs copy failures with the URI)"
+cat > "$W/abrupt.py" <<'PY'
+import socket, ssl, sys
+host, port, path, n = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4])
+ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+bodies = 0
+for _ in range(n):
+    s = ctx.wrap_socket(socket.create_connection(("127.0.0.1", port)), server_hostname=host)
+    s.sendall(f"GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nAccept: text/html\r\n\r\n".encode())
+    head = s.recv(4096)          # status line + headers, then hang up at once
+    if b"content-length: 0" not in head.lower():
+        bodies += 1
+    s.close()
+print(bodies)
+PY
+for p in "/?rb_launch=$TOKEN" "/deep/x?a=1&rb_launch=$TOKEN" "/?rb_launch=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"; do
+  expect "code-bearing responses carry no body (40 abrupt clients)" "$(python3 "$W/abrupt.py" demo-private.repo.box "$HTTPS" "$p" 40)" 0
+done
+expect "public app: stray code answer carries no body" "$(python3 "$W/abrupt.py" demo-listed.repo.box "$HTTPS" "/?rb_launch=$TOKEN" 20)" 0
+sleep 0.5
+
 echo "== no secrets in logs"
-expect "control plane log has no launch token" "$(command grep -c "$TOKEN" "$W/cp.log" "$W/caddy.log" "$W/origin.log" | awk -F: '{s+=$2} END {print s}')" 0
-expect "control plane log has no enrol token" "$(command grep -c "${PATHPART#/enrol/}" "$W/cp.log" | awk -F: '{s+=$2} END {print s}')" 0
-expect "no log has the AI prompt" "$(command grep -c "$CANARY" "$W/cp.log" "$W/caddy.log" "$W/broker.log" "$W/origin.log" "$W/chatmock.log" | awk -F: '{s+=$2} END {print s}')" 0
-expect "no log has the bridge secret" "$(command grep -c "$SECRET" "$W/cp.log" "$W/caddy.log" "$W/broker.log" "$W/origin.log" | awk -F: '{s+=$2} END {print s}')" 0
+ALL_LOGS=("$W/cp.log" "$W/caddy.log" "$W/origin.log" "$W/broker.log" "$W/chatmock.log")
+expect "no log has the launch token" "$(command grep -c -- "$TOKEN" "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
+expect "no log has any rb_launch= query" "$(command grep -c -- 'rb_launch=' "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
+expect "no log has the enrol token" "$(command grep -c -- "${PATHPART#/enrol/}" "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
+expect "no log has an app session cookie value" "$(command grep -c -- "$(awk '/__Host-rb_app/ {print $7}' "$AJAR")" "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
+expect "no log has the AI prompt" "$(command grep -c -- "$CANARY" "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
+expect "no log has the bridge secret" "$(command grep -c -- "$SECRET" "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
 expect "AI requests were logged (metadata only)" "$([[ $(command grep -c 'chat app=demo-private' "$W/cp.log") -gt 0 ]] && echo yes)" yes
 
 if [[ $fail -eq 0 ]]; then echo "EDGE E2E: ALL PASS (work dir $W)"; else echo "EDGE E2E: FAILURES (work dir $W)"; exit 1; fi

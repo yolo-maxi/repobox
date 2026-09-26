@@ -44,6 +44,7 @@ STAGE=/home/fran/repobox-platform-stage
 ADMIN_NAME="${ADMIN_NAME:-fran}"
 STATIC_ROOTS="${STATIC_ROOTS:-/srv/repobox-platform/apps /var/www/repo.box/subdomains}"
 RETIRE_HOSTS="${RETIRE_HOSTS:-}"
+SVC_USER=repobox-platform
 
 log() { printf '\n=== %s ===\n' "$*"; }
 remote() { ssh -o BatchMode=yes "$HOST" "$@"; }
@@ -76,17 +77,28 @@ rsync -az --delete \
 rsync -az --delete "$CRATE_DIR/demo/" "$HOST:$STAGE/demo/"
 
 log "install"
+# The control plane runs as the non-login system user repobox-platform; the
+# registry and the AI bridge credential are readable only by it. First run on
+# a host still owned by fran: stop the service, hand the state over, restart
+# below with the new unit (a few seconds of gate downtime, once).
 remote "set -e
   sudo -n install -d -o root -g root -m 0755 /srv/repobox-platform /srv/repobox-platform/bin /srv/repobox-platform/apps
-  sudo -n install -d -o fran -g fran -m 0700 /var/lib/repobox-platform
+  getent passwd $SVC_USER >/dev/null || sudo -n useradd --system --user-group --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin $SVC_USER
+  sudo -n install -o root -g root -m 0755 '$STAGE/repobox-platform-cli' /usr/local/bin/repobox-platform
+  sudo -n install -d -o $SVC_USER -g $SVC_USER -m 0700 /var/lib/repobox-platform
+  if sudo -n find /var/lib/repobox-platform -maxdepth 1 -name 'platform.db*' ! -user $SVC_USER | grep -q .; then
+    echo 'migrating registry ownership to $SVC_USER'
+    sudo -n systemctl stop repobox-platform.service
+    sudo -n find /var/lib/repobox-platform -maxdepth 1 -name 'platform.db*' -exec chown $SVC_USER:$SVC_USER {} + -exec chmod 0600 {} +
+  fi
   sudo -n install -d -o fran -g fran -m 0700 /home/fran/backups/repobox-platform
   sudo -n install -d -o root -g root -m 0755 /etc/caddy/repobox-platform
   for app in demo-unlisted demo-listed; do
     sudo -n install -d -o root -g root -m 0755 /srv/repobox-platform/apps/\$app
     sudo -n install -o root -g root -m 0644 '$STAGE/demo/'\$app/index.html /srv/repobox-platform/apps/\$app/index.html
   done
-  if [ -f /var/lib/repobox-platform/platform.db ]; then
-    '$STAGE/repobox-platform' backup --out /home/fran/backups/repobox-platform/platform-\$(date -u +%Y%m%dT%H%M%SZ).db
+  if sudo -n test -f /var/lib/repobox-platform/platform.db; then
+    /usr/local/bin/repobox-platform backup --out /home/fran/backups/repobox-platform/platform-\$(date -u +%Y%m%dT%H%M%SZ).db
   fi
   if [ -f /srv/repobox-platform/bin/repobox-platform ]; then
     sudo -n cp -p /srv/repobox-platform/bin/repobox-platform /srv/repobox-platform/bin/repobox-platform.prev-\$(date -u +%Y%m%dT%H%M%SZ)
@@ -100,13 +112,15 @@ remote "set -e
   sudo -n systemctl restart repobox-platform.service repobox-platform-demo-private.service
   sleep 1.5
   systemctl is-active repobox-platform.service repobox-platform-demo-private.service
+  test \"\$(stat -c %U /proc/\$(systemctl show -p MainPID --value repobox-platform.service))\" = $SVC_USER
+  echo \"control plane runs as \$(stat -c %U /proc/\$(systemctl show -p MainPID --value repobox-platform.service))\"
   curl -sf http://127.0.0.1:3230/healthz
   curl -sf -o /dev/null -w 'demo origin: %{http_code}\n' http://127.0.0.1:3231/
 "
 
 log "registry: admin + demo apps"
 remote "set -e
-  P=/srv/repobox-platform/bin/repobox-platform
+  P=/usr/local/bin/repobox-platform
   if ! \$P user list | command grep -q '^$ADMIN_NAME '; then
     \$P bootstrap-admin --name '$ADMIN_NAME' --display-name 'Fran' --out /home/fran/secrets/repobox-platform-$ADMIN_NAME-\$(date -u +%Y%m%dT%H%M%SZ).url
   fi
@@ -124,7 +138,7 @@ else
   roots_args=""; for r in $STATIC_ROOTS; do roots_args="$roots_args --apps-root '$r'"; done
   retire_args=""; for h in $RETIRE_HOSTS; do retire_args="$retire_args --retire '$h'"; done
   remote "set -e
-    P=/srv/repobox-platform/bin/repobox-platform
+    P=/usr/local/bin/repobox-platform
     \$P routes render --check-roots $roots_args --out '$STAGE/apps.caddy'
     sudo -n python3 /srv/repobox-platform/caddy-apply.py apply '$STAGE/auth.repo.box.caddy' \
       --apps '$STAGE/apps.caddy' $retire_args ${CADDY_DRY_RUN:+--dry-run}
@@ -164,7 +178,7 @@ printf '  %-45s %s (want 404)\n' "auth.repo.box/gate/ai/..." "$code"; [[ "$code"
 # Every registered app, expectation derived from the registry: anonymous gets
 # 401 on private, 200 on public, 404 on disabled; a spoofed identity header
 # never changes a private answer.
-apps_json=$(remote "/srv/repobox-platform/bin/repobox-platform app list --json")
+apps_json=$(remote "/usr/local/bin/repobox-platform app list --json")
 while read -r name vis enabled; do
   if [[ "$enabled" != "true" ]]; then want=404
   elif [[ "$vis" == "private" ]]; then want=401
