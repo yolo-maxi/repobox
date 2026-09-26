@@ -214,3 +214,10 @@ private apps:
   application code never renders a password screen; the registry declaration,
   the audited attestation and the migration/preflight review are what enforce
   it. Reference conversion: Study Diary (`docs/platform-control-plane.md`).
+- **AI is a platform capability, not an app secret.** Managed apps call
+  `POST https://<app>.repo.box/_repo_box/ai/v1/chat/completions` same-origin
+  with the user's platform session (non-streaming, no tools); never embed a
+  model key or reach ChatMock directly. Policy per app via `app ai …`.
+  Agents discover the platform at `https://auth.repo.box/api/platform/v1`
+  (OpenAPI, MCP, `skill.md`) with an operator-issued scoped service token.
+  Contract: `skills/repobox-platform/SKILL.md`.

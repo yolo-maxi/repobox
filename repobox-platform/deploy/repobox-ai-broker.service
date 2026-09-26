@@ -1,0 +1,38 @@
+# /etc/systemd/system/repobox-ai-broker.service  (Hetzner, next to ChatMock)
+# The only path from repo.box to ChatMock. Loopback only; every request needs
+# the bridge secret (systemd credential, root-owned 0600 source); the broker
+# re-validates the request against platform ceilings and routes only allowed
+# models that ChatMock currently exposes. It logs metadata only (app, user
+# id, model, status, sizes, latency), never prompts, outputs or secrets.
+[Unit]
+Description=repo.box platform AI broker (loopback, ChatMock)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+LoadCredential=ai-bridge-secret:/etc/repobox-platform/ai-bridge.secret
+Environment=RUST_LOG=info
+ExecStart=/opt/repobox-platform/bin/repobox-platform ai-broker --bind 127.0.0.1:8127 --upstream http://127.0.0.1:8111 --models gpt-5.6-terra,gpt-5.6-luna,gpt-5.6-sol
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

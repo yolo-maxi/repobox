@@ -23,6 +23,10 @@
 #                                       Caddy blocks, in the same validated apply as
 #                                       the rendered routes that replace them
 #   CADDY_DRY_RUN=1 ./scripts/deploy.sh validate the Caddy change, install nothing
+#   SKIP_AI_SWEEP=1 ./scripts/deploy.sh skip the per-app /_repo_box/ai checks
+#                                       (only while routes are not yet re-rendered)
+#
+# Needs the AI bridge secret on the host first: scripts/deploy-ai-bridge.sh.
 #
 # STATIC_ROOTS lists the directories a registered static app may live under
 # (space separated); the rendered routes are refused otherwise.
@@ -50,9 +54,18 @@ cargo clippy -p repobox-platform --all-targets -- -D warnings
 if [[ -z "${SKIP_TESTS:-}" ]]; then
   cargo test -p repobox-platform
 fi
-cargo build --release -p repobox-platform --target "$TARGET"
+REPOBOX_PLATFORM_GIT_SHA="$(git rev-parse --short HEAD)" \
+  cargo build --release -p repobox-platform --target "$TARGET"
 ldd "$BIN" 2>&1 | command grep -qiE "statically linked|not a dynamic executable" || { echo "FATAL: binary is not static" >&2; exit 1; }
 "$BIN" --version
+
+log "precheck: AI bridge secret on $HOST"
+# The unit loads it with LoadCredential=; without it the control plane would
+# not start. It is created by scripts/deploy-ai-bridge.sh (run that first).
+remote "sudo -n test -s /etc/repobox-platform/ai-bridge.secret" || {
+  echo "FATAL: /etc/repobox-platform/ai-bridge.secret missing on $HOST; run scripts/deploy-ai-bridge.sh first" >&2
+  exit 1
+}
 
 log "ship to $HOST:$STAGE"
 remote "mkdir -p '$STAGE'"
@@ -74,6 +87,9 @@ remote "set -e
   done
   if [ -f /var/lib/repobox-platform/platform.db ]; then
     '$STAGE/repobox-platform' backup --out /home/fran/backups/repobox-platform/platform-\$(date -u +%Y%m%dT%H%M%SZ).db
+  fi
+  if [ -f /srv/repobox-platform/bin/repobox-platform ]; then
+    sudo -n cp -p /srv/repobox-platform/bin/repobox-platform /srv/repobox-platform/bin/repobox-platform.prev-\$(date -u +%Y%m%dT%H%M%SZ)
   fi
   sudo -n install -o root -g root -m 0755 '$STAGE/repobox-platform' /srv/repobox-platform/bin/repobox-platform
   sudo -n install -o root -g root -m 0644 '$STAGE/repobox-platform.service' /etc/systemd/system/repobox-platform.service
@@ -131,6 +147,20 @@ check() { # url expected-code  (retries while the TLS cert is still being issued
 check https://auth.repo.box/healthz 200
 check https://auth.repo.box/ 200
 check https://auth.repo.box/gate/verify 404
+check https://auth.repo.box/api/platform/v1 200
+check https://auth.repo.box/api/platform/v1/openapi.json 200
+check https://auth.repo.box/api/platform/v1/skill.md 200
+check https://auth.repo.box/api/platform/v1/apps 401
+ai_check() { # url expected-code: anonymous POST to an app's same-origin AI endpoint
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+    -H 'X-RepoBox-Auth: session' -H 'X-RepoBox-User-Id: 1' -H 'X-RepoBox-Gate: 1' \
+    -d '{"messages":[{"role":"user","content":"sweep"}]}' "$1" || true)
+  printf '  %-45s %s (want %s, anonymous + forged AI call)\n' "$1" "$code" "$2"
+  [[ "$code" == "$2" ]] || fail=1
+}
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'X-RepoBox-Gate: 1' -H 'X-RepoBox-Gate-App: demo-private' https://auth.repo.box/gate/ai/v1/chat/completions || true)
+printf '  %-45s %s (want 404)\n' "auth.repo.box/gate/ai/..." "$code"; [[ "$code" == "404" ]] || fail=1
 # Every registered app, expectation derived from the registry: anonymous gets
 # 401 on private, 200 on public, 404 on disabled; a spoofed identity header
 # never changes a private answer.
@@ -140,6 +170,10 @@ while read -r name vis enabled; do
   elif [[ "$vis" == "private" ]]; then want=401
   else want=200; fi
   check "https://$name.repo.box/" "$want"
+  if [[ -z "${SKIP_AI_SWEEP:-}" ]]; then
+    if [[ "$enabled" != "true" ]]; then ai_check "https://$name.repo.box/_repo_box/ai/v1/chat/completions" 404
+    else ai_check "https://$name.repo.box/_repo_box/ai/v1/chat/completions" 401; fi
+  fi
   if [[ "$want" == "401" ]]; then
     code=$(curl -s -o /dev/null -w '%{http_code}' -H 'X-RepoBox-User: fran' -H 'X-RepoBox-Role: admin' -H 'X-RepoBox-Auth: session' "https://$name.repo.box/" || true)
     printf '  %-45s %s (want 401, spoofed identity)\n' "https://$name.repo.box/" "$code"

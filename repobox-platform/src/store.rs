@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use crate::model::{App, AppKind, IdentityContract, Role, User, Visibility};
+use crate::model::{AiPolicy, App, AppKind, IdentityContract, Role, User, Visibility};
 use crate::tokens;
 
 pub type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
@@ -207,7 +207,16 @@ CREATE TABLE IF NOT EXISTS apps (
     enabled INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    identity TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending'))
+    identity TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending')),
+    ai_enabled INTEGER NOT NULL DEFAULT 0,
+    ai_provider TEXT NOT NULL DEFAULT 'chatmock',
+    ai_default_model TEXT NOT NULL DEFAULT 'gpt-5.6-terra',
+    ai_models TEXT NOT NULL DEFAULT 'gpt-5.6-terra,gpt-5.6-luna',
+    ai_max_input_chars INTEGER NOT NULL DEFAULT 32000,
+    ai_max_output_tokens INTEGER NOT NULL DEFAULT 2048,
+    ai_user_daily_requests INTEGER NOT NULL DEFAULT 200,
+    ai_app_daily_requests INTEGER NOT NULL DEFAULT 2000,
+    ai_public_policy TEXT
 );
 CREATE TABLE IF NOT EXISTS grants (
     app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
@@ -289,7 +298,42 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '5');
+CREATE TABLE IF NOT EXISTS ai_usage_daily (
+    app_id INTEGER NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    day INTEGER NOT NULL,
+    requests INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (app_id, user_id, day)
+);
+CREATE TABLE IF NOT EXISTS service_tokens (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    token_hash TEXT NOT NULL UNIQUE,
+    owner_id INTEGER NOT NULL REFERENCES users(id),
+    scopes TEXT NOT NULL,
+    apps TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    revoked_at INTEGER,
+    last_used_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS app_requests (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL CHECK (kind IN ('static', 'proxy')),
+    target TEXT NOT NULL,
+    visibility TEXT NOT NULL CHECK (visibility IN ('private', 'public_unlisted', 'public_listed')),
+    owner_id INTEGER NOT NULL REFERENCES users(id),
+    service_token_id INTEGER REFERENCES service_tokens(id),
+    note TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    created_at INTEGER NOT NULL,
+    decided_at INTEGER,
+    decision_note TEXT NOT NULL DEFAULT ''
+);
+INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '6');
 "#;
 
 /// Columns added after the first release. `CREATE TABLE IF NOT EXISTS` does
@@ -304,7 +348,48 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "identity",
         "TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending'))",
     ),
+    // Schema 6: per-app AI policy. Existing apps get AI *off*; only new
+    // private platform-identity registrations get it on by default.
+    ("apps", "ai_enabled", "INTEGER NOT NULL DEFAULT 0"),
+    ("apps", "ai_provider", "TEXT NOT NULL DEFAULT 'chatmock'"),
+    (
+        "apps",
+        "ai_default_model",
+        "TEXT NOT NULL DEFAULT 'gpt-5.6-terra'",
+    ),
+    (
+        "apps",
+        "ai_models",
+        "TEXT NOT NULL DEFAULT 'gpt-5.6-terra,gpt-5.6-luna'",
+    ),
+    (
+        "apps",
+        "ai_max_input_chars",
+        "INTEGER NOT NULL DEFAULT 32000",
+    ),
+    (
+        "apps",
+        "ai_max_output_tokens",
+        "INTEGER NOT NULL DEFAULT 2048",
+    ),
+    (
+        "apps",
+        "ai_user_daily_requests",
+        "INTEGER NOT NULL DEFAULT 200",
+    ),
+    (
+        "apps",
+        "ai_app_daily_requests",
+        "INTEGER NOT NULL DEFAULT 2000",
+    ),
+    ("apps", "ai_public_policy", "TEXT"),
 ];
+
+/// Current schema version (also written to `meta`).
+pub const SCHEMA_VERSION: i64 = 6;
+
+/// AI usage counters (requests per app, user and UTC day) are kept this long.
+pub const AI_USAGE_RETENTION_DAYS: i64 = 90;
 
 /// Daily access counters (and the per-day user ids of private apps that
 /// back the unique-user figure) are kept for this many UTC days, today
@@ -712,10 +797,19 @@ impl Store {
         }
         let now = self.now();
         let conn = self.lock();
+        // Private platform-identity apps get the AI capability by default;
+        // every other registration starts with it off.
+        let ai = AiPolicy::registration_default(visibility, identity);
         conn.execute(
-            "INSERT INTO apps (name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?8, ?9)",
-            params![name, title, description.trim(), owner_id, kind.as_str(), target, visibility.as_str(), now, identity.as_str()],
+            "INSERT INTO apps (name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity,
+                               ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens,
+                               ai_user_daily_requests, ai_app_daily_requests, ai_public_policy)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            params![
+                name, title, description.trim(), owner_id, kind.as_str(), target, visibility.as_str(), now, identity.as_str(),
+                ai.enabled as i64, ai.provider, ai.default_model, ai.models_csv(), ai.max_input_chars, ai.max_output_tokens,
+                ai.user_daily_requests, ai.app_daily_requests, ai.public_policy
+            ],
         )
         .map_err(|e| match StoreError::from(e) {
             StoreError::Conflict(_) => StoreError::Conflict(format!("app '{name}' already exists")),
@@ -819,15 +913,18 @@ impl Store {
 
     /// Change visibility. Switching to `private` is refused unless the app
     /// carries the platform identity contract (policy: a private app must
-    /// authenticate nobody itself).
-    pub fn set_app_visibility(&self, id: i64, visibility: Visibility) -> Result<()> {
+    /// authenticate nobody itself). Switching an app with AI on to public
+    /// without the explicit public abuse/quota policy switches AI *off* in
+    /// the same statement, so a private app can never silently become a
+    /// public free model proxy. Returns whether AI was switched off.
+    pub fn set_app_visibility(&self, id: i64, visibility: Visibility) -> Result<bool> {
         let now = self.now();
         let conn = self.lock();
-        let identity: String = conn
+        let (identity, ai_enabled, public_policy): (String, i64, Option<String>) = conn
             .query_row(
-                "SELECT identity FROM apps WHERE id = ?1",
+                "SELECT identity, ai_enabled, ai_public_policy FROM apps WHERE id = ?1",
                 params![id],
-                |r| r.get(0),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .optional()?
             .ok_or(StoreError::NotFound)?;
@@ -836,11 +933,14 @@ impl Store {
         {
             return Err(StoreError::Invalid(PRIVATE_NEEDS_PLATFORM_IDENTITY.into()));
         }
+        let ai_off = visibility.is_public() && ai_enabled != 0 && public_policy.is_none();
         conn.execute(
-            "UPDATE apps SET visibility = ?2, updated_at = ?3 WHERE id = ?1",
-            params![id, visibility.as_str(), now],
+            "UPDATE apps SET visibility = ?2, updated_at = ?3,
+                ai_enabled = CASE WHEN ?4 THEN 0 ELSE ai_enabled END
+             WHERE id = ?1",
+            params![id, visibility.as_str(), now, ai_off],
         )?;
-        Ok(())
+        Ok(ai_off)
     }
 
     /// Operator attestation after review: the app has no login of its own
@@ -1479,6 +1579,358 @@ impl Store {
         })
     }
 
+    // -------------------------------------------------------------------- AI
+
+    /// Replace an app's AI policy after validating it against the app's
+    /// current visibility and identity contract. Audited by the caller.
+    pub fn set_app_ai(&self, id: i64, policy: &AiPolicy) -> Result<App> {
+        let app = self.app_by_id(id).map_err(|e| match e {
+            StoreError::Db(rusqlite::Error::QueryReturnedNoRows) => StoreError::NotFound,
+            other => other,
+        })?;
+        policy
+            .validate(app.visibility, app.identity)
+            .map_err(StoreError::Invalid)?;
+        let now = self.now();
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE apps SET ai_enabled = ?2, ai_provider = ?3, ai_default_model = ?4, ai_models = ?5,
+                ai_max_input_chars = ?6, ai_max_output_tokens = ?7, ai_user_daily_requests = ?8,
+                ai_app_daily_requests = ?9, ai_public_policy = ?10, updated_at = ?11
+             WHERE id = ?1 AND visibility = ?12 AND identity = ?13",
+            params![
+                id,
+                policy.enabled as i64,
+                policy.provider,
+                policy.default_model,
+                policy.models_csv(),
+                policy.max_input_chars,
+                policy.max_output_tokens,
+                policy.user_daily_requests,
+                policy.app_daily_requests,
+                policy.public_policy,
+                now,
+                app.visibility.as_str(),
+                app.identity.as_str()
+            ],
+        )
+        .and_then(|n| {
+            if n == 1 {
+                Ok(())
+            } else {
+                Err(rusqlite::Error::QueryReturnedNoRows)
+            }
+        })
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => StoreError::Conflict(format!(
+                "app '{}' changed while updating its AI policy; retry",
+                app.name
+            )),
+            other => other.into(),
+        })?;
+        drop(conn);
+        self.app_by_id(id)
+    }
+
+    /// Count one AI request for (app, user) today if both daily quotas still
+    /// have room; otherwise count nothing and say which quota is exhausted.
+    /// Only counters are stored (no prompt, model output or request detail).
+    pub fn ai_take_quota(
+        &self,
+        app: &App,
+        user_id: i64,
+    ) -> Result<std::result::Result<AiUsage, &'static str>> {
+        let day = day_of(self.now());
+        let conn = self.lock();
+        let tx = conn.unchecked_transaction()?;
+        let user_n: i64 = tx.query_row(
+            "SELECT COALESCE(SUM(requests), 0) FROM ai_usage_daily WHERE app_id = ?1 AND user_id = ?2 AND day = ?3",
+            params![app.id, user_id, day],
+            |r| r.get(0),
+        )?;
+        let app_n: i64 = tx.query_row(
+            "SELECT COALESCE(SUM(requests), 0) FROM ai_usage_daily WHERE app_id = ?1 AND day = ?2",
+            params![app.id, day],
+            |r| r.get(0),
+        )?;
+        if app_n >= app.ai.app_daily_requests {
+            return Ok(Err("app_daily_quota"));
+        }
+        if user_n >= app.ai.user_daily_requests {
+            return Ok(Err("user_daily_quota"));
+        }
+        tx.execute(
+            "INSERT INTO ai_usage_daily (app_id, user_id, day, requests) VALUES (?1, ?2, ?3, 1)
+             ON CONFLICT(app_id, user_id, day) DO UPDATE SET requests = requests + 1",
+            params![app.id, user_id, day],
+        )?;
+        tx.execute(
+            "DELETE FROM ai_usage_daily WHERE day <= ?1",
+            params![day - AI_USAGE_RETENTION_DAYS],
+        )?;
+        tx.commit()?;
+        Ok(Ok(AiUsage {
+            day,
+            user_requests: user_n + 1,
+            app_requests: app_n + 1,
+        }))
+    }
+
+    /// Today's AI request counters for an app: (all users, distinct users).
+    pub fn ai_usage_today(&self, app_id: i64) -> Result<(i64, i64)> {
+        let day = day_of(self.now());
+        let conn = self.lock();
+        conn.query_row(
+            "SELECT COALESCE(SUM(requests), 0), COUNT(DISTINCT user_id) FROM ai_usage_daily WHERE app_id = ?1 AND day = ?2",
+            params![app_id, day],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(Into::into)
+    }
+
+    // --------------------------------------------------------- service tokens
+
+    /// Issue a scoped, owner-bound machine token. Returns the raw value once
+    /// (`rbp_…`); only its hash is stored.
+    pub fn create_service_token(
+        &self,
+        name: &str,
+        owner: &User,
+        scopes: &[String],
+        apps: &[String],
+        ttl_secs: i64,
+    ) -> Result<(String, ServiceToken)> {
+        crate::model::validate_user_name(name)
+            .map_err(|e| StoreError::Invalid(format!("token name: {e}")))?;
+        if !owner.enabled {
+            return Err(StoreError::Invalid(format!(
+                "user '{}' is disabled",
+                owner.name
+            )));
+        }
+        if scopes.is_empty() {
+            return Err(StoreError::Invalid(
+                "a service token needs at least one scope".into(),
+            ));
+        }
+        for sc in scopes {
+            crate::model::validate_scope(sc).map_err(StoreError::Invalid)?;
+        }
+        for a in apps {
+            let app = self
+                .app_by_name(a)?
+                .ok_or_else(|| StoreError::Invalid(format!("no app '{a}'")))?;
+            if app.owner_id != owner.id {
+                return Err(StoreError::Invalid(format!(
+                    "app '{a}' is not owned by '{}'; service tokens only reach their owner's apps",
+                    owner.name
+                )));
+            }
+        }
+        if !(3600..=90 * 86400).contains(&ttl_secs) {
+            return Err(StoreError::Invalid(
+                "service token lifetime must be 1 hour to 90 days".into(),
+            ));
+        }
+        let raw = tokens::generate();
+        let now = self.now();
+        let conn = self.lock();
+        conn.execute(
+            "INSERT INTO service_tokens (name, token_hash, owner_id, scopes, apps, created_at, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![name, tokens::hash(&raw), owner.id, scopes.join(" "), apps.join(","), now, now + ttl_secs],
+        )
+        .map_err(|e| match StoreError::from(e) {
+            StoreError::Conflict(_) => StoreError::Conflict(format!("service token '{name}' already exists")),
+            other => other,
+        })?;
+        let id = conn.last_insert_rowid();
+        let tok = conn.query_row(
+            &format!("{SERVICE_SELECT} WHERE id = ?1"),
+            params![id],
+            row_service,
+        )?;
+        Ok((format!("{}{raw}", crate::model::SERVICE_TOKEN_PREFIX), tok))
+    }
+
+    /// Resolve a bearer value to a live service token and its enabled owner.
+    pub fn service_token_lookup(&self, bearer: &str) -> Result<Option<(ServiceToken, User)>> {
+        let Some(raw) = bearer.strip_prefix(crate::model::SERVICE_TOKEN_PREFIX) else {
+            return Ok(None);
+        };
+        if !tokens::looks_like_token(raw) {
+            return Ok(None);
+        }
+        let now = self.now();
+        let conn = self.lock();
+        let Some(tok) = conn
+            .query_row(
+                &format!("{SERVICE_SELECT} WHERE token_hash = ?1"),
+                params![tokens::hash(raw)],
+                row_service,
+            )
+            .optional()?
+        else {
+            return Ok(None);
+        };
+        if tok.revoked_at.is_some() || tok.expires_at <= now {
+            return Ok(None);
+        }
+        let user = conn.query_row(
+            "SELECT id, name, display_name, role, enabled, created_at FROM users WHERE id = ?1",
+            params![tok.owner_id],
+            row_user,
+        )?;
+        if !user.enabled {
+            return Ok(None);
+        }
+        if tok.last_used_at.is_none_or(|t| now - t > 60) {
+            conn.execute(
+                "UPDATE service_tokens SET last_used_at = ?2 WHERE id = ?1",
+                params![tok.id, now],
+            )?;
+        }
+        Ok(Some((tok, user)))
+    }
+
+    pub fn list_service_tokens(&self) -> Result<Vec<ServiceToken>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(&format!("{SERVICE_SELECT} ORDER BY id"))?;
+        let rows = stmt.query_map([], row_service)?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(Into::into)
+    }
+
+    pub fn revoke_service_token(&self, name: &str) -> Result<bool> {
+        let now = self.now();
+        let conn = self.lock();
+        let exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM service_tokens WHERE name = ?1",
+                params![name],
+                |_| Ok(true),
+            )
+            .optional()?
+            .unwrap_or(false);
+        if !exists {
+            return Err(StoreError::NotFound);
+        }
+        let n = conn.execute(
+            "UPDATE service_tokens SET revoked_at = ?2 WHERE name = ?1 AND revoked_at IS NULL",
+            params![name, now],
+        )?;
+        Ok(n == 1)
+    }
+
+    // ------------------------------------------------------- app requests
+
+    /// Record an app registration request filed by an agent. Nothing is
+    /// registered until an operator approves it with the CLI.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_app_request(
+        &self,
+        name: &str,
+        title: &str,
+        description: &str,
+        kind: AppKind,
+        target: &str,
+        visibility: Visibility,
+        owner_id: i64,
+        service_token_id: Option<i64>,
+        note: &str,
+    ) -> Result<AppRequest> {
+        crate::model::validate_app_name(name).map_err(StoreError::Invalid)?;
+        let target = crate::model::validate_target(kind, target).map_err(StoreError::Invalid)?;
+        let title = title.trim();
+        if title.is_empty() || title.chars().count() > 80 {
+            return Err(StoreError::Invalid("title must be 1-80 characters".into()));
+        }
+        if description.chars().count() > 500 || note.chars().count() > 500 {
+            return Err(StoreError::Invalid(
+                "description and note must be at most 500 characters".into(),
+            ));
+        }
+        if description
+            .chars()
+            .chain(note.chars())
+            .any(|c| c.is_control() && c != '\n')
+        {
+            return Err(StoreError::Invalid(
+                "description and note may not contain control characters".into(),
+            ));
+        }
+        if self.app_by_name(name)?.is_some() {
+            return Err(StoreError::Conflict(format!("app '{name}' already exists")));
+        }
+        let now = self.now();
+        let conn = self.lock();
+        let pending: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM app_requests WHERE owner_id = ?1 AND status = 'pending'",
+            params![owner_id],
+            |r| r.get(0),
+        )?;
+        if pending >= 10 {
+            return Err(StoreError::Conflict(
+                "too many pending app requests for this owner (10); ask an operator to review them"
+                    .into(),
+            ));
+        }
+        conn.execute(
+            "INSERT INTO app_requests (name, title, description, kind, target, visibility, owner_id, service_token_id, note, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![name, title, description.trim(), kind.as_str(), target, visibility.as_str(), owner_id, service_token_id, note.trim(), now],
+        )?;
+        let id = conn.last_insert_rowid();
+        conn.query_row(
+            &format!("{REQUEST_SELECT} WHERE id = ?1"),
+            params![id],
+            row_request,
+        )
+        .map_err(Into::into)
+    }
+
+    pub fn list_app_requests(&self, owner_id: Option<i64>) -> Result<Vec<AppRequest>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(&format!(
+            "{REQUEST_SELECT} WHERE (?1 IS NULL OR owner_id = ?1) ORDER BY id DESC LIMIT 100"
+        ))?;
+        let rows = stmt.query_map(params![owner_id], row_request)?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(Into::into)
+    }
+
+    pub fn app_request(&self, id: i64) -> Result<AppRequest> {
+        let conn = self.lock();
+        conn.query_row(
+            &format!("{REQUEST_SELECT} WHERE id = ?1"),
+            params![id],
+            row_request,
+        )
+        .optional()?
+        .ok_or(StoreError::NotFound)
+    }
+
+    /// Mark a pending request decided. Returns false if it was not pending.
+    pub fn decide_app_request(&self, id: i64, approved: bool, note: &str) -> Result<bool> {
+        let now = self.now();
+        let conn = self.lock();
+        let n = conn.execute(
+            "UPDATE app_requests SET status = ?2, decided_at = ?3, decision_note = ?4 WHERE id = ?1 AND status = 'pending'",
+            params![id, if approved { "approved" } else { "rejected" }, now, note],
+        )?;
+        Ok(n == 1)
+    }
+
+    pub fn schema_version(&self) -> Result<String> {
+        let conn = self.lock();
+        conn.query_row(
+            "SELECT value FROM meta WHERE key = 'schema_version'",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(Into::into)
+    }
+
     // ---------------------------------------------------------------- backup
 
     /// Consistent online backup using SQLite's backup API (safe while the
@@ -1492,7 +1944,112 @@ impl Store {
     }
 }
 
-const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity FROM apps";
+const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy FROM apps";
+
+const SERVICE_SELECT: &str = "SELECT id, name, owner_id, scopes, apps, created_at, expires_at, revoked_at, last_used_at FROM service_tokens";
+const REQUEST_SELECT: &str = "SELECT id, name, title, description, kind, target, visibility, owner_id, service_token_id, note, status, created_at, decided_at, decision_note FROM app_requests";
+
+/// Counters after a successful `ai_take_quota`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiUsage {
+    pub day: i64,
+    pub user_requests: i64,
+    pub app_requests: i64,
+}
+
+/// A scoped machine credential (never the raw value).
+#[derive(Debug, Clone)]
+pub struct ServiceToken {
+    pub id: i64,
+    pub name: String,
+    pub owner_id: i64,
+    pub scopes: Vec<String>,
+    /// Empty = every app the owner owns.
+    pub apps: Vec<String>,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub revoked_at: Option<i64>,
+    pub last_used_at: Option<i64>,
+}
+
+impl ServiceToken {
+    pub fn has_scope(&self, scope: &str) -> bool {
+        self.scopes.iter().any(|s| s == scope)
+    }
+    /// May this token see `app`? Only apps its owner owns, narrowed to the
+    /// token's app list when one was given.
+    pub fn reaches(&self, app: &App) -> bool {
+        app.owner_id == self.owner_id && (self.apps.is_empty() || self.apps.contains(&app.name))
+    }
+    pub fn status(&self, now: i64) -> &'static str {
+        if self.revoked_at.is_some() {
+            "revoked"
+        } else if self.expires_at <= now {
+            "expired"
+        } else {
+            "active"
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AppRequest {
+    pub id: i64,
+    pub name: String,
+    pub title: String,
+    pub description: String,
+    pub kind: AppKind,
+    pub target: String,
+    pub visibility: Visibility,
+    pub owner_id: i64,
+    pub service_token_id: Option<i64>,
+    pub note: String,
+    pub status: String,
+    pub created_at: i64,
+    pub decided_at: Option<i64>,
+    pub decision_note: String,
+}
+
+fn row_service(r: &Row<'_>) -> rusqlite::Result<ServiceToken> {
+    let scopes: String = r.get(3)?;
+    let apps: String = r.get(4)?;
+    Ok(ServiceToken {
+        id: r.get(0)?,
+        name: r.get(1)?,
+        owner_id: r.get(2)?,
+        scopes: scopes.split_whitespace().map(str::to_string).collect(),
+        apps: apps
+            .split(',')
+            .filter(|a| !a.is_empty())
+            .map(str::to_string)
+            .collect(),
+        created_at: r.get(5)?,
+        expires_at: r.get(6)?,
+        revoked_at: r.get(7)?,
+        last_used_at: r.get(8)?,
+    })
+}
+
+fn row_request(r: &Row<'_>) -> rusqlite::Result<AppRequest> {
+    let kind: String = r.get(4)?;
+    let vis: String = r.get(6)?;
+    Ok(AppRequest {
+        id: r.get(0)?,
+        name: r.get(1)?,
+        title: r.get(2)?,
+        description: r.get(3)?,
+        kind: AppKind::parse(&kind).unwrap_or(AppKind::Proxy),
+        target: r.get(5)?,
+        visibility: Visibility::parse(&vis).unwrap_or(Visibility::Private),
+        owner_id: r.get(7)?,
+        service_token_id: r.get(8)?,
+        note: r.get(9)?,
+        status: r.get(10)?,
+        created_at: r.get(11)?,
+        decided_at: r.get(12)?,
+        decision_note: r.get(13)?,
+    })
+}
 
 /// Why a private registration or a switch to private is refused.
 pub const PRIVATE_NEEDS_PLATFORM_IDENTITY: &str = "private apps must declare the platform identity contract (`--identity platform`: the app has no password, login, setup link or session of its own and scopes records by the gate-injected identity); an existing app is attested with `app attest <name>` after review";
@@ -1535,6 +2092,17 @@ fn row_app(r: &Row<'_>) -> rusqlite::Result<App> {
         updated_at: r.get(10)?,
         identity: IdentityContract::parse(&r.get::<_, String>(11)?)
             .unwrap_or(IdentityContract::Pending),
+        ai: AiPolicy {
+            enabled: r.get::<_, i64>(12)? != 0,
+            provider: r.get(13)?,
+            default_model: r.get(14)?,
+            models: AiPolicy::parse_models(&r.get::<_, String>(15)?),
+            max_input_chars: r.get(16)?,
+            max_output_tokens: r.get(17)?,
+            user_daily_requests: r.get(18)?,
+            app_daily_requests: r.get(19)?,
+            public_policy: r.get(20)?,
+        },
     })
 }
 
@@ -2256,7 +2824,12 @@ mod tests {
                     ",\n    identity TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending'))",
                     "",
                 )
-                .replace("'schema_version', '5'", "'schema_version', '2'"),
+                .replace("'schema_version', '6'", "'schema_version', '2'")
+                .lines()
+                .filter(|l| !l.trim_start().starts_with("ai_"))
+                .collect::<Vec<_>>()
+                .join("\n")
+                .replace(",\n);", "\n);"),
         )
         .unwrap();
         // A private app registered before the identity policy.
@@ -2306,13 +2879,16 @@ mod tests {
                     |r| r.get(0),
                 )
                 .unwrap();
-            assert_eq!(v, "5");
+            assert_eq!(v, "6");
+            assert!(has("apps", "ai_enabled") && has("apps", "ai_public_policy"));
         }
         // The pre-policy private app keeps serving as it was, but is pending
         // review and cannot be (re)declared private until attested.
         let legacy = s.app_by_name("legacy").unwrap().unwrap();
         assert_eq!(legacy.identity, IdentityContract::Pending);
         assert_eq!(legacy.visibility, Visibility::Private);
+        // Schema 6 does not mass-migrate: existing apps get AI off.
+        assert_eq!(legacy.ai, crate::model::AiPolicy::disabled());
         assert!(legacy.enabled);
         assert!(
             s.set_app_visibility(legacy.id, Visibility::Private)

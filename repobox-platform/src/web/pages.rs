@@ -1464,13 +1464,21 @@ pub async fn app_visibility(
     let Some(v) = Visibility::parse(&f.visibility) else {
         return redirect(&format!("{back}?err=bad_visibility"));
     };
-    match s.store.set_app_visibility(app.id, v) {
-        Ok(()) => {}
+    let ai_off = match s.store.set_app_visibility(app.id, v) {
+        Ok(off) => off,
         Err(StoreError::Invalid(_)) => return redirect(&format!("{back}?err=identity_pending")),
         Err(e) => return internal(&s, e),
-    }
+    };
     s.store
         .audit(Some(user.id), "app.visibility", &app.name, v.as_str());
+    if ai_off {
+        s.store.audit(
+            Some(user.id),
+            "app.ai",
+            &app.name,
+            "enabled=false (made public without a public AI policy)",
+        );
+    }
     redirect(&format!("{back}?ok=saved"))
 }
 

@@ -1,6 +1,8 @@
 //! HTTP surface: the auth.repo.box UI and the loopback gate that Caddy calls
 //! through `forward_auth` for every managed app request.
 
+pub mod ai;
+pub mod api;
 pub mod css;
 pub mod gate;
 pub mod html;
@@ -11,7 +13,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{any, get, post};
 
 use crate::model::User;
 use crate::store::{Session, SessionKind, Store};
@@ -36,6 +38,10 @@ pub struct Config {
     pub auth_session_ttl: i64,
     pub app_session_ttl: i64,
     pub link_ttl: i64,
+    /// Bridge to the ChatMock broker (None: the AI endpoint answers 503).
+    pub ai: Option<std::sync::Arc<crate::ai::Bridge>>,
+    /// How routes are rendered on this host (for read-only route previews).
+    pub routes: crate::render::RenderConfig,
 }
 
 impl Config {
@@ -47,6 +53,15 @@ impl Config {
             auth_session_ttl: 30 * 86400,
             app_session_ttl: 24 * 3600,
             link_ttl: 7 * 86400,
+            ai: None,
+            routes: crate::render::RenderConfig {
+                domain: domain.to_string(),
+                gate: "127.0.0.1:3230".into(),
+                apps_roots: vec![
+                    "/srv/repobox-platform/apps".into(),
+                    "/var/www/repo.box/subdomains".into(),
+                ],
+            },
         }
     }
 }
@@ -77,6 +92,32 @@ pub fn router(state: S) -> Router {
         )
         .route("/api/directory", get(pages::api_directory))
         .route("/gate/verify", get(gate::verify))
+        // Platform AI endpoint, reached only through an app route
+        // (`/_repo_box/ai/v1/*` rewritten by Caddy); `/gate/*` is 404 on
+        // auth.repo.box itself.
+        .route("/gate/ai/v1/chat/completions", post(ai::chat))
+        .route("/gate/ai/v1/models", get(ai::models))
+        .route("/gate/ai/{*rest}", any(ai::not_found))
+        // Agent/operator discovery and the scoped machine API (+ MCP).
+        .route("/.well-known/repobox-platform.json", get(api::discovery))
+        .route("/api/platform/v1", get(api::discovery))
+        .route("/api/platform/v1/openapi.json", get(api::openapi))
+        .route("/api/platform/v1/skill.md", get(api::skill))
+        .route("/api/platform/v1/whoami", get(api::whoami))
+        .route("/api/platform/v1/apps", get(api::apps))
+        .route("/api/platform/v1/apps/{name}", get(api::app))
+        .route(
+            "/api/platform/v1/apps/{name}/ai",
+            get(api::app_ai).patch(api::app_ai_patch),
+        )
+        .route("/api/platform/v1/apps/{name}/route", get(api::app_route))
+        .route(
+            "/api/platform/v1/app-requests",
+            get(api::app_requests).post(api::app_request_create),
+        )
+        .route("/api/platform/v1/release", get(api::release))
+        .route("/api/platform/v1/mcp", post(api::mcp).get(api::mcp_get))
+        .route("/api/platform/v1/{*rest}", any(api::api_not_found))
         .route("/me", get(pages::me))
         .route("/me/enrol-device", post(pages::me_enrol_device))
         .route("/me/sessions/{id}/revoke", post(pages::me_revoke_session))

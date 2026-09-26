@@ -7,7 +7,11 @@
 //! 1. strip any browser-supplied `X-RepoBox-*` identity header;
 //! 2. ask the control plane (`forward_auth`) whether this request may proceed;
 //! 3. copy only the gate-issued identity headers onto the request;
-//! 4. serve: `file_server` for static apps, `reverse_proxy` to a loopback
+//! 4. reserved platform paths (`/_repo_box/*`) are handled *before* the app
+//!    origin: the AI endpoint goes to the control plane on loopback (which
+//!    re-checks the app session itself), anything else reserved is 404, so no
+//!    app origin can ever shadow or observe these paths;
+//! 5. serve: `file_server` for static apps, `reverse_proxy` to a loopback
 //!    origin for proxy apps.
 //!
 //! Visibility and enabled/disabled state are *not* baked into the route: the
@@ -41,6 +45,18 @@ pub const IDENTITY_HEADERS: &[&str] = &[
 /// Header that marks a request as coming from Caddy's forward_auth hop.
 pub const GATE_MARKER_HEADER: &str = "X-RepoBox-Gate";
 pub const GATE_APP_HEADER: &str = "X-RepoBox-Gate-App";
+
+/// Caddy path matcher for the AI endpoint on every app host.
+pub const AI_ROUTE_MATCH: &str = "/_repo_box/ai/v1/*";
+/// Public prefix replaced by `AI_GATE_PREFIX` before the control plane hop.
+pub const AI_PUBLIC_PREFIX: &str = "/_repo_box/ai";
+/// Loopback-only control plane prefix the AI endpoint is served under. The
+/// `/gate/` prefix is 404 on auth.repo.box, so it is reachable only through
+/// an app route (or directly on repo.box loopback, where it still needs a
+/// valid app session cookie).
+pub const AI_GATE_PREFIX: &str = "/gate/ai";
+/// Everything else under the reserved prefix is refused at the edge.
+pub const RESERVED_MATCH: &str = "/_repo_box/*";
 
 pub fn validate_for_render(app: &App, cfg: &RenderConfig) -> Result<(), String> {
     validate_app_name(&app.name).map_err(|e| format!("app '{}': {e}", app.name))?;
@@ -139,15 +155,38 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
         out.push_str(&format!("\t\t\theader_up {GATE_MARKER_HEADER} 1\n"));
         out.push_str(&format!("\t\t\theader_up {GATE_APP_HEADER} {}\n", app.name));
         out.push_str("\t\t}\n");
+        // Platform-reserved paths, before the origin. AI policy (enabled,
+        // models, limits, quotas) is evaluated per request by the control
+        // plane, so the route shape is the same for every app.
+        out.push_str(&format!("\t\thandle {AI_ROUTE_MATCH} {{\n"));
+        // One directive: inside `handle` Caddy sorts `rewrite` before `uri`,
+        // so a strip + rewrite pair would not compose. The first occurrence
+        // of the public prefix is the path's own prefix (matched above).
+        out.push_str(&format!(
+            "\t\t\turi replace {AI_PUBLIC_PREFIX}/ {AI_GATE_PREFIX}/ 1\n"
+        ));
+        out.push_str(&format!("\t\t\treverse_proxy {} {{\n", cfg.gate));
+        out.push_str(&format!("\t\t\t\theader_up {GATE_MARKER_HEADER} 1\n"));
+        out.push_str(&format!(
+            "\t\t\t\theader_up {GATE_APP_HEADER} {}\n",
+            app.name
+        ));
+        out.push_str("\t\t\t}\n");
+        out.push_str("\t\t}\n");
+        out.push_str(&format!("\t\thandle {RESERVED_MATCH} {{\n"));
+        out.push_str("\t\t\trespond 404\n");
+        out.push_str("\t\t}\n");
+        out.push_str("\t\thandle {\n");
         match app.kind {
             AppKind::Static => {
-                out.push_str(&format!("\t\troot * {target}\n"));
-                out.push_str("\t\tfile_server\n");
+                out.push_str(&format!("\t\t\troot * {target}\n"));
+                out.push_str("\t\t\tfile_server\n");
             }
             AppKind::Proxy => {
-                out.push_str(&format!("\t\treverse_proxy {target}\n"));
+                out.push_str(&format!("\t\t\treverse_proxy {target}\n"));
             }
         }
+        out.push_str("\t\t}\n");
         out.push_str("\t}\n");
         out.push_str("}\n");
     }
@@ -172,6 +211,7 @@ mod tests {
             created_at: 0,
             updated_at: 0,
             identity: IdentityContract::Platform,
+            ai: crate::model::AiPolicy::private_default(),
         }
     }
 
@@ -209,19 +249,34 @@ mod tests {
         assert!(out.contains("copy_headers X-RepoBox-User X-RepoBox-User-Id X-RepoBox-Role X-RepoBox-Auth X-RepoBox-App"));
         assert!(out.contains("header_up X-RepoBox-Gate-App demo-private"));
         assert!(
-            out.contains("reverse_proxy 127.0.0.1:3231"),
+            out.contains("\t\t\treverse_proxy 127.0.0.1:3231\n"),
             "localhost normalised"
         );
         let strip = out.find("request_header -X-RepoBox-*").unwrap();
         let fa = out.find("forward_auth").unwrap();
-        let rp = out.find("reverse_proxy").unwrap();
-        assert!(strip < fa && fa < rp, "strip, then gate, then serve");
+        let ai = out.find("handle /_repo_box/ai/v1/* {").unwrap();
+        let reserved = out.find("handle /_repo_box/* {").unwrap();
+        let origin = out.find("reverse_proxy 127.0.0.1:3231").unwrap();
+        assert!(
+            strip < fa && fa < ai && ai < reserved && reserved < origin,
+            "strip, gate, reserved AI path, other reserved paths, then the origin"
+        );
+        // The AI path goes to the loopback control plane, marked and named by
+        // the route (never by the browser), under the loopback-only prefix.
+        assert!(out.contains(
+            "\t\thandle /_repo_box/ai/v1/* {\n\t\t\turi replace /_repo_box/ai/ /gate/ai/ 1\n\t\t\treverse_proxy 127.0.0.1:3230 {\n\t\t\t\theader_up X-RepoBox-Gate 1\n\t\t\t\theader_up X-RepoBox-Gate-App demo-private\n\t\t\t}\n\t\t}\n"
+        ));
+        assert!(out.contains("\t\thandle /_repo_box/* {\n\t\t\trespond 404\n\t\t}\n"));
+        // Exactly one strip, before anything else in the route: the AI hop
+        // only ever sees gate-issued identity headers.
+        assert_eq!(out.matches("request_header -X-RepoBox-*").count(), 1);
         let s = render(
             &[app("s", AppKind::Static, "/srv/repobox-platform/apps/s")],
             &cfg(),
         )
         .unwrap();
-        assert!(s.contains("root * /srv/repobox-platform/apps/s\n\t\tfile_server"));
+        assert!(s.contains("root * /srv/repobox-platform/apps/s\n\t\t\tfile_server"));
+        assert!(s.find("handle /_repo_box/* {").unwrap() < s.find("file_server").unwrap());
     }
 
     #[test]
@@ -276,7 +331,7 @@ mod tests {
             &multi,
         )
         .unwrap();
-        assert!(ok.contains("root * /var/www/repo.box/subdomains/circuit\n\t\tfile_server"));
+        assert!(ok.contains("root * /var/www/repo.box/subdomains/circuit\n\t\t\tfile_server"));
         assert!(
             render(
                 &[app("x", AppKind::Static, "/var/www/repo.box/subdomains")],

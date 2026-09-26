@@ -217,13 +217,74 @@ line inside the managed block of the main Caddyfile. Registering an app and
 rendering routes is **operator-only** (CLI on the host); the web UI has no
 create/deploy/route controls.
 
+### Platform AI capability (same-origin, schema 6)
+
+Every enabled managed app host reserves `/_repo_box/*` **before** its
+static/proxy origin (rendered route: strip `X-RepoBox-*` → `forward_auth`
+gate → `handle /_repo_box/ai/v1/*` → `handle /_repo_box/*` 404 → `handle`
+origin). `POST https://<app>.repo.box/_repo_box/ai/v1/chat/completions` and
+`GET …/v1/models` are rewritten to `/gate/ai/v1/*` on the loopback control
+plane (`/gate/*` is 404 on auth.repo.box), which:
+
+* requires the Caddy marker, a gate identity of `session`, and a live
+  `__Host-rb_app` session *for that app* whose user matches the gate's user
+  id and still has access (forged headers without the cookie → 401);
+* requires same-origin (`Content-Type: application/json`, `Origin` host and
+  `Sec-Fetch-Site` checked when present);
+* applies the app's AI policy (enabled, allowed/default model, input
+  characters, output tokens, per-user and per-app daily quotas);
+* forwards a rebuilt, non-streaming request to the broker through
+  `127.0.0.1:3232` (reverse SSH tunnel) with the bridge secret, and rebuilds
+  the response into plain `chat.completion`.
+
+The broker (`repobox-platform ai-broker`, Hetzner `127.0.0.1:8127`,
+`DynamicUser`, `IPAddressAllow=localhost`) checks the secret in constant
+time, re-applies platform ceilings, routes only its model allowlist ∩ the
+models ChatMock currently exposes, and calls ChatMock on `127.0.0.1:8111`
+without any credential. Both hops log only app, user id, model, status,
+character counts and latency. `ai_usage_daily` stores request counters per
+app/user/UTC day (90-day retention). **v1 is non-streaming** (`stream: true`
+→ 400) and has **no tools/functions/images**.
+
+Registry policy (schema 6 columns on `apps`): new `--visibility private
+--identity platform` registrations get AI **on** with defaults (terra
+default, terra+luna allowed, 32 000 input chars, 2 048 output tokens,
+200/user/day, 2 000/app/day; `--no-ai` opts out). Every pre-existing app and
+every public/pending registration starts with AI **off** (no mass
+migration). A public app can enable AI only with `public_policy
+signed-in-quota` plus explicit quotas, and even then only signed-in users
+with access can call it. Making an AI-enabled private app public without
+that policy switches AI off in the same statement (audited). CLI: `app ai
+show|enable|disable|set`.
+
+### Agent/operator discovery and machine access
+
+* `GET https://auth.repo.box/api/platform/v1` (= `/.well-known/repobox-platform.json`),
+  `/api/platform/v1/openapi.json`, `/api/platform/v1/skill.md`: public,
+  versioned, secret-free. `repobox-platform skill` prints the same skill.
+* **Service tokens** (`service-token create|list|revoke`): `rbp_…` bearer,
+  one owner, only that owner's apps (optionally `--app`-narrowed), scopes
+  `apps:read apps:request ai:read ai:write routes:read release:read`,
+  ≤ 90 days, hashed at rest, written once to a 0600 file. They are **not
+  OAuth**; a scoped OAuth client-credentials issuer is the remaining
+  dependency. No scope reaches users, grants, sessions, Caddy apply, SSH,
+  the DB or provider credentials.
+* REST: `whoami`, `apps`, `apps/{name}`, `apps/{name}/ai` (GET/PATCH within
+  ceilings), `apps/{name}/route` (read-only preview), `app-requests`
+  (GET/POST — a request the operator approves with `app requests approve`),
+  `release`. MCP (`POST /api/platform/v1/mcp`, JSON-RPC, JSON responses only)
+  exposes the same operations as tools with the same scopes. API mutations
+  are audited with the token name.
+* The full agent contract: `skills/repobox-platform/SKILL.md`. Rationale:
+  `docs/platform-ai-plan.md`.
+
 ## Local development
 
 ```bash
-cargo test -p repobox-platform                       # 38 unit + integration tests
+cargo test -p repobox-platform                       # unit + integration tests (tests/ai.rs: AI path)
 cargo clippy -p repobox-platform --all-targets -- -D warnings
 cargo fmt -p repobox-platform -- --check
-repobox-platform/scripts/edge-e2e.sh                 # real Caddy on loopback, 33 live checks
+repobox-platform/scripts/edge-e2e.sh                 # real Caddy + real broker + fake ChatMock on loopback
 ```
 
 Run it by hand:
@@ -745,6 +806,15 @@ records. No link was generated or sent; no email flow exists.
   no git repository; consider importing `/srv/study-diary` into one.
 
 ## Current limitations
+
+* Platform AI v1: non-streaming only; text only; no tools. A request counts
+  against the daily quotas once it passes validation, even if the provider
+  then fails. The quota is per UTC day, not a sliding window. Output is cut
+  at `max_tokens × 8` characters because the platform does not rely on
+  ChatMock honouring `max_tokens`. An app backend can call the endpoint only
+  by relaying the signed-in user's cookie (no server-to-server credential in
+  v1). Service tokens are not OAuth, and the machine API has no dedicated
+  rate limit beyond Caddy.
 
 * One control plane process, one SQLite file, no HA; fine for this scale.
 * Sessions: 30 d device sessions, 24 h app sessions, no sliding renewal.

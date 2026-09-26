@@ -1573,9 +1573,12 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "bytes",
  "chrono",
  "clap",
  "http-body-util",
+ "hyper 1.8.1",
+ "hyper-util",
  "rand 0.8.5",
  "rusqlite",
  "serde",

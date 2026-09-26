@@ -1,6 +1,7 @@
 //! repo.box platform control plane library. See `main.rs` for the CLI and
 //! `docs/platform-control-plane.md` for the architecture.
 
+pub mod ai;
 pub mod demo_origin;
 pub mod model;
 pub mod render;

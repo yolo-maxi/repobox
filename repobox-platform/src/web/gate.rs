@@ -17,7 +17,8 @@ use axum::response::{IntoResponse, Response};
 
 use super::html::{Shell, status_page};
 use super::{APP_COOKIE, LAUNCH_PARAM, S, html, set_cookie, urlencode};
-use crate::model::{Visibility, validate_app_name};
+use crate::ai::AiError;
+use crate::model::{RESERVED_PATH_PREFIX, Visibility, validate_app_name};
 use crate::render::{GATE_APP_HEADER, GATE_MARKER_HEADER};
 use crate::store::{SessionKind, TokenKind};
 
@@ -203,7 +204,20 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
             ),
         );
     }
+    let method = hdr(&headers, "x-forwarded-method").unwrap_or("GET");
+    let uri = hdr(&headers, "x-forwarded-uri").unwrap_or("/").to_string();
+    // Platform-reserved paths (`/_repo_box/*`, e.g. the AI endpoint) are
+    // API calls: denials are JSON, and a launch code is never redeemed there.
+    let reserved = uri.starts_with(RESERVED_PATH_PREFIX);
     let Ok(Some(app)) = s.store.app_by_name(app_name) else {
+        if reserved {
+            return AiError::new(
+                StatusCode::NOT_FOUND,
+                "unknown_app",
+                "this host is not registered with the platform",
+            )
+            .into_response();
+        }
         return html(
             StatusCode::NOT_FOUND,
             status_page(
@@ -216,9 +230,16 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
         );
     };
 
-    let method = hdr(&headers, "x-forwarded-method").unwrap_or("GET");
-    let uri = hdr(&headers, "x-forwarded-uri").unwrap_or("/").to_string();
     let (clean_uri, token) = split_token(&uri);
+    let token = token.filter(|_| !reserved);
+    if reserved && !app.enabled {
+        return AiError::new(
+            StatusCode::NOT_FOUND,
+            "app_disabled",
+            "this app is switched off",
+        )
+        .into_response();
+    }
     let launch_url = format!("{}/{}", s.cfg.public_base, app.name);
     let sign_in = |text: &str| {
         format!(
@@ -343,6 +364,14 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
 
     // 2./3. Private apps require a session; public apps do not.
     if app.visibility == Visibility::Private && session.is_none() {
+        if reserved {
+            return AiError::new(
+                StatusCode::UNAUTHORIZED,
+                "unauthenticated",
+                "a signed-in platform session for this app is required; open the app from auth.repo.box first",
+            )
+            .into_response();
+        }
         return html(
             StatusCode::UNAUTHORIZED,
             status_page(

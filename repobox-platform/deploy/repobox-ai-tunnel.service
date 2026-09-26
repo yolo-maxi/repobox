@@ -1,0 +1,19 @@
+# /etc/systemd/system/repobox-ai-tunnel.service  (Hetzner)
+# Private reverse tunnel: repo.box 127.0.0.1:3232 -> Hetzner broker
+# 127.0.0.1:8127. Binds repo.box loopback only (never a public or docker
+# interface); the broker still requires the bridge secret. Same pattern as
+# the existing per-app AI bridges, owned by the platform instead of an app.
+[Unit]
+Description=repo.box platform AI tunnel (repo.box loopback -> AI broker)
+After=network-online.target repobox-ai-broker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=xiko
+ExecStart=/usr/bin/ssh -N -i /home/xiko/.ssh/id_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -R 127.0.0.1:3232:127.0.0.1:8127 fran@204.168.190.248
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

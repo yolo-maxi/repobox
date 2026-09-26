@@ -12,7 +12,11 @@ User=fran
 Group=fran
 Environment=RUST_LOG=info
 Environment=REPOBOX_PLATFORM_DB=/var/lib/repobox-platform/platform.db
-ExecStart=/srv/repobox-platform/bin/repobox-platform serve --bind 127.0.0.1:3230 --public-base https://auth.repo.box --domain repo.box
+# Bridge secret for the AI broker (root-owned 0600 source, installed by
+# scripts/deploy-ai-bridge.sh). 127.0.0.1:3232 is the repo.box end of the
+# private reverse tunnel to the broker on the ChatMock host.
+LoadCredential=ai-bridge-secret:/etc/repobox-platform/ai-bridge.secret
+ExecStart=/srv/repobox-platform/bin/repobox-platform serve --bind 127.0.0.1:3230 --public-base https://auth.repo.box --domain repo.box --ai-upstream http://127.0.0.1:3232
 Restart=always
 RestartSec=2
 NoNewPrivileges=true

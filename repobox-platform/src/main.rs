@@ -2,7 +2,9 @@
 //!
 //! * `serve`        — the auth.repo.box UI plus the loopback gate for Caddy.
 //! * `demo-origin`  — the loopback origin behind the private demo app.
-//! * operator commands (users, apps, grants, route rendering, backups). These
+//! * `ai-broker`    — the ChatMock broker (runs next to ChatMock on Hetzner).
+//! * operator commands (users, apps, grants, AI policy, service tokens,
+//!   registration requests, route rendering, backups). These
 //!   are the only way to register an app or produce a route: the web UI has no
 //!   deploy or route controls by design.
 //!
@@ -10,7 +12,7 @@
 //! operator command writes a single-use link to a 0600 file it was asked to
 //! create. Nothing is ever printed to stdout or logged.
 
-use repobox_platform::{demo_origin, model, render, store, web};
+use repobox_platform::{ai, demo_origin, model, render, store, web};
 
 use std::io::Write;
 use std::net::SocketAddr;
@@ -19,7 +21,7 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 
-use model::{AppKind, IdentityContract, Role, Visibility};
+use model::{AiPolicy, AppKind, IdentityContract, Role, Visibility};
 use store::{Store, TokenKind};
 
 const DEFAULT_DB: &str = "/var/lib/repobox-platform/platform.db";
@@ -28,7 +30,9 @@ const DEFAULT_DB: &str = "/var/lib/repobox-platform/platform.db";
 #[command(
     name = "repobox-platform",
     version,
-    about = "repo.box platform control plane"
+    about = "repo.box platform control plane",
+    long_about = "repo.box platform control plane: named users, app grants, one-time launch codes, the Caddy edge gate, the per-app AI capability and operator route rendering.\n\nThis CLI is the canonical mutating interface. Agents without host access use the scoped machine API instead: discovery at https://auth.repo.box/api/platform/v1 (OpenAPI at /api/platform/v1/openapi.json, MCP at /api/platform/v1/mcp) with an operator-issued service token (`service-token create`). The full agent contract is printed by `repobox-platform skill`.",
+    after_help = "Common flows:\n  app register NAME --title T --owner U --kind proxy --target 127.0.0.1:PORT --identity platform\n      (private + platform identity => AI capability on by default; --no-ai to opt out)\n  app ai show NAME | app ai set NAME --models gpt-5.6-terra,gpt-5.6-luna --max-output-tokens 1024\n  service-token create --name agent-x --owner U --scope apps:read --scope ai:read --out FILE\n  app requests list | app requests approve ID\n  routes render --out FILE   (then the guarded Caddy apply in scripts/deploy.sh)\n  skill                      (print the agent SKILL.md)"
 )]
 struct Cli {
     /// SQLite database path
@@ -54,7 +58,42 @@ enum Cmd {
         /// Apex domain managed apps hang off
         #[arg(long, env = "REPOBOX_PLATFORM_DOMAIN", default_value = "repo.box")]
         domain: String,
+        /// Loopback URL of the AI broker (the repo.box end of the tunnel),
+        /// e.g. http://127.0.0.1:3232. Unset: the AI endpoint answers 503.
+        #[arg(long, env = "REPOBOX_PLATFORM_AI_UPSTREAM")]
+        ai_upstream: Option<String>,
+        /// Bridge secret file. Default: the systemd credential
+        /// `ai-bridge-secret` ($CREDENTIALS_DIRECTORY, LoadCredential=).
+        #[arg(long, env = "REPOBOX_PLATFORM_AI_SECRET_FILE")]
+        ai_secret_file: Option<PathBuf>,
+        /// Concurrent AI requests this control plane forwards
+        #[arg(long, default_value_t = 8)]
+        ai_max_concurrency: usize,
     },
+    /// Run the ChatMock broker: loopback only, bridge-secret authenticated,
+    /// model allowlist intersected with ChatMock's live models, hard request
+    /// ceilings, no body logging. Reached from repo.box only through the
+    /// private reverse tunnel.
+    AiBroker {
+        #[arg(long, default_value = "127.0.0.1:8127")]
+        bind: SocketAddr,
+        /// ChatMock base URL (loopback)
+        #[arg(long, default_value = "http://127.0.0.1:8111")]
+        upstream: String,
+        /// Bridge secret file. Default: the systemd credential `ai-bridge-secret`.
+        #[arg(long, env = "REPOBOX_AI_BROKER_SECRET_FILE")]
+        secret_file: Option<PathBuf>,
+        /// Models to route (comma separated; must be known platform models)
+        #[arg(long, default_value = "gpt-5.6-terra,gpt-5.6-luna,gpt-5.6-sol")]
+        models: String,
+        #[arg(long, default_value_t = 4)]
+        max_concurrency: usize,
+        /// Seconds to wait for ChatMock
+        #[arg(long, default_value_t = 85)]
+        timeout_secs: u64,
+    },
+    /// Print the agent skill (SKILL.md): endpoint contract, policy, access model
+    Skill,
     /// Run the private demo app origin (loopback only)
     DemoOrigin {
         #[arg(long, default_value = "127.0.0.1:3231")]
@@ -91,6 +130,12 @@ enum Cmd {
     Routes {
         #[command(subcommand)]
         cmd: RoutesCmd,
+    },
+    /// Scoped machine credentials for the platform API / MCP (not OAuth)
+    #[command(name = "service-token")]
+    ServiceToken {
+        #[command(subcommand)]
+        cmd: ServiceTokenCmd,
     },
     /// Online backup of the database to a file
     Backup {
@@ -181,6 +226,29 @@ enum AppCmd {
         /// If the app exists, update title/description/kind/target only
         #[arg(long)]
         replace_route: bool,
+        /// Opt a private app out of the default AI capability
+        #[arg(long)]
+        no_ai: bool,
+        /// Enable AI on a *public* app: the only policy is `signed-in-quota`
+        /// (only signed-in platform users with access; explicit quotas)
+        #[arg(long, value_parser = ["signed-in-quota"], requires_all = ["ai_user_daily", "ai_app_daily"])]
+        ai_public_policy: Option<String>,
+        /// Explicit per-user daily AI requests (public apps)
+        #[arg(long)]
+        ai_user_daily: Option<i64>,
+        /// Explicit per-app daily AI requests (public apps)
+        #[arg(long)]
+        ai_app_daily: Option<i64>,
+    },
+    /// Inspect or change an app's AI capability policy
+    Ai {
+        #[command(subcommand)]
+        cmd: AiCmd,
+    },
+    /// Review app registration requests filed through the machine API
+    Requests {
+        #[command(subcommand)]
+        cmd: RequestsCmd,
     },
     /// Attest, after review, that an app uses only the gate-injected identity
     /// (no app-level password, login, setup link or session). One-way, audited.
@@ -245,6 +313,104 @@ enum AppCmd {
 }
 
 #[derive(Subcommand)]
+enum AiCmd {
+    /// Show the AI policy, endpoint and today's usage
+    Show {
+        name: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Turn the AI capability on (policy must validate: platform identity;
+    /// public apps need --public-policy via `set` first)
+    Enable { name: String },
+    /// Turn the AI capability off (policy values are kept)
+    Disable { name: String },
+    /// Change policy fields; unspecified fields are kept
+    Set {
+        name: String,
+        /// Default model when a request names none
+        #[arg(long)]
+        default_model: Option<String>,
+        /// Allowed models, comma separated
+        #[arg(long)]
+        models: Option<String>,
+        /// Max total characters across a request's messages
+        #[arg(long)]
+        max_input_chars: Option<i64>,
+        /// Max output tokens (max_tokens default and ceiling)
+        #[arg(long)]
+        max_output_tokens: Option<i64>,
+        /// Requests per user per UTC day
+        #[arg(long)]
+        user_daily: Option<i64>,
+        /// Requests per app per UTC day
+        #[arg(long)]
+        app_daily: Option<i64>,
+        /// Public abuse/quota policy: `signed-in-quota` or `none`
+        #[arg(long, value_parser = ["signed-in-quota", "none"])]
+        public_policy: Option<String>,
+        /// Also enable
+        #[arg(long, conflicts_with = "disable")]
+        enable: bool,
+        /// Also disable
+        #[arg(long)]
+        disable: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum RequestsCmd {
+    /// List registration requests (newest first)
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Register the requested app (same checks as `app register`), then
+    /// render routes and apply them with the guarded Caddy path
+    Approve {
+        id: i64,
+        #[arg(long, default_value = "")]
+        note: String,
+    },
+    /// Reject a request
+    Reject {
+        id: i64,
+        #[arg(long)]
+        note: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ServiceTokenCmd {
+    /// Issue a token bound to one owner; the raw value is written once to a
+    /// new 0600 file and never printed
+    Create {
+        /// Token name (a-z, 0-9, '.', '_', '-')
+        #[arg(long)]
+        name: String,
+        /// Owner user; the token only reaches apps this user owns
+        #[arg(long)]
+        owner: String,
+        /// Scope (repeat): apps:read apps:request ai:read ai:write routes:read release:read
+        #[arg(long = "scope", required = true)]
+        scopes: Vec<String>,
+        /// Restrict to these apps (repeat; default: all apps the owner owns)
+        #[arg(long = "app")]
+        apps: Vec<String>,
+        /// Lifetime in days (1-90)
+        #[arg(long, default_value_t = 30)]
+        ttl_days: i64,
+        /// File to write the token to (created 0600, must not exist)
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// List tokens (never shows values)
+    List,
+    /// Revoke a token by name (effective on the next request)
+    Revoke { name: String },
+}
+
+#[derive(Subcommand)]
 enum RoutesCmd {
     /// Render the Caddy snippet for every registered app
     Render {
@@ -277,16 +443,25 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             bind,
             public_base,
             domain,
+            ai_upstream,
+            ai_secret_file,
+            ai_max_concurrency,
         } => {
             init_tracing();
             if !bind.ip().is_loopback() {
                 return Err(format!("serve must bind to loopback, got {bind}").into());
             }
             let store = Store::open(&cli.db)?;
-            let state = Arc::new(web::AppState {
-                store,
-                cfg: web::Config::defaults(&public_base, &domain),
-            });
+            let mut cfg = web::Config::defaults(&public_base, &domain);
+            cfg.routes.gate = bind.to_string();
+            if let Some(url) = ai_upstream {
+                let secret = ai::Secret::load(ai_secret_file.as_deref(), "ai-bridge-secret")?;
+                cfg.ai = Some(Arc::new(ai::Bridge::new(&url, secret, ai_max_concurrency)?));
+                tracing::info!("AI endpoint enabled via broker {url}");
+            } else {
+                tracing::info!("AI endpoint not configured (no --ai-upstream): it answers 503");
+            }
+            let state = Arc::new(web::AppState { store, cfg });
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(async move {
                 let app = web::router(state);
@@ -300,6 +475,30 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 Ok::<(), Box<dyn std::error::Error>>(())
             })
         }
+        Cmd::AiBroker {
+            bind,
+            upstream,
+            secret_file,
+            models,
+            max_concurrency,
+            timeout_secs,
+        } => {
+            init_tracing();
+            let cfg = ai::BrokerConfig {
+                upstream,
+                secret: ai::Secret::load(secret_file.as_deref(), "ai-bridge-secret")?,
+                models: AiPolicy::parse_models(&models),
+                max_concurrency,
+                timeout: std::time::Duration::from_secs(timeout_secs),
+            };
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(ai::serve_broker(bind, cfg))
+        }
+        Cmd::Skill => {
+            print!("{}", web::api::SKILL_MD);
+            Ok(())
+        }
+        Cmd::ServiceToken { cmd } => service_token_cmd(&Store::open(&cli.db)?, cmd),
         Cmd::DemoOrigin { bind, app, title } => {
             init_tracing();
             let rt = tokio::runtime::Runtime::new()?;
@@ -571,6 +770,10 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
             visibility,
             identity,
             replace_route,
+            no_ai,
+            ai_public_policy,
+            ai_user_daily,
+            ai_app_daily,
         } => {
             let kind = AppKind::parse(&kind).ok_or("bad kind")?;
             let vis = Visibility::parse(&visibility).ok_or("bad visibility")?;
@@ -626,13 +829,35 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                         a.identity.as_str()
                     ),
                 );
+                let a = if no_ai && a.ai.enabled {
+                    let mut p = a.ai.clone();
+                    p.enabled = false;
+                    store.set_app_ai(a.id, &p)?
+                } else if let Some(policy) = ai_public_policy {
+                    let mut p = AiPolicy::private_default();
+                    p.public_policy = Some(policy);
+                    p.user_daily_requests = ai_user_daily.ok_or("--ai-user-daily is required")?;
+                    p.app_daily_requests = ai_app_daily.ok_or("--ai-app-daily is required")?;
+                    match store.set_app_ai(a.id, &p) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            // Keep registration atomic from the operator's view.
+                            store.delete_app(&a.name)?;
+                            return Err(e.into());
+                        }
+                    }
+                } else {
+                    a
+                };
+                store.audit(None, "app.ai", &a.name, &ai_audit_detail(&a.ai, "register"));
                 println!(
-                    "registered '{}' ({} -> {}), owner {}, visibility {}",
+                    "registered '{}' ({} -> {}), owner {}, visibility {}, AI {}",
                     a.name,
                     a.kind.as_str(),
                     a.target,
                     o.name,
-                    a.visibility.as_str()
+                    a.visibility.as_str(),
+                    if a.ai.enabled { "on" } else { "off" }
                 );
             }
             println!("next: `repobox-platform routes render --out <snippet>` and reload Caddy");
@@ -647,6 +872,7 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                             "name": a.name, "title": a.title, "kind": a.kind.as_str(), "target": a.target,
                             "visibility": a.visibility.as_str(), "enabled": a.enabled, "owner_id": a.owner_id,
                             "identity": a.identity.as_str(),
+                            "ai": a.ai.to_json(),
                         })
                     })
                     .collect();
@@ -695,6 +921,20 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 "identity:    {} — {}",
                 a.identity.as_str(),
                 a.identity.help()
+            );
+            println!(
+                "ai:          {} (default {}, models {}, in {} chars, out {} tokens, {}/user/day, {}/app/day{})",
+                if a.ai.enabled { "on" } else { "off" },
+                a.ai.default_model,
+                a.ai.models_csv(),
+                a.ai.max_input_chars,
+                a.ai.max_output_tokens,
+                a.ai.user_daily_requests,
+                a.ai.app_daily_requests,
+                a.ai.public_policy
+                    .as_deref()
+                    .map(|p| format!(", public policy {p}"))
+                    .unwrap_or_default()
             );
             let grants = store.list_grants(a.id)?;
             println!("grants:      {}", grants.len());
@@ -749,7 +989,18 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
         AppCmd::Visibility { name, visibility } => {
             let a = need_app(store, &name)?;
             let v = Visibility::parse(&visibility).ok_or("bad visibility")?;
-            store.set_app_visibility(a.id, v)?;
+            if store.set_app_visibility(a.id, v)? {
+                store.audit(
+                    None,
+                    "app.ai",
+                    &a.name,
+                    "enabled=false (made public without a public AI policy)",
+                );
+                println!(
+                    "note: the AI capability was switched off (public apps need `app ai set {} --public-policy signed-in-quota --user-daily N --app-daily N --enable`)",
+                    a.name
+                );
+            }
             store.audit(
                 None,
                 "app.visibility",
@@ -833,6 +1084,8 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 );
             }
         }
+        AppCmd::Ai { cmd } => ai_cmd(store, cmd)?,
+        AppCmd::Requests { cmd } => requests_cmd(store, cmd)?,
         AppCmd::Visits { name, days } => {
             let a = need_app(store, &name)?;
             let v = store.app_visits(a.id, days)?;
@@ -875,6 +1128,328 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                     );
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+fn ai_audit_detail(p: &AiPolicy, via: &str) -> String {
+    format!(
+        "{via} enabled={} default={} models={} in={} out={} user/day={} app/day={} public={}",
+        p.enabled,
+        p.default_model,
+        p.models_csv(),
+        p.max_input_chars,
+        p.max_output_tokens,
+        p.user_daily_requests,
+        p.app_daily_requests,
+        p.public_policy.as_deref().unwrap_or("-")
+    )
+}
+
+fn ai_cmd(store: &Store, cmd: AiCmd) -> Result<(), Box<dyn std::error::Error>> {
+    let update =
+        |name: &str, f: &dyn Fn(&mut AiPolicy)| -> Result<model::App, Box<dyn std::error::Error>> {
+            let a = need_app(store, name)?;
+            let mut p = a.ai.clone();
+            f(&mut p);
+            let a = store.set_app_ai(a.id, &p)?;
+            store.audit(None, "app.ai", &a.name, &ai_audit_detail(&a.ai, "cli"));
+            Ok(a)
+        };
+    match cmd {
+        AiCmd::Show { name, json } => {
+            let a = need_app(store, &name)?;
+            let (requests, users) = store.ai_usage_today(a.id)?;
+            let endpoint = format!("https://{}.repo.box{}", a.name, model::AI_CHAT_PATH);
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "app": a.name, "policy": a.ai.to_json(), "endpoint": endpoint,
+                        "usage_today_utc": {"requests": requests, "users": users},
+                    }))?
+                );
+            } else {
+                println!("app:           {}", a.name);
+                println!("enabled:       {}", a.ai.enabled);
+                println!("provider:      {}", a.ai.provider);
+                println!("default model: {}", a.ai.default_model);
+                println!("models:        {}", a.ai.models_csv());
+                println!("max input:     {} characters", a.ai.max_input_chars);
+                println!("max output:    {} tokens", a.ai.max_output_tokens);
+                println!(
+                    "quota:         {}/user/day, {}/app/day (UTC)",
+                    a.ai.user_daily_requests, a.ai.app_daily_requests
+                );
+                println!(
+                    "public policy: {}",
+                    a.ai.public_policy.as_deref().unwrap_or("none")
+                );
+                println!("streaming:     no (v1 is non-streaming)");
+                println!("endpoint:      POST {endpoint}");
+                println!("today:         {requests} request(s) by {users} user(s)");
+            }
+        }
+        AiCmd::Enable { name } => {
+            let a = update(&name, &|p| p.enabled = true)?;
+            println!(
+                "'{}' AI capability on (default {})",
+                a.name, a.ai.default_model
+            );
+        }
+        AiCmd::Disable { name } => {
+            let a = update(&name, &|p| p.enabled = false)?;
+            println!("'{}' AI capability off", a.name);
+        }
+        AiCmd::Set {
+            name,
+            default_model,
+            models,
+            max_input_chars,
+            max_output_tokens,
+            user_daily,
+            app_daily,
+            public_policy,
+            enable,
+            disable,
+        } => {
+            let a = update(&name, &|p| {
+                if let Some(m) = &models {
+                    p.models = AiPolicy::parse_models(m);
+                }
+                if let Some(m) = &default_model {
+                    p.default_model = m.clone();
+                }
+                if let Some(v) = max_input_chars {
+                    p.max_input_chars = v;
+                }
+                if let Some(v) = max_output_tokens {
+                    p.max_output_tokens = v;
+                }
+                if let Some(v) = user_daily {
+                    p.user_daily_requests = v;
+                }
+                if let Some(v) = app_daily {
+                    p.app_daily_requests = v;
+                }
+                match public_policy.as_deref() {
+                    Some("none") => p.public_policy = None,
+                    Some(v) => p.public_policy = Some(v.to_string()),
+                    None => {}
+                }
+                if enable {
+                    p.enabled = true;
+                }
+                if disable {
+                    p.enabled = false;
+                }
+            })?;
+            println!(
+                "'{}' AI policy updated: {}",
+                a.name,
+                ai_audit_detail(&a.ai, "now")
+            );
+        }
+    }
+    Ok(())
+}
+
+fn requests_cmd(store: &Store, cmd: RequestsCmd) -> Result<(), Box<dyn std::error::Error>> {
+    match cmd {
+        RequestsCmd::List { json } => {
+            let list = store.list_app_requests(None)?;
+            if json {
+                let v: Vec<serde_json::Value> = list
+                    .iter()
+                    .map(|r| serde_json::json!({
+                        "id": r.id, "name": r.name, "title": r.title, "kind": r.kind.as_str(),
+                        "target": r.target, "visibility": r.visibility.as_str(), "owner_id": r.owner_id,
+                        "status": r.status, "note": r.note, "created_at": r.created_at,
+                    }))
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&v)?);
+            } else {
+                println!(
+                    "ID    STATUS    NAME                   KIND    TARGET                               VISIBILITY       OWNER         NOTE"
+                );
+                for r in list {
+                    let owner = store
+                        .user_by_id(r.owner_id)
+                        .map(|u| u.name)
+                        .unwrap_or_else(|_| "?".into());
+                    println!(
+                        "{:<5} {:<9} {:<22} {:<7} {:<36} {:<16} {:<13} {}",
+                        r.id,
+                        r.status,
+                        r.name,
+                        r.kind.as_str(),
+                        r.target,
+                        r.visibility.as_str(),
+                        owner,
+                        r.note
+                    );
+                }
+            }
+        }
+        RequestsCmd::Approve { id, note } => {
+            let r = store.app_request(id)?;
+            if r.status != "pending" {
+                return Err(format!("request {id} is already {}", r.status).into());
+            }
+            let owner = store.user_by_id(r.owner_id)?;
+            // Private requests were accepted only with the platform identity
+            // declaration, so they register with it (and AI on by default).
+            let identity = if r.visibility == Visibility::Private {
+                IdentityContract::Platform
+            } else {
+                IdentityContract::Pending
+            };
+            let a = store.create_app(
+                &r.name,
+                &r.title,
+                &r.description,
+                owner.id,
+                r.kind,
+                &r.target,
+                r.visibility,
+                identity,
+            )?;
+            store.decide_app_request(id, true, &note)?;
+            store.audit(
+                None,
+                "app.register",
+                &a.name,
+                &format!(
+                    "{} {} owner={} identity={} request={id}",
+                    a.kind.as_str(),
+                    a.target,
+                    owner.name,
+                    a.identity.as_str()
+                ),
+            );
+            println!(
+                "approved request {id}: registered '{}' ({} -> {}), AI {}",
+                a.name,
+                a.kind.as_str(),
+                a.target,
+                if a.ai.enabled { "on" } else { "off" }
+            );
+            println!(
+                "next: render routes and apply them with the guarded Caddy path (scripts/deploy.sh)"
+            );
+        }
+        RequestsCmd::Reject { id, note } => {
+            if !store.decide_app_request(id, false, &note)? {
+                return Err(format!("request {id} is not pending").into());
+            }
+            store.audit(None, "app.request_reject", &id.to_string(), &note);
+            println!("rejected request {id}");
+        }
+    }
+    Ok(())
+}
+
+fn service_token_cmd(
+    store: &Store,
+    cmd: ServiceTokenCmd,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match cmd {
+        ServiceTokenCmd::Create {
+            name,
+            owner,
+            scopes,
+            apps,
+            ttl_days,
+            out,
+        } => {
+            use std::os::unix::fs::OpenOptionsExt;
+            if out.exists() {
+                return Err(format!("{} already exists; choose a new file", out.display()).into());
+            }
+            let o = need_user(store, &owner)?;
+            // Open the file first so a failure never leaves a live token nobody holds.
+            let mut f = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&out)?;
+            let (raw, tok) =
+                match store.create_service_token(&name, &o, &scopes, &apps, ttl_days * 86400) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        drop(f);
+                        let _ = std::fs::remove_file(&out);
+                        return Err(e.into());
+                    }
+                };
+            writeln!(f, "{raw}")?;
+            writeln!(
+                f,
+                "# repo.box platform service token '{}' for owner '{}'; scopes: {}; expires {}; use as Authorization: Bearer <first line>",
+                tok.name,
+                o.name,
+                tok.scopes.join(" "),
+                web::html::fmt_ts(tok.expires_at)
+            )?;
+            store.audit(
+                None,
+                "service_token.create",
+                &tok.name,
+                &format!(
+                    "owner={} scopes={} apps={}",
+                    o.name,
+                    tok.scopes.join(","),
+                    tok.apps.join(",")
+                ),
+            );
+            println!(
+                "service token '{}' written to {} (owner {}, expires {})",
+                tok.name,
+                out.display(),
+                o.name,
+                web::html::fmt_ts(tok.expires_at)
+            );
+        }
+        ServiceTokenCmd::List => {
+            let now = store.now();
+            println!(
+                "NAME                 OWNER        STATUS   EXPIRES            LAST USED          SCOPES / APPS"
+            );
+            for t in store.list_service_tokens()? {
+                let owner = store
+                    .user_by_id(t.owner_id)
+                    .map(|u| u.name)
+                    .unwrap_or_else(|_| "?".into());
+                println!(
+                    "{:<20} {:<12} {:<8} {:<18} {:<18} {} / {}",
+                    t.name,
+                    owner,
+                    t.status(now),
+                    web::html::fmt_ts(t.expires_at),
+                    t.last_used_at
+                        .map(web::html::fmt_ts)
+                        .unwrap_or_else(|| "-".into()),
+                    t.scopes.join(" "),
+                    if t.apps.is_empty() {
+                        "all owned apps".to_string()
+                    } else {
+                        t.apps.join(",")
+                    }
+                );
+            }
+        }
+        ServiceTokenCmd::Revoke { name } => {
+            let changed = store.revoke_service_token(&name)?;
+            store.audit(None, "service_token.revoke", &name, "cli");
+            println!(
+                "{} '{name}'",
+                if changed {
+                    "revoked"
+                } else {
+                    "already revoked:"
+                }
+            );
         }
     }
     Ok(())
