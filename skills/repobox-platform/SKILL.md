@@ -218,6 +218,9 @@ repobox-platform service-token revoke my-agent
    app, user id, model, status, character counts and latency; the database
    keeps daily request counters only (90-day retention).
 6. No model tool execution and no arbitrary app actions in v1.
+7. Known limit: on repo.box the bridge secret is readable by processes of the
+   control plane's service user; the broker's allowlist, ceilings and
+   concurrency still bound what such a process could do.
 
 ## 5. Test, deploy, rollback (operators)
 

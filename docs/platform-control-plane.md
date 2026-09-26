@@ -737,6 +737,61 @@ still dated 14:26:46 UTC).
   live `apps.caddy` by nothing but those comment lines. Live Caddy was not
   touched.
 
+## Deployment record (2026-09-26, platform AI capability + machine API)
+
+Commit `f87beb0a` (+ this docs follow-up) on `feat/platform-auth-control-plane`.
+
+* **Hetzner** (`scripts/deploy-ai-bridge.sh`): `repobox-ai-broker`
+  (`/opt/repobox-platform/bin`, `DynamicUser`, `127.0.0.1:8127`) and
+  `repobox-ai-tunnel` (`ssh -R 127.0.0.1:3232:127.0.0.1:8127` to repo.box).
+  Bridge secret created once at `/etc/repobox-platform/ai-bridge.secret`
+  (root 0600) and copied to the same path on repo.box over ssh stdin; never
+  printed. Verified: broker and ChatMock bound to loopback only, broker not
+  reachable on the public IP, secret required locally and through the
+  tunnel, tunnel end on repo.box bound to `127.0.0.1:3232` only.
+* **repo.box** (`scripts/deploy.sh`, full): DB backup
+  `/home/fran/backups/repobox-platform/platform-20260926T231116Z.db`;
+  previous binary kept as `/srv/repobox-platform/bin/repobox-platform.prev-20260926T231116Z`;
+  schema 5 → 6 in place (every existing app: AI **off**); routes re-rendered
+  for all 22 apps (only change: the reserved `/_repo_box/*` handles; dry run
+  on a registry copy first), `caddy validate` OK, reload OK. Caddy backups
+  `/etc/caddy/backups/Caddyfile.pre-repobox-platform-20260926T231119Z` and
+  `apps.caddy.pre-repobox-platform-20260926T231119Z`. Rollback:
+  `sudo python3 /srv/repobox-platform/caddy-apply.py rollback /etc/caddy/backups/Caddyfile.pre-repobox-platform-20260926T231119Z --apps /etc/caddy/backups/apps.caddy.pre-repobox-platform-20260926T231119Z`,
+  then reinstall the `.prev-…` binary and the previous unit (no
+  `LoadCredential`/`--ai-upstream`), and `deploy-ai-bridge.sh rollback` on
+  Hetzner.
+* **Sweep:** every host's page answer unchanged; anonymous + forged AI call
+  401 on all 21 enabled hosts, 404 on the disabled one; discovery 200,
+  `/api/platform/v1/apps` 401, `auth.repo.box/gate/ai/…` 404. One pre-existing
+  failure: `fieldwork-write` (registry says public) answers 404, the same
+  drift recorded on 2026-09-25; not touched.
+* **Live E2E with a disposable identity** (`aiprobe-231148`, granted on
+  demo-private, AI enabled there for the test): anonymous app/launcher/AI
+  401; forged identity + gate headers 401; enrol → launcher 302 → launch
+  code → app 200; auth session alone does not unlock AI (401); same-origin
+  POST returned a real `gpt-5.6-terra` completion (≈4 s first call); models =
+  terra, luna; the session with forged admin headers was served and logged as
+  user 27 (the probe), never as fran; cross-origin 403, `stream` 400,
+  `gpt-5.6-sol` 400, 40 000 chars 413, `tools` 400, `/_repo_box/whoami.json`
+  404, the session on another host 401. Direct from repo.box loopback: tunnel
+  without/with a fake secret 401, control-plane hop with forged headers and no
+  cookie 401. Discovery, OpenAPI, skill, service-token whoami/apps/ai/release
+  (broker reachable, schema 6, commit f87beb0a), `ai:write` missing 403,
+  other app 404, MCP `tools/list` (9) and `get_ai_policy` all as specified.
+  A prompt canary appeared in **no** journal on either host nor in ChatMock
+  state; the bridge secret, `rbp_` tokens, `__Host-rb_*` cookies and
+  `rb_launch=` codes appeared in no journal. Cleanup: probe user disabled
+  (sessions revoked), grant and service token revoked, link/token/cookie
+  files shredded, demo-private AI switched back **off**.
+* **Stated limit found in deployment:** systemd exposes the credential to the
+  service user (`/run/credentials/repobox-platform.service/ai-bridge-secret`,
+  `fran` 0400). Any other process running as `fran` on repo.box could read it
+  and call the broker directly through `127.0.0.1:3232`, bypassing per-app
+  policy and quotas (still bounded by the broker's allowlist, ceilings and
+  concurrency of 4, and never reaching beyond ChatMock). Closing this needs
+  the control plane under its own system user (DB ownership move) — follow-up.
+
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
 
 Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
@@ -814,7 +869,9 @@ records. No link was generated or sent; no email flow exists.
   ChatMock honouring `max_tokens`. An app backend can call the endpoint only
   by relaying the signed-in user's cookie (no server-to-server credential in
   v1). Service tokens are not OAuth, and the machine API has no dedicated
-  rate limit beyond Caddy.
+  rate limit beyond Caddy. The bridge secret is readable by any process of
+  the control plane's service user (`fran`) on repo.box (see the 2026-09-26
+  record).
 
 * One control plane process, one SQLite file, no HA; fine for this scale.
 * Sessions: 30 d device sessions, 24 h app sessions, no sliding renewal.
