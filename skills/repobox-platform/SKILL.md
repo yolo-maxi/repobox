@@ -218,24 +218,10 @@ repobox-platform service-token revoke my-agent
    app, user id, model, status, character counts and latency; the database
    keeps daily request counters only (90-day retention).
 6. No model tool execution and no arbitrary app actions in v1.
-7. Known limit: on repo.box the bridge secret is readable by processes of the
-   control plane's service user; the broker's allowlist, ceilings and
-   concurrency still bound what such a process could do.
-
-## 5. Test, deploy, rollback (operators)
-
-- Tests: `cargo fmt -p repobox-platform -- --check`,
-  `cargo clippy -p repobox-platform --all-targets -- -D warnings`,
-  `cargo test -p repobox-platform` (AI path: `tests/ai.rs`).
-- Broker + tunnel on Hetzner: `repobox-platform/scripts/deploy-ai-bridge.sh`
-  (installs `repobox-ai-broker.service` on `127.0.0.1:8127` and
-  `repobox-ai-tunnel.service` forwarding repo.box `127.0.0.1:3232`; creates
-  the shared secret once on both hosts, never prints it).
-- Control plane + routes: `repobox-platform/scripts/deploy.sh` (gates, DB
-  backup, service restart, `routes render`, guarded Caddy apply: backup →
-  validate → reload → auto-restore on failure; `CADDY_DRY_RUN=1` first).
-- Rollback: `sudo python3 /srv/repobox-platform/caddy-apply.py rollback
-  <backup>`; restore the previous binary from `/srv/repobox-platform/bin/`
-  backups; `sudo systemctl disable --now repobox-ai-tunnel repobox-ai-broker`
-  (Hetzner) turns the AI endpoint into a clean 502/503 without touching app
-  routing. Per app: `repobox-platform app ai disable <name>`.
+7. The control plane runs as its own non-login system user
+   (`repobox-platform`); the registry and the bridge credential are not
+   readable by app services. Host-level limit: the `fran` account (which runs
+   many app services) is root-equivalent through the `docker` group and
+   passwordless sudo, so a compromised `fran` service could still reach them
+   through root; the broker's allowlist, ceilings and concurrency bound what
+   any caller holding the secret can do.

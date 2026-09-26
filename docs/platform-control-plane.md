@@ -795,6 +795,66 @@ Commit `f87beb0a` (+ this docs follow-up) on `feat/platform-auth-control-plane`.
   concurrency of 4, and never reaching beyond ChatMock). Closing this needs
   the control plane under its own system user (DB ownership move) — follow-up.
 
+## Deployment record (2026-09-26 evening: launch-code log leak, service user)
+
+Commit `46dd48c1` (+ docs), pushed and deployed.
+
+* **Release blocker fixed — launch codes in edge logs.** Independent
+  verification saw `edge-e2e.sh` fail "control plane log has no launch
+  token" (1 hit). Reproduced with `RUST_LOG=trace` (timing only): the hit was
+  in **Caddy's** log, `http.handlers.reverse_proxy` "aborting with incomplete
+  response" / `writing: client disconnected`, which records `request.uri`
+  (`/gate/verify?rb_launch=<code>`) and `X-Forwarded-Uri`. Trigger: a client
+  hanging up while Caddy copied the gate's 403 HTML body for a replayed code.
+  Fix: every gate answer to a code-bearing request is body-less (redeem 302,
+  public/stale 302, rejection/disabled **303** to
+  `https://auth.repo.box/<app>?launch_error=<kind>&next=<path>` — no code —
+  where the launcher explains and offers *Launch again*, never
+  auto-relaunching). HTTP/transport crates are capped at `info` regardless of
+  `RUST_LOG`. `edge-e2e.sh` now runs a deterministic abrupt-client stress
+  (TLS, hang up after headers) on code-bearing URLs and checks every log for
+  `rb_launch=`, tokens, cookies, prompts and the bridge secret. The previous
+  binary (`E2E_BIN=…`) fails it deterministically (40/40 bodies, 27 log
+  hits); the fix passes 83/83, also under `RUST_LOG=trace`. Production: a bad
+  code answers `303`, 0 bytes; 25 abrupt TLS clients got 0 bodies; no
+  `rb_launch=` in any repo.box journal line since.
+* **Control plane under its own system user.** `repobox-platform` (uid 995,
+  nologin, no home). `deploy.sh` created it, stopped the service, chowned the
+  registry (dir 0700, files 0600; were `fran` 0644), backed up
+  (`platform-20260926T233014Z.db`), installed the hardened unit
+  (`ProtectHome=true`, `IPAddressDeny=any` + `IPAddressAllow=localhost`,
+  `UMask=0077`, kernel/namespace/SUID restrictions) and asserts the running
+  uid on every deploy. Demo origin: `DynamicUser`. Operators:
+  `/usr/local/bin/repobox-platform` (sudo + runuser; `--out` files written
+  back as the caller 0600 with O_EXCL; the raw binary now prints a hint).
+  Previous units: `/root/backups/repobox-platform-units-20260926T232929Z/`.
+* **Proven on the host:** main PID owned by `repobox-platform`; 3230/3231
+  bound 127.0.0.1 (3232 = the tunnel's sshd, 127.0.0.1); as `fran` — and as a
+  `fran` service with NoNewPrivileges — the DB, the state dir, the credential
+  (`/run/credentials/repobox-platform.service/`, `repobox-platform` 0400) and
+  the service's `/proc/…/environ` are unreadable, and sudo is blocked in the
+  NoNewPrivileges context; a transient unit with the same IP policy as the
+  service user cannot reach the internet but reaches the gate. **Host-level
+  limit (not changed here):** every `fran` service inherits the `docker`
+  group (verified: the Docker socket is reachable even under
+  NoNewPrivileges) and `fran` has NOPASSWD sudo, so a compromised `fran`
+  service is still root-equivalent. Closing that needs apps off the `fran`
+  account/docker group — a host-wide change.
+* **Live E2E (disposable `aiprobe-233106`)**: all anonymous/forged/direct
+  refusals, real `gpt-5.6-terra` completion, policy refusals, rejected-code
+  checks, discovery/OpenAPI/skill/service token/MCP, release reports commit
+  `46dd48c1`. Log search since the probe start (103 repo.box / 21 Hetzner
+  journal lines): 0 hits for `rb_launch=`, prompt canary, bridge secret,
+  `rbp_`, `__Host-rb_`; Caddy logged nothing during the stress. Revocation
+  proven before shredding (token, app session, AI, device session all 401);
+  user disabled, grant and token revoked, files shredded, demo-private AI off.
+  Registry sweep: every host as expected except the pre-existing
+  `fieldwork-write` 404.
+* **Rollback (user migration):** `sudo systemctl stop repobox-platform`;
+  `sudo chown fran:fran /var/lib/repobox-platform /var/lib/repobox-platform/platform.db*`;
+  restore the unit files from `/root/backups/repobox-platform-units-20260926T232929Z/`
+  and the `.prev-…` binary; `daemon-reload`; start.
+
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
 
 Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
@@ -872,9 +932,9 @@ records. No link was generated or sent; no email flow exists.
   ChatMock honouring `max_tokens`. An app backend can call the endpoint only
   by relaying the signed-in user's cookie (no server-to-server credential in
   v1). Service tokens are not OAuth, and the machine API has no dedicated
-  rate limit beyond Caddy. The bridge secret is readable by any process of
-  the control plane's service user (`fran`) on repo.box (see the 2026-09-26
-  record).
+  rate limit beyond Caddy. Since 2026-09-26 (evening) the control plane runs
+  as its own user; the remaining host-level limit (fran is root-equivalent via
+  docker/sudo) is in that record.
 
 * One control plane process, one SQLite file, no HA; fine for this scale.
 * Sessions: 30 d device sessions, 24 h app sessions, no sliding renewal.
