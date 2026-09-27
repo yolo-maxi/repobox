@@ -1033,6 +1033,48 @@ b5e528cf.
   The agent starts at `https://auth.repo.box/api/platform/v1` and deploys
   with `POST https://auth.repo.box/api/platform/v1/publisher/releases`.
 
+## Deployment record (2026-09-27, public docs landing)
+
+Feedback: "the plumbing is solid, the surface is a mystery". An agent with a
+publisher token found the releases API but no human-readable docs;
+`/docs` was 404, because it fell through to the `/{name}` launcher.
+
+* `GET https://auth.repo.box/docs`: a public, server-rendered page (no token,
+  no registry data) linking the publisher quickstart (`/docs#publish`),
+  capabilities JSON, OpenAPI, `skill.md`, the MCP endpoint and the
+  well-known document. It shows the exact deploy endpoint, the multipart
+  parts in order (`manifest`, then `image`), the `docker save` recipe, the
+  minimal manifest, and the release status, logs, rollback and restart URLs.
+  It also states the contract: apps are private, `/data` survives updates and
+  rollbacks, `runtime.env` is plain non-secret config, and v1 has no secrets
+  management and no DB backup/export API. `/docs/` answers 303 to `/docs`,
+  and every auth page has a "Docs" nav item. `docs` was already a reserved
+  app name.
+* Discovery (`/api/platform/v1`, well-known) has a top-level `docs`, plus
+  `documentation.docs`, `documentation.publisher_quickstart` and
+  `publishing.docs`. OpenAPI has `externalDocs` and a `/docs` path. The upload
+  contract (`how_to_deploy`, malformed-upload answers) carries `docs`.
+* Every service-token and publisher-token 401, and the API 404, names
+  `https://auth.repo.box/docs`.
+* Stale publisher MCP `initialize` instructions ("a Git repository (repo.box
+  clones, builds and runs it)") now describe the direct `docker save` upload.
+* Gates: fmt, clippy `-D warnings`, 93 tests (new
+  `docs_landing_is_public_and_linked_from_discovery_and_401s`),
+  `publisher-e2e.sh` ALL PASS (57 checks, 4 new `/docs` checks through real
+  Caddy), `edge-e2e.sh` ALL PASS. The deploy sweep now checks `/docs`.
+* Deployed e02f458a, then 9b748268 (long URLs wrap: page width 390 at a
+  390 px viewport, was 463) with `NO_CADDY=1`. No Caddy, route, runtime or
+  token change. DB backups `platform-20260927T093558Z.db` and
+  `-093804Z.db`. The live binary sha256 (`f26def18…`) equals the local build.
+  The sweep had 89 checks; the only mismatch was the pre-existing
+  `fieldwork-write` 404. That 404 comes from the origin on
+  127.0.0.1:4110 (JSON body), not the edge.
+* External HTTPS checks: `/docs` 200 `text/html`, all links present,
+  `/docs/` 303. Discovery and well-known `docs` =
+  `https://auth.repo.box/docs`. OpenAPI `externalDocs` is present, and
+  `skill.md` has the docs row. Anonymous and invalid-token 401s name the docs
+  URL. `/`, `/me`, `/demo-private` and `/admin/users` answer as before.
+
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
 
 Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
