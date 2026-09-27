@@ -945,6 +945,94 @@ Commit `46dd48c1` (+ docs), pushed and deployed.
   restore the unit files from `/root/backups/repobox-platform-units-20260926T232929Z/`
   and the `.prev-…` binary; `daemon-reload`; start.
 
+## Deployment record (2026-09-27, external publisher: docker save upload)
+
+Commits 9a6e89a8 and b5e528cf, deployed with `scripts/deploy.sh` from
+Hetzner. The live binary sha256 prefix `00f7272d…` equals the local build of
+b5e528cf.
+
+* **Gates.** fmt; clippy `-D warnings`; 92 tests (38 unit, 16 AI, 31
+  platform, 7 publisher; the deploy re-ran them); `edge-e2e.sh` ALL PASS;
+  `publisher-e2e.sh` ALL PASS (real Caddy + real Docker: upload, live,
+  launcher, same-origin AI, update, failed update keeps the old release
+  serving, rollback, restart, logs, isolation, revocation, removal, no
+  secrets in logs).
+* **Spike before building.** On the live containerd image store,
+  `docker load` of an archive whose names were rewritten
+  (docker-save and OCI-only variants) produced exactly the rewritten name;
+  an unnamed archive loaded dangling. The spike images were removed.
+* **Rollout.**
+  1. `CADDY_DRY_RUN=1`: binary + units installed, registry migrated to
+     schema 7 (DB backups `platform-20260927T090929Z.db`, `…090953Z.db`,
+     `…091438Z.db` in `/home/fran/backups/repobox-platform`); the managed
+     block with `import …/published.caddy` validated.
+  2. Guarded apply: Caddy backup
+     `/etc/caddy/backups/Caddyfile.pre-repobox-platform-20260927T090957Z`,
+     validate + reload OK.
+
+  The sweep's only mismatch is the pre-existing `fieldwork-write` 404 drift
+  (left untouched).
+* **Boundary, proven on the host.**
+  * The API runs as `repobox-platform` (uid 995), which gets
+    `permission denied` on the Docker socket, has no sudo and no
+    supplementary groups, and listens only on 127.0.0.1:3230. It can write
+    only `/var/lib/repobox-platform` and the spool, and permissions confine
+    it to `jobs/`, `uploads/` and `queries/`.
+  * The worker is a root oneshot (ProtectSystem=strict, ProtectHome,
+    NoNewPrivileges) with write access to the spool,
+    `/srv/repobox-platform/published`, `/etc/caddy` and
+    `/run/xtables.lock` only.
+* **Bug found by the live run.** The first live release failed cleanly
+  (`failed/internal`): systemd bind-mounts every `ReadWritePaths` entry
+  separately, so the `uploads/ → jobs/` rename returned EXDEV. Fixed in
+  b5e528cf: one spool path, orphan cleanup on queue failure, worker prunes
+  unclaimed uploads. Redeployed with `NO_CADDY=1`.
+* **Live external-style test** (disposable publisher `pubprobe-09270910`,
+  `pub_7b6fd49a15701621`; token written 0600, copied to the agent side and
+  shredded on the host; HTTPS only from Hetzner). The run, in order:
+  1. Discovery `publishing` section read.
+  2. Upload of a 56 MB `docker save | gzip` archive → `200 live` in ≈5 s
+     (release record carried digest, format `docker-save+gzip`, image id,
+     launcher URL and the edge-gated direct URL).
+  3. Container checks: image `repobox-pub/<app>:<release>`, user `node`,
+     not privileged, network `repobox-published` (172.31.240.0/24,
+     icc=false, bridge rbpub0), port `127.0.0.1:4600` only,
+     MKNOD/NET_RAW dropped, no-new-privileges, 128 MiB, pids 512, volume
+     `/data`. Firewall rules present in DOCKER-USER and INPUT. The route
+     rendered with the gated shape.
+  4. Anonymous direct host 401, spoofed identity 401, anonymous AI 401.
+  5. Operator-granted disposable viewer, driven in Chromium through
+     `auth.repo.box/<app>`: clean redirect (no code in the URL), page v1,
+     gate identity visible, same-origin AI button → 200 with the real
+     model's answer.
+  6. Update with a second, different image → v3 live, `/data` kept,
+     access model unchanged. Runtime logs endpoint OK.
+  7. Isolation and unauthorized requests:
+     * Publisher lists only its own app.
+     * `study-diary`, `demo-private` and `couchclub` answer 404 to
+       get/restart/rollback/logs.
+     * Taking the name `study-diary` → 409 `name_unavailable`.
+     * The service API refuses the publisher token (401).
+     * Anonymous requests, a bad token, two Authorization headers and an
+       anonymous upload all get 401.
+     * MCP `list_my_apps` shows only its own app.
+  8. Live rollback → the v1 image again.
+  9. Revocation → whoami, upload and MCP all 401.
+  10. 0 hits for the token, `rbpub_`, `rb_launch=` or the enrol token in
+      1,233 journal lines or the Caddy logs.
+* **Cleanup.** `publisher remove-app --purge-data`: container, images,
+  volume and route removed; `published.caddy` has 0 apps; Caddy validates;
+  the host no longer resolves to a site. The publisher, its owner record
+  and the viewer are disabled, the token revoked, spool results deleted,
+  and local artifacts shredded or removed. Release rows remain as audit
+  history (app link cleared).
+* **Issuing the real credential** (not done; Fran's decision):
+  `sudo /usr/local/bin/repobox-platform publisher create --handle muse`,
+  then
+  `sudo /usr/local/bin/repobox-platform publisher token create --publisher muse --name muse-1 --ttl-days 30 --out /home/fran/secrets/muse-publisher.token`.
+  The agent starts at `https://auth.repo.box/api/platform/v1` and deploys
+  with `POST https://auth.repo.box/api/platform/v1/publisher/releases`.
+
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
 
 Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
