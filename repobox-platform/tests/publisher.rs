@@ -825,3 +825,122 @@ async fn discovery_openapi_skill_and_mcp_describe_the_publisher() {
         .await;
     assert_eq!(st, StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn docs_landing_is_public_and_linked_from_discovery_and_401s() {
+    let h = H::new();
+    // Public HTML, no token, and it is not swallowed by the `/{name}` launcher.
+    let r = web::router(h.state.clone())
+        .oneshot(Request::get("/docs").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    assert!(
+        r.headers()[header::CONTENT_TYPE]
+            .to_str()
+            .unwrap()
+            .starts_with("text/html")
+    );
+    let html =
+        String::from_utf8(r.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
+    let links = web::docs::links(BASE);
+    for (label, url) in &links {
+        assert!(html.contains(&format!("href=\"{url}\"")), "{label} {url}");
+    }
+    for needle in [
+        "id=\"publish\"",
+        "POST https://auth.repo.box/api/platform/v1/publisher/releases",
+        "in this order",
+        "<code>manifest</code>",
+        "<code>image</code>",
+        "docker save myapp | gzip &gt; myapp.tar.gz",
+        "{&quot;name&quot;: &quot;myapp&quot;, &quot;title&quot;: &quot;My app&quot;}",
+        "/releases/{id}?wait=300",
+        "/apps/{name}/logs?tail=200",
+        "/apps/{name}/rollback",
+        "/apps/{name}/restart",
+        "Apps are private.",
+        "survives updates, restarts and rollbacks",
+        "plain, non-secret configuration",
+        "no secrets management, no database backup or export API",
+    ] {
+        assert!(html.contains(needle), "docs lack {needle}");
+    }
+    assert!(!html.contains("clone"), "docs mention Git cloning");
+    // Every linked document answers publicly (MCP is POST-only, bearer).
+    for (_, url) in &links {
+        let path = url.strip_prefix(BASE).unwrap();
+        let path = path.split('#').next().unwrap();
+        let (st, _) = h.get(path, None).await;
+        let want = if path.ends_with("/mcp") {
+            StatusCode::METHOD_NOT_ALLOWED
+        } else {
+            StatusCode::OK
+        };
+        assert_eq!(st, want, "{path}");
+    }
+    let r = web::router(h.state.clone())
+        .oneshot(Request::get("/docs/").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(r.headers()[header::LOCATION], "/docs");
+
+    // Discovery names the docs directly, not only openapi/skill.
+    let (_, v) = h.get("/api/platform/v1", None).await;
+    assert_eq!(v["docs"], "https://auth.repo.box/docs");
+    assert_eq!(v["documentation"]["docs"], "https://auth.repo.box/docs");
+    assert_eq!(
+        v["documentation"]["publisher_quickstart"],
+        "https://auth.repo.box/docs#publish"
+    );
+    assert_eq!(
+        v["publishing"]["docs"],
+        "https://auth.repo.box/docs#publish"
+    );
+    let (_, o) = h.get("/api/platform/v1/openapi.json", None).await;
+    assert_eq!(o["externalDocs"]["url"], "https://auth.repo.box/docs");
+    assert!(web::api::SKILL_MD.contains("https://auth.repo.box/docs"));
+
+    // Every 401 points at the docs landing.
+    let img = image_tar();
+    for tok in ["", "rbpub_nope", &h.service.clone()] {
+        let (st, v) = h.deploy(tok, &manifest("trip"), &img).await;
+        assert_eq!(st, StatusCode::UNAUTHORIZED);
+        assert!(
+            v["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("https://auth.repo.box/docs"),
+            "{v}"
+        );
+    }
+    for path in [
+        "/api/platform/v1/publisher/whoami",
+        "/api/platform/v1/apps",
+        "/api/platform/v1/whoami",
+    ] {
+        let (st, v) = h.get(path, None).await;
+        assert_eq!(st, StatusCode::UNAUTHORIZED, "{path}");
+        assert!(
+            v["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("https://auth.repo.box/docs"),
+            "{path}: {v}"
+        );
+    }
+
+    // The publisher MCP describes direct image upload, never Git clone/build.
+    let (_, v) = h
+        .post_json(
+            "/api/platform/v1/mcp",
+            &h.muse,
+            json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}),
+        )
+        .await;
+    let text = v["result"]["instructions"].as_str().unwrap();
+    assert!(text.contains("docker save"), "{text}");
+    assert!(text.contains("/api/platform/v1/publisher/releases"));
+    assert!(text.contains("https://auth.repo.box/docs"));
+    assert!(!text.contains("Git repository") && !text.contains("clones"));
+}

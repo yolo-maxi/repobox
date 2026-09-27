@@ -143,6 +143,12 @@ docker save e2e-publisher-probe:latest | gzip > "$W/probe.tar.gz"
 echo "  archive: $(stat -c %s "$W/probe.tar.gz") bytes"
 MANIFEST="{\"name\":\"$APP\",\"title\":\"E2E probe\",\"version\":\"1.0.0\",\"runtime\":{\"health_path\":\"/healthz\",\"memory_mb\":128,\"env\":{\"APP_VERSION\":\"v1\"}},\"provenance\":{\"repository\":\"https://example.com/probe\",\"commit\":\"abc1234\"}}"
 
+echo "== public docs through the edge"
+expect "anonymous /docs -> 200" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$A/docs")" 200
+expect "/docs has the publisher quickstart" "$(curl -s "${R[@]}" "$A/docs" | command grep -c 'id="publish"')" 1
+expect "discovery names the docs" "$(curl -s "${R[@]}" "$A/api/platform/v1" | jq_ 'd["docs"]')" "https://auth.repo.box/docs"
+expect "401 points at the docs" "$(curl -s "${R[@]}" "$A/api/platform/v1/publisher/whoami" | jq_ '"https://auth.repo.box/docs" in d["error"]["message"]')" True
+
 echo "== unauthorized requests"
 expect "anonymous upload -> 401" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' -F "manifest=$MANIFEST;type=application/json" -F "image=@$W/probe.tar.gz" "$A/api/platform/v1/publisher/releases")" 401
 expect "no upload was stored" "$(ls -A "$SPOOL/uploads" | wc -l)" 0

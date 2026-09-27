@@ -175,6 +175,7 @@ check() { # url expected-code  (retries while the TLS cert is still being issued
 check https://auth.repo.box/healthz 200
 check https://auth.repo.box/ 200
 check https://auth.repo.box/gate/verify 404
+check https://auth.repo.box/docs 200
 check https://auth.repo.box/api/platform/v1 200
 check https://auth.repo.box/api/platform/v1/openapi.json 200
 check https://auth.repo.box/api/platform/v1/skill.md 200

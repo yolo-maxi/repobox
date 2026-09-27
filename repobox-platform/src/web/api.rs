@@ -61,11 +61,14 @@ impl ApiError {
             message: message.into(),
         }
     }
-    fn unauthorized() -> Self {
+    fn unauthorized(s: &S) -> Self {
         Self::new(
             StatusCode::UNAUTHORIZED,
             "unauthorized",
-            "a valid service token is required (Authorization: Bearer rbp_…); see /api/platform/v1",
+            format!(
+                "a valid service token is required (Authorization: Bearer rbp_…); docs: {}",
+                super::docs::docs_url(&s.cfg.public_base)
+            ),
         )
     }
     fn scope(scope: &str) -> Self {
@@ -140,10 +143,10 @@ fn caller(s: &S, headers: &HeaderMap) -> Result<Caller, ApiError> {
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .ok_or_else(ApiError::unauthorized)?;
+        .ok_or_else(|| ApiError::unauthorized(s))?;
     match s.store.service_token_lookup(raw.trim()) {
         Ok(Some((token, owner))) => Ok(Caller { token, owner }),
-        Ok(None) => Err(ApiError::unauthorized()),
+        Ok(None) => Err(ApiError::unauthorized(s)),
         Err(_) => Err(ApiError::internal()),
     }
 }
@@ -187,7 +190,10 @@ pub fn discovery_doc(s: &S) -> Value {
         "service": "repo.box platform control plane",
         "api_version": API_VERSION,
         "software_version": build_version(),
+        "docs": super::docs::docs_url(base),
         "documentation": {
+            "docs": super::docs::docs_url(base),
+            "publisher_quickstart": format!("{}#publish", super::docs::docs_url(base)),
             "skill": format!("{base}/api/platform/v1/skill.md"),
             "openapi": format!("{base}/api/platform/v1/openapi.json"),
             "cli": "repobox-platform --help (operator host); every subcommand has --help",
@@ -203,6 +209,7 @@ pub fn discovery_doc(s: &S) -> Value {
         },
         "endpoints": {
             "discovery": format!("{base}/api/platform/v1"),
+            "docs": format!("GET {} (HTML, public)", super::docs::docs_url(base)),
             "whoami": format!("GET {base}/api/platform/v1/whoami"),
             "apps": format!("GET {base}/api/platform/v1/apps"),
             "app": format!("GET {base}/api/platform/v1/apps/{{name}}"),
@@ -296,6 +303,7 @@ pub async fn openapi(State(s): State<S>) -> Response {
             "version": API_VERSION,
             "description": "Scoped machine API for agents. Service tokens (rbp_) expose owner-scoped reads, bounded AI policy updates and app registration requests. Publisher tokens (rbpub_) deploy and operate the publisher's own apps from uploaded `docker save` archives (tag: publisher). Neither is OAuth.",
         },
+        "externalDocs": {"description": "Human-readable docs and publisher deploy quickstart (public)", "url": super::docs::docs_url(base)},
         "servers": [{"url": base}],
         "components": {
             "securitySchemes": {
@@ -329,6 +337,7 @@ pub async fn openapi(State(s): State<S>) -> Response {
         },
         "paths": {
             "/api/platform/v1": {"get": {"summary": "Capabilities document (public)", "security": [], "responses": {"200": {"description": "OK"}}}},
+            "/docs": {"get": {"summary": "Human-readable docs landing with the publisher quickstart (public HTML)", "security": [], "responses": {"200": {"description": "OK", "content": {"text/html": {}}}}}},
             "/api/platform/v1/whoami": {"get": op("Token identity, owner and scopes", "any", json!({}))},
             "/api/platform/v1/apps": {"get": op("Apps this token reaches", "apps:read", json!({}))},
             "/api/platform/v1/apps/{name}": {"get": op("One app", "apps:read", json!({"parameters": name}))},
@@ -703,11 +712,14 @@ pub async fn release(State(s): State<S>, headers: HeaderMap) -> Response {
     }
 }
 
-pub async fn api_not_found() -> Response {
+pub async fn api_not_found(State(s): State<S>) -> Response {
     ApiError::new(
         StatusCode::NOT_FOUND,
         "not_found",
-        "unknown API path; see /api/platform/v1",
+        format!(
+            "unknown API path; docs: {}",
+            super::docs::docs_url(&s.cfg.public_base)
+        ),
     )
     .into_response()
 }
@@ -892,7 +904,7 @@ pub async fn mcp(State(s): State<S>, headers: HeaderMap, body: Option<Json<Value
                 "protocolVersion": MCP_PROTOCOL_VERSION,
                 "capabilities": {"tools": {"listChanged": false}},
                 "serverInfo": {"name": "repobox-platform", "version": build_version()},
-                "instructions": "repo.box platform control plane. Tools are owner-scoped by the service token. App registration is a request an operator approves; applying routes, users, grants and provider credentials are never available here. Read /api/platform/v1/skill.md for the full contract.",
+                "instructions": format!("repo.box platform control plane. Tools are owner-scoped by the service token. App registration is a request an operator approves; applying routes, users, grants and provider credentials are never available here. Docs: {}", super::docs::docs_url(&s.cfg.public_base)),
             }),
         ),
         "ping" => rpc_result(&id, json!({})),
@@ -978,7 +990,7 @@ async fn mcp_publisher(s: S, headers: HeaderMap, body: Option<Json<Value>>) -> R
                 "protocolVersion": MCP_PROTOCOL_VERSION,
                 "capabilities": {"tools": {"listChanged": false}},
                 "serverInfo": {"name": "repobox-platform-publisher", "version": build_version()},
-                "instructions": "repo.box publisher. deploy_app takes a manifest with a Git repository (repo.box clones, builds and runs it) or a prebuilt image; the app is private with the platform identity and the AI endpoint on, and only this publisher can see or change it. Poll get_release until done, then share the launcher_url. Read /api/platform/v1/skill.md for the contract.",
+                "instructions": format!("repo.box publisher. Deploying is a direct HTTPS multipart upload of a Docker image archive (`docker save` output) plus a JSON manifest to POST {base}/api/platform/v1/publisher/releases; MCP carries no image bytes, so call how_to_deploy for the exact request. repo.box does not clone, pull or build anything. The app is private with the platform identity and the AI endpoint on, and only this publisher can see or change it. Poll get_release until done, then share the launcher_url. Docs: {docs}", base = s.cfg.public_base, docs = super::docs::docs_url(&s.cfg.public_base)),
             }),
         ),
         "ping" => rpc_result(&id, json!({})),

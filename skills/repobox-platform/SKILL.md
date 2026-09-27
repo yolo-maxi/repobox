@@ -18,6 +18,7 @@ Discovery (public, versioned, no secrets):
 
 | What | Where |
 |------|-------|
+| Docs (HTML, start here) | `https://auth.repo.box/docs` (publisher quickstart at `/docs#publish`) |
 | Capabilities document | `GET https://auth.repo.box/api/platform/v1` (also `/.well-known/repobox-platform.json`) |
 | OpenAPI 3.1 | `GET https://auth.repo.box/api/platform/v1/openapi.json` |
 | This skill | `GET https://auth.repo.box/api/platform/v1/skill.md`, or `repobox-platform skill` |
@@ -106,9 +107,13 @@ the publisher bearer) offers `publisher_whoami`, `how_to_deploy`,
 `get_build_log`, `get_app_logs`, `rollback_app` and `restart_app`. Image
 bytes travel only over the HTTPS upload.
 
+`runtime.env` is plain, non-secret configuration: values are stored as sent
+with the release record and passed as ordinary container environment.
+
 Not in v1: registry pulls or Git builds (upload the image), secrets
-management (do not bake secrets into images), custom domains, public
-visibility. The limits are 10 apps per publisher and 100 releases per 24 h.
+management (do not bake secrets into images or `runtime.env`), a database
+backup/export API (back up `/data` from inside the app), custom domains,
+public visibility. The limits are 10 apps per publisher and 100 releases per 24 h.
 
 Operators: `repobox-platform publisher create --handle NAME`,
 `publisher token create --publisher NAME --name NAME-1 --out FILE`,

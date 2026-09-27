@@ -51,6 +51,7 @@ pub fn page(shell: &Shell<'_>, body: &str) -> String {
                 items.push(("/admin/audit", "Audit", "audit"));
             }
         }
+        items.push(("/docs", "Docs", "docs"));
         items
             .iter()
             .map(|(href, label, key)| {

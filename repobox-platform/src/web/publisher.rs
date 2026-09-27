@@ -10,8 +10,9 @@
 //!   Apps of other publishers or operators are indistinguishable from
 //!   missing ones; a deploy to a name held by anyone else is refused with one
 //!   generic message.
-//! * This service only validates and queues. The root deploy worker clones,
-//!   builds, runs, health-gates and routes (see `publisher::worker`); the
+//! * This service only validates and queues. The root deploy worker imports
+//!   the uploaded archive, runs, health-gates and routes (see
+//!   `publisher::worker`); the
 //!   service has no Docker, Git, network egress or Caddy authority.
 
 use std::time::Duration;
@@ -172,20 +173,27 @@ pub fn caller(s: &S, headers: &HeaderMap) -> Result<PubCaller, PubError> {
     let unauth = |m: &str| PubError::new(StatusCode::UNAUTHORIZED, "unauthorized", m);
     let mut values = headers.get_all(header::AUTHORIZATION).iter();
     let (Some(v), None) = (values.next(), values.next()) else {
-        return Err(unauth(
-            "exactly one Authorization: Bearer rbpub_… header is required; see https://auth.repo.box/api/platform/v1",
-        ));
+        return Err(unauth(&format!(
+            "exactly one Authorization: Bearer rbpub_… header is required; docs: {}",
+            super::docs::docs_url(&s.cfg.public_base)
+        )));
     };
     let raw = v
         .to_str()
         .ok()
         .and_then(|v| v.strip_prefix("Bearer "))
         .map(str::trim)
-        .ok_or_else(|| unauth("use Authorization: Bearer rbpub_…"))?;
+        .ok_or_else(|| {
+            unauth(&format!(
+                "use Authorization: Bearer rbpub_…; docs: {}",
+                super::docs::docs_url(&s.cfg.public_base)
+            ))
+        })?;
     if !raw.starts_with(TOKEN_PREFIX) {
-        return Err(unauth(
-            "this endpoint needs a publisher token (rbpub_…); service tokens (rbp_…) cannot deploy",
-        ));
+        return Err(unauth(&format!(
+            "this endpoint needs a publisher token (rbpub_…); service tokens (rbp_…) cannot deploy; docs: {}",
+            super::docs::docs_url(&s.cfg.public_base)
+        )));
     }
     match s.store.publisher_token_lookup(raw) {
         Ok(Some((token, publisher, owner))) => Ok(PubCaller {
@@ -193,7 +201,10 @@ pub fn caller(s: &S, headers: &HeaderMap) -> Result<PubCaller, PubError> {
             publisher,
             owner,
         }),
-        Ok(None) => Err(unauth("publisher token is invalid, expired or revoked")),
+        Ok(None) => Err(unauth(&format!(
+            "publisher token is invalid, expired or revoked; docs: {}",
+            super::docs::docs_url(&s.cfg.public_base)
+        ))),
         Err(_) => Err(PubError::internal()),
     }
 }
@@ -396,6 +407,7 @@ fn release_reply(s: &S, c: &PubCaller, r: &Release, app: &App) -> (StatusCode, V
 /// What a deploy request looks like; returned with every malformed request.
 pub fn upload_contract(s: &S) -> Value {
     json!({
+        "docs": format!("{}#publish", super::docs::docs_url(&s.cfg.public_base)),
         "method": "POST",
         "url": format!("{}/api/platform/v1/publisher/releases", s.cfg.public_base),
         "content_type": "multipart/form-data",
@@ -1269,6 +1281,7 @@ pub fn discovery(s: &S) -> Value {
     let base = &s.cfg.public_base;
     let p = |path: &str| format!("{base}/api/platform/v1/publisher{path}");
     json!({
+        "docs": format!("{}#publish", super::docs::docs_url(base)),
         "summary": "Deploy your own private app to https://<name>.repo.box by uploading a Docker image archive (`docker save`) with a small JSON manifest in one HTTPS request. No registry, Git host, SSH or Docker access needed.",
         "available": s.cfg.publisher.is_some(),
         "credential": {

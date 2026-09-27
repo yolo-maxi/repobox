@@ -4,6 +4,7 @@
 pub mod ai;
 pub mod api;
 pub mod css;
+pub mod docs;
 pub mod gate;
 pub mod html;
 pub mod pages;
@@ -103,6 +104,8 @@ pub fn router(state: S) -> Router {
         .route("/gate/ai/v1/models", get(ai::models))
         .route("/gate/ai/{*rest}", any(ai::not_found))
         // Agent/operator discovery and the scoped machine API (+ MCP).
+        .route(docs::DOCS_PATH, get(docs::docs))
+        .route("/docs/", get(|| async { redirect(docs::DOCS_PATH) }))
         .route("/.well-known/repobox-platform.json", get(api::discovery))
         .route("/api/platform/v1", get(api::discovery))
         .route("/api/platform/v1/openapi.json", get(api::openapi))
