@@ -4,6 +4,7 @@
 pub mod ai;
 pub mod demo_origin;
 pub mod model;
+pub mod publisher;
 pub mod render;
 pub mod store;
 pub mod tokens;

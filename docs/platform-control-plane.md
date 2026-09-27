@@ -278,6 +278,95 @@ show|enable|disable|set`.
 * The full agent contract: `skills/repobox-platform/SKILL.md`. Rationale:
   `docs/platform-ai-plan.md`.
 
+### External publisher: deploy by `docker save` upload (schema 7)
+
+A **publisher** is a trusted first-party agent outside the repo.box
+perimeter (the first one is `muse`). It deploys its own apps with one
+credential, a **publisher token** `rbpub_…`, and the discovery document
+`https://auth.repo.box/api/platform/v1` (`publishing` section, OpenAPI tag
+`publisher`, `skill.md` §0, MCP publisher tools). It gets no SSH, Docker,
+Caddy, database, ChatMock or browser access, and no view of any app it did
+not create.
+
+* **Principal.** Table `publishers`: an immutable `pub_<16 hex>` id, a
+  handle, a display name and an **owner record** (a member user, by default
+  a new one named after the handle). That user owns every app the publisher
+  creates. `apps.publisher_id` marks those apps, and every publisher query
+  is keyed on it. Tokens (`publisher_tokens`) are hashed, last at most 30
+  days, are revocable, and are written once to a 0600 file. Disabling the
+  publisher stops all of its tokens. Service tokens (`rbp_`) and publisher
+  tokens are rejected on each other's API; cookies and `X-RepoBox-*` never
+  authenticate here. Exactly one `Authorization` header is required. Not
+  OAuth: an OAuth client-credentials issuer could replace token issuance
+  later without changing the principal model.
+* **Contract.** One HTTPS request, `POST /api/platform/v1/publisher/releases`,
+  with `multipart/form-data` parts in this order:
+  1. `manifest`: JSON with `name`, `title`, and optional `description`,
+     `version`, `runtime` (`port`, `health_path`, `memory_mb`, `env`), `ai`
+     and `provenance`.
+  2. `image`: `docker save` output (tar or gzip), `podman save`
+     (docker-archive or oci-archive), or an OCI layout tar. It must hold
+     exactly one linux/amd64 image and be at most 2 GiB.
+
+  The manifest is validated, and the name is checked against the registry,
+  the Caddyfile's site addresses, the rendered apps and
+  `/var/www/repo.box/subdomains`, *before* any image byte is accepted. Every
+  collision answers `409 name_unavailable`. On a refusal the rest of the
+  upload is read and discarded, because Caddy would otherwise turn the
+  answer into a 502. Every malformed request is answered with `expected`,
+  which is the exact request to send. `?wait=N` long-polls.
+* **Split of authority.**
+  * `repobox-platform.service` (the non-root `repobox-platform` user)
+    streams the upload to `/var/spool/repobox-publisher/uploads`
+    (sha256 computed on the way), records a `queued` release
+    (`publisher_releases`) and writes a job into `jobs/`. That is all it can
+    do: its write access covers only `jobs/`, `uploads/` and `queries/`.
+  * `repobox-publisher-worker.path` → `repobox-publisher-worker.service`
+    (root oneshot, systemd-sandboxed; never opens the registry) handles the
+    job:
+    1. Re-hashes the upload and streams a copy whose `manifest.json` /
+       `index.json` name records are replaced by
+       `repobox-pub/<app>:<release>` (`repositories` dropped). The tags the
+       archive carried are therefore never applied on the host; this was
+       verified on the live containerd image store before the build.
+    2. Runs `docker load`, then checks the image is linux/amd64.
+    3. Starts the container from a fixed argv template: network
+       `repobox-published` (bridge `rbpub0`, 172.31.240.0/24, no
+       inter-container traffic; iptables drops new connections from the
+       bridge to the host and to private/link-local ranges); a
+       `127.0.0.1:<4600-4999>` port; `--memory`, 1 CPU, pids 512;
+       `no-new-privileges`; NET_RAW/MKNOD dropped; restart
+       `unless-stopped`; volume `rbpub-<app>-data:/data`.
+    4. Health-gates the new container while the old release keeps serving.
+    5. Renders `/etc/caddy/repobox-platform/published.caddy` from its own
+       state (validated labels and loopback ports only, with the standard
+       gated route incl. `/_repo_box/ai`) and applies it with
+       `caddy-apply.py apply-published`: refuse hosts defined elsewhere,
+       back up, validate the whole config, reload, restore on failure.
+    6. Retires the old container and keeps 3 release images for rollback.
+
+    Progress, the verdict and a deploy log land in `results/` (root 0755)
+    and are folded into the registry by the service (every request plus a
+    2 s tick; a release unanswered for 1 h becomes `failed/timeout`).
+  * `repobox-publisher-query.path/.service` answers runtime log/status
+    queries (`docker logs`/`inspect` of the app's current container only),
+    so logs stay available during a long deploy.
+* **Lifecycle.** A new app is private, identity `platform`, AI on (policy
+  default) and owned by the publisher's owner record. An upload with the same
+  name updates the app: title/description change; identity, visibility,
+  grants and AI policy are preserved. Release states: `queued → building →
+  starting → live | failed`; the previous live release becomes `superseded`,
+  and a restart ends as `done`. `rollback` runs a retained release again
+  (new release record, same image, `/data` kept); `restart` restarts the
+  live container. Limits: 10 apps per publisher, 100 releases per 24 h, one
+  release in progress per app, 3 GiB total memory across published apps
+  (worker flag).
+* **Operator CLI.** `publisher create|list|show|disable|enable`,
+  `publisher token create|list|revoke`, `publisher releases`,
+  `publisher release ID` (with the deploy log),
+  `publisher remove-app NAME [--purge-data] --yes`. `routes render`
+  excludes publisher apps, and `app remove` refuses them.
+
 ## Local development
 
 ```bash
@@ -285,6 +374,7 @@ cargo test -p repobox-platform                       # unit + integration tests 
 cargo clippy -p repobox-platform --all-targets -- -D warnings
 cargo fmt -p repobox-platform -- --check
 repobox-platform/scripts/edge-e2e.sh                 # real Caddy + real broker + fake ChatMock on loopback
+repobox-platform/scripts/publisher-e2e.sh            # real Caddy + real Docker: upload -> live -> launch -> AI -> update/rollback/remove
 ```
 
 Run it by hand:
@@ -936,6 +1026,17 @@ records. No link was generated or sent; no email flow exists.
   as its own user; the remaining host-level limit (fran is root-equivalent via
   docker/sudo) is in that record.
 
+* External publisher v1 is Docker image upload only (no registry pulls or
+  Git builds). There is no secrets management, so env values are plain
+  settings in the manifest. Only linux/amd64 is accepted. Apps are always
+  private; an operator grants people access. Containers share the host
+  kernel: isolation is runc + seccomp/AppArmor defaults + the fixed run
+  template, with no gVisor. The deploy worker is root with Docker authority
+  and is therefore the trusted computing base; its inputs are only
+  validated jobs, and it runs argv without a shell. The worker's iptables
+  rules are re-asserted on every worker run and once at boot (the worker unit
+  is enabled for `multi-user.target`). Uploads are at most 2 GiB and go through
+  Caddy without a dedicated throttle.
 * One control plane process, one SQLite file, no HA; fine for this scale.
 * Sessions: 30 d device sessions, 24 h app sessions, no sliding renewal.
   App sessions created before schema 3 carry no device link, so revoking a

@@ -1,0 +1,11 @@
+# /etc/systemd/system/repobox-publisher-worker.path
+# Run the deploy worker whenever the control plane queues a job.
+[Unit]
+Description=repo.box publisher deploy queue
+
+[Path]
+DirectoryNotEmpty=/var/spool/repobox-publisher/jobs
+Unit=repobox-publisher-worker.service
+
+[Install]
+WantedBy=multi-user.target

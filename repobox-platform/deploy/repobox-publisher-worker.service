@@ -1,0 +1,40 @@
+# /etc/systemd/system/repobox-publisher-worker.service
+# repo.box publisher deploy worker: imports uploaded `docker save` archives
+# (under the platform's own image names only), runs each release as a
+# loopback-only container with a fixed template, health-gates it, and applies
+# the published routes through caddy-apply.py (backup, validate, reload,
+# restore). Started by repobox-publisher-worker.path whenever the control
+# plane queues a job; never opens the registry database.
+#
+# This is the only publisher component with Docker and Caddy authority. The
+# control plane (repobox-platform.service, its own non-root user) only writes
+# validated jobs and uploads into the spool.
+[Unit]
+Description=repo.box publisher deploy worker
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/srv/repobox-platform/bin/repobox-platform publisher-worker
+TimeoutStartSec=45min
+UMask=0022
+Environment=XDG_DATA_HOME=/var/spool/repobox-publisher/work/caddy-home
+Environment=XDG_CONFIG_HOME=/var/spool/repobox-publisher/work/caddy-home
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/spool/repobox-publisher /srv/repobox-platform/published /etc/caddy -/run/xtables.lock
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+# Also run once at boot: re-asserts the published network and its firewall
+# rules (iptables rules do not survive a reboot) and drains leftover jobs.
+WantedBy=multi-user.target

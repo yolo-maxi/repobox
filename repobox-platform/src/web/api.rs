@@ -239,6 +239,7 @@ pub fn discovery_doc(s: &S) -> Value {
             "defaults": AiPolicy::private_default().to_json(),
             "public_apps": format!("AI stays off unless the app declares public_policy '{AI_PUBLIC_POLICY_SIGNED_IN_QUOTA}' with explicit quotas; even then only signed-in platform users with access can call it"),
         },
+        "publishing": super::publisher::discovery(s),
     })
 }
 
@@ -293,11 +294,14 @@ pub async fn openapi(State(s): State<S>) -> Response {
         "info": {
             "title": "repo.box platform control plane API",
             "version": API_VERSION,
-            "description": "Scoped machine API for agents. The CLI (`repobox-platform`) is the canonical mutating interface; this API exposes owner-scoped reads, bounded AI policy updates and app registration *requests*. Service tokens are not OAuth.",
+            "description": "Scoped machine API for agents. Service tokens (rbp_) expose owner-scoped reads, bounded AI policy updates and app registration requests. Publisher tokens (rbpub_) deploy and operate the publisher's own apps from uploaded `docker save` archives (tag: publisher). Neither is OAuth.",
         },
         "servers": [{"url": base}],
         "components": {
-            "securitySchemes": {"serviceToken": {"type": "http", "scheme": "bearer", "bearerFormat": "rbp_ service token"}},
+            "securitySchemes": {
+                "serviceToken": {"type": "http", "scheme": "bearer", "bearerFormat": "rbp_ service token"},
+                "publisherToken": {"type": "http", "scheme": "bearer", "bearerFormat": "rbpub_ publisher token"},
+            },
             "schemas": {
                 "Error": {"type": "object", "properties": {"error": {"type": "object", "properties": {"code": {"type": "string"}, "message": {"type": "string"}}}}},
                 "AiPolicyPatch": {"type": "object", "additionalProperties": false, "properties": {
@@ -310,6 +314,7 @@ pub async fn openapi(State(s): State<S>) -> Response {
                     "app_daily_requests": {"type": "integer", "minimum": 1, "maximum": AI_APP_DAILY_CEILING},
                     "public_policy": {"type": ["string", "null"], "enum": [AI_PUBLIC_POLICY_SIGNED_IN_QUOTA, null]},
                 }},
+                "ReleaseManifest": super::publisher::manifest_schema(),
                 "AppRequest": {"type": "object", "required": ["name", "title", "kind", "target", "visibility"], "additionalProperties": false, "properties": {
                     "name": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"},
                     "title": {"type": "string", "maxLength": 80},
@@ -340,6 +345,13 @@ pub async fn openapi(State(s): State<S>) -> Response {
             "/api/platform/v1/mcp": {"post": op("MCP JSON-RPC endpoint (tools mirror this API)", "any", json!({}))},
         },
     });
+    let mut doc = doc;
+    if let (Some(paths), Value::Object(extra)) = (
+        doc["paths"].as_object_mut(),
+        super::publisher::openapi_paths(),
+    ) {
+        paths.extend(extra);
+    }
     let mut r = json_ok_status(StatusCode::OK, &doc);
     r.headers_mut().insert(
         header::CACHE_CONTROL,
@@ -836,6 +848,14 @@ pub async fn mcp_get() -> Response {
 }
 
 pub async fn mcp(State(s): State<S>, headers: HeaderMap, body: Option<Json<Value>>) -> Response {
+    // Publisher tokens get the publisher tool set (deploy/operate own apps).
+    let is_publisher = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with(&format!("Bearer {}", crate::publisher::TOKEN_PREFIX)));
+    if is_publisher {
+        return mcp_publisher(s, headers, body).await;
+    }
     // Every MCP call needs the bearer; unauthenticated callers get the plain
     // 401 (with WWW-Authenticate) rather than a JSON-RPC envelope.
     let c = match caller(&s, &headers) {
@@ -916,6 +936,65 @@ pub async fn mcp(State(s): State<S>, headers: HeaderMap, body: Option<Json<Value
                 Err(e) => rpc_result(
                     &id,
                     json!({"content": [{"type": "text", "text": e.body().to_string()}], "structuredContent": e.body(), "isError": true}),
+                ),
+            }
+        }
+        _ => rpc_error(&id, -32601, &format!("method '{method}' not found")),
+    };
+    json_ok_status(StatusCode::OK, &out)
+}
+
+async fn mcp_publisher(s: S, headers: HeaderMap, body: Option<Json<Value>>) -> Response {
+    use super::publisher as p;
+    let c = match p::caller(&s, &headers) {
+        Ok(c) => c,
+        Err(e) => return e.into_response(),
+    };
+    let Some(Json(msg)) = body else {
+        return json_ok_status(
+            StatusCode::BAD_REQUEST,
+            &rpc_error(
+                &Value::Null,
+                -32700,
+                "parse error: expected a JSON-RPC object",
+            ),
+        );
+    };
+    if msg.is_array() {
+        return json_ok_status(
+            StatusCode::BAD_REQUEST,
+            &rpc_error(&Value::Null, -32600, "batches are not supported"),
+        );
+    }
+    let Some(id) = msg.get("id").cloned() else {
+        return (StatusCode::ACCEPTED, "").into_response();
+    };
+    let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
+    let params = msg.get("params").cloned().unwrap_or(json!({}));
+    let out = match method {
+        "initialize" => rpc_result(
+            &id,
+            json!({
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "capabilities": {"tools": {"listChanged": false}},
+                "serverInfo": {"name": "repobox-platform-publisher", "version": build_version()},
+                "instructions": "repo.box publisher. deploy_app takes a manifest with a Git repository (repo.box clones, builds and runs it) or a prebuilt image; the app is private with the platform identity and the AI endpoint on, and only this publisher can see or change it. Poll get_release until done, then share the launcher_url. Read /api/platform/v1/skill.md for the contract.",
+            }),
+        ),
+        "ping" => rpc_result(&id, json!({})),
+        "tools/list" => rpc_result(&id, json!({"tools": p::mcp_tools()})),
+        "tools/call" => {
+            let tool = params.get("name").and_then(Value::as_str).unwrap_or("");
+            let args = params.get("arguments").cloned().unwrap_or(json!({}));
+            match p::mcp_call(&s, &c, tool, &args).await {
+                None => rpc_error(&id, -32602, &format!("unknown tool '{tool}'")),
+                Some(Ok(v)) => rpc_result(
+                    &id,
+                    json!({"content": [{"type": "text", "text": v.to_string()}], "structuredContent": v, "isError": false}),
+                ),
+                Some(Err(e)) => rpc_result(
+                    &id,
+                    json!({"content": [{"type": "text", "text": e.to_string()}], "structuredContent": e, "isError": true}),
                 ),
             }
         }

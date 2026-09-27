@@ -212,6 +212,7 @@ mod tests {
             updated_at: 0,
             identity: IdentityContract::Platform,
             ai: crate::model::AiPolicy::private_default(),
+            publisher_id: None,
         }
     }
 

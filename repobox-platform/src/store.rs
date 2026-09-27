@@ -21,6 +21,9 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 use crate::model::{AiPolicy, App, AppKind, IdentityContract, Role, User, Visibility};
 use crate::tokens;
 
+mod publisher;
+pub use publisher::{NAME_UNAVAILABLE, Publisher, PublisherToken, Release, WORKER_MANAGED_TARGET};
+
 pub type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
 
 pub fn system_clock() -> Clock {
@@ -333,7 +336,50 @@ CREATE TABLE IF NOT EXISTS app_requests (
     decided_at INTEGER,
     decision_note TEXT NOT NULL DEFAULT ''
 );
-INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '6');
+CREATE TABLE IF NOT EXISTS publishers (
+    id INTEGER PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
+    handle TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    owner_id INTEGER NOT NULL REFERENCES users(id),
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS publisher_tokens (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    token_hash TEXT NOT NULL UNIQUE,
+    publisher_id INTEGER NOT NULL REFERENCES publishers(id),
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    revoked_at INTEGER,
+    last_used_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS publisher_releases (
+    id TEXT PRIMARY KEY,
+    publisher_id INTEGER NOT NULL REFERENCES publishers(id),
+    app_name TEXT NOT NULL,
+    app_id INTEGER REFERENCES apps(id) ON DELETE SET NULL,
+    version INTEGER NOT NULL,
+    op TEXT NOT NULL CHECK (op IN ('deploy', 'rollback', 'restart')),
+    rollback_of TEXT,
+    manifest TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('queued', 'building', 'starting', 'live', 'superseded', 'failed', 'done')),
+    failure_code TEXT NOT NULL DEFAULT '',
+    failure TEXT NOT NULL DEFAULT '',
+    commit_sha TEXT NOT NULL DEFAULT '',
+    build_mode TEXT NOT NULL DEFAULT '',
+    image_id TEXT NOT NULL DEFAULT '',
+    artifact_sha256 TEXT NOT NULL DEFAULT '',
+    artifact_bytes INTEGER NOT NULL DEFAULT 0,
+    retained INTEGER NOT NULL DEFAULT 0,
+    token_name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    finished_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS publisher_releases_app ON publisher_releases(app_name, created_at);
+INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '7');
 "#;
 
 /// Columns added after the first release. `CREATE TABLE IF NOT EXISTS` does
@@ -383,10 +429,12 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "INTEGER NOT NULL DEFAULT 2000",
     ),
     ("apps", "ai_public_policy", "TEXT"),
+    // Schema 7: apps created by an external publisher.
+    ("apps", "publisher_id", "INTEGER REFERENCES publishers(id)"),
 ];
 
 /// Current schema version (also written to `meta`).
-pub const SCHEMA_VERSION: i64 = 6;
+pub const SCHEMA_VERSION: i64 = 7;
 
 /// AI usage counters (requests per app, user and UTC day) are kept this long.
 pub const AI_USAGE_RETENTION_DAYS: i64 = 90;
@@ -1944,7 +1992,7 @@ impl Store {
     }
 }
 
-const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy FROM apps";
+const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy, publisher_id FROM apps";
 
 const SERVICE_SELECT: &str = "SELECT id, name, owner_id, scopes, apps, created_at, expires_at, revoked_at, last_used_at FROM service_tokens";
 const REQUEST_SELECT: &str = "SELECT id, name, title, description, kind, target, visibility, owner_id, service_token_id, note, status, created_at, decided_at, decision_note FROM app_requests";
@@ -2103,6 +2151,7 @@ fn row_app(r: &Row<'_>) -> rusqlite::Result<App> {
             app_daily_requests: r.get(19)?,
             public_policy: r.get(20)?,
         },
+        publisher_id: r.get(21)?,
     })
 }
 
@@ -2824,7 +2873,7 @@ mod tests {
                     ",\n    identity TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending'))",
                     "",
                 )
-                .replace("'schema_version', '6'", "'schema_version', '2'")
+                .replace("'schema_version', '7'", "'schema_version', '2'")
                 .lines()
                 .filter(|l| !l.trim_start().starts_with("ai_"))
                 .collect::<Vec<_>>()
@@ -2879,8 +2928,9 @@ mod tests {
                     |r| r.get(0),
                 )
                 .unwrap();
-            assert_eq!(v, "6");
+            assert_eq!(v, "7");
             assert!(has("apps", "ai_enabled") && has("apps", "ai_public_policy"));
+            assert!(has("apps", "publisher_id"));
         }
         // The pre-policy private app keeps serving as it was, but is pending
         // review and cannot be (re)declared private until attested.

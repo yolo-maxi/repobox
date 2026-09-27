@@ -14,6 +14,8 @@
 
 use repobox_platform::{ai, demo_origin, model, render, store, web};
 
+mod publisher_cli;
+
 use std::io::Write;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -32,7 +34,7 @@ const DEFAULT_DB: &str = "/var/lib/repobox-platform/platform.db";
     version,
     about = "repo.box platform control plane",
     long_about = "repo.box platform control plane: named users, app grants, one-time launch codes, the Caddy edge gate, the per-app AI capability and operator route rendering.\n\nThis CLI is the canonical mutating interface. Agents without host access use the scoped machine API instead: discovery at https://auth.repo.box/api/platform/v1 (OpenAPI at /api/platform/v1/openapi.json, MCP at /api/platform/v1/mcp) with an operator-issued service token (`service-token create`). The full agent contract is printed by `repobox-platform skill`.",
-    after_help = "Common flows:\n  app register NAME --title T --owner U --kind proxy --target 127.0.0.1:PORT --identity platform\n      (private + platform identity => AI capability on by default; --no-ai to opt out)\n  app ai show NAME | app ai set NAME --models gpt-5.6-terra,gpt-5.6-luna --max-output-tokens 1024\n  service-token create --name agent-x --owner U --scope apps:read --scope ai:read --out FILE\n  app requests list | app requests approve ID\n  routes render --out FILE   (then the guarded Caddy apply in scripts/deploy.sh)\n  skill                      (print the agent SKILL.md)"
+    after_help = "Common flows:\n  app register NAME --title T --owner U --kind proxy --target 127.0.0.1:PORT --identity platform\n      (private + platform identity => AI capability on by default; --no-ai to opt out)\n  app ai show NAME | app ai set NAME --models gpt-5.6-terra,gpt-5.6-luna --max-output-tokens 1024\n  service-token create --name agent-x --owner U --scope apps:read --scope ai:read --out FILE\n  app requests list | app requests approve ID\n  routes render --out FILE   (then the guarded Caddy apply in scripts/deploy.sh)\n  publisher create --handle muse | publisher token create --publisher muse --name muse-1 --out FILE\n  publisher releases --publisher muse | publisher release ID | publisher token revoke NAME\n  skill                      (print the agent SKILL.md)"
 )]
 struct Cli {
     /// SQLite database path
@@ -69,6 +71,18 @@ enum Cmd {
         /// Concurrent AI requests this control plane forwards
         #[arg(long, default_value_t = 8)]
         ai_max_concurrency: usize,
+        /// Publisher spool (unset: the publisher API answers 503)
+        #[arg(long, env = "REPOBOX_PUBLISHER_SPOOL")]
+        publisher_spool: Option<PathBuf>,
+        /// Caddy files whose site hosts count as taken app names (repeat)
+        #[arg(long = "publisher-host-file", default_values = ["/etc/caddy/Caddyfile", "/etc/caddy/repobox-platform/apps.caddy"])]
+        publisher_host_files: Vec<PathBuf>,
+        /// Directories whose entries count as taken app names (repeat)
+        #[arg(long = "publisher-reserved-dir", default_values = ["/var/www/repo.box/subdomains"])]
+        publisher_reserved_dirs: Vec<PathBuf>,
+        /// Refuse uploads while the spool filesystem has less free space (MiB)
+        #[arg(long, default_value_t = web::publisher::MIN_FREE_BYTES / (1024 * 1024))]
+        publisher_min_free_mib: u64,
     },
     /// Run the ChatMock broker: loopback only, bridge-secret authenticated,
     /// model allowlist intersected with ChatMock's live models, hard request
@@ -137,6 +151,20 @@ enum Cmd {
         #[command(subcommand)]
         cmd: ServiceTokenCmd,
     },
+    /// External publishers (trusted agents that deploy their own apps by
+    /// uploading `docker save` archives over HTTPS): principals, tokens,
+    /// releases
+    Publisher {
+        #[command(subcommand)]
+        cmd: publisher_cli::PublisherCmd,
+    },
+    /// Root deploy worker: process queued releases (systemd oneshot started
+    /// by repobox-publisher-worker.path); never opens the registry
+    #[command(name = "publisher-worker")]
+    PublisherWorker(publisher_cli::WorkerArgs),
+    /// Root query worker: answer queued runtime log/status queries
+    #[command(name = "publisher-query")]
+    PublisherQuery(publisher_cli::WorkerArgs),
     /// Online backup of the database to a file
     Backup {
         #[arg(long)]
@@ -446,6 +474,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             ai_upstream,
             ai_secret_file,
             ai_max_concurrency,
+            publisher_spool,
+            publisher_host_files,
+            publisher_reserved_dirs,
+            publisher_min_free_mib,
         } => {
             init_tracing();
             if !bind.ip().is_loopback() {
@@ -461,9 +493,27 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 tracing::info!("AI endpoint not configured (no --ai-upstream): it answers 503");
             }
+            if let Some(spool) = publisher_spool {
+                cfg.publisher = Some(web::publisher::PublisherConfig {
+                    spool: repobox_platform::publisher::spool::Spool::new(spool),
+                    host_files: publisher_host_files,
+                    reserved_dirs: publisher_reserved_dirs,
+                    min_free_bytes: publisher_min_free_mib * 1024 * 1024,
+                });
+                tracing::info!("publisher API enabled");
+            }
             let state = Arc::new(web::AppState { store, cfg });
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(async move {
+                // Fold deploy-worker progress into the registry even when
+                // no publisher is polling.
+                let tick = state.clone();
+                tokio::spawn(async move {
+                    loop {
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        web::publisher::sync(&tick);
+                    }
+                });
                 let app = web::router(state);
                 let listener = tokio::net::TcpListener::bind(bind).await?;
                 tracing::info!(
@@ -549,6 +599,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Cmd::User { cmd } => user_cmd(&open_store(&cli.db)?, cmd),
         Cmd::App { cmd } => app_cmd(&open_store(&cli.db)?, cmd),
         Cmd::Routes { cmd } => routes_cmd(&open_store(&cli.db)?, cmd),
+        Cmd::Publisher { cmd } => publisher_cli::run(&open_store(&cli.db)?, cmd),
+        Cmd::PublisherWorker(args) => publisher_cli::run_worker(&args),
+        Cmd::PublisherQuery(args) => publisher_cli::run_query(&args),
         Cmd::Backup { out } => {
             let store = open_store(&cli.db)?;
             if out.exists() {
@@ -914,6 +967,8 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                             "visibility": a.visibility.as_str(), "enabled": a.enabled, "owner_id": a.owner_id,
                             "identity": a.identity.as_str(),
                             "ai": a.ai.to_json(),
+                            "publisher": a.publisher_id.is_some(),
+                            "live": a.publisher_id.is_none() || store.live_release(&a.name).ok().flatten().is_some(),
                         })
                     })
                     .collect();
@@ -1080,6 +1135,9 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
         }
         AppCmd::Remove { name } => {
             let a = need_app(store, &name)?;
+            if a.publisher_id.is_some() {
+                return Err(format!("'{name}' was created by a publisher; use `publisher remove-app {name} --yes` (removes its container and route too)").into());
+            }
             store.delete_app(&a.name)?;
             store.audit(None, "app.remove", &a.name, "cli");
             println!("removed '{}'; re-render routes and reload Caddy", a.name);
@@ -1505,7 +1563,12 @@ fn routes_cmd(store: &Store, cmd: RoutesCmd) -> Result<(), Box<dyn std::error::E
             apps_roots,
             check_roots,
         } => {
-            let apps = store.list_apps()?;
+            // Publisher apps are routed by the deploy worker (published.caddy).
+            let apps: Vec<model::App> = store
+                .list_apps()?
+                .into_iter()
+                .filter(|a| a.publisher_id.is_none())
+                .collect();
             let cfg = render::RenderConfig {
                 domain,
                 gate,

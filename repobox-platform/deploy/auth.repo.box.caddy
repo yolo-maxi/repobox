@@ -27,4 +27,6 @@ auth.repo.box {
 	}
 }
 import /etc/caddy/repobox-platform/apps.caddy
+# Apps deployed by external publishers (rendered by the publisher deploy worker).
+import /etc/caddy/repobox-platform/published.caddy
 # END repobox-platform managed

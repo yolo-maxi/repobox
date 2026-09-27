@@ -1,0 +1,10 @@
+# /etc/systemd/system/repobox-publisher-query.path
+[Unit]
+Description=repo.box publisher runtime query queue
+
+[Path]
+DirectoryNotEmpty=/var/spool/repobox-publisher/queries
+Unit=repobox-publisher-query.service
+
+[Install]
+WantedBy=multi-user.target

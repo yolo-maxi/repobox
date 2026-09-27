@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Publisher probe</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+  pre { background: #f3f3f3; padding: .75rem; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>publisher-probe <span id="version">{{VERSION}}</span></h1>
+<p>Deployed by an external publisher from an uploaded <code>docker save</code> archive.</p>
+<h2>Who am I</h2>
+<pre id="who">loading…</pre>
+<h2>Platform AI</h2>
+<button id="ask" type="button">Ask the model</button>
+<pre id="answer"></pre>
+<script>
+fetch('/whoami.json').then(r => r.json()).then(j => { document.getElementById('who').textContent = JSON.stringify(j, null, 2); });
+async function ask() {
+  const out = document.getElementById('answer');
+  out.textContent = '…';
+  const r = await fetch('/_repo_box/ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'Reply with the single word: pong' }], max_tokens: 20 }),
+  });
+  const j = await r.json();
+  out.textContent = r.ok ? j.choices[0].message.content : `error ${r.status}: ${j.error && j.error.code}`;
+  out.dataset.status = String(r.status);
+}
+document.getElementById('ask').addEventListener('click', ask);
+</script>
+</body>
+</html>

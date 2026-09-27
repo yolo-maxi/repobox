@@ -1,6 +1,6 @@
 ---
 name: repobox-platform
-description: Use when building, publishing or operating an app under <name>.repo.box through the repo.box platform control plane (auth.repo.box) — especially calling the same-origin AI endpoint /_repo_box/ai/v1/chat/completions, inspecting or changing an app's AI policy, discovering the platform API/MCP, requesting an app registration, previewing routes or checking release status.
+description: Use when building, deploying or operating an app under <name>.repo.box through the repo.box platform (auth.repo.box) — especially deploying your own app with a publisher token by uploading a `docker save` archive, checking release status/logs, rolling back, calling the same-origin AI endpoint /_repo_box/ai/v1/chat/completions, or using the platform API/MCP.
 ---
 
 # repo.box platform — agent skill
@@ -21,8 +21,99 @@ Discovery (public, versioned, no secrets):
 | Capabilities document | `GET https://auth.repo.box/api/platform/v1` (also `/.well-known/repobox-platform.json`) |
 | OpenAPI 3.1 | `GET https://auth.repo.box/api/platform/v1/openapi.json` |
 | This skill | `GET https://auth.repo.box/api/platform/v1/skill.md`, or `repobox-platform skill` |
-| MCP | `POST https://auth.repo.box/api/platform/v1/mcp` (bearer service token) |
+| MCP | `POST https://auth.repo.box/api/platform/v1/mcp` (bearer service or publisher token) |
 | CLI | `repobox-platform --help` and `<subcommand> --help` (operator host) |
+
+## 0. Deploy your own app (publisher token)
+
+A **publisher** is a trusted external agent with one credential,
+`Authorization: Bearer rbpub_…` (a *publisher token*: operator-issued,
+written once to a 0600 file, expires within 30 days, revocable; not a
+service token, not a browser session, not OAuth). It deploys apps to
+`https://<name>.repo.box` by uploading a Docker image archive. It needs no
+registry, Git host, SSH or Docker access on repo.box. It owns, sees and can
+change **only the apps it created**; everything else looks like `404`, and a
+name held by anyone else is refused with `409 name_unavailable`.
+
+**One request deploys (and the same request with the same name updates):**
+
+```bash
+docker build --platform linux/amd64 -t myapp .
+docker save myapp | gzip > myapp.tar.gz
+curl -fsS -H "Authorization: Bearer $REPOBOX_PUBLISHER_TOKEN" \
+  -F 'manifest={"name":"myapp","title":"My app","runtime":{"port":8080,"health_path":"/healthz"}};type=application/json' \
+  -F image=@myapp.tar.gz \
+  'https://auth.repo.box/api/platform/v1/publisher/releases?wait=300'
+```
+
+- `multipart/form-data`, parts in this order: `manifest` (JSON), then
+  `image`.
+- Supported archives: `docker save` output (tar, optionally gzip);
+  `podman save --format docker-archive|oci-archive`; an OCI layout tar
+  (`docker buildx build --platform linux/amd64 --provenance=false --output type=oci,dest=myapp.tar .`).
+  Exactly one `linux/amd64` image, at most 2 GiB.
+- Manifest: `name` (DNS label) and `title` are required. Optional fields:
+  `description`, `version` (your label), `ai` (default `true`), and
+  `provenance` (`repository`/`commit`/`note`, recorded only). `runtime`
+  takes `port` (the container port; default is the image's single
+  `EXPOSE`, else 8080; also passed as `$PORT`), `health_path` (default `/`),
+  `memory_mb` (64–1024, default 512) and `env` (non-secret settings).
+  Unknown fields are refused.
+- Whatever names/tags the archive carries are ignored. The platform imports
+  it only as `repobox-pub/<app>:<release>`.
+
+**Answer:** `202` while queued/in progress, `200` once done (`?wait=N`
+long-polls up to 600 s). `release`: `id`, `version`, `status`
+(`queued → building → starting → live | failed`; older live releases become
+`superseded`; a restart ends `done`), `artifact`
+(`sha256`, `bytes`, `format`, `image_id`), `failure {code, message}`,
+`links.self`, `links.build_log`. `app`: `launcher_url`
+(`https://auth.repo.box/<name>`, the URL to share), `direct_url` (edge-gated:
+anonymous requests get 401), `status`, `ai`, `current_release`. `next` says
+what to do.
+
+**Runtime contract.** The container is reached only by the platform edge on
+the host loopback; listen on `0.0.0.0:$PORT` inside it. A release goes live only
+after `GET health_path` answers (2xx/3xx; any non-5xx for the default `/`)
+within 120 s. Until then the previous release keeps serving (blue/green).
+Every request carries the edge-injected identity
+(`X-RepoBox-User-Id`, `X-RepoBox-User`, `X-RepoBox-Role`, `X-RepoBox-Auth:
+session`). The app has **no login of its own**; key records on
+`X-RepoBox-User-Id`. The AI endpoint (§1) is on by default. `/data`
+(`$REPOBOX_DATA_DIR`) persists across updates and rollbacks. The platform
+also sets `PORT`, `REPOBOX_APP`, `REPOBOX_APP_URL`,
+`REPOBOX_LAUNCHER_URL`, `REPOBOX_AI_CHAT_PATH` and `REPOBOX_RELEASE`.
+Limits: 1 CPU, `memory_mb`, 512 processes. There is no privileged mode, host
+network, host port or host mount. The app is private: an operator grants
+people access; a publisher cannot change visibility or grants.
+
+**Operate your apps** (same bearer):
+
+| | |
+|---|---|
+| `GET /api/platform/v1/publisher/whoami` | your publisher id, apps, limits |
+| `GET /api/platform/v1/publisher/apps[/{name}]` | status, launcher URL, current release |
+| `GET /api/platform/v1/publisher/releases[?app=]`, `/releases/{id}[?wait=]` | release records |
+| `GET /api/platform/v1/publisher/releases/{id}/log` | deploy log (text): import, start, health, route |
+| `GET /api/platform/v1/publisher/apps/{name}/logs?tail=200` | container state + recent stdout/stderr |
+| `POST /api/platform/v1/publisher/apps/{name}/rollback` | run a retained earlier release again (body optional: `{"release":"rel-…"}`; 3 releases retained) |
+| `POST /api/platform/v1/publisher/apps/{name}/restart` | restart the live container |
+
+Errors are `{"error":{"code","message"}}`. Upload mistakes add `expected`,
+which is the exact request to send. MCP (`POST /api/platform/v1/mcp` with
+the publisher bearer) offers `publisher_whoami`, `how_to_deploy`,
+`list_my_apps`, `get_my_app`, `list_releases`, `get_release`,
+`get_build_log`, `get_app_logs`, `rollback_app` and `restart_app`. Image
+bytes travel only over the HTTPS upload.
+
+Not in v1: registry pulls or Git builds (upload the image), secrets
+management (do not bake secrets into images), custom domains, public
+visibility. The limits are 10 apps per publisher and 100 releases per 24 h.
+
+Operators: `repobox-platform publisher create --handle NAME`,
+`publisher token create --publisher NAME --name NAME-1 --out FILE`,
+`publisher token revoke`, `publisher disable`, `publisher releases`,
+`publisher release ID`, `publisher remove-app NAME --yes`.
 
 ## 1. The app AI endpoint
 

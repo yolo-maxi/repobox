@@ -93,6 +93,15 @@ remote "set -e
   fi
   sudo -n install -d -o fran -g fran -m 0700 /home/fran/backups/repobox-platform
   sudo -n install -d -o root -g root -m 0755 /etc/caddy/repobox-platform
+  # Publisher spool: the service writes jobs/uploads/queries; the root
+  # workers write results and keep their own state under /srv.
+  sudo -n install -d -o root -g root -m 0755 /var/spool/repobox-publisher /var/spool/repobox-publisher/results /srv/repobox-platform/published
+  sudo -n install -d -o root -g root -m 0700 /var/spool/repobox-publisher/work
+  for d in jobs uploads queries; do sudo -n install -d -o $SVC_USER -g $SVC_USER -m 0700 /var/spool/repobox-publisher/\$d; done
+  if ! sudo -n test -f /etc/caddy/repobox-platform/published.caddy; then
+    printf '%s\n' '# PUBLISHED by \`repobox-platform publisher-worker\`. Do not edit by hand.' | sudo -n tee /etc/caddy/repobox-platform/published.caddy >/dev/null
+    sudo -n chmod 0644 /etc/caddy/repobox-platform/published.caddy
+  fi
   for app in demo-unlisted demo-listed; do
     sudo -n install -d -o root -g root -m 0755 /srv/repobox-platform/apps/\$app
     sudo -n install -o root -g root -m 0644 '$STAGE/demo/'\$app/index.html /srv/repobox-platform/apps/\$app/index.html
@@ -107,7 +116,12 @@ remote "set -e
   sudo -n install -o root -g root -m 0644 '$STAGE/repobox-platform.service' /etc/systemd/system/repobox-platform.service
   sudo -n install -o root -g root -m 0644 '$STAGE/repobox-platform-demo-private.service' /etc/systemd/system/repobox-platform-demo-private.service
   sudo -n install -o root -g root -m 0755 '$STAGE/caddy-apply.py' /srv/repobox-platform/caddy-apply.py
+  for u in repobox-publisher-worker.service repobox-publisher-worker.path repobox-publisher-query.service repobox-publisher-query.path; do
+    sudo -n install -o root -g root -m 0644 '$STAGE/'\$u /etc/systemd/system/\$u
+  done
   sudo -n systemctl daemon-reload
+  sudo -n systemctl enable --now repobox-publisher-worker.path repobox-publisher-query.path
+  sudo -n systemctl enable repobox-publisher-worker.service
   sudo -n systemctl enable --now repobox-platform.service repobox-platform-demo-private.service
   sudo -n systemctl restart repobox-platform.service repobox-platform-demo-private.service
   sleep 1.5
@@ -165,6 +179,9 @@ check https://auth.repo.box/api/platform/v1 200
 check https://auth.repo.box/api/platform/v1/openapi.json 200
 check https://auth.repo.box/api/platform/v1/skill.md 200
 check https://auth.repo.box/api/platform/v1/apps 401
+check https://auth.repo.box/api/platform/v1/publisher/whoami 401
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -F 'manifest={"name":"sweep","title":"x"};type=application/json' -F 'image=@/dev/null' https://auth.repo.box/api/platform/v1/publisher/releases || true)
+printf '  %-45s %s (want 401, anonymous upload)\n' "publisher/releases POST" "$code"; [[ "$code" == "401" ]] || fail=1
 ai_check() { # url expected-code: anonymous POST to an app's same-origin AI endpoint
   local code
   code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
@@ -193,7 +210,7 @@ while read -r name vis enabled; do
     printf '  %-45s %s (want 401, spoofed identity)\n' "https://$name.repo.box/" "$code"
     [[ "$code" == "401" ]] || fail=1
   fi
-done < <(printf '%s' "$apps_json" | python3 -c 'import json,sys; [print(a["name"], a["visibility"], str(a["enabled"]).lower()) for a in json.load(sys.stdin)]')
+done < <(printf '%s' "$apps_json" | python3 -c 'import json,sys; [print(a["name"], a["visibility"], str(a["enabled"]).lower()) for a in json.load(sys.stdin) if a.get("live", True)]')
 dir=$(curl -s https://auth.repo.box/api/directory)
 echo "  directory: $dir"
 while read -r name vis enabled; do

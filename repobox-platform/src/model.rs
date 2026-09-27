@@ -191,6 +191,10 @@ pub struct App {
     pub updated_at: i64,
     pub identity: IdentityContract,
     pub ai: AiPolicy,
+    /// Set when an external publisher created the app: only that publisher
+    /// can see or change it through the publisher API, and its route is
+    /// rendered by the deploy worker (not by `routes render`).
+    pub publisher_id: Option<i64>,
 }
 
 impl App {

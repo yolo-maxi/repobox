@@ -7,6 +7,7 @@ pub mod css;
 pub mod gate;
 pub mod html;
 pub mod pages;
+pub mod publisher;
 
 use std::sync::Arc;
 
@@ -42,6 +43,8 @@ pub struct Config {
     pub ai: Option<std::sync::Arc<crate::ai::Bridge>>,
     /// How routes are rendered on this host (for read-only route previews).
     pub routes: crate::render::RenderConfig,
+    /// External publisher (None: the publisher API answers 503).
+    pub publisher: Option<publisher::PublisherConfig>,
 }
 
 impl Config {
@@ -62,6 +65,7 @@ impl Config {
                     "/var/www/repo.box/subdomains".into(),
                 ],
             },
+            publisher: None,
         }
     }
 }
@@ -116,6 +120,42 @@ pub fn router(state: S) -> Router {
             get(api::app_requests).post(api::app_request_create),
         )
         .route("/api/platform/v1/release", get(api::release))
+        // Publisher API (Bearer rbpub_…): deploy and operate own apps.
+        .route("/api/platform/v1/publisher/whoami", get(publisher::whoami))
+        .route(
+            "/api/platform/v1/publisher/releases",
+            get(publisher::releases)
+                .post(publisher::deploy)
+                // Image archives stream to disk; the handler enforces 2 GiB.
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    crate::publisher::archive::MAX_UPLOAD_BYTES as usize + 64 * 1024,
+                )),
+        )
+        .route(
+            "/api/platform/v1/publisher/releases/{id}",
+            get(publisher::release),
+        )
+        .route(
+            "/api/platform/v1/publisher/releases/{id}/log",
+            get(publisher::release_log),
+        )
+        .route("/api/platform/v1/publisher/apps", get(publisher::apps))
+        .route(
+            "/api/platform/v1/publisher/apps/{name}",
+            get(publisher::app),
+        )
+        .route(
+            "/api/platform/v1/publisher/apps/{name}/logs",
+            get(publisher::logs),
+        )
+        .route(
+            "/api/platform/v1/publisher/apps/{name}/rollback",
+            post(publisher::rollback),
+        )
+        .route(
+            "/api/platform/v1/publisher/apps/{name}/restart",
+            post(publisher::restart),
+        )
         .route("/api/platform/v1/mcp", post(api::mcp).get(api::mcp_get))
         .route("/api/platform/v1/{*rest}", any(api::api_not_found))
         .route("/me", get(pages::me))
