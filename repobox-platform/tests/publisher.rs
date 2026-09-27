@@ -723,6 +723,12 @@ async fn discovery_openapi_skill_and_mcp_describe_the_publisher() {
     assert_eq!(p["available"], true);
     assert_eq!(p["credential"]["type"], "publisher_token");
     assert!(p["recipe"][1].as_str().unwrap().contains("docker save"));
+    assert!(
+        p["recipe"][2]
+            .as_str()
+            .unwrap()
+            .contains("https://auth.repo.box/api/platform/v1/publisher/releases?wait=300")
+    );
     assert_eq!(p["upload"]["parts"][0]["name"], "manifest");
     assert!(p["archive_formats"].as_array().unwrap().len() >= 3);
     assert!(

@@ -32,9 +32,11 @@ PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true
-# The publisher spool: the service writes jobs, uploads and queries only;
-# results, the worker's state and Caddy stay out of reach.
-ReadWritePaths=/var/lib/repobox-platform /var/spool/repobox-publisher/jobs /var/spool/repobox-publisher/uploads /var/spool/repobox-publisher/queries
+# The publisher spool as ONE path (separate bind mounts would make the
+# uploads/ -> jobs/ rename cross devices). File permissions keep the service
+# to jobs/, uploads/ and queries/: results/ and work/ are root-owned and the
+# root-owned 0755 parent means no subdirectory can be swapped.
+ReadWritePaths=/var/lib/repobox-platform /var/spool/repobox-publisher
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectKernelLogs=true

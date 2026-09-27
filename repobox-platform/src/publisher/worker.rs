@@ -939,16 +939,23 @@ fn trim_log(path: &Path) {
 
 fn prune_spool(cfg: &WorkerConfig) {
     let now = std::time::SystemTime::now();
-    if let Ok(rd) = std::fs::read_dir(cfg.spool.results()) {
-        for e in rd.filter_map(|e| e.ok()) {
-            let old = e
-                .metadata()
-                .and_then(|m| m.modified())
-                .ok()
-                .and_then(|t| now.duration_since(t).ok())
-                .is_some_and(|d| d.as_secs() > 30 * 86400);
-            if old {
-                let _ = std::fs::remove_file(e.path());
+    // Results for a month; uploads a job never claimed (the API failed
+    // between storing and queueing) after two hours.
+    for (dir, secs) in [
+        (cfg.spool.results(), 30 * 86400),
+        (cfg.spool.uploads(), 2 * 3600),
+    ] {
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for e in rd.filter_map(|e| e.ok()) {
+                let old = e
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| now.duration_since(t).ok())
+                    .is_some_and(|d| d.as_secs() > secs);
+                if old {
+                    let _ = std::fs::remove_file(e.path());
+                }
             }
         }
     }

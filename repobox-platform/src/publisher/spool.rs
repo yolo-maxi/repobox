@@ -212,8 +212,12 @@ impl Spool {
     /// entries, so a leftover part can never keep a `.path` unit firing.
     fn put(&self, dir: PathBuf, id: &str, bytes: &[u8]) -> std::io::Result<()> {
         let part = self.uploads().join(format!(".{id}.json.part"));
-        write_new(&part, bytes)?;
-        std::fs::rename(&part, dir.join(format!("{id}.json")))
+        let r = write_new(&part, bytes)
+            .and_then(|_| std::fs::rename(&part, dir.join(format!("{id}.json"))));
+        if r.is_err() {
+            let _ = std::fs::remove_file(&part);
+        }
+        r
     }
 
     /// API side: queue a job.

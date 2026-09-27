@@ -672,6 +672,7 @@ fn fail_release(s: &S, id: &str, app: &str) {
 fn queue(s: &S, pc: &PublisherConfig, job: &Job) -> Result<(), PubError> {
     if let Err(e) = pc.spool.enqueue(job) {
         tracing::error!("publisher spool write failed for {}: {e}", job.id);
+        let _ = std::fs::remove_file(pc.spool.upload_path(&job.id));
         fail_release(s, &job.id, &job.app);
         return Err(PubError::internal());
     }
@@ -1280,7 +1281,7 @@ pub fn discovery(s: &S) -> Value {
         "recipe": [
             "docker build --platform linux/amd64 -t myapp .   # any Dockerfile; the app listens on 0.0.0.0:$PORT (or the port you declare)",
             "docker save myapp | gzip > myapp.tar.gz          # or: docker save -o myapp.tar myapp / podman save --format docker-archive -o myapp.tar myapp",
-            "curl -fsS -H \"Authorization: Bearer $REPOBOX_PUBLISHER_TOKEN\" -F 'manifest={\"name\":\"myapp\",\"title\":\"My app\",\"runtime\":{\"port\":8080,\"health_path\":\"/healthz\"}};type=application/json' -F image=@myapp.tar.gz \"$BASE/api/platform/v1/publisher/releases?wait=300\"",
+            format!("curl -fsS -H \"Authorization: Bearer $REPOBOX_PUBLISHER_TOKEN\" -F 'manifest={{\"name\":\"myapp\",\"title\":\"My app\",\"runtime\":{{\"port\":8080,\"health_path\":\"/healthz\"}}}};type=application/json' -F image=@myapp.tar.gz \"{base}/api/platform/v1/publisher/releases?wait=300\""),
             "read release.status (live/failed) and app.launcher_url from the answer; if still queued, GET release.links.self?wait=300",
             "open app.launcher_url in a browser (platform sign-in); updates: repeat the upload with the same name; rollback/restart/logs via app.links",
         ],
