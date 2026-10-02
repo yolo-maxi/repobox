@@ -239,7 +239,11 @@ CJ="$W/carol.jar"
 expect "open link -> body-less 303 to the clean /invite" "$(curl -s "${R[@]}" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' "$A$OPATH")" "303 0 $A/invite"
 expect "token moved into a host-only cookie" "$(command grep -c '__Host-rb_invite' "$CJ")" 1
 page=$(curl -s "${R[@]}" -b "$CJ" -D "$W/invite.h" "$A/invite")
-expect "page greets the recipient" "$(echo "$page" | command grep -c 'Welcome, <strong>Carol</strong>')" 1
+expect "page is only the neutral transition" "$(echo "$page" | command grep -c '<h1>Opening Private demo…</h1>')/$(echo "$page" | command grep -ci 'account\|carol')" "1/0"
+expect "page auto-submits after load (no confirmation click)" "$(echo "$page" | command grep -c "addEventListener('load',go")" 1
+for i in 1 2 3; do curl -s "${R[@]}" -b "$W/preview$i.jar" -c "$W/preview$i.jar" -o /dev/null -L "$A$OPATH"; done
+expect "previews/scanners (GET + follow, no JS) consume nothing" "$("$P" --db "$DB" app invites demo-private | awk '$2=="new:carol" {print $3}')/$("$P" --db "$DB" user list | command grep -c '^carol ')" "active/0"
+expect "POST without same-origin evidence -> nothing consumed" "$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST "$A/invite")" "303 $A/invite"
 expect "page carries no token" "$(echo "$page" | command grep -c -- "$ORAW")" 0
 expect "page: same-origin referrer policy survives the edge" "$(command grep -ci '^referrer-policy: same-origin' "$W/invite.h")" 1
 expect "other pages keep the edge default policy" "$(curl -s "${R[@]}" -D - -o /dev/null "$A/" | command grep -ci '^referrer-policy: strict-origin-when-cross-origin')" 1
@@ -248,7 +252,7 @@ expect "stranger signed in (bob) -> refused" "$(curl -s "${R[@]}" -o /dev/null -
 expect "stranger POST -> nothing consumed" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' -H "Cookie: __Host-rb_invite=$ORAW; __Host-rb_auth=$BOBC" "$A/invite")" "303 $A/invite?err=sign_out_first"
 expect "cross-site POST -> nothing consumed" "$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://evil.example' "$A/invite")" "303 $A/invite"
 expect "link still active" "$("$P" --db "$DB" app invites demo-private | awk '$2=="new:carol" {print $3}')" active
-expect "one click: account created, signed in, granted -> launcher" "$(curl -s "${R[@]}" -b "$CJ" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' "$A/invite")" "303 0 $A/demo-private"
+expect "auto-submitted POST: account created, signed in, granted -> launcher" "$(curl -s "${R[@]}" -b "$CJ" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' "$A/invite")" "303 0 $A/demo-private"
 expect "device cookie set, invite cookie gone" "$(command grep -c '__Host-rb_auth' "$CJ")/$(command grep -c '__Host-rb_invite' "$CJ")" "1/0"
 OLOC=$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{redirect_url}' "$A/demo-private")
 case "$OLOC" in https://demo-private.repo.box/?rb_launch=*) printf '  ok   %-55s %s\n' "launcher mints the launch code" "(code elided)";; *) echo "  FAIL launcher: $OLOC"; fail=1;; esac
@@ -318,7 +322,7 @@ PY
   cat > "$W/browser.js" <<'JS'
 // The owner's exact flow: sign in, open the app's manage page, "Onboard new
 // user", enter handle + display name, take the one link; then the new
-// person opens it in a fresh browser and clicks once.
+// person opens it in a fresh browser and lands in the app with no click.
 const { chromium } = require('playwright');
 const [chrome, franFile] = process.argv.slice(2);
 const franLink = require('fs').readFileSync(franFile, 'utf8').split('\n')[0];
@@ -338,11 +342,14 @@ const franLink = require('fs').readFileSync(franFile, 'utf8').split('\n')[0];
   const raw = link.split('/').pop();
   const page = await (await b.newContext({ ignoreHTTPSErrors: true })).newPage();
   const seen = [];
+  let posts = 0, transition = null;
   page.on('framenavigated', f => { if (f === page.mainFrame()) seen.push(f.url()); });
-  await page.goto(link);
-  const clean = page.url() === 'https://auth.repo.box/invite' && (await page.textContent('body')).includes('Welcome, Dave');
-  await page.click('button:has-text("Create account and open Private demo")');
+  page.on('request', r => { if (r.method() === 'POST' && r.url() === 'https://auth.repo.box/invite') posts++; });
+  page.on('response', async r => { if (r.request().method() === 'GET' && r.url() === 'https://auth.repo.box/invite') transition = await r.text().catch(() => ''); });
+  await page.goto(link, { waitUntil: 'commit' });
   await page.waitForURL(u => u.hostname === 'demo-private.repo.box', { timeout: 15000 }).catch(() => {});
+  const clean = seen.includes('https://auth.repo.box/invite') && posts === 1 && !!transition
+    && transition.includes('<h1>Opening Private demo…</h1>') && !/account|dave/i.test(transition);
   const landed = page.url() === 'https://demo-private.repo.box/';
   const who = landed && (await page.textContent('body')).includes('dave');
   const tokenFree = seen.slice(1).every(u => !u.includes(raw) && !u.includes('rb_launch'));
@@ -350,7 +357,7 @@ const franLink = require('fs').readFileSync(franFile, 'utf8').split('\n')[0];
   await b.close();
 })().catch(e => { console.log('error ' + String(e.message).split('\n')[0].replace(/[A-Za-z0-9_-]{43}/g, '<redacted>')); process.exit(1); });
 JS
-  expect "browser: owner page 'Onboard new user' -> link -> one click -> app as dave" "$(NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-calendar/node_modules}" node "$W/browser.js" "$CHROME" "$W/fran.url")" 11111
+  expect "browser: owner page 'Onboard new user' -> link -> no click -> app as dave" "$(NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-calendar/node_modules}" node "$W/browser.js" "$CHROME" "$W/fran.url")" 11111
   expect "browser: dave's account exists as a member" "$("$P" --db "$DB" user list | awk '$1=="dave" {print $2, $3}')" "member active"
   expect "browser: dave holds exactly the intended grant" "$("$P" --db "$DB" app show demo-private | command grep -c '^  - dave ')/$("$P" --db "$DB" app show demo-unlisted | command grep -c '^  - dave ')" "1/0"
   kill $PX 2>/dev/null || true

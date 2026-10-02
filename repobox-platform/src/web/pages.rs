@@ -2250,6 +2250,35 @@ pub async fn invite_page(State(s): State<S>, headers: HeaderMap, Query(q): Q) ->
         Err(fail) => return invite_failed(&s, current.as_ref(), fail),
     };
     let app = &ctx.app;
+    // A named signup link opened on a not-yet-signed-in device: no
+    // confirmation step, just a neutral transition that POSTs itself once the
+    // page has really loaded (link previews and scanners only GET, and GET
+    // never consumes). After a retry redirect it waits for a click instead,
+    // so a refusal can never loop.
+    if ctx.signup.is_some() && current.is_none() {
+        let auto = !q.contains_key("err");
+        let title = format!("Opening {}…", app.title);
+        let body = format!(
+            "<div class=\"status-page\"><h1>{title}</h1><form id=\"rb-go\" method=\"post\" action=\"/invite\">{button}</form></div>{script}",
+            title = esc(&title),
+            button = if auto {
+                format!(
+                    "<noscript><button class=\"btn primary\" type=\"submit\">Continue to {t}</button></noscript><button class=\"btn primary\" type=\"submit\" id=\"rb-go-later\" hidden>Continue to {t}</button>",
+                    t = esc(&app.title)
+                )
+            } else {
+                format!(
+                    "<button class=\"btn primary\" type=\"submit\">Continue to {}</button>",
+                    esc(&app.title)
+                )
+            },
+            script = if auto { INVITE_AUTO_JS } else { "" },
+        );
+        let sh = shell(&s, &title, None, "");
+        let mut resp = html(StatusCode::OK, page(&sh, &body));
+        invite_headers(&mut resp);
+        return resp;
+    }
     let retry = q
         .get("err")
         .and_then(|c| InviteRetry::from_code(c))
@@ -2267,28 +2296,16 @@ pub async fn invite_page(State(s): State<S>, headers: HeaderMap, Query(q): Q) ->
         )
     };
     let open_label = format!("Open {}", app.title);
-    let (status, form) = if let Some((name, dn)) = &ctx.signup {
-        match &current {
-            Some(u) => (
-                StatusCode::FORBIDDEN,
-                format!(
-                    "<p class=\"flash err\">This link creates a new account for <strong>{}</strong> (<code>{}</code>), and this device is signed in as <code>{}</code>.</p><p>Nothing was changed. If the link is yours, sign out on this device and open the link again.</p><form method=\"post\" action=\"/logout\"><button class=\"btn\" type=\"submit\">Sign out this device</button></form>",
-                    esc(dn),
-                    esc(name),
-                    esc(&u.name)
-                ),
+    let (status, form) = if let (Some((name, dn)), Some(u)) = (&ctx.signup, &current) {
+        (
+            StatusCode::FORBIDDEN,
+            format!(
+                "<p class=\"flash err\">This link creates a new account for <strong>{}</strong> (<code>{}</code>), and this device is signed in as <code>{}</code>.</p><p>Nothing was changed. If the link is yours, sign out on this device and open the link again.</p><form method=\"post\" action=\"/logout\"><button class=\"btn\" type=\"submit\">Sign out this device</button></form>",
+                esc(dn),
+                esc(name),
+                esc(&u.name)
             ),
-            None => (
-                StatusCode::OK,
-                format!(
-                    "<p>Welcome, <strong>{}</strong>. Continuing creates your repo.box account <code>{}</code>, signs this device in for 30 days and opens {}. No password, nothing else to click.</p>{}",
-                    esc(dn),
-                    esc(name),
-                    esc(&app.title),
-                    button(&format!("Create account and open {}", app.title))
-                ),
-            ),
-        }
+        )
     } else {
         match (&ctx.recipient, &current) {
         (Some(r), Some(u)) if u.id == r.id => (
@@ -2356,6 +2373,22 @@ pub async fn invite_page(State(s): State<S>, headers: HeaderMap, Query(q): Q) ->
     invite_headers(&mut resp);
     resp
 }
+
+/// Submits the signup handoff form once, only after the document has fully
+/// loaded (and, if prerendered, only once it is actually shown). If the
+/// submit has not navigated away after a few seconds, a plain button appears.
+const INVITE_AUTO_JS: &str = r#"<script>
+(function(){
+var f=document.getElementById('rb-go');if(!f)return;var sent=false;
+function go(){if(sent)return;sent=true;f.submit();}
+function ready(){
+  if(document.prerendering){document.addEventListener('prerenderingchange',ready,{once:true});return;}
+  if(document.readyState==='complete')go();else window.addEventListener('load',go,{once:true});
+}
+ready();
+setTimeout(function(){var b=document.getElementById('rb-go-later');if(b)b.hidden=false;},6000);
+})();
+</script>"#;
 
 enum Redeemed {
     Done(Response),

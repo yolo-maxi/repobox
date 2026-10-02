@@ -72,9 +72,14 @@ browser ──HTTPS──▶ Caddy (repo.box host)
   user** (button at the top, panel `#onboard`), enters the new person's
   global repo.box **handle** and **display name** (the only fields an
   account has; role is always member) and gets one private **signup link**,
-  shown once. Opening it and clicking **Create account and open <app>**
-  creates that `auth.repo.box` account, signs the device in (30 d), adds the
-  grant for this one app and lands them in the app. The account is created
+  shown once. Opening it on a not-yet-signed-in device shows only a neutral
+  "Opening <app>…" transition that submits itself (same-origin POST, after
+  the page has loaded; a `<noscript>` button otherwise) and creates that
+  `auth.repo.box` account, signs the device in (30 d), adds the grant for
+  this one app and lands them in the app, with no click. GETs never consume
+  the link, so previews and non-JS scanners cannot use it (a scanner that
+  runs JavaScript in a real browser could; that is inherent to any
+  buttonless flow). A signed-in device is still refused. The account is created
   only when the link is used (schema 8: `tokens.new_user_name`,
   `tokens.new_display_name`), so a signup link can never be pointed at an
   existing account, and member owners may create them. The handle must be

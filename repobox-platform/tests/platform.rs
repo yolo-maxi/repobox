@@ -2997,12 +2997,42 @@ async fn owner_onboards_a_new_user_from_the_manage_page() {
     assert_eq!(hdr(&hd, "location"), Some("/invite?err=sign_out_first"));
     assert_eq!(h.invite_status(&raw), "active");
     assert!(h.state.store.user_by_name("gianluca").unwrap().is_none());
-    // The new person's device: one click creates the account and lands in the app.
-    let (st, _, page) = h.get("/invite", Some(&ic)).await;
+    // Link previews and scanners only GET: any number of fetches of the link
+    // and of the clean page consume nothing and create nobody.
+    for _ in 0..3 {
+        let ic = h.open_invite(&raw).await;
+        let (st, _, _) = h.get("/invite", Some(&ic)).await;
+        assert_eq!(st, StatusCode::OK);
+    }
+    // A replayed POST without browser same-origin evidence consumes nothing.
+    let (_, hd, _) = h.post("/invite", Some(&ic), "", false).await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite"));
+    assert_eq!(h.invite_status(&raw), "active");
+    assert!(h.state.store.user_by_name("gianluca").unwrap().is_none());
+    // The new person's device: a neutral transition that submits itself once
+    // loaded; no confirmation click, no account language, no token.
+    let (st, hd, page) = h.get("/invite", Some(&ic)).await;
     assert_eq!(st, StatusCode::OK);
-    assert!(page.contains("Welcome, <strong>Gianluca R</strong>"));
-    assert!(page.contains("Create account and open Private demo"));
+    assert_invite_headers(&hd);
+    assert!(page.contains("<h1>Opening Private demo…</h1>"));
+    assert!(page.contains("<form id=\"rb-go\" method=\"post\" action=\"/invite\">"));
+    assert!(page.contains("addEventListener('load',go"));
+    assert!(page.contains("<noscript><button"), "works without JS");
+    for gone in [
+        "Create account",
+        "account",
+        "Welcome",
+        "Gianluca",
+        "gianluca",
+        "invited you",
+    ] {
+        assert!(!page.contains(gone), "{gone}");
+    }
     assert!(!page.contains(&raw));
+    // After a retry redirect it waits for a click instead of looping.
+    let (_, _, page) = h.get("/invite?err=sign_out_first", Some(&ic)).await;
+    assert!(page.contains("Continue to Private demo"));
+    assert!(!page.contains("<script>"));
     let (st, hd, body) = h
         .post(
             "/invite",
