@@ -1223,6 +1223,50 @@ expires in 72 h, `--ttl-hours` up to 168), then shred the file. In the UI:
 `https://auth.repo.box/apps/hushbench` → **Onboarding links** → For
 `<handle>` → **Create onboarding link** (shown once).
 
+## Deployment record (2026-10-02 late, "Onboard new user" on the manage page)
+
+Owner clarification: the normal flow must be on the app's manage page, not
+the operator CLI. Fran opens `https://auth.repo.box/apps/<app>`, clicks
+**Onboard new user**, enters the new person's handle and display name and
+gets one private signup link; using it creates the global account, signs the
+device in, adds only that app's grant and opens the app.
+
+* Commits `400883d` (signup links, schema 8, manage-page panel, CLI `--new`),
+  `1643282` + `d977d9c` (panel clears the sticky header; fields wrap to full
+  width on phones). Deployed with `NO_CADDY=1 scripts/deploy.sh` at 23:21,
+  23:27 and 23:33 UTC (routes and the Caddy block unchanged); DB backup
+  `platform-20261002T232148Z.db` before the schema 8 columns were added on
+  open. Live binary sha256 `a8c40c40dd1c2067…` = local build of `d977d9c`.
+  Sweep: only the pre-existing Fieldwork origin 404s.
+* Gates: fmt, clippy `-D warnings`, 99 tests (platform 37 incl.
+  `owner_onboards_a_new_user_from_the_manage_page` as a *member* owner and
+  `signup_link_fails_safely_when_its_handle_or_app_goes_away`), edge E2E
+  114/114 whose real-Chromium step is the owner flow: enrol `fran` → manage
+  page → **Onboard new user** → `dave`/`Dave` → link → fresh browser → one
+  click → `https://demo-private.repo.box/` as `dave`, member, one grant.
+* Live (Playwright on production; disposable admin `rbtest-adm-10022322`
+  as owner, since admins see the same manage page): button visible at the
+  top and jumps to the form; signup link shown once; the table shows
+  `new: rbtest-new-10022322` and never the link again; the owner's own
+  signed-in browser opening it is refused; a fresh 390 px browser sees
+  "Welcome, Onboard Test New", clicks **Create account and open HushBench**,
+  lands on `https://hushbench.repo.box/` (reload stays in; `/me` shows the
+  new account); replay → `/invite?e=used`; the row shows used by the new
+  account. Host: account `member`, granted on exactly 1 of 28 apps
+  (HushBench), audit `invite.create new:…` → `user.join` →
+  `invite.redeem signup` → `launch.mint`/`launch.redeem`; journal since
+  23:20 UTC: 0 signup-token hits, 0 `/invite/`, 0 `rb_launch=`. Phone and
+  desktop screenshots checked after the layout fix. Cleanup: grant revoked,
+  both accounts disabled (sessions revoked), link files shredded on both
+  hosts; HushBench back to 0 grants.
+
+**Onboarding someone to HushBench** (normal flow): `https://auth.repo.box/apps/hushbench`
+→ **Onboard new user** → Handle + Display name → **Create signup link** →
+send the link shown once to that person, privately. It expires in 72 h and
+works once; the **Onboarding links** table shows its status and lets you
+revoke it. CLI equivalent (same backend):
+`/usr/local/bin/repobox-platform app invite hushbench --new <handle> --display-name "<Name>" --out <0600 file>`.
+
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
 
 Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
