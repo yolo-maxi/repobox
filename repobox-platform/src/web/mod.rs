@@ -29,6 +29,16 @@ pub const APP_COOKIE: &str = "__Host-rb_app";
 /// the app host. Deliberately not `token`: apps use that name for their own
 /// invite/setup links, and the gate must never swallow those.
 pub const LAUNCH_PARAM: &str = "rb_launch";
+/// Holds a raw onboarding-link token between `GET /invite/<token>` (which
+/// only moves it here and redirects to the clean `/invite`) and the POST that
+/// consumes it, so the token never stays in the address bar, in a rendered
+/// page or in a request URI that answers with a body.
+pub const INVITE_COOKIE: &str = "__Host-rb_invite";
+
+/// Default lifetime of an onboarding link (UI and CLI): 72 hours.
+pub const INVITE_TTL_DEFAULT: i64 = 72 * 3600;
+/// Longest onboarding link the CLI will mint.
+pub const INVITE_TTL_MAX: i64 = 7 * 86400;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -40,6 +50,8 @@ pub struct Config {
     pub auth_session_ttl: i64,
     pub app_session_ttl: i64,
     pub link_ttl: i64,
+    /// Lifetime of an onboarding (invitation) link.
+    pub invite_ttl: i64,
     /// Bridge to the ChatMock broker (None: the AI endpoint answers 503).
     pub ai: Option<std::sync::Arc<crate::ai::Bridge>>,
     /// How routes are rendered on this host (for read-only route previews).
@@ -57,6 +69,7 @@ impl Config {
             auth_session_ttl: 30 * 86400,
             app_session_ttl: 24 * 3600,
             link_ttl: 7 * 86400,
+            invite_ttl: INVITE_TTL_DEFAULT,
             ai: None,
             routes: crate::render::RenderConfig {
                 domain: domain.to_string(),
@@ -209,6 +222,10 @@ pub fn router(state: S) -> Router {
         .route(
             "/enrol/{token}",
             get(pages::enrol_get).post(pages::enrol_post),
+        )
+        .route(
+            "/invite",
+            get(pages::invite_page).post(pages::invite_submit),
         )
         .route(
             "/invite/{token}",

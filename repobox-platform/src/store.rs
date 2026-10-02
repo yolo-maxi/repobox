@@ -1162,7 +1162,12 @@ impl Store {
         .map_err(Into::into)
     }
 
-    fn token_by_raw(&self, kind: TokenKind, raw: &str) -> std::result::Result<Token, RedeemError> {
+    /// A token by its raw value whatever its state (callers check it).
+    pub fn token_by_raw(
+        &self,
+        kind: TokenKind,
+        raw: &str,
+    ) -> std::result::Result<Token, RedeemError> {
         if !tokens::looks_like_token(raw) {
             return Err(RedeemError::Unknown);
         }
@@ -1235,6 +1240,17 @@ impl Store {
             used_by,
             ..tok
         })
+    }
+
+    /// Record who redeemed a token after the fact (an onboarding link is
+    /// consumed before the new user it creates exists).
+    pub fn set_token_used_by(&self, id: i64, user_id: i64) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE tokens SET used_by = ?2 WHERE id = ?1 AND used_at IS NOT NULL AND used_by IS NULL",
+            params![id, user_id],
+        )?;
+        Ok(())
     }
 
     pub fn revoke_token(&self, id: i64) -> Result<()> {

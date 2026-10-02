@@ -1584,11 +1584,127 @@ async fn device_enrolment_link_is_single_use_and_post_only() {
     );
 }
 
+// ------------------------------------------------------- onboarding links
+
+const INVITE_COOKIE: &str = "__Host-rb_invite";
+
+/// Every answer on the onboarding path is uncached and sends no Referer.
+fn assert_invite_headers(hd: &HeaderMap) {
+    assert_eq!(hdr(hd, "cache-control"), Some("no-store"));
+    assert_eq!(hdr(hd, "referrer-policy"), Some("no-referrer"));
+}
+
+/// All Set-Cookie values of a response.
+fn set_cookies(hd: &HeaderMap) -> Vec<String> {
+    hd.get_all(header::SET_COOKIE)
+        .iter()
+        .map(|v| v.to_str().unwrap().to_string())
+        .collect()
+}
+
+impl H {
+    /// Open `/invite/<raw>` like a browser: a body-less 303 to the clean
+    /// `/invite` that moves the token into the host-only invite cookie.
+    async fn open_invite(&self, raw: &str) -> String {
+        let (st, hd, body) = self.get(&format!("/invite/{raw}"), None).await;
+        assert_eq!(st, StatusCode::SEE_OTHER);
+        assert!(body.is_empty(), "token-bearing URI answers without a body");
+        assert_eq!(hdr(&hd, "location"), Some("/invite"));
+        assert_invite_headers(&hd);
+        let sc = hdr(&hd, "set-cookie").unwrap();
+        assert!(sc.starts_with(&format!("{INVITE_COOKIE}={raw};")), "{sc}");
+        assert!(sc.contains("; Secure") && sc.contains("; HttpOnly") && sc.contains("; Path=/"));
+        assert!(!sc.to_lowercase().contains("domain="));
+        format!("{INVITE_COOKIE}={raw}")
+    }
+
+    /// A link that does not open: 303 to `/invite?e=<code>`, no body, no token.
+    async fn invite_refused(&self, raw: &str, code: &str) {
+        let (st, hd, body) = self.get(&format!("/invite/{raw}"), None).await;
+        assert_eq!(st, StatusCode::SEE_OTHER);
+        assert!(body.is_empty());
+        assert_eq!(hdr(&hd, "location").unwrap(), format!("/invite?e={code}"));
+        assert!(set_cookies(&hd).iter().all(|c| c.contains("Max-Age=0")));
+        let (st, _, page) = self.get(&format!("/invite?e={code}"), None).await;
+        assert_eq!(st, StatusCode::GONE);
+        assert!(!page.contains(raw));
+    }
+
+    /// Follow a successful redemption into the app: launcher → launch code →
+    /// gate → app session on a clean URL → identity at the origin.
+    async fn land_in_app(&self, device_cookie: &str, app: &str) -> HeaderMap {
+        let (st, h, _) = self.get(&format!("/{app}"), Some(device_cookie)).await;
+        assert_eq!(st, StatusCode::FOUND);
+        let loc = hdr(&h, "location").unwrap();
+        assert!(
+            loc.starts_with(&format!("https://{app}.repo.box/?rb_launch=")),
+            "{loc}"
+        );
+        let code = loc.split("rb_launch=").nth(1).unwrap().to_string();
+        let (st, hd, body) = self
+            .gate(app, &format!("/?rb_launch={code}"), None, NAV)
+            .await;
+        assert_eq!(st, StatusCode::FOUND);
+        assert!(body.is_empty());
+        assert_eq!(
+            hdr(&hd, "location"),
+            Some("/"),
+            "code stripped from the final URL"
+        );
+        let app_cookie = app_cookie_from(&hd);
+        let (st, hd, _) = self.navigate(app, "/", Some(&app_cookie)).await;
+        assert_eq!(st, StatusCode::OK);
+        hd
+    }
+
+    fn invite_token(
+        &self,
+        app: &str,
+        recipient: Option<&User>,
+        created_by: Option<&User>,
+    ) -> String {
+        let app = self.state.store.app_by_name(app).unwrap().unwrap();
+        self.state
+            .store
+            .create_token(
+                repobox_platform::store::TokenKind::Invite,
+                recipient.map(|u| u.id),
+                Some(app.id),
+                created_by.map(|u| u.id),
+                self.state.cfg.invite_ttl,
+                "cli",
+            )
+            .unwrap()
+            .0
+    }
+
+    fn grant(&self, app: &str, user: &User) -> bool {
+        let app = self.state.store.app_by_name(app).unwrap().unwrap();
+        self.state.store.has_grant(app.id, user.id).unwrap()
+    }
+
+    fn invite_status(&self, raw: &str) -> &'static str {
+        self.state
+            .store
+            .token_by_raw(repobox_platform::store::TokenKind::Invite, raw)
+            .unwrap()
+            .status(self.state.store.now())
+    }
+
+    fn token_id(&self, raw: &str) -> i64 {
+        self.state
+            .store
+            .token_by_raw(repobox_platform::store::TokenKind::Invite, raw)
+            .unwrap()
+            .id
+    }
+}
+
 #[tokio::test]
-async fn owner_invite_creates_user_and_grant_once() {
+async fn open_onboarding_link_joins_a_new_person_and_lands_in_the_app() {
     let h = H::new();
     let owner = h.auth_cookie(&h.owner);
-    // bob cannot create invites for an app he does not own.
+    // bob cannot create links for an app he does not own.
     assert_eq!(
         h.post(
             "/apps/demo-private/invites",
@@ -1604,42 +1720,68 @@ async fn owner_invite_creates_user_and_grant_once() {
         .post("/apps/demo-private/invites", Some(&owner), "", true)
         .await;
     assert_eq!(st, StatusCode::OK);
+    assert!(body.contains("Onboarding link for Private demo"));
     let raw = extract_link(&body, "https://auth.repo.box/invite/");
-    let (st, _, page) = h.get(&format!("/invite/{raw}"), None).await;
+    let ic = h.open_invite(&raw).await;
+    let (st, hd, page) = h.get("/invite", Some(&ic)).await;
     assert_eq!(st, StatusCode::OK);
+    assert_invite_headers(&hd);
     assert!(page.contains("Invitation to Private demo"));
-    // Bad handle does not burn the invitation.
-    let (st, _, _) = h
-        .post(
-            &format!("/invite/{raw}"),
-            None,
-            "name=Bad%20Name&display_name=X",
-            true,
-        )
+    assert!(page.contains("action=\"/invite\""));
+    assert!(!page.contains(&raw), "the page never carries the token");
+    // A bad or taken handle does not burn the link.
+    let (st, hd, body) = h
+        .post("/invite", Some(&ic), "name=Bad%20Name&display_name=X", true)
         .await;
-    assert_eq!(st, StatusCode::BAD_REQUEST);
-    // Existing handle is refused too.
-    let (st, _, _) = h
-        .post(
-            &format!("/invite/{raw}"),
-            None,
-            "name=bob&display_name=Bob",
-            true,
-        )
+    assert_eq!(
+        (st, hdr(&hd, "location")),
+        (StatusCode::SEE_OTHER, Some("/invite?err=bad_handle"))
+    );
+    assert!(body.is_empty());
+    let (st, _, page) = h.get("/invite?err=bad_handle", Some(&ic)).await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(page.contains("Handles are 1-32"));
+    let (_, hd, _) = h
+        .post("/invite", Some(&ic), "name=bob&display_name=Bob", true)
         .await;
-    assert_eq!(st, StatusCode::CONFLICT);
-    // New person joins.
+    assert_eq!(hdr(&hd, "location"), Some("/invite?err=taken"));
+    // Cross-site POST is bounced, nothing consumed.
     let (st, hd, _) = h
         .post(
-            &format!("/invite/{raw}"),
-            None,
+            "/invite",
+            Some(&ic),
+            "name=newbie&display_name=New+Person",
+            false,
+        )
+        .await;
+    assert_eq!(
+        (st, hdr(&hd, "location")),
+        (StatusCode::SEE_OTHER, Some("/invite"))
+    );
+    assert!(h.state.store.user_by_name("newbie").unwrap().is_none());
+    // New person joins and is sent straight to the app's launcher.
+    let (st, hd, body) = h
+        .post(
+            "/invite",
+            Some(&ic),
             "name=newbie&display_name=New+Person",
             true,
         )
         .await;
     assert_eq!(st, StatusCode::SEE_OTHER);
-    let cookie = hdr(&hd, "set-cookie")
-        .unwrap()
+    assert!(body.is_empty());
+    assert_eq!(hdr(&hd, "location"), Some("/demo-private"));
+    assert_invite_headers(&hd);
+    let cookies = set_cookies(&hd);
+    assert!(
+        cookies
+            .iter()
+            .any(|c| c.starts_with(&format!("{INVITE_COOKIE}=;")) && c.contains("Max-Age=0"))
+    );
+    let device = cookies
+        .iter()
+        .find(|c| c.starts_with(&format!("{AUTH_COOKIE}=")))
+        .expect("device signed in")
         .split(';')
         .next()
         .unwrap()
@@ -1652,43 +1794,325 @@ async fn owner_invite_creates_user_and_grant_once() {
         .expect("user created");
     assert_eq!(newbie.display_name, "New Person");
     assert_eq!(newbie.role, Role::Member);
-    let app = h.state.store.app_by_name("demo-private").unwrap().unwrap();
-    assert!(h.state.store.has_grant(app.id, newbie.id).unwrap());
-    // ...and can launch straight away.
-    let (st, _, _) = h.get("/demo-private", Some(&cookie)).await;
-    assert_eq!(st, StatusCode::FOUND);
-    // Invitation is spent.
+    assert!(h.grant("demo-private", &newbie));
+    assert!(!h.grant("other-private", &newbie), "only the intended app");
+    let tok = h.state.store.token_by_id(h.token_id(&raw)).unwrap();
+    assert_eq!(tok.used_by, Some(newbie.id));
+    let hd = h.land_in_app(&device, "demo-private").await;
+    assert_eq!(hdr(&hd, "x-repobox-user"), Some("newbie"));
     assert_eq!(
-        h.get(&format!("/invite/{raw}"), None).await.0,
-        StatusCode::GONE
+        hdr(&hd, "x-repobox-user-id"),
+        Some(newbie.id.to_string().as_str())
     );
+    // Spent: reopening, replaying the cookie, or the legacy POST all fail and
+    // grant nobody anything.
+    h.invite_refused(&raw, "used").await;
+    let eve = h.auth_cookie(&h.eve);
+    let (st, hd, _) = h
+        .post("/invite", Some(&format!("{ic}; {eve}")), "", true)
+        .await;
     assert_eq!(
-        h.post(
-            &format!("/invite/{raw}"),
-            Some(&h.auth_cookie(&h.eve)),
-            "",
-            true
-        )
-        .await
-        .0,
-        StatusCode::GONE
+        (st, hdr(&hd, "location")),
+        (StatusCode::SEE_OTHER, Some("/invite?e=used"))
     );
-    // A signed-in user accepting an invitation gets a grant on their existing account.
+    let (st, hd, body) = h
+        .post(&format!("/invite/{raw}"), Some(&eve), "", true)
+        .await;
+    assert_eq!(
+        (st, hdr(&hd, "location")),
+        (StatusCode::SEE_OTHER, Some("/invite?e=used"))
+    );
+    assert!(body.is_empty());
+    assert!(!h.grant("demo-private", &h.eve));
+
+    // A signed-in person accepts an open link with their existing account.
     let (_, _, body) = h
         .post("/apps/demo-private/invites", Some(&owner), "", true)
         .await;
     let raw2 = extract_link(&body, "https://auth.repo.box/invite/");
+    let ic2 = h.open_invite(&raw2).await;
+    let (st, _, page) = h.get("/invite", Some(&format!("{ic2}; {eve}"))).await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(page.contains("Accept and open"));
     let (st, hd, _) = h
+        .post("/invite", Some(&format!("{ic2}; {eve}")), "", true)
+        .await;
+    assert_eq!(
+        (st, hdr(&hd, "location")),
+        (StatusCode::SEE_OTHER, Some("/demo-private"))
+    );
+    assert!(
+        set_cookies(&hd).iter().all(|c| !c.starts_with(AUTH_COOKIE)),
+        "existing device session kept"
+    );
+    assert!(h.grant("demo-private", &h.eve));
+    let hd = h.land_in_app(&eve, "demo-private").await;
+    assert_eq!(hdr(&hd, "x-repobox-user"), Some("eve"));
+}
+
+#[tokio::test]
+async fn bound_onboarding_link_signs_the_recipient_in_and_nobody_else() {
+    let h = H::new();
+    let gianluca = h
+        .state
+        .store
+        .create_user("gianluca", "Gianluca", Role::Member)
+        .unwrap();
+    // Operator CLI link (no creator), bound to gianluca.
+    let raw = h.invite_token("other-private", Some(&gianluca), None);
+    let ic = h.open_invite(&raw).await;
+    // A stranger signed in on this device is refused; nothing is consumed.
+    let eve = h.auth_cookie(&h.eve);
+    let (st, _, page) = h.get("/invite", Some(&format!("{ic}; {eve}"))).await;
+    assert_eq!(st, StatusCode::FORBIDDEN);
+    assert!(page.contains("This link is for <strong>Gianluca</strong>"));
+    let (_, hd, _) = h
+        .post("/invite", Some(&format!("{ic}; {eve}")), "", true)
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?err=wrong_user"));
+    assert!(!h.grant("other-private", &h.eve));
+    assert_eq!(h.invite_status(&raw), "active");
+    // The recipient's new device: one click, signed in, granted, launched.
+    let (st, _, page) = h.get("/invite", Some(&ic)).await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(page.contains("Welcome, <strong>Gianluca</strong>"));
+    assert!(page.contains("Open Other private"));
+    let (st, hd, body) = h
+        .post("/invite", Some(&ic), "name=mallory&display_name=M", true)
+        .await;
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert!(body.is_empty());
+    assert_eq!(hdr(&hd, "location"), Some("/other-private"));
+    assert!(h.state.store.user_by_name("mallory").unwrap().is_none());
+    let device = set_cookies(&hd)
+        .into_iter()
+        .find(|c| c.starts_with(&format!("{AUTH_COOKIE}=")))
+        .expect("device signed in as the recipient")
+        .split(';')
+        .next()
+        .unwrap()
+        .to_string();
+    assert!(h.grant("other-private", &gianluca));
+    assert!(!h.grant("demo-private", &gianluca));
+    let hd = h.land_in_app(&device, "other-private").await;
+    assert_eq!(hdr(&hd, "x-repobox-user"), Some("gianluca"));
+    assert_eq!(hdr(&hd, "x-repobox-auth"), Some("session"));
+    h.invite_refused(&raw, "used").await;
+
+    // Already signed in as the recipient: no new device session, straight in.
+    let (dev, _) = h.device(&gianluca, "phone");
+    let raw = h.invite_token("demo-private", Some(&gianluca), None);
+    let ic = h.open_invite(&raw).await;
+    let (st, hd, _) = h
+        .post("/invite", Some(&format!("{ic}; {dev}")), "", true)
+        .await;
+    assert_eq!(
+        (st, hdr(&hd, "location")),
+        (StatusCode::SEE_OTHER, Some("/demo-private"))
+    );
+    assert!(set_cookies(&hd).iter().all(|c| !c.starts_with(AUTH_COOKIE)));
+    let hd = h.land_in_app(&dev, "demo-private").await;
+    assert_eq!(hdr(&hd, "x-repobox-user"), Some("gianluca"));
+}
+
+#[tokio::test]
+async fn owner_bound_link_needs_the_recipient_signed_in_and_refuses_admins() {
+    let h = H::new();
+    let owner = h.auth_cookie(&h.owner);
+    let (_, hd, _) = h
         .post(
-            &format!("/invite/{raw2}"),
-            Some(&h.auth_cookie(&h.eve)),
-            "",
+            "/apps/other-private/invites",
+            Some(&owner),
+            "for=fran",
             true,
         )
         .await;
-    assert_eq!(st, StatusCode::SEE_OTHER);
-    assert!(hdr(&hd, "set-cookie").is_none(), "existing session kept");
-    assert!(h.state.store.has_grant(app.id, h.eve.id).unwrap());
+    assert_eq!(
+        hdr(&hd, "location"),
+        Some("/apps/other-private?err=invite_admin")
+    );
+    let (_, hd, _) = h
+        .post(
+            "/apps/other-private/invites",
+            Some(&owner),
+            "for=nobody",
+            true,
+        )
+        .await;
+    assert_eq!(
+        hdr(&hd, "location"),
+        Some("/apps/other-private?err=no_user")
+    );
+    let (st, _, body) = h
+        .post("/apps/other-private/invites", Some(&owner), "for=Eve", true)
+        .await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(body.contains("Send this to Eve only"));
+    let raw = extract_link(&body, "https://auth.repo.box/invite/");
+    let ic = h.open_invite(&raw).await;
+    // A member owner cannot mint device sign-ins: an anonymous device is told
+    // to sign in first and nothing happens.
+    let (st, _, page) = h.get("/invite", Some(&ic)).await;
+    assert_eq!(st, StatusCode::FORBIDDEN);
+    assert!(page.contains("does not sign a device in"));
+    let (_, hd, _) = h.post("/invite", Some(&ic), "", true).await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?err=sign_in_first"));
+    assert!(set_cookies(&hd).is_empty());
+    assert_eq!(h.invite_status(&raw), "active");
+    // Eve, signed in, uses it.
+    let eve = h.auth_cookie(&h.eve);
+    let (_, hd, _) = h
+        .post("/invite", Some(&format!("{ic}; {eve}")), "", true)
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some("/other-private"));
+    assert!(h.grant("other-private", &h.eve));
+    // The manage page shows who each link is for.
+    let (_, _, page) = h.get("/apps/other-private", Some(&owner)).await;
+    assert!(page.contains("Onboarding links"));
+    assert!(page.contains("<td>eve</td>"));
+}
+
+#[tokio::test]
+async fn onboarding_link_fails_safely_when_expired_revoked_or_stale() {
+    let h = H::new();
+    let gianluca = h
+        .state
+        .store
+        .create_user("gianluca", "Gianluca", Role::Member)
+        .unwrap();
+    let app = h.state.store.app_by_name("other-private").unwrap().unwrap();
+    let no_effect = |h: &H| {
+        assert!(!h.grant("other-private", &gianluca));
+        assert_eq!(
+            h.state
+                .store
+                .list_sessions(gianluca.id, SessionKind::Auth)
+                .unwrap()
+                .len(),
+            0
+        );
+    };
+
+    // App switched off: refused at open and at submit, token kept.
+    let raw = h.invite_token("other-private", Some(&gianluca), None);
+    let ic = h.open_invite(&raw).await;
+    h.state.store.set_app_enabled(app.id, false).unwrap();
+    h.invite_refused(&raw, "app_off").await;
+    let (_, hd, _) = h.post("/invite", Some(&ic), "", true).await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?e=app_off"));
+    let (_, hd, _) = h.post(&format!("/invite/{raw}"), None, "", true).await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?e=app_off"));
+    no_effect(&h);
+    assert_eq!(h.invite_status(&raw), "active");
+    h.state.store.set_app_enabled(app.id, true).unwrap();
+
+    // Revoked by the operator.
+    h.state.store.revoke_token(h.token_id(&raw)).unwrap();
+    h.invite_refused(&raw, "revoked").await;
+    let (_, hd, _) = h.post("/invite", Some(&ic), "", true).await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?e=revoked"));
+    no_effect(&h);
+
+    // Expired (72 h default).
+    let raw = h.invite_token("other-private", Some(&gianluca), None);
+    let ic = h.open_invite(&raw).await;
+    h.clock.fetch_add(72 * 3600 + 1, Ordering::SeqCst);
+    h.invite_refused(&raw, "expired").await;
+    let (_, hd, _) = h.post("/invite", Some(&ic), "", true).await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?e=expired"));
+    no_effect(&h);
+
+    // Recipient disabled.
+    let raw = h.invite_token("other-private", Some(&gianluca), None);
+    h.state.store.set_user_enabled(gianluca.id, false).unwrap();
+    h.invite_refused(&raw, "stale").await;
+    h.state.store.set_user_enabled(gianluca.id, true).unwrap();
+
+    // Creator no longer manages the app (a member owner who lost the app).
+    let raw = h.invite_token("other-private", None, Some(&h.owner));
+    let ic = h.open_invite(&raw).await;
+    h.state
+        .store
+        .transfer_app_owner(&app, &h.fran, "test")
+        .unwrap();
+    h.invite_refused(&raw, "stale").await;
+    let (_, hd, _) = h
+        .post("/invite", Some(&ic), "name=newbie&display_name=N", true)
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?e=stale"));
+    assert!(h.state.store.user_by_name("newbie").unwrap().is_none());
+    no_effect(&h);
+
+    // Unknown token and no cookie at all.
+    h.invite_refused("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "invalid")
+        .await;
+    assert_eq!(h.get("/invite", None).await.0, StatusCode::NOT_FOUND);
+    let (st, hd, _) = h.post("/invite", None, "", true).await;
+    assert_eq!(
+        (st, hdr(&hd, "location")),
+        (StatusCode::SEE_OTHER, Some("/invite"))
+    );
+}
+
+#[tokio::test]
+async fn legacy_invite_post_is_body_less_and_lands_in_the_app() {
+    let h = H::new();
+    let gianluca = h
+        .state
+        .store
+        .create_user("gianluca", "Gianluca", Role::Member)
+        .unwrap();
+    let raw = h.invite_token("demo-private", None, Some(&h.owner));
+    // Retry: the token moves into the cookie, body-less, URL clean.
+    let (st, hd, body) = h
+        .post(
+            &format!("/invite/{raw}"),
+            None,
+            "name=bob&display_name=B",
+            true,
+        )
+        .await;
+    assert_eq!(
+        (st, hdr(&hd, "location")),
+        (StatusCode::SEE_OTHER, Some("/invite?err=taken"))
+    );
+    assert!(body.is_empty());
+    assert!(
+        hdr(&hd, "set-cookie")
+            .unwrap()
+            .starts_with(&format!("{INVITE_COOKIE}={raw};"))
+    );
+    // Cross-site: same hand-off, nothing consumed.
+    let (_, hd, body) = h.post(&format!("/invite/{raw}"), None, "", false).await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite"));
+    assert!(body.is_empty());
+    // No form body at all (no Content-Type): still a body-less redirect.
+    let (st, hd, body) = h
+        .send(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/invite/{raw}"))
+                .header(header::ORIGIN, BASE)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(
+        (st, hdr(&hd, "location")),
+        (StatusCode::SEE_OTHER, Some("/invite?err=bad_handle"))
+    );
+    assert!(body.is_empty());
+    // Success from a signed-in device.
+    let (dev, _) = h.device(&gianluca, "laptop");
+    let (st, hd, body) = h
+        .post(&format!("/invite/{raw}"), Some(&dev), "", true)
+        .await;
+    assert_eq!(
+        (st, hdr(&hd, "location")),
+        (StatusCode::SEE_OTHER, Some("/demo-private"))
+    );
+    assert!(body.is_empty());
+    assert!(h.grant("demo-private", &gianluca));
 }
 
 #[tokio::test]

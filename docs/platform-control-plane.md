@@ -67,9 +67,43 @@ browser ──HTTPS──▶ Caddy (repo.box host)
   operator CLI, or by the user from another signed-in device. Opening it shows
   a confirmation page; the POST consumes it and sets `__Host-rb_auth` (30 d).
   GET never consumes, so link-preview bots cannot burn a link.
-* **Invitations**: an app owner (or admin) creates `/invite/<token>` (7 days,
-  single use). A signed-in visitor accepting it gets a grant; a new person
-  picks a handle and becomes a member with the grant, signed in on that device.
+* **Onboarding links** (invitations, `/invite/<token>`): one private URL that
+  takes a person from nothing to *inside* a named app. It is a hashed,
+  single-use `invite` token bound to one app (72 h by default, CLI up to 7 d)
+  and, preferably, to one recipient (`tokens.user_id`, an enabled member):
+  * `GET /invite/<token>` only checks the token, moves it into the host-only
+    `__Host-rb_invite` cookie (30 min) and answers a **body-less 303** to the
+    clean `/invite`; failures 303 to `/invite?e=<reason>`. The raw token never
+    stays in the address bar, never appears in a page and never rides on a
+    request whose answer has a body (the Caddy log rule of the launch code).
+    Onboarding responses are `no-store` and `Referrer-Policy: no-referrer`
+    (the edge sets its own policy only as a default, `?Referrer-Policy`).
+  * `GET /invite` says exactly what continuing does on this device; GET never
+    consumes, so link previews cannot burn it.
+  * `POST /invite` (same-origin) re-validates, consumes atomically, then:
+    **recipient link** — a device already signed in as the recipient is just
+    granted; a device that is not signed in is signed in as the recipient
+    (30 d device session) only if the link came from the operator CLI or an
+    enabled admin (the people who may issue device links), otherwise it is
+    told to sign in first; a device signed in as *anyone else* is refused and
+    nothing is consumed. **Open link** — a signed-in person accepts with their
+    account; a new person picks a handle and becomes a member. Either way the
+    only grant created is the one app, and the answer is a body-less 303 to
+    the launcher `/<app>`, which mints the usual 90 s launch code; the gate
+    turns it into the app session and a clean app URL. One click, no second
+    URL.
+  * Every use re-checks that the app is enabled, that the creator may still
+    manage it (owner transferred or disabled: refused), and that the recipient
+    is still an enabled member. Replays, expired, revoked and app-off links
+    are refused before any user, session or grant is created; mistakes the
+    person can fix (bad or taken handle, wrong account) never consume it.
+    Admin accounts cannot be recipients. The legacy form target
+    `POST /invite/<token>` performs the same redemption with body-less
+    answers.
+  * Owners create links on the manage page (**Onboarding links**, optional
+    "For" handle; a member owner's recipient link needs the recipient already
+    signed in) and see who each is for, status, expiry and who used it;
+    the operator uses `app invite` (below).
 * **Visibility**: `private` (default; grant required, listed only to users who
   can open it), `public_unlisted` (no auth, never in the directory),
   `public_listed` (no auth, in the directory and `/api/directory`). Admins and
@@ -441,6 +475,12 @@ $P bootstrap-admin --name fran --out /home/fran/secrets/repobox-platform-fran-$(
 $P user create ocean --display-name Ocean               # then: $P user enrol ocean --out <0600 file>
 $P app register myapp --title "My app" --owner fran --kind proxy --target 127.0.0.1:3299
 $P app grant myapp --user ocean
+# One private onboarding link into an app (signs the device in, grants, opens):
+$P app invite hushbench --for gianluca --out /home/fran/secrets/onboard-hushbench-gianluca-$(date -u +%Y%m%dT%H%M%SZ).url
+$P app invite hushbench --for newperson --create-user --display-name "New Person" --out <0600 file>
+$P app invite hushbench --open --out <0600 file>          # anyone; they pick a handle
+$P app invites hushbench                                   # for / status / expiry / used by, no secrets
+$P app invite-revoke hushbench --id <id>
 $P routes render --check-roots --out /tmp/apps.caddy \
   && sudo install -m 0644 /tmp/apps.caddy /etc/caddy/repobox-platform/apps.caddy \
   && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile \
@@ -509,7 +549,18 @@ whole change and installs nothing.
    directory, spoofed `X-RepoBox-*` headers never influencing a decision,
    app-session binding to one app, launch requiring sign-in and access,
    open-redirect hardening of `next`, single-use POST-only device links,
-   invitation flow (new and existing users), owner/admin-only management, CSRF,
+   onboarding links (open link: bad/taken handle never burns it, cross-site
+   POST bounced, new person joins → body-less 303 to the launcher → launch
+   code → gate → app session on a clean URL with the new identity, only the
+   intended grant, `used_by` recorded, replay/legacy POST refused; recipient
+   link from the CLI: stranger signed in refused without consuming, new
+   device signed in as the recipient with one click and launched, a form
+   naming another handle ignored, already-signed-in recipient gets no new
+   device session; member-owner recipient link needs sign-in, admins and
+   unknown handles refused as recipients; app off, revoked, expired,
+   recipient disabled and creator no longer managing → refused with no
+   user/session/grant; token never in a page, Location or body;
+   `no-store` + `no-referrer`), owner/admin-only management, CSRF,
    directory partitioning (Your apps before Other apps, admin/owner/grantee/
    anonymous views), public-unlisted absent unless in the access list, access
    counting only on allowed requests (denials, disabled, replay and the
@@ -540,7 +591,13 @@ whole change and installs nothing.
    everywhere", admin-only and CSRF guards on all of it.
 2. `repobox-platform/scripts/edge-e2e.sh` — same contract through a real Caddy
    with the generated routes (proves the strip + forward_auth + copy_headers
-   mechanics, host-only/HttpOnly cookies, no secrets in logs), plus opens:
+   mechanics, host-only/HttpOnly cookies, no secrets in logs), plus the
+   onboarding chain (`app invite --for carol --create-user` → 0600 file →
+   body-less 303 to `/invite` → `no-referrer` survives the edge → stranger
+   refused → one POST → launcher → launch code → gate → `whoami` shows carol
+   with exactly one grant → replay/app-off/revoked refused → no onboarding
+   token or `/invite/` path in any log, body-less under abrupt clients),
+   plus opens:
    curl's `*/*` requests through the launch flow leave zero opens, one
    browser-style page load then a second one in the same visit plus an
    asset and an API fetch leave exactly one open by `bob` in
@@ -1180,6 +1237,12 @@ records. No link was generated or sent; no email flow exists.
   repo.box site does not consume it yet.
 * Rate limiting relies on Caddy/fail2ban; tokens are 256-bit so brute force is
   not practical, but there is no dedicated throttle on `/enrol/*`/`/invite/*`.
+* Onboarding links are bearer links like device links: whoever holds a
+  recipient link from the operator/an admin can sign a device in as that
+  recipient once, so deliver it only to that person, privately. An open link
+  admits whoever opens it first. The raw link stays in the browser history of
+  the device that opened it (spent after use). A recipient link from a member
+  owner cannot sign a device in; the recipient needs a device link first.
 * No app deletion from the UI (`app remove` via CLI, then re-render).
 * Existing apps on repo.box are not migrated; only the three demo apps use the
   managed route model.

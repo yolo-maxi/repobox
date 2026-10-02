@@ -303,6 +303,42 @@ enum AppCmd {
         #[arg(long)]
         user: String,
     },
+    /// Write a single-use onboarding link for this app to a 0600 file (never
+    /// printed). Opening it signs the recipient's device in if needed, adds
+    /// the app grant and lands them in the app. `--for` binds it to one
+    /// member; `--open` makes a link where a new person picks a handle.
+    Invite {
+        name: String,
+        /// Recipient handle (an enabled member); nobody else can use the link
+        #[arg(
+            long = "for",
+            conflicts_with = "open",
+            required_unless_present = "open"
+        )]
+        for_user: Option<String>,
+        /// Create the recipient as a new member first (needs --display-name)
+        #[arg(long, requires_all = ["for_user", "display_name"])]
+        create_user: bool,
+        #[arg(long)]
+        display_name: Option<String>,
+        /// Open link: whoever opens it first joins with a handle of their choice
+        #[arg(long)]
+        open: bool,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long, default_value_t = 72)]
+        ttl_hours: i64,
+    },
+    /// List an app's onboarding links (no secrets)
+    Invites {
+        name: String,
+    },
+    /// Revoke an unused onboarding link by id (from `app invites`)
+    InviteRevoke {
+        name: String,
+        #[arg(long)]
+        id: i64,
+    },
     Visibility {
         name: String,
         #[arg(value_parser = ["private", "public_unlisted", "public_listed"])]
@@ -1065,6 +1101,123 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 u.name,
                 a.name
             );
+        }
+        AppCmd::Invite {
+            name,
+            for_user,
+            create_user,
+            display_name,
+            open: _,
+            out,
+            ttl_hours,
+        } => {
+            use std::os::unix::fs::OpenOptionsExt;
+            let a = need_app(store, &name)?;
+            if !a.enabled {
+                return Err(format!("app '{}' is disabled; enable it first", a.name).into());
+            }
+            if ttl_hours < 1 || ttl_hours * 3600 > web::INVITE_TTL_MAX {
+                return Err(format!(
+                    "--ttl-hours must be between 1 and {}",
+                    web::INVITE_TTL_MAX / 3600
+                )
+                .into());
+            }
+            if out.exists() {
+                return Err(format!("{} already exists; choose a new file so a stale link is never confused for a fresh one", out.display()).into());
+            }
+            let handle = for_user.as_deref().unwrap_or("");
+            if create_user {
+                let u = store.create_user(
+                    &handle.trim().to_lowercase(),
+                    display_name.as_deref().unwrap_or_default(),
+                    Role::Member,
+                )?;
+                store.audit(None, "user.create", &u.name, "cli");
+                println!("created user '{}' (member)", u.name);
+            }
+            let recipient = web::pages::invite_recipient(store, handle).map_err(|k| match k {
+                "invite_admin" => format!("'{handle}' is an admin; admins already open every app"),
+                "invite_disabled_user" => format!("user '{handle}' is disabled"),
+                _ => format!("no user '{handle}' (add --create-user --display-name …)"),
+            })?;
+            let (raw, tok) = store.create_token(
+                TokenKind::Invite,
+                recipient.as_ref().map(|u| u.id),
+                Some(a.id),
+                None,
+                ttl_hours * 3600,
+                "cli",
+            )?;
+            let public_base = std::env::var("REPOBOX_PLATFORM_PUBLIC_BASE")
+                .unwrap_or_else(|_| "https://auth.repo.box".into());
+            let mut f = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&out)?;
+            writeln!(f, "{}/invite/{}", public_base.trim_end_matches('/'), raw)?;
+            let who = recipient
+                .as_ref()
+                .map(|u| format!("'{}' only", u.name))
+                .unwrap_or_else(|| "anyone (open link)".into());
+            writeln!(
+                f,
+                "# single-use onboarding link into '{}' for {}; expires {}",
+                a.name,
+                who,
+                web::html::fmt_ts(tok.expires_at)
+            )?;
+            store.audit(
+                None,
+                "invite.create",
+                &a.name,
+                &format!(
+                    "{} cli",
+                    recipient
+                        .as_ref()
+                        .map(|u| u.name.as_str())
+                        .unwrap_or("open")
+                ),
+            );
+            println!(
+                "single-use onboarding link into '{}' for {} written to {} (expires in {}h, id {})",
+                a.name,
+                who,
+                shown(&out),
+                ttl_hours,
+                tok.id
+            );
+        }
+        AppCmd::Invites { name } => {
+            let a = need_app(store, &name)?;
+            let now = store.now();
+            println!(
+                "ID     FOR                  STATUS    CREATED            EXPIRES            USED BY"
+            );
+            for t in store.list_app_tokens(TokenKind::Invite, a.id)? {
+                let name_of =
+                    |id: Option<i64>| id.and_then(|id| store.user_by_id(id).ok()).map(|u| u.name);
+                println!(
+                    "{:<6} {:<20} {:<9} {:<18} {:<18} {}",
+                    t.id,
+                    name_of(t.user_id).unwrap_or_else(|| "anyone".into()),
+                    t.status(now),
+                    web::html::fmt_ts(t.created_at),
+                    web::html::fmt_ts(t.expires_at),
+                    name_of(t.used_by).unwrap_or_else(|| "-".into())
+                );
+            }
+        }
+        AppCmd::InviteRevoke { name, id } => {
+            let a = need_app(store, &name)?;
+            let t = store.token_by_id(id)?;
+            if t.kind != TokenKind::Invite || t.app_id != Some(a.id) {
+                return Err(format!("no onboarding link {id} for '{}'", a.name).into());
+            }
+            store.revoke_token(id)?;
+            store.audit(None, "invite.revoke", &a.name, "cli");
+            println!("revoked onboarding link {id} for '{}'", a.name);
         }
         AppCmd::Attest { name, note } => {
             let a = need_app(store, &name)?;

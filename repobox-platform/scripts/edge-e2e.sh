@@ -11,6 +11,9 @@
 #     identity visible to the origin
 #   - public unlisted/listed -> 200 without auth, no identity at the origin
 #   - disable via CLI -> 404 immediately, no re-render
+#   - onboarding link: one URL takes a brand-new device from nothing to a
+#     signed-in, granted app session on a clean app URL; strangers, replays
+#     and disabled apps are refused; the token never reaches a log
 #   - the same-origin AI endpoint (/_repo_box/ai/v1/*): reserved before the
 #     origin, gate + session required, forged headers stripped, policy and
 #     limits enforced, real broker with the bridge secret in front of a fake
@@ -55,6 +58,10 @@ cat > "$W/Caddyfile" <<CADDY
 	skip_install_trust
 }
 auth.repo.box {
+	header {
+		?Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
 	handle /gate/* {
 		respond 404
 	}
@@ -218,6 +225,50 @@ expect "pending public app cannot be made private (CLI)" "$("$P" --db "$DB" app 
 expect "attest, then private is allowed" "$("$P" --db "$DB" app attest legacy-pub --note e2e >/dev/null && "$P" --db "$DB" app visibility legacy-pub private >/dev/null && echo ok)" ok
 "$P" --db "$DB" app remove legacy-pub >/dev/null
 
+echo "== onboarding link: one private URL from a new device into the app"
+"$P" --db "$DB" app invite demo-private --for carol --create-user --display-name Carol --out "$W/carol.url" >/dev/null
+expect "onboarding link file is 0600" "$(stat -c %a "$W/carol.url")" 600
+OLINK=$(head -1 "$W/carol.url")
+OPATH=${OLINK#https://auth.repo.box}
+ORAW=${OPATH#/invite/}
+CJ="$W/carol.jar"
+expect "open link -> body-less 303 to the clean /invite" "$(curl -s "${R[@]}" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' "$A$OPATH")" "303 0 $A/invite"
+expect "token moved into a host-only cookie" "$(command grep -c '__Host-rb_invite' "$CJ")" 1
+page=$(curl -s "${R[@]}" -b "$CJ" -D "$W/invite.h" "$A/invite")
+expect "page greets the recipient" "$(echo "$page" | command grep -c 'Welcome, <strong>Carol</strong>')" 1
+expect "page carries no token" "$(echo "$page" | command grep -c -- "$ORAW")" 0
+expect "page: no-referrer survives the edge" "$(command grep -ci '^referrer-policy: no-referrer' "$W/invite.h")" 1
+expect "other pages keep the edge default policy" "$(curl -s "${R[@]}" -D - -o /dev/null "$A/" | command grep -ci '^referrer-policy: strict-origin-when-cross-origin')" 1
+BOBC=$(awk '/__Host-rb_auth/ {print $7}' "$JAR")
+expect "stranger signed in (bob) -> refused" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' -H "Cookie: __Host-rb_invite=$ORAW; __Host-rb_auth=$BOBC" "$A/invite")" 403
+expect "stranger POST -> nothing consumed" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' -H "Cookie: __Host-rb_invite=$ORAW; __Host-rb_auth=$BOBC" "$A/invite")" "303 $A/invite?err=wrong_user"
+expect "cross-site POST -> nothing consumed" "$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://evil.example' "$A/invite")" "303 $A/invite"
+expect "link still active" "$("$P" --db "$DB" app invites demo-private | awk '$2=="carol" {print $3}')" active
+expect "one click: signed in + granted -> launcher" "$(curl -s "${R[@]}" -b "$CJ" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' "$A/invite")" "303 0 $A/demo-private"
+expect "device cookie set, invite cookie gone" "$(command grep -c '__Host-rb_auth' "$CJ")/$(command grep -c '__Host-rb_invite' "$CJ")" "1/0"
+OLOC=$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{redirect_url}' "$A/demo-private")
+case "$OLOC" in https://demo-private.repo.box/?rb_launch=*) printf '  ok   %-55s %s\n' "launcher mints the launch code" "(code elided)";; *) echo "  FAIL launcher: $OLOC"; fail=1;; esac
+OCODE=${OLOC#*rb_launch=}
+CAJ="$W/carol.appjar"
+expect "gate: app session + clean app URL" "$(curl -s "${R[@]}" -c "$CAJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' "$PRIV/?rb_launch=$OCODE")" "302 0 $PRIV/"
+who=$(curl -s "${R[@]}" -b "$CAJ" "$PRIV/whoami.json")
+expect "origin sees X-RepoBox-User=carol" "$(echo "$who" | command grep -c '"x-repobox-user":"carol"')" 1
+who=$(curl -s "${R[@]}" -b "$CAJ" -H 'X-RepoBox-User: fran' -H 'X-RepoBox-Role: admin' "$PRIV/whoami.json")
+expect "spoofed headers with carol's session: still carol/member" "$(echo "$who" | command grep -c '"x-repobox-user":"carol".*"x-repobox-role":"member"\|"x-repobox-role":"member".*"x-repobox-user":"carol"')" 1
+expect "carol holds exactly the one intended grant" "$("$P" --db "$DB" app show demo-private | command grep -c '^  - carol ')/$("$P" --db "$DB" app show demo-listed | command grep -c '^  - carol ')" "1/0"
+expect "replay -> refused, body-less, no token in target" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' "$A$OPATH")" "303 0 $A/invite?e=used"
+expect "replayed cookie -> refused" "$(curl -s "${R[@]}" -o /dev/null -w '%{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' -H "Cookie: __Host-rb_invite=$ORAW" "$A/invite")" "$A/invite?e=used"
+expect "used link records carol" "$("$P" --db "$DB" app invites demo-private | awk '$2=="carol" {print $3, $NF}')" "used carol"
+"$P" --db "$DB" app invite demo-private --open --out "$W/open.url" >/dev/null
+O2=$(head -1 "$W/open.url"); O2=${O2#https://auth.repo.box}
+"$P" --db "$DB" app disable demo-private >/dev/null
+expect "app disabled -> link refused" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "$A$O2")" "303 $A/invite?e=app_off"
+"$P" --db "$DB" app enable demo-private >/dev/null
+O2ID=$("$P" --db "$DB" app invites demo-private | awk '$2=="anyone" && $3=="active" {print $1; exit}')
+"$P" --db "$DB" app invite-revoke demo-private --id "$O2ID" >/dev/null
+expect "revoked link refused" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "$A$O2")" "303 $A/invite?e=revoked"
+expect "app host anonymous + spoofed identity still 401" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' -H 'X-RepoBox-User: carol' -H 'X-RepoBox-Auth: session' "$PRIV/")" 401
+
 echo "== revocation / disable"
 "$P" --db "$DB" app revoke demo-private --user bob >/dev/null
 expect "grant revoked -> live session denied" "$(curl -s "${R[@]}" -b "$AJAR" -o /dev/null -w '%{http_code}' "$PRIV/")" 401
@@ -248,6 +299,7 @@ PY
 for p in "/?rb_launch=$TOKEN" "/deep/x?a=1&rb_launch=$TOKEN" "/?rb_launch=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"; do
   expect "code-bearing responses carry no body (40 abrupt clients)" "$(python3 "$W/abrupt.py" demo-private.repo.box "$HTTPS" "$p" 40)" 0
 done
+expect "onboarding link answers carry no body (20 abrupt clients)" "$(python3 "$W/abrupt.py" auth.repo.box "$HTTPS" "$OPATH" 20)" 0
 expect "public app: stray code answer carries no body" "$(python3 "$W/abrupt.py" demo-listed.repo.box "$HTTPS" "/?rb_launch=$TOKEN" 20)" 0
 sleep 0.5
 
@@ -255,6 +307,8 @@ echo "== no secrets in logs"
 ALL_LOGS=("$W/cp.log" "$W/caddy.log" "$W/origin.log" "$W/broker.log" "$W/chatmock.log")
 expect "no log has the launch token" "$(command grep -c -- "$TOKEN" "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
 expect "no log has any rb_launch= query" "$(command grep -c -- 'rb_launch=' "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
+expect "no log has the onboarding token" "$(command grep -c -- "$ORAW" "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
+expect "no log has any /invite/ token path" "$(command grep -c -- '/invite/' "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
 expect "no log has the enrol token" "$(command grep -c -- "${PATHPART#/enrol/}" "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
 expect "no log has an app session cookie value" "$(command grep -c -- "$(awk '/__Host-rb_app/ {print $7}' "$AJAR")" "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
 expect "no log has the AI prompt" "$(command grep -c -- "$CANARY" "${ALL_LOGS[@]}" | awk -F: '{s+=$2} END {print s}')" 0
