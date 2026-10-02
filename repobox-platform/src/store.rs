@@ -18,7 +18,10 @@ use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use crate::model::{AiPolicy, App, AppKind, IdentityContract, Role, User, Visibility};
+use crate::model::{
+    AiPolicy, App, AppKind, IdentityContract, Role, User, Visibility, validate_display_name,
+    validate_user_name,
+};
 use crate::tokens;
 
 mod publisher;
@@ -121,6 +124,9 @@ pub struct Token {
     pub note: String,
     /// Launch codes only: the device (auth) session that minted the code.
     pub session_id: Option<i64>,
+    /// Signup links only: the account (handle, display name) the link
+    /// creates when it is used.
+    pub new_user: Option<(String, String)>,
 }
 
 impl Token {
@@ -241,7 +247,9 @@ CREATE TABLE IF NOT EXISTS tokens (
     used_by INTEGER REFERENCES users(id),
     revoked_at INTEGER,
     note TEXT NOT NULL DEFAULT '',
-    session_id INTEGER REFERENCES sessions(id)
+    session_id INTEGER REFERENCES sessions(id),
+    new_user_name TEXT,
+    new_display_name TEXT
 );
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY,
@@ -379,7 +387,7 @@ CREATE TABLE IF NOT EXISTS publisher_releases (
     finished_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS publisher_releases_app ON publisher_releases(app_name, created_at);
-INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '7');
+INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '8');
 "#;
 
 /// Columns added after the first release. `CREATE TABLE IF NOT EXISTS` does
@@ -431,10 +439,14 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
     ("apps", "ai_public_policy", "TEXT"),
     // Schema 7: apps created by an external publisher.
     ("apps", "publisher_id", "INTEGER REFERENCES publishers(id)"),
+    // Schema 8: signup links (an onboarding link that creates this account
+    // when it is used; the handle is not taken until then).
+    ("tokens", "new_user_name", "TEXT"),
+    ("tokens", "new_display_name", "TEXT"),
 ];
 
 /// Current schema version (also written to `meta`).
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 8;
 
 /// AI usage counters (requests per app, user and UTC day) are kept this long.
 pub const AI_USAGE_RETENTION_DAYS: i64 = 90;
@@ -1240,6 +1252,47 @@ impl Store {
             used_by,
             ..tok
         })
+    }
+
+    /// Mint a signup link: an onboarding link for `app_id` that creates the
+    /// member `name` / `display_name` when it is used. The handle must be
+    /// free and not reserved by another live signup link; the account itself
+    /// is created only at redemption.
+    pub fn create_signup_token(
+        &self,
+        app_id: i64,
+        created_by: Option<i64>,
+        name: &str,
+        display_name: &str,
+        ttl_secs: i64,
+        note: &str,
+    ) -> Result<(String, Token)> {
+        validate_user_name(name).map_err(StoreError::Invalid)?;
+        validate_display_name(display_name).map_err(StoreError::Invalid)?;
+        let raw = tokens::generate();
+        let hash = tokens::hash(&raw);
+        let now = self.now();
+        let conn = self.lock();
+        let taken: i64 = conn.query_row(
+            "SELECT (SELECT COUNT(*) FROM users WHERE name = ?1)
+                  + (SELECT COUNT(*) FROM tokens WHERE kind = 'invite' AND new_user_name = ?1
+                       AND used_at IS NULL AND revoked_at IS NULL AND expires_at > ?2)",
+            params![name, now],
+            |r| r.get(0),
+        )?;
+        if taken > 0 {
+            return Err(StoreError::Conflict(format!(
+                "the handle '{name}' is taken or already has a live signup link"
+            )));
+        }
+        conn.execute(
+            "INSERT INTO tokens (kind, token_hash, user_id, app_id, created_by, created_at, expires_at, note, new_user_name, new_display_name)
+             VALUES ('invite', ?1, NULL, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![hash, app_id, created_by, now, now + ttl_secs, note, name, display_name],
+        )?;
+        let id = conn.last_insert_rowid();
+        drop(conn);
+        Ok((raw, self.token_by_id(id)?))
     }
 
     /// Record who redeemed a token after the fact (an onboarding link is
@@ -2117,7 +2170,7 @@ fn row_request(r: &Row<'_>) -> rusqlite::Result<AppRequest> {
 
 /// Why a private registration or a switch to private is refused.
 pub const PRIVATE_NEEDS_PLATFORM_IDENTITY: &str = "private apps must declare the platform identity contract (`--identity platform`: the app has no password, login, setup link or session of its own and scopes records by the gate-injected identity); an existing app is attested with `app attest <name>` after review";
-const TOKEN_SELECT: &str = "SELECT id, kind, user_id, app_id, created_by, created_at, expires_at, used_at, used_by, revoked_at, note, session_id FROM tokens";
+const TOKEN_SELECT: &str = "SELECT id, kind, user_id, app_id, created_by, created_at, expires_at, used_at, used_by, revoked_at, note, session_id, new_user_name, new_display_name FROM tokens";
 const SESSION_SELECT: &str = "SELECT id, kind, user_id, app_id, created_at, expires_at, last_seen_at, revoked_at, label, parent_id FROM sessions";
 
 /// Typeahead match: case-insensitive substring of the handle or the display
@@ -2186,6 +2239,13 @@ fn row_token(r: &Row<'_>) -> rusqlite::Result<Token> {
         revoked_at: r.get(9)?,
         note: r.get(10)?,
         session_id: r.get(11)?,
+        new_user: match (
+            r.get::<_, Option<String>>(12)?,
+            r.get::<_, Option<String>>(13)?,
+        ) {
+            (Some(n), Some(d)) => Some((n, d)),
+            _ => None,
+        },
     })
 }
 
@@ -2889,7 +2949,7 @@ mod tests {
                     ",\n    identity TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending'))",
                     "",
                 )
-                .replace("'schema_version', '7'", "'schema_version', '2'")
+                .replace("'schema_version', '8'", "'schema_version', '2'")
                 .lines()
                 .filter(|l| !l.trim_start().starts_with("ai_"))
                 .collect::<Vec<_>>()
@@ -2944,7 +3004,7 @@ mod tests {
                     |r| r.get(0),
                 )
                 .unwrap();
-            assert_eq!(v, "7");
+            assert_eq!(v, "8");
             assert!(has("apps", "ai_enabled") && has("apps", "ai_public_policy"));
             assert!(has("apps", "publisher_id"));
         }

@@ -15,7 +15,8 @@
 #     signed-in, granted app session on a clean app URL; strangers, replays
 #     and disabled apps are refused; the token never reaches a log; and, when
 #     Playwright's Chromium is installed, the same chain in a real browser
-#     (through a CONNECT proxy to this Caddy, so Origin/cookies are real)
+#     (through a CONNECT proxy to this Caddy, so Origin/cookies are real),
+#     starting from the owner's manage page: "Onboard new user"
 #   - the same-origin AI endpoint (/_repo_box/ai/v1/*): reserved before the
 #     origin, gate + session required, forged headers stripped, policy and
 #     limits enforced, real broker with the bridge secret in front of a fake
@@ -228,7 +229,8 @@ expect "attest, then private is allowed" "$("$P" --db "$DB" app attest legacy-pu
 "$P" --db "$DB" app remove legacy-pub >/dev/null
 
 echo "== onboarding link: one private URL from a new device into the app"
-"$P" --db "$DB" app invite demo-private --for carol --create-user --display-name Carol --out "$W/carol.url" >/dev/null
+"$P" --db "$DB" app invite demo-private --new carol --display-name Carol --out "$W/carol.url" >/dev/null
+expect "signup link does not create the account yet" "$("$P" --db "$DB" user list | command grep -c '^carol ')" 0
 expect "onboarding link file is 0600" "$(stat -c %a "$W/carol.url")" 600
 OLINK=$(head -1 "$W/carol.url")
 OPATH=${OLINK#https://auth.repo.box}
@@ -243,10 +245,10 @@ expect "page: same-origin referrer policy survives the edge" "$(command grep -ci
 expect "other pages keep the edge default policy" "$(curl -s "${R[@]}" -D - -o /dev/null "$A/" | command grep -ci '^referrer-policy: strict-origin-when-cross-origin')" 1
 BOBC=$(awk '/__Host-rb_auth/ {print $7}' "$JAR")
 expect "stranger signed in (bob) -> refused" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' -H "Cookie: __Host-rb_invite=$ORAW; __Host-rb_auth=$BOBC" "$A/invite")" 403
-expect "stranger POST -> nothing consumed" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' -H "Cookie: __Host-rb_invite=$ORAW; __Host-rb_auth=$BOBC" "$A/invite")" "303 $A/invite?err=wrong_user"
+expect "stranger POST -> nothing consumed" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' -H "Cookie: __Host-rb_invite=$ORAW; __Host-rb_auth=$BOBC" "$A/invite")" "303 $A/invite?err=sign_out_first"
 expect "cross-site POST -> nothing consumed" "$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://evil.example' "$A/invite")" "303 $A/invite"
-expect "link still active" "$("$P" --db "$DB" app invites demo-private | awk '$2=="carol" {print $3}')" active
-expect "one click: signed in + granted -> launcher" "$(curl -s "${R[@]}" -b "$CJ" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' "$A/invite")" "303 0 $A/demo-private"
+expect "link still active" "$("$P" --db "$DB" app invites demo-private | awk '$2=="new:carol" {print $3}')" active
+expect "one click: account created, signed in, granted -> launcher" "$(curl -s "${R[@]}" -b "$CJ" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' "$A/invite")" "303 0 $A/demo-private"
 expect "device cookie set, invite cookie gone" "$(command grep -c '__Host-rb_auth' "$CJ")/$(command grep -c '__Host-rb_invite' "$CJ")" "1/0"
 OLOC=$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{redirect_url}' "$A/demo-private")
 case "$OLOC" in https://demo-private.repo.box/?rb_launch=*) printf '  ok   %-55s %s\n' "launcher mints the launch code" "(code elided)";; *) echo "  FAIL launcher: $OLOC"; fail=1;; esac
@@ -260,7 +262,7 @@ expect "spoofed headers with carol's session: still carol/member" "$(echo "$who"
 expect "carol holds exactly the one intended grant" "$("$P" --db "$DB" app show demo-private | command grep -c '^  - carol ')/$("$P" --db "$DB" app show demo-listed | command grep -c '^  - carol ')" "1/0"
 expect "replay -> refused, body-less, no token in target" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' "$A$OPATH")" "303 0 $A/invite?e=used"
 expect "replayed cookie -> refused" "$(curl -s "${R[@]}" -o /dev/null -w '%{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' -H "Cookie: __Host-rb_invite=$ORAW" "$A/invite")" "$A/invite?e=used"
-expect "used link records carol" "$("$P" --db "$DB" app invites demo-private | awk '$2=="carol" {print $3, $NF}')" "used carol"
+expect "used link records carol" "$("$P" --db "$DB" app invites demo-private | awk '$2=="new:carol" {print $3, $NF}')" "used carol"
 "$P" --db "$DB" app invite demo-private --open --out "$W/open.url" >/dev/null
 O2=$(head -1 "$W/open.url"); O2=${O2#https://auth.repo.box}
 "$P" --db "$DB" app disable demo-private >/dev/null
@@ -274,7 +276,7 @@ expect "app host anonymous + spoofed identity still 401" "$(curl -s "${R[@]}" -o
 CHROME="${E2E_CHROME:-$HOME/.cache/ms-playwright/chromium-1148/chrome-linux/chrome}"
 if [[ -x "$CHROME" ]] && NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-calendar/node_modules}" node -e 'require("playwright")' 2>/dev/null; then
   echo "== onboarding link in a real browser (Chromium through Caddy)"
-  "$P" --db "$DB" app invite demo-private --for dave --create-user --display-name Dave --out "$W/dave.url" >/dev/null
+  "$P" --db "$DB" user enrol fran --out "$W/fran.url" >/dev/null
   # Chromium talks to the real https://*.repo.box URLs (port 443) through a
   # CONNECT proxy that tunnels every :443 to this Caddy, so Origin, cookies
   # and the cross-host launch hop behave exactly as in production.
@@ -314,29 +316,43 @@ PY
   PX=$!
   sleep 0.5
   cat > "$W/browser.js" <<'JS'
+// The owner's exact flow: sign in, open the app's manage page, "Onboard new
+// user", enter handle + display name, take the one link; then the new
+// person opens it in a fresh browser and clicks once.
 const { chromium } = require('playwright');
-const [chrome, file] = process.argv.slice(2);
-const link = require('fs').readFileSync(file, 'utf8').split('\n')[0];
-const raw = link.split('/').pop();
+const [chrome, franFile] = process.argv.slice(2);
+const franLink = require('fs').readFileSync(franFile, 'utf8').split('\n')[0];
 (async () => {
   const b = await chromium.launch({ executablePath: chrome, proxy: { server: 'http://127.0.0.1:3934' } });
-  const ctx = await b.newContext({ ignoreHTTPSErrors: true });
-  const page = await ctx.newPage();
+  const owner = await (await b.newContext({ ignoreHTTPSErrors: true })).newPage();
+  await owner.goto(franLink);
+  await owner.click('button[type=submit]');
+  await owner.waitForURL(u => u.pathname === '/');
+  await owner.goto('https://auth.repo.box/apps/demo-private');
+  await owner.click('a:has-text("Onboard new user")');
+  await owner.fill('#onboard-name', 'dave');
+  await owner.fill('#onboard-dn', 'Dave');
+  await owner.click('button:has-text("Create signup link")');
+  const link = (await owner.textContent('.secret')).trim();
+  const shown = link.startsWith('https://auth.repo.box/invite/');
+  const raw = link.split('/').pop();
+  const page = await (await b.newContext({ ignoreHTTPSErrors: true })).newPage();
   const seen = [];
   page.on('framenavigated', f => { if (f === page.mainFrame()) seen.push(f.url()); });
   await page.goto(link);
-  const clean = page.url() === 'https://auth.repo.box/invite';
-  await page.click('button:has-text("Open Private demo")');
+  const clean = page.url() === 'https://auth.repo.box/invite' && (await page.textContent('body')).includes('Welcome, Dave');
+  await page.click('button:has-text("Create account and open Private demo")');
   await page.waitForURL(u => u.hostname === 'demo-private.repo.box', { timeout: 15000 }).catch(() => {});
   const landed = page.url() === 'https://demo-private.repo.box/';
   const who = landed && (await page.textContent('body')).includes('dave');
   const tokenFree = seen.slice(1).every(u => !u.includes(raw) && !u.includes('rb_launch'));
-  console.log(`${+clean}${+landed}${+who}${+tokenFree}`);
+  console.log(`${+shown}${+clean}${+landed}${+who}${+tokenFree}`);
   await b.close();
 })().catch(e => { console.log('error ' + String(e.message).split('\n')[0].replace(/[A-Za-z0-9_-]{43}/g, '<redacted>')); process.exit(1); });
 JS
-  expect "browser: link -> clean /invite -> one click -> app as dave, clean URLs" "$(NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-calendar/node_modules}" node "$W/browser.js" "$CHROME" "$W/dave.url")" 1111
-  expect "browser: dave holds exactly the intended grant" "$("$P" --db "$DB" app show demo-private | command grep -c '^  - dave ')" 1
+  expect "browser: owner page 'Onboard new user' -> link -> one click -> app as dave" "$(NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-calendar/node_modules}" node "$W/browser.js" "$CHROME" "$W/fran.url")" 11111
+  expect "browser: dave's account exists as a member" "$("$P" --db "$DB" user list | awk '$1=="dave" {print $2, $3}')" "member active"
+  expect "browser: dave holds exactly the intended grant" "$("$P" --db "$DB" app show demo-private | command grep -c '^  - dave ')/$("$P" --db "$DB" app show demo-unlisted | command grep -c '^  - dave ')" "1/0"
   kill $PX 2>/dev/null || true
 else
   echo "== (skipped: no Chromium/Playwright for the real-browser onboarding check)"

@@ -304,23 +304,20 @@ enum AppCmd {
         user: String,
     },
     /// Write a single-use onboarding link for this app to a 0600 file (never
-    /// printed). Opening it signs the recipient's device in if needed, adds
-    /// the app grant and lands them in the app. `--for` binds it to one
-    /// member; `--open` makes a link where a new person picks a handle.
+    /// printed); the same links as the manage page. `--new` (signup link):
+    /// opening it creates that account, signs the device in, adds only this
+    /// app's grant and opens the app. `--for`: an existing member. `--open`:
+    /// whoever opens it first picks a handle.
     Invite {
         name: String,
-        /// Recipient handle (an enabled member); nobody else can use the link
-        #[arg(
-            long = "for",
-            conflicts_with = "open",
-            required_unless_present = "open"
-        )]
-        for_user: Option<String>,
-        /// Create the recipient as a new member first (needs --display-name)
-        #[arg(long, requires_all = ["for_user", "display_name"])]
-        create_user: bool,
+        /// Signup link for a new person: their handle (needs --display-name)
+        #[arg(long = "new", requires = "display_name", conflicts_with_all = ["for_user", "open"])]
+        new_user: Option<String>,
         #[arg(long)]
         display_name: Option<String>,
+        /// Existing member's handle; nobody else can use the link
+        #[arg(long = "for", conflicts_with = "open", required_unless_present_any = ["open", "new_user"])]
+        for_user: Option<String>,
         /// Open link: whoever opens it first joins with a handle of their choice
         #[arg(long)]
         open: bool,
@@ -1104,9 +1101,9 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
         }
         AppCmd::Invite {
             name,
-            for_user,
-            create_user,
+            new_user,
             display_name,
+            for_user,
             open: _,
             out,
             ttl_hours,
@@ -1126,29 +1123,41 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
             if out.exists() {
                 return Err(format!("{} already exists; choose a new file so a stale link is never confused for a fresh one", out.display()).into());
             }
-            let handle = for_user.as_deref().unwrap_or("");
-            if create_user {
-                let u = store.create_user(
-                    &handle.trim().to_lowercase(),
-                    display_name.as_deref().unwrap_or_default(),
-                    Role::Member,
+            let (raw, tok, who) = if let Some(handle) = new_user {
+                let handle = handle.trim().to_lowercase();
+                let (raw, tok) = store.create_signup_token(
+                    a.id,
+                    None,
+                    &handle,
+                    display_name.as_deref().unwrap_or_default().trim(),
+                    ttl_hours * 3600,
+                    "cli",
                 )?;
-                store.audit(None, "user.create", &u.name, "cli");
-                println!("created user '{}' (member)", u.name);
-            }
-            let recipient = web::pages::invite_recipient(store, handle).map_err(|k| match k {
-                "invite_admin" => format!("'{handle}' is an admin; admins already open every app"),
-                "invite_disabled_user" => format!("user '{handle}' is disabled"),
-                _ => format!("no user '{handle}' (add --create-user --display-name …)"),
-            })?;
-            let (raw, tok) = store.create_token(
-                TokenKind::Invite,
-                recipient.as_ref().map(|u| u.id),
-                Some(a.id),
-                None,
-                ttl_hours * 3600,
-                "cli",
-            )?;
+                (raw, tok, format!("new account '{handle}'"))
+            } else {
+                let handle = for_user.as_deref().unwrap_or("");
+                let recipient =
+                    web::pages::invite_recipient(store, handle).map_err(|k| match k {
+                        "invite_admin" => {
+                            format!("'{handle}' is an admin; admins already open every app")
+                        }
+                        "invite_disabled_user" => format!("user '{handle}' is disabled"),
+                        _ => format!("no user '{handle}' (for a new person use --new)"),
+                    })?;
+                let (raw, tok) = store.create_token(
+                    TokenKind::Invite,
+                    recipient.as_ref().map(|u| u.id),
+                    Some(a.id),
+                    None,
+                    ttl_hours * 3600,
+                    "cli",
+                )?;
+                let who = recipient
+                    .as_ref()
+                    .map(|u| format!("'{}' only", u.name))
+                    .unwrap_or_else(|| "anyone (open link)".into());
+                (raw, tok, who)
+            };
             let public_base = std::env::var("REPOBOX_PLATFORM_PUBLIC_BASE")
                 .unwrap_or_else(|_| "https://auth.repo.box".into());
             let mut f = std::fs::OpenOptions::new()
@@ -1157,10 +1166,6 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 .mode(0o600)
                 .open(&out)?;
             writeln!(f, "{}/invite/{}", public_base.trim_end_matches('/'), raw)?;
-            let who = recipient
-                .as_ref()
-                .map(|u| format!("'{}' only", u.name))
-                .unwrap_or_else(|| "anyone (open link)".into());
             writeln!(
                 f,
                 "# single-use onboarding link into '{}' for {}; expires {}",
@@ -1168,18 +1173,7 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 who,
                 web::html::fmt_ts(tok.expires_at)
             )?;
-            store.audit(
-                None,
-                "invite.create",
-                &a.name,
-                &format!(
-                    "{} cli",
-                    recipient
-                        .as_ref()
-                        .map(|u| u.name.as_str())
-                        .unwrap_or("open")
-                ),
-            );
+            store.audit(None, "invite.create", &a.name, &format!("{who} cli"));
             println!(
                 "single-use onboarding link into '{}' for {} written to {} (expires in {}h, id {})",
                 a.name,
@@ -1201,7 +1195,11 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 println!(
                     "{:<6} {:<20} {:<9} {:<18} {:<18} {}",
                     t.id,
-                    name_of(t.user_id).unwrap_or_else(|| "anyone".into()),
+                    t.new_user
+                        .as_ref()
+                        .map(|(n, _)| format!("new:{n}"))
+                        .or_else(|| name_of(t.user_id))
+                        .unwrap_or_else(|| "anyone".into()),
                     t.status(now),
                     web::html::fmt_ts(t.created_at),
                     web::html::fmt_ts(t.expires_at),

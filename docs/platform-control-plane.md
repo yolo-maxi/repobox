@@ -67,10 +67,29 @@ browser ──HTTPS──▶ Caddy (repo.box host)
   operator CLI, or by the user from another signed-in device. Opening it shows
   a confirmation page; the POST consumes it and sets `__Host-rb_auth` (30 d).
   GET never consumes, so link-preview bots cannot burn a link.
-* **Onboarding links** (invitations, `/invite/<token>`): one private URL that
-  takes a person from nothing to *inside* a named app. It is a hashed,
-  single-use `invite` token bound to one app (72 h by default, CLI up to 7 d)
-  and, preferably, to one recipient (`tokens.user_id`, an enabled member):
+* **Onboard new user** (the normal flow, on the app's manage page
+  `auth.repo.box/apps/<app>`, owner or admin): the owner clicks **Onboard new
+  user** (button at the top, panel `#onboard`), enters the new person's
+  global repo.box **handle** and **display name** (the only fields an
+  account has; role is always member) and gets one private **signup link**,
+  shown once. Opening it and clicking **Create account and open <app>**
+  creates that `auth.repo.box` account, signs the device in (30 d), adds the
+  grant for this one app and lands them in the app. The account is created
+  only when the link is used (schema 8: `tokens.new_user_name`,
+  `tokens.new_display_name`), so a signup link can never be pointed at an
+  existing account, and member owners may create them. The handle must be
+  free when the link is made, is reserved while the link is live (a second
+  link for it is refused), and is re-checked at use (taken meanwhile:
+  `/invite?e=handle_taken`, nothing consumed). The form on the `/invite`
+  page cannot change the handle or display name. A device already signed in
+  as anyone is refused (`sign_out_first`, nothing consumed). Same backend
+  from the CLI: `app invite <app> --new <handle> --display-name "<Name>"`.
+* **Onboarding links** in general (invitations, `/invite/<token>`): one
+  private URL that takes a person from nothing to *inside* a named app. A
+  hashed, single-use `invite` token bound to one app (72 h by default, CLI up
+  to 7 d) and to a new account (signup link, above), to an existing member
+  (`tokens.user_id`; manage page → Onboarding links → "Link for an existing
+  member"), or to nobody (open link):
   * `GET /invite/<token>` only checks the token, moves it into the host-only
     `__Host-rb_invite` cookie (30 min) and answers a **body-less 303** to the
     clean `/invite`; failures 303 to `/invite?e=<reason>`. The raw token never
@@ -102,10 +121,10 @@ browser ──HTTPS──▶ Caddy (repo.box host)
     Admin accounts cannot be recipients. The legacy form target
     `POST /invite/<token>` performs the same redemption with body-less
     answers.
-  * Owners create links on the manage page (**Onboarding links**, optional
-    "For" handle; a member owner's recipient link needs the recipient already
-    signed in) and see who each is for, status, expiry and who used it;
-    the operator uses `app invite` (below).
+  * The manage page's **Onboarding links** table shows who each link is for
+    (`new: <handle>`, a member, or `anyone`), status, expiry and who used it,
+    with Revoke; a member owner's existing-member link needs the recipient
+    already signed in. The operator CLI (`app invite`) mints the same links.
 * **Visibility**: `private` (default; grant required, listed only to users who
   can open it), `public_unlisted` (no auth, never in the directory),
   `public_listed` (no auth, in the directory and `/api/directory`). Admins and
@@ -477,9 +496,9 @@ $P bootstrap-admin --name fran --out /home/fran/secrets/repobox-platform-fran-$(
 $P user create ocean --display-name Ocean               # then: $P user enrol ocean --out <0600 file>
 $P app register myapp --title "My app" --owner fran --kind proxy --target 127.0.0.1:3299
 $P app grant myapp --user ocean
-# One private onboarding link into an app (signs the device in, grants, opens):
+# Normal flow is the manage page ("Onboard new user"). Same links from the CLI:
+$P app invite hushbench --new newperson --display-name "New Person" --out <0600 file>   # signup link
 $P app invite hushbench --for gianluca --out /home/fran/secrets/onboard-hushbench-gianluca-$(date -u +%Y%m%dT%H%M%SZ).url
-$P app invite hushbench --for newperson --create-user --display-name "New Person" --out <0600 file>
 $P app invite hushbench --open --out <0600 file>          # anyone; they pick a handle
 $P app invites hushbench                                   # for / status / expiry / used by, no secrets
 $P app invite-revoke hushbench --id <id>
@@ -1182,7 +1201,11 @@ only that app's grant and lands the person in the app.
   users disabled (sessions revoked), link files shredded on both hosts;
   HushBench back to 0 grants.
 
-Generating a HushBench onboarding link (operator, on the repo.box host):
+Generating a HushBench onboarding link: superseded by the manage-page
+**Onboard new user** flow (next record); the CLI equivalent
+for a new person is now `--new <handle> --display-name` (the account is
+created when the link is used), and `--create-user` no longer exists. As
+shipped on 2026-10-02:
 
 ```bash
 P=/usr/local/bin/repobox-platform

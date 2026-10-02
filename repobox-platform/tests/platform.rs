@@ -2811,3 +2811,208 @@ async fn every_code_bearing_gate_response_is_body_less() {
         .await;
     assert_eq!((st, body.as_str()), (StatusCode::SEE_OTHER, ""), "disabled");
 }
+
+#[tokio::test]
+async fn owner_onboards_a_new_user_from_the_manage_page() {
+    let h = H::new();
+    // The owner here is a plain member: onboarding is an owner affordance.
+    let owner = h.auth_cookie(&h.owner);
+    let (st, _, page) = h.get("/apps/demo-private", Some(&owner)).await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(page.contains("href=\"#onboard\">Onboard new user</a>"));
+    assert!(page.contains("id=\"onboard\""));
+    assert!(page.contains("action=\"/apps/demo-private/onboard\""));
+    assert!(page.contains("name=\"name\"") && page.contains("name=\"display_name\""));
+    assert!(page.contains("Create signup link"));
+    // Only managers, only same-origin, only valid and free handles.
+    assert_eq!(
+        h.post(
+            "/apps/demo-private/onboard",
+            Some(&h.auth_cookie(&h.bob)),
+            "name=x&display_name=X",
+            true
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    let err = |q: &str| format!("/apps/demo-private?err={q}#onboard");
+    let (_, hd, _) = h
+        .post(
+            "/apps/demo-private/onboard",
+            Some(&owner),
+            "name=gianluca&display_name=G",
+            false,
+        )
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some("/apps/demo-private?err=csrf"));
+    for (form, want) in [
+        ("name=Bad%20Name&display_name=X", "bad_name"),
+        ("name=ok&display_name=", "bad_display"),
+        ("name=eve&display_name=Eve", "onboard_taken"),
+    ] {
+        let (_, hd, _) = h
+            .post("/apps/demo-private/onboard", Some(&owner), form, true)
+            .await;
+        assert_eq!(hdr(&hd, "location"), Some(err(want).as_str()), "{form}");
+    }
+    let (st, hd, body) = h
+        .post(
+            "/apps/demo-private/onboard",
+            Some(&owner),
+            "name=Gianluca&display_name=Gianluca+R",
+            true,
+        )
+        .await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(hdr(&hd, "cache-control"), Some("no-store"));
+    assert!(body.contains("Signup link for Gianluca R"));
+    assert!(body.contains("creates the repo.box account gianluca"));
+    let raw = extract_link(&body, "https://auth.repo.box/invite/");
+    // No account yet; the handle is reserved by the live link.
+    assert!(h.state.store.user_by_name("gianluca").unwrap().is_none());
+    let (_, hd, _) = h
+        .post(
+            "/apps/demo-private/onboard",
+            Some(&owner),
+            "name=gianluca&display_name=Other",
+            true,
+        )
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some(err("onboard_taken").as_str()));
+    let (_, _, page) = h.get("/apps/demo-private", Some(&owner)).await;
+    assert!(page.contains("<td>new: gianluca</td>"));
+    assert!(
+        !page.contains(&raw),
+        "the manage page never shows the link again"
+    );
+
+    let ic = h.open_invite(&raw).await;
+    // A device signed in as somebody else: refused, nothing consumed.
+    let eve = h.auth_cookie(&h.eve);
+    let (st, _, page) = h.get("/invite", Some(&format!("{ic}; {eve}"))).await;
+    assert_eq!(st, StatusCode::FORBIDDEN);
+    assert!(page.contains("creates a new account for <strong>Gianluca R</strong>"));
+    let (_, hd, _) = h
+        .post("/invite", Some(&format!("{ic}; {eve}")), "", true)
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?err=sign_out_first"));
+    assert_eq!(h.invite_status(&raw), "active");
+    assert!(h.state.store.user_by_name("gianluca").unwrap().is_none());
+    // The new person's device: one click creates the account and lands in the app.
+    let (st, _, page) = h.get("/invite", Some(&ic)).await;
+    assert_eq!(st, StatusCode::OK);
+    assert!(page.contains("Welcome, <strong>Gianluca R</strong>"));
+    assert!(page.contains("Create account and open Private demo"));
+    assert!(!page.contains(&raw));
+    let (st, hd, body) = h
+        .post(
+            "/invite",
+            Some(&ic),
+            "name=mallory&display_name=Mallory",
+            true,
+        )
+        .await;
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert!(body.is_empty());
+    assert_eq!(hdr(&hd, "location"), Some("/demo-private"));
+    assert_invite_headers(&hd);
+    assert!(
+        h.state.store.user_by_name("mallory").unwrap().is_none(),
+        "the form cannot choose another handle"
+    );
+    let g = h
+        .state
+        .store
+        .user_by_name("gianluca")
+        .unwrap()
+        .expect("account created");
+    assert_eq!(
+        (g.display_name.as_str(), g.role),
+        ("Gianluca R", Role::Member)
+    );
+    assert!(h.grant("demo-private", &g));
+    for other in ["other-private", "demo-listed", "demo-unlisted"] {
+        assert!(!h.grant(other, &g), "only the intended app: {other}");
+    }
+    let tok = h.state.store.token_by_id(h.token_id(&raw)).unwrap();
+    assert_eq!(tok.used_by, Some(g.id));
+    let device = set_cookies(&hd)
+        .into_iter()
+        .find(|c| c.starts_with(&format!("{AUTH_COOKIE}=")))
+        .expect("device signed in")
+        .split(';')
+        .next()
+        .unwrap()
+        .to_string();
+    let hd = h.land_in_app(&device, "demo-private").await;
+    assert_eq!(hdr(&hd, "x-repobox-user"), Some("gianluca"));
+    assert_eq!(
+        hdr(&hd, "x-repobox-user-id"),
+        Some(g.id.to_string().as_str())
+    );
+    // Single use.
+    h.invite_refused(&raw, "used").await;
+    let (_, hd, _) = h.post("/invite", Some(&ic), "", true).await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?e=used"));
+}
+
+#[tokio::test]
+async fn signup_link_fails_safely_when_its_handle_or_app_goes_away() {
+    let h = H::new();
+    let owner = h.auth_cookie(&h.owner);
+    let app = h.state.store.app_by_name("demo-private").unwrap().unwrap();
+    // Handle taken after the link was made: refused, nothing consumed or granted.
+    let (raw, _) = h
+        .state
+        .store
+        .create_signup_token(app.id, Some(h.owner.id), "zed", "Zed", 3600, "")
+        .unwrap();
+    let ic = h.open_invite(&raw).await;
+    let zed = h
+        .state
+        .store
+        .create_user("zed", "Someone Else", Role::Member)
+        .unwrap();
+    h.invite_refused(&raw, "handle_taken").await;
+    let (_, hd, _) = h.post("/invite", Some(&ic), "", true).await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?e=handle_taken"));
+    assert!(set_cookies(&hd).iter().all(|c| !c.starts_with(AUTH_COOKIE)));
+    assert!(!h.grant("demo-private", &zed));
+    assert_eq!(h.invite_status(&raw), "active");
+    // App switched off: no new links, and live ones do not work.
+    let (raw, _) = h
+        .state
+        .store
+        .create_signup_token(app.id, Some(h.owner.id), "yan", "Yan", 3600, "")
+        .unwrap();
+    h.state.store.set_app_enabled(app.id, false).unwrap();
+    let (_, _, page) = h.get("/apps/demo-private", Some(&owner)).await;
+    assert!(page.contains("Enable it to onboard people"));
+    let (_, hd, _) = h
+        .post(
+            "/apps/demo-private/onboard",
+            Some(&owner),
+            "name=xan&display_name=Xan",
+            true,
+        )
+        .await;
+    assert_eq!(
+        hdr(&hd, "location"),
+        Some("/apps/demo-private?err=onboard_app_off#onboard")
+    );
+    h.invite_refused(&raw, "app_off").await;
+    assert!(h.state.store.user_by_name("yan").unwrap().is_none());
+    // Expired.
+    h.state.store.set_app_enabled(app.id, true).unwrap();
+    h.clock.fetch_add(3601, Ordering::SeqCst);
+    h.invite_refused(&raw, "expired").await;
+    assert!(h.state.store.user_by_name("yan").unwrap().is_none());
+    // An expired link no longer reserves its handle.
+    assert!(
+        h.state
+            .store
+            .create_signup_token(app.id, Some(h.owner.id), "yan", "Yan", 3600, "")
+            .is_ok()
+    );
+}

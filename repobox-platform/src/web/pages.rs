@@ -38,6 +38,11 @@ fn msg_text(key: &str) -> Option<&'static str> {
         "invite_revoked" => "Onboarding link revoked.",
         "invite_admin" => "Admins can already open every app; onboarding links are for members.",
         "invite_disabled_user" => "That user is disabled.",
+        "onboard_taken" => {
+            "That handle is already taken, or already has a live signup link. Pick another handle, or use a link for an existing member."
+        }
+        "onboard_app_off" => "The app is switched off. Enable it to onboard people.",
+        "bad_display" => "Display names are 1-64 characters.",
         "session_revoked" => "Device signed out. App sessions it launched are ended too.",
         "app_session_revoked" => "App session ended.",
         "sessions_revoked_all" => "Every device and app session of that user is revoked.",
@@ -1083,9 +1088,10 @@ pub async fn app_manage(
         if app.description.is_empty() { String::new() } else { format!(" · {}", esc(&app.description)) }
     ));
     body.push_str(&format!(
-        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn primary\" href=\"/{name}\">Launch</a><a class=\"btn\" href=\"/apps/{name}/visits\">Visits</a><a class=\"btn\" href=\"/apps/{name}/analytics\">Requests</a><a class=\"btn\" href=\"/\">Directory</a></div>",
+        "<div class=\"row\" style=\"margin-bottom:18px\"><a class=\"btn primary\" href=\"/{name}\">Launch</a><a class=\"btn primary\" href=\"#onboard\">Onboard new user</a><a class=\"btn\" href=\"/apps/{name}/visits\">Visits</a><a class=\"btn\" href=\"/apps/{name}/analytics\">Requests</a><a class=\"btn\" href=\"/\">Directory</a></div>",
         name = esc(&app.name)
     ));
+    body.push_str(&onboard_panel(&s, &app, &base));
     body.push_str(&format!(
         "<div class=\"panel\"><dl class=\"kv\"><dt>Route</dt><dd><code>{}</code> → <code>{}</code></dd><dt>Owner</dt><dd>{}</dd><dt>Registered</dt><dd>{}</dd><dt>Identity</dt><dd>{} <span class=\"hint\">{}</span></dd></dl><p class=\"hint\" style=\"margin:10px 0 0\">Route shape and origin are operator-managed (CLI + rendered Caddy config). This page controls who may open the app. The edge strips any identity header a browser sends and injects only the gate-issued one; the app's own authorisation is record scoping by that identity, never a second login.</p></div>",
         app.kind.as_str(),
@@ -1160,7 +1166,7 @@ pub async fn app_manage(
     }
     body.push_str("</div>");
 
-    body.push_str(&format!("<h2 id=\"onboarding\">Onboarding links <span class=\"count\">{}</span></h2><div class=\"panel\"><p class=\"muted\">One private link that takes a person straight into this app: {} adds their access and opens the app. Single use, expires after {} hours. Name the person it is for so nobody else can use it; leave it empty for an open link where a new person picks a handle.</p><form method=\"post\" action=\"{base}/invites\" class=\"row\" style=\"margin-bottom:14px;align-items:flex-end;gap:10px;flex-wrap:wrap\"><div class=\"field\" style=\"margin:0\"><label for=\"invite-for\">For (handle, optional)</label><input type=\"text\" id=\"invite-for\" name=\"for\" placeholder=\"e.g. gianluca\" autocomplete=\"off\" autocapitalize=\"none\"></div><button class=\"btn primary\" type=\"submit\">Create onboarding link</button></form>", invites.iter().filter(|t| t.status(now) == "active").count(), if user.is_admin() { "it signs their device in when needed," } else { "once their device is signed in, it" }, s.cfg.invite_ttl / 3600));
+    body.push_str(&format!("<h2 id=\"onboarding\">Onboarding links <span class=\"count\">{}</span></h2><div class=\"panel\"><p class=\"muted\">Every link here is private, single use and expires after {} hours. Use <a href=\"#onboard\">Onboard new user</a> for someone who has no repo.box account yet.</p><details style=\"margin-bottom:14px\"><summary>Link for an existing member, or an open link</summary><p class=\"hint\">For an existing member: {} adds their access and opens the app; nobody else can use it. Leave the handle empty for an open link: whoever opens it first picks a handle.</p><form method=\"post\" action=\"{base}/invites\" class=\"row\" style=\"align-items:flex-end;gap:10px;flex-wrap:wrap\"><div class=\"field\" style=\"margin:0\"><label for=\"invite-for\">Existing member (handle, optional)</label><input type=\"text\" id=\"invite-for\" name=\"for\" placeholder=\"e.g. gianluca\" autocomplete=\"off\" autocapitalize=\"none\"></div><button class=\"btn\" type=\"submit\">Create link</button></form></details>", invites.iter().filter(|t| t.status(now) == "active").count(), s.cfg.invite_ttl / 3600, if user.is_admin() { "it signs their device in when needed," } else { "once their device is signed in, it" }));
     if invites.is_empty() {
         body.push_str("<div class=\"empty\">No onboarding links created.</div>");
     } else {
@@ -1180,11 +1186,14 @@ pub async fn app_manage(
             } else {
                 String::new()
             };
-            let for_user = t
-                .user_id
-                .and_then(|id| s.store.user_by_id(id).ok())
-                .map(|u| u.name)
-                .unwrap_or_else(|| "anyone".into());
+            let for_user = match &t.new_user {
+                Some((n, _)) => format!("new: {n}"),
+                None => t
+                    .user_id
+                    .and_then(|id| s.store.user_by_id(id).ok())
+                    .map(|u| u.name)
+                    .unwrap_or_else(|| "anyone".into()),
+            };
             body.push_str(&format!(
                 "<tr><td>{}</td><td>{}</td><td><span class=\"badge {}\">{}</span></td><td>{}</td><td>{}</td><td style=\"text-align:right\">{}</td></tr>",
                 fmt_ts(t.created_at),
@@ -1596,6 +1605,95 @@ pub async fn app_grant_revoke(
     redirect(&format!("{back}?ok=grant_removed"))
 }
 
+/// The primary onboarding affordance on the manage page: name the new
+/// person, get one signup link that creates their account, signs their
+/// device in, grants this app and opens it.
+fn onboard_panel(s: &AppState, app: &App, base: &str) -> String {
+    let form = if app.enabled {
+        format!(
+            "<form method=\"post\" action=\"{base}/onboard\" class=\"row\" style=\"align-items:flex-end;gap:10px;flex-wrap:wrap\"><div class=\"field\" style=\"margin:0\"><label for=\"onboard-name\">Handle</label><input type=\"text\" id=\"onboard-name\" name=\"name\" placeholder=\"e.g. gianluca\" required maxlength=\"32\" pattern=\"[a-z0-9._-]+\" autocomplete=\"off\" autocapitalize=\"none\" spellcheck=\"false\"><span class=\"hint\">their repo.box handle: lowercase letters, digits, . _ -</span></div><div class=\"field\" style=\"margin:0\"><label for=\"onboard-dn\">Display name</label><input type=\"text\" id=\"onboard-dn\" name=\"display_name\" placeholder=\"Gianluca\" required maxlength=\"64\" autocomplete=\"off\"></div><button class=\"btn primary\" type=\"submit\">Create signup link</button></form>"
+        )
+    } else {
+        "<p class=\"flash err\">The app is switched off. Enable it to onboard people.</p>"
+            .to_string()
+    };
+    format!(
+        "<section class=\"panel\" id=\"onboard\" aria-labelledby=\"onboard-h\" style=\"margin-bottom:14px\"><h3 id=\"onboard-h\">Onboard new user</h3><p class=\"muted\">For someone without a repo.box account. You get one private signup link, shown once: opening it creates their account, signs their device in, gives them access to {} only and opens it. Single use, expires after {} hours.</p>{}</section>",
+        esc(&app.title),
+        s.cfg.invite_ttl / 3600,
+        form
+    )
+}
+
+#[derive(Deserialize, Default)]
+pub struct OnboardForm {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub display_name: String,
+}
+
+/// `POST /apps/<name>/onboard`: mint a signup link for a new person. The
+/// account is created only when the link is used, so the link can never be
+/// turned against an existing account.
+pub async fn app_onboard_create(
+    State(s): State<S>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    Form(f): Form<OnboardForm>,
+) -> Response {
+    let (user, app) = match manageable(&s, &name, &headers) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let back = format!("/apps/{}", app.name);
+    if let Err(r) = require_same_origin(&s, &headers, &back) {
+        return r;
+    }
+    if !app.enabled {
+        return redirect(&format!("{back}?err=onboard_app_off#onboard"));
+    }
+    let handle = f.name.trim().to_lowercase();
+    let display = f.display_name.trim().to_string();
+    if validate_user_name(&handle).is_err() {
+        return redirect(&format!("{back}?err=bad_name#onboard"));
+    }
+    if validate_display_name(&display).is_err() {
+        return redirect(&format!("{back}?err=bad_display#onboard"));
+    }
+    match s.store.create_signup_token(
+        app.id,
+        Some(user.id),
+        &handle,
+        &display,
+        s.cfg.invite_ttl,
+        "",
+    ) {
+        Ok((raw, tok)) => {
+            s.store.audit(
+                Some(user.id),
+                "invite.create",
+                &app.name,
+                &format!("new:{handle}"),
+            );
+            show_link_once(
+                &s,
+                &user,
+                &format!("Signup link for {display}"),
+                &format!(
+                    "Send this to {display} only, privately. Opening it creates the repo.box account {handle}, signs their device in, gives them access to {} and opens it. It works once.",
+                    app.title
+                ),
+                &format!("{}/invite/{}", s.cfg.public_base, raw),
+                tok.expires_at,
+                &back,
+            )
+        }
+        Err(StoreError::Conflict(_)) => redirect(&format!("{back}?err=onboard_taken#onboard")),
+        Err(e) => internal(&s, e),
+    }
+}
+
 #[derive(Deserialize, Default)]
 pub struct InviteCreateForm {
     /// Optional recipient handle; empty means an open link (the person
@@ -1835,6 +1933,8 @@ enum InviteFail {
     Link(crate::store::RedeemError),
     AppOff,
     Stale,
+    /// A signup link whose handle was taken after the link was made.
+    HandleTaken,
 }
 
 impl InviteFail {
@@ -1847,6 +1947,7 @@ impl InviteFail {
             InviteFail::Link(R::Revoked) => "revoked",
             InviteFail::AppOff => "app_off",
             InviteFail::Stale => "stale",
+            InviteFail::HandleTaken => "handle_taken",
         }
     }
 
@@ -1858,6 +1959,7 @@ impl InviteFail {
             "revoked" => InviteFail::Link(R::Revoked),
             "app_off" => InviteFail::AppOff,
             "stale" => InviteFail::Stale,
+            "handle_taken" => InviteFail::HandleTaken,
             _ => InviteFail::Link(R::Unknown),
         }
     }
@@ -1867,6 +1969,9 @@ impl InviteFail {
             InviteFail::Link(e) => e.message(),
             InviteFail::AppOff => "The app this link is for is switched off.",
             InviteFail::Stale => "This link is no longer valid.",
+            InviteFail::HandleTaken => {
+                "The handle this signup link was made for has been taken in the meantime."
+            }
         }
     }
 }
@@ -1876,6 +1981,8 @@ struct InviteCtx {
     app: App,
     inviter: Option<User>,
     recipient: Option<User>,
+    /// Signup link: the (handle, display name) it creates.
+    signup: Option<(String, String)>,
     /// May this link sign a not-yet-signed-in device in as the recipient?
     can_enrol: bool,
 }
@@ -1914,12 +2021,19 @@ fn invite_ctx(s: &AppState, raw: &str) -> Result<InviteCtx, InviteFail> {
             Some(u)
         }
     };
+    let signup = tok.new_user.clone();
+    if let Some((name, _)) = &signup
+        && !matches!(s.store.user_by_name(name), Ok(None))
+    {
+        return Err(InviteFail::HandleTaken);
+    }
     let can_enrol = recipient.is_some() && inviter.as_ref().map(|u| u.is_admin()).unwrap_or(true);
     Ok(InviteCtx {
         tok,
         app,
         inviter,
         recipient,
+        signup,
         can_enrol,
     })
 }
@@ -2012,6 +2126,7 @@ enum InviteRetry {
     Taken,
     WrongUser,
     SignInFirst,
+    SignOutFirst,
 }
 
 impl InviteRetry {
@@ -2021,6 +2136,7 @@ impl InviteRetry {
             InviteRetry::Taken => "taken",
             InviteRetry::WrongUser => "wrong_user",
             InviteRetry::SignInFirst => "sign_in_first",
+            InviteRetry::SignOutFirst => "sign_out_first",
         }
     }
 
@@ -2030,6 +2146,7 @@ impl InviteRetry {
             "taken" => InviteRetry::Taken,
             "wrong_user" => InviteRetry::WrongUser,
             "sign_in_first" => InviteRetry::SignInFirst,
+            "sign_out_first" => InviteRetry::SignOutFirst,
             _ => return None,
         })
     }
@@ -2044,6 +2161,9 @@ impl InviteRetry {
             }
             InviteRetry::WrongUser => {
                 "This link is for someone else, and this device is signed in as a different person."
+            }
+            InviteRetry::SignOutFirst => {
+                "This link creates a new account, and this device is already signed in as someone. Sign out on this device first, then open the link again."
             }
             InviteRetry::SignInFirst => {
                 "This link does not sign a device in. Sign this device in as the person it is for, then open the link again."
@@ -2092,7 +2212,30 @@ pub async fn invite_page(State(s): State<S>, headers: HeaderMap, Query(q): Q) ->
         )
     };
     let open_label = format!("Open {}", app.title);
-    let (status, form) = match (&ctx.recipient, &current) {
+    let (status, form) = if let Some((name, dn)) = &ctx.signup {
+        match &current {
+            Some(u) => (
+                StatusCode::FORBIDDEN,
+                format!(
+                    "<p class=\"flash err\">This link creates a new account for <strong>{}</strong> (<code>{}</code>), and this device is signed in as <code>{}</code>.</p><p>Nothing was changed. If the link is yours, sign out on this device and open the link again.</p><form method=\"post\" action=\"/logout\"><button class=\"btn\" type=\"submit\">Sign out this device</button></form>",
+                    esc(dn),
+                    esc(name),
+                    esc(&u.name)
+                ),
+            ),
+            None => (
+                StatusCode::OK,
+                format!(
+                    "<p>Welcome, <strong>{}</strong>. Continuing creates your repo.box account <code>{}</code>, signs this device in for 30 days and opens {}. No password, nothing else to click.</p>{}",
+                    esc(dn),
+                    esc(name),
+                    esc(&app.title),
+                    button(&format!("Create account and open {}", app.title))
+                ),
+            ),
+        }
+    } else {
+        match (&ctx.recipient, &current) {
         (Some(r), Some(u)) if u.id == r.id => (
             StatusCode::OK,
             format!(
@@ -2143,6 +2286,7 @@ pub async fn invite_page(State(s): State<S>, headers: HeaderMap, Query(q): Q) ->
             StatusCode::OK,
             "<p>Pick a handle to join. This device is signed in as you and the app opens straight away.</p><form method=\"post\" action=\"/invite\" class=\"stack\" style=\"text-align:left;max-width:360px;margin:0 auto\"><div class=\"field\"><label for=\"name\">Handle</label><input type=\"text\" id=\"name\" name=\"name\" placeholder=\"e.g. ocean\" required autocomplete=\"off\" autocapitalize=\"none\"><span class=\"hint\">lowercase letters, digits, . _ -</span></div><div class=\"field\"><label for=\"dn\">Display name</label><input type=\"text\" id=\"dn\" name=\"display_name\" placeholder=\"Ocean\" required autocomplete=\"off\"></div><div><button class=\"btn primary\" type=\"submit\">Join and open</button></div></form>".to_string(),
         ),
+    }
     };
     let body = format!(
         "<div class=\"status-page\"><div class=\"icon\">✉️</div><h1>Invitation to {}</h1><p class=\"muted\">{} invited you · <span class=\"mono\">{}</span> · works once</p>{}{}</div>",
@@ -2177,22 +2321,29 @@ fn redeem_invite(s: &AppState, headers: &HeaderMap, raw: &str, f: &InviteForm) -
         Enrol(User),
         Join(String, String),
     }
-    let who = match (&ctx.recipient, current) {
-        (Some(r), Some(u)) if u.id == r.id => Who::Existing(u),
-        (Some(_), Some(_)) => return Redeemed::Retry(InviteRetry::WrongUser),
-        (Some(r), None) if ctx.can_enrol => Who::Enrol(r.clone()),
-        (Some(_), None) => return Redeemed::Retry(InviteRetry::SignInFirst),
-        (None, Some(u)) => Who::Existing(u),
-        (None, None) => {
-            let name = f.name.trim().to_lowercase();
-            let dn = f.display_name.trim().to_string();
-            if validate_user_name(&name).is_err() || validate_display_name(&dn).is_err() {
-                return Redeemed::Retry(InviteRetry::BadHandle);
+    let who = if let Some((name, dn)) = &ctx.signup {
+        match current {
+            Some(_) => return Redeemed::Retry(InviteRetry::SignOutFirst),
+            None => Who::Join(name.clone(), dn.clone()),
+        }
+    } else {
+        match (&ctx.recipient, current) {
+            (Some(r), Some(u)) if u.id == r.id => Who::Existing(u),
+            (Some(_), Some(_)) => return Redeemed::Retry(InviteRetry::WrongUser),
+            (Some(r), None) if ctx.can_enrol => Who::Enrol(r.clone()),
+            (Some(_), None) => return Redeemed::Retry(InviteRetry::SignInFirst),
+            (None, Some(u)) => Who::Existing(u),
+            (None, None) => {
+                let name = f.name.trim().to_lowercase();
+                let dn = f.display_name.trim().to_string();
+                if validate_user_name(&name).is_err() || validate_display_name(&dn).is_err() {
+                    return Redeemed::Retry(InviteRetry::BadHandle);
+                }
+                if matches!(s.store.user_by_name(&name), Ok(Some(_))) {
+                    return Redeemed::Retry(InviteRetry::Taken);
+                }
+                Who::Join(name, dn)
             }
-            if matches!(s.store.user_by_name(&name), Ok(Some(_))) {
-                return Redeemed::Retry(InviteRetry::Taken);
-            }
-            Who::Join(name, dn)
         }
     };
     // Consume first so two people cannot both use one link.
@@ -2239,6 +2390,7 @@ fn redeem_invite(s: &AppState, headers: &HeaderMap, raw: &str, f: &InviteForm) -
         return Redeemed::Done(internal(s, e));
     }
     let mode = match (&ctx.recipient, new_device) {
+        _ if ctx.signup.is_some() => "signup",
         (Some(_), true) => "recipient,device",
         (Some(_), false) => "recipient",
         (None, true) => "open,joined",

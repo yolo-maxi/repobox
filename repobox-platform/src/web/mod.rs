@@ -214,6 +214,7 @@ pub fn router(state: S) -> Router {
             "/apps/{name}/grants/{user}/revoke",
             post(pages::app_grant_revoke),
         )
+        .route("/apps/{name}/onboard", post(pages::app_onboard_create))
         .route("/apps/{name}/invites", post(pages::app_invite_create))
         .route(
             "/apps/{name}/invites/{id}/revoke",
