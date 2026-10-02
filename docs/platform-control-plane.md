@@ -1279,6 +1279,43 @@ works once; the **Onboarding links** table shows its status and lets you
 revoke it. CLI equivalent (same backend):
 `/usr/local/bin/repobox-platform app invite hushbench --new <handle> --display-name "<Name>" --out <0600 file>`.
 
+## Deployment record (2026-10-02 night, directory filters + buttonless product-named signup links)
+
+* Commits `6bccf46` (quick filters All / Private / Public · listed /
+  Public · unlisted on the signed-in **Your apps** line, `?show=`; they only
+  narrow the access list, keep directory order and manage controls; Other
+  apps and the anonymous directory are untouched; selected chip has
+  `aria-current="page"`), `5af4ce1` (named signup link on a not-signed-in
+  device: neutral "Opening <app>…" page that auto-POSTs after load, no
+  account wording, noscript button; no auto-submit after a retry redirect),
+  `33d366f` (links are `/invite/<app>/<token>`; segment checked against the
+  token's app, mismatch = `e=invalid`; legacy `/invite/<token>` still works).
+* Deploys (`NO_CADDY=1`): 23:42 UTC (`6bccf46` alone; it started before the
+  onboarding request arrived), 23:44 (`5af4ce1`), 23:49 (`33d366f`, backup
+  `platform-20261002T234909Z.db`). Live sha256 `5460b5a9dfcc6357…` = local
+  build. Sweep: only the pre-existing Fieldwork origin 404s.
+* Gates: fmt, clippy `-D warnings`, 101 tests (platform 39, incl.
+  `your_apps_quick_filters_only_narrow_the_access_list` and
+  `onboarding_link_names_its_app_and_the_name_is_never_trusted`), edge E2E
+  120/120 (preview GET+follow consumes nothing, origin-less POST refused,
+  tampered segment GET/POST refused, Chromium owner → link → no click →
+  app).
+* Live (Playwright, disposable admin/member/new user `rbtest-*-10022349`,
+  1280 px and 390 px): admin chips All 28 / Private 15 / Public · listed 2 /
+  Public · unlisted 11, each filter an ordered subset with Manage on every
+  card, no horizontal overflow; member sees only their grant under every
+  filter, Other apps byte-identical, launcher status unchanged (granted 302,
+  ungranted 403). HushBench signup link from the manage page reads
+  `/invite/hushbench/<token>`; `demo-private`, `nope`, `HushBench` segments →
+  `/invite?e=invalid` (app not named); owner's signed-in browser refused,
+  link still active; fresh 390 px browser → one POST → HushBench, transition
+  `<h1>Opening HushBench…</h1>` with no account wording; replay →
+  `e=used`. Audit: one `user.join`, one `invite.redeem`. Journal and Caddy
+  logs: 0 token hits, 0 `/invite/` paths. Cleanup: grants revoked, users
+  disabled, link files shredded.
+* Known limit: a scanner that runs JavaScript in a full browser could
+  complete a buttonless link; plain previewers and non-JS scanners cannot.
+
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
 
 Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
