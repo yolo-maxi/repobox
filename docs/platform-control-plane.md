@@ -1139,6 +1139,67 @@ publisher token found the releases API but no human-readable docs;
   `skill.md` has the docs row. Anonymous and invalid-token 401s name the docs
   URL. `/`, `/me`, `/demo-private` and `/admin/users` answer as before.
 
+## Deployment record (2026-10-02, one-URL onboarding links)
+
+Problem: a new person was told to get an `auth.repo.box` device link first
+and then open `hushbench.repo.box` separately. Now an owner/operator sends
+one private onboarding link that signs the device in (when allowed), adds
+only that app's grant and lands the person in the app.
+
+* Commits `f281662` (feature) and `061fca0` (`Referrer-Policy: same-origin`
+  on onboarding pages + real-browser edge E2E). Deployed twice with
+  `scripts/deploy.sh` (full, Caddy apply): 22:26 and 22:33 UTC; live binary
+  sha256 `5488f22345488ecc…` = local build of `061fca0`. Caddy change: only
+  the managed block's `Referrer-Policy` became a default (`?Referrer-Policy`);
+  rendered routes were byte-identical to the live `apps.caddy` before the
+  apply. Backups `/etc/caddy/backups/Caddyfile.pre-repobox-platform-20261002T222644Z`
+  and `…-20261002T223350Z`; DB backups `platform-20261002T222640Z.db`,
+  `platform-20261002T223346Z.db`. No schema change.
+* Gates: fmt, clippy `-D warnings`, `cargo test -p repobox-platform` (38 unit +
+  16 AI + 35 platform + 8 publisher), `edge-e2e.sh` 112/112 incl. the
+  real-Chromium onboarding chain; the browser step fails on a `no-referrer`
+  build (proven), which is the bug the first live run hit: Chromium sends
+  `Origin: null` on the form POST, the CSRF check refused it, nothing was
+  consumed or granted.
+* Live sweep: everything as expected except the two pre-existing Fieldwork
+  capability hosts (`fieldwork-deck`, `fieldwork-write`), whose origin
+  answers `404 {"error":"Not found."}` at `/` (also with a direct loopback
+  request); routes unchanged.
+* Live E2E with disposable members `rbtest-new-10022227` and
+  `rbtest-old-10022227` (links in 0600 files, never printed; Playwright,
+  390 px viewport): stranger signed in → clean `/invite`, refused, nothing
+  consumed; existing signed-in recipient → one click → `https://hushbench.repo.box/`;
+  brand-new device → welcome page → one click → signed in, granted, landed
+  on `https://hushbench.repo.box/` (reload stays in); replay in a fresh
+  browser → `/invite?e=used`, HushBench still private. Registry/audit:
+  `invite.redeem … recipient,device` / `recipient`, then `launch.mint` +
+  `launch.redeem`, exactly one HushBench grant each. Caddy + control-plane
+  journal since 22:20 UTC: 0 hits for any raw link token, 0 `/invite/`,
+  0 `rb_launch=`. External: bogus link → `303 0 …/invite?e=invalid`;
+  `/invite?e=…` 410 with `no-store` + `same-origin`; other pages keep the
+  edge default; HushBench anonymous/spoofed 401; forged `rb_launch` body-less
+  303; `:3230` unreachable from outside. Cleanup: both grants revoked, both
+  users disabled (sessions revoked), link files shredded on both hosts;
+  HushBench back to 0 grants.
+
+Generating a HushBench onboarding link (operator, on the repo.box host):
+
+```bash
+P=/usr/local/bin/repobox-platform
+# new person (creates the member and the link in one step):
+$P app invite hushbench --for <handle> --create-user --display-name "<Name>" \
+   --out /home/fran/secrets/onboard-hushbench-<handle>-$(date -u +%Y%m%dT%H%M%SZ).url
+# existing member (e.g. gianluca):
+$P app invite hushbench --for gianluca --out /home/fran/secrets/onboard-hushbench-gianluca-$(date -u +%Y%m%dT%H%M%SZ).url
+$P app invites hushbench           # status / used by, no secrets
+$P app invite-revoke hushbench --id <id>
+```
+
+Send the first line of the 0600 file privately to that person only (it
+expires in 72 h, `--ttl-hours` up to 168), then shred the file. In the UI:
+`https://auth.repo.box/apps/hushbench` → **Onboarding links** → For
+`<handle>` → **Create onboarding link** (shown once).
+
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
 
 Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
