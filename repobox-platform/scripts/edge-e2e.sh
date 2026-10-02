@@ -234,8 +234,11 @@ expect "signup link does not create the account yet" "$("$P" --db "$DB" user lis
 expect "onboarding link file is 0600" "$(stat -c %a "$W/carol.url")" 600
 OLINK=$(head -1 "$W/carol.url")
 OPATH=${OLINK#https://auth.repo.box}
-ORAW=${OPATH#/invite/}
+ORAW=${OPATH##*/}
 CJ="$W/carol.jar"
+expect "link names its product: /invite/demo-private/<token>" "$([[ "$OPATH" == "/invite/demo-private/$ORAW" && ${#ORAW} -eq 43 ]] && echo yes)" yes
+expect "tampered product segment -> refused like an unknown link" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' "$A/invite/demo-listed/$ORAW")" "303 0 $A/invite?e=invalid"
+expect "tampered segment POST -> refused, nothing consumed" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' "$A/invite/nope/$ORAW")/$("$P" --db "$DB" app invites demo-private | awk '$2=="new:carol" {print $3}')" "303 $A/invite?e=invalid/active"
 expect "open link -> body-less 303 to the clean /invite" "$(curl -s "${R[@]}" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' "$A$OPATH")" "303 0 $A/invite"
 expect "token moved into a host-only cookie" "$(command grep -c '__Host-rb_invite' "$CJ")" 1
 page=$(curl -s "${R[@]}" -b "$CJ" -D "$W/invite.h" "$A/invite")
@@ -338,7 +341,7 @@ const franLink = require('fs').readFileSync(franFile, 'utf8').split('\n')[0];
   await owner.fill('#onboard-dn', 'Dave');
   await owner.click('button:has-text("Create signup link")');
   const link = (await owner.textContent('.secret')).trim();
-  const shown = link.startsWith('https://auth.repo.box/invite/');
+  const shown = link.startsWith('https://auth.repo.box/invite/demo-private/');
   const raw = link.split('/').pop();
   const page = await (await b.newContext({ ignoreHTTPSErrors: true })).newPage();
   const seen = [];

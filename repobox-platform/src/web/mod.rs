@@ -29,7 +29,7 @@ pub const APP_COOKIE: &str = "__Host-rb_app";
 /// the app host. Deliberately not `token`: apps use that name for their own
 /// invite/setup links, and the gate must never swallow those.
 pub const LAUNCH_PARAM: &str = "rb_launch";
-/// Holds a raw onboarding-link token between `GET /invite/<token>` (which
+/// Holds a raw onboarding-link token between `GET /invite/<app>/<token>` (which
 /// only moves it here and redirects to the clean `/invite`) and the POST that
 /// consumes it, so the token never stays in the address bar, in a rendered
 /// page or in a request URI that answers with a body.
@@ -231,6 +231,10 @@ pub fn router(state: S) -> Router {
         .route(
             "/invite/{token}",
             get(pages::invite_get).post(pages::invite_post),
+        )
+        .route(
+            "/invite/{app}/{token}",
+            get(pages::invite_get_named).post(pages::invite_post_named),
         )
         .route("/{name}", get(pages::launch))
         .fallback(pages::not_found)

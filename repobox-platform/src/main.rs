@@ -1165,7 +1165,11 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 .create_new(true)
                 .mode(0o600)
                 .open(&out)?;
-            writeln!(f, "{}/invite/{}", public_base.trim_end_matches('/'), raw)?;
+            writeln!(
+                f,
+                "{}",
+                web::pages::invite_link(&public_base, &a.name, &raw)
+            )?;
             writeln!(
                 f,
                 "# single-use onboarding link into '{}' for {}; expires {}",

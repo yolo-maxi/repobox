@@ -1820,7 +1820,7 @@ async fn open_onboarding_link_joins_a_new_person_and_lands_in_the_app() {
         .await;
     assert_eq!(st, StatusCode::OK);
     assert!(body.contains("Onboarding link for Private demo"));
-    let raw = extract_link(&body, "https://auth.repo.box/invite/");
+    let raw = extract_link(&body, "https://auth.repo.box/invite/demo-private/");
     let ic = h.open_invite(&raw).await;
     let (st, hd, page) = h.get("/invite", Some(&ic)).await;
     assert_eq!(st, StatusCode::OK);
@@ -1928,7 +1928,7 @@ async fn open_onboarding_link_joins_a_new_person_and_lands_in_the_app() {
     let (_, _, body) = h
         .post("/apps/demo-private/invites", Some(&owner), "", true)
         .await;
-    let raw2 = extract_link(&body, "https://auth.repo.box/invite/");
+    let raw2 = extract_link(&body, "https://auth.repo.box/invite/demo-private/");
     let ic2 = h.open_invite(&raw2).await;
     let (st, _, page) = h.get("/invite", Some(&format!("{ic2}; {eve}"))).await;
     assert_eq!(st, StatusCode::OK);
@@ -2047,7 +2047,7 @@ async fn owner_bound_link_needs_the_recipient_signed_in_and_refuses_admins() {
         .await;
     assert_eq!(st, StatusCode::OK);
     assert!(body.contains("Send this to Eve only"));
-    let raw = extract_link(&body, "https://auth.repo.box/invite/");
+    let raw = extract_link(&body, "https://auth.repo.box/invite/other-private/");
     let ic = h.open_invite(&raw).await;
     // A member owner cannot mint device sign-ins: an anonymous device is told
     // to sign in first and nothing happens.
@@ -2966,7 +2966,7 @@ async fn owner_onboards_a_new_user_from_the_manage_page() {
     assert_eq!(hdr(&hd, "cache-control"), Some("no-store"));
     assert!(body.contains("Signup link for Gianluca R"));
     assert!(body.contains("creates the repo.box account gianluca"));
-    let raw = extract_link(&body, "https://auth.repo.box/invite/");
+    let raw = extract_link(&body, "https://auth.repo.box/invite/demo-private/");
     // No account yet; the handle is reserved by the live link.
     assert!(h.state.store.user_by_name("gianluca").unwrap().is_none());
     let (_, hd, _) = h
@@ -3083,6 +3083,80 @@ async fn owner_onboards_a_new_user_from_the_manage_page() {
     h.invite_refused(&raw, "used").await;
     let (_, hd, _) = h.post("/invite", Some(&ic), "", true).await;
     assert_eq!(hdr(&hd, "location"), Some("/invite?e=used"));
+}
+
+#[tokio::test]
+async fn onboarding_link_names_its_app_and_the_name_is_never_trusted() {
+    let h = H::new();
+    // The CLI writes the product-named form.
+    let raw = h.invite_token("demo-private", None, None);
+    let link =
+        repobox_platform::web::pages::invite_link("https://auth.repo.box/", "demo-private", &raw);
+    assert_eq!(
+        link,
+        format!("https://auth.repo.box/invite/demo-private/{raw}")
+    );
+    // Tampered or mistyped app segments (another real app, an unknown one, a
+    // case variant): refused like an unknown link, body-less, no cookie,
+    // nothing consumed, and the page never says which app the token is for.
+    for wrong in ["other-private", "demo-listed", "nope", "Demo-Private"] {
+        let (st, hd, body) = h.get(&format!("/invite/{wrong}/{raw}"), None).await;
+        assert_eq!(st, StatusCode::SEE_OTHER, "{wrong}");
+        assert!(body.is_empty());
+        assert_eq!(hdr(&hd, "location"), Some("/invite?e=invalid"), "{wrong}");
+        assert!(
+            set_cookies(&hd).iter().all(|c| c.contains("Max-Age=0")),
+            "{wrong}"
+        );
+        let (_, hd, body) = h
+            .post(&format!("/invite/{wrong}/{raw}"), None, "", true)
+            .await;
+        assert!(body.is_empty());
+        assert_eq!(hdr(&hd, "location"), Some("/invite?e=invalid"), "{wrong}");
+        assert!(set_cookies(&hd).is_empty(), "{wrong}");
+    }
+    let (_, _, page) = h.get("/invite?e=invalid", None).await;
+    assert!(!page.contains("demo-private") && !page.contains("Private demo"));
+    assert_eq!(h.invite_status(&raw), "active");
+    // The right name: same clean hand-off as the legacy form.
+    let (st, hd, body) = h.get(&format!("/invite/demo-private/{raw}"), None).await;
+    assert_eq!(st, StatusCode::SEE_OTHER);
+    assert!(body.is_empty());
+    assert_eq!(hdr(&hd, "location"), Some("/invite"));
+    assert_invite_headers(&hd);
+    assert!(
+        hdr(&hd, "set-cookie")
+            .unwrap()
+            .starts_with(&format!("{INVITE_COOKIE}={raw};"))
+    );
+    // Signed in as bob, POST to the named URI: redeemed once, for that app only.
+    let bob = h.auth_cookie(&h.bob);
+    let (_, hd, _) = h
+        .post(
+            &format!("/invite/other-private/{raw}"),
+            Some(&bob),
+            "",
+            true,
+        )
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?e=invalid"));
+    assert!(!h.grant("other-private", &h.bob));
+    assert_eq!(h.invite_status(&raw), "active");
+    let raw2 = h.invite_token("demo-listed", None, None);
+    let (_, hd, _) = h
+        .post(&format!("/invite/demo-listed/{raw2}"), Some(&bob), "", true)
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some("/demo-listed"));
+    assert!(h.grant("demo-listed", &h.bob));
+    // A used link is "used" under its own name, "invalid" under any other.
+    let (_, hd, _) = h.get(&format!("/invite/demo-listed/{raw2}"), None).await;
+    assert_eq!(hdr(&hd, "location"), Some("/invite?e=used"));
+    // Legacy un-named links keep working.
+    let ic = h.open_invite(&raw).await;
+    let (_, hd, _) = h
+        .post("/invite", Some(&format!("{ic}; {bob}")), "", true)
+        .await;
+    assert_eq!(hdr(&hd, "location"), Some("/demo-private"));
 }
 
 #[tokio::test]

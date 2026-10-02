@@ -89,13 +89,19 @@ browser ──HTTPS──▶ Caddy (repo.box host)
   page cannot change the handle or display name. A device already signed in
   as anyone is refused (`sign_out_first`, nothing consumed). Same backend
   from the CLI: `app invite <app> --new <handle> --display-name "<Name>"`.
-* **Onboarding links** in general (invitations, `/invite/<token>`): one
+* **Onboarding links** in general (invitations, `/invite/<app>/<token>`, e.g.
+  `https://auth.repo.box/invite/hushbench/<token>`): one
   private URL that takes a person from nothing to *inside* a named app. A
   hashed, single-use `invite` token bound to one app (72 h by default, CLI up
   to 7 d) and to a new account (signup link, above), to an existing member
   (`tokens.user_id`; manage page → Onboarding links → "Link for an existing
   member"), or to nobody (open link):
-  * `GET /invite/<token>` only checks the token, moves it into the host-only
+  * The `<app>` segment only names the product for the recipient. The token
+    alone decides; a segment that is not the token's own app (another app,
+    an unknown name, a case variant) is refused exactly like an unknown link
+    (`/invite?e=invalid`, no cookie, nothing consumed, the app not revealed).
+    Links minted before this change (`/invite/<token>`) keep working.
+  * `GET /invite/<app>/<token>` only checks the token, moves it into the host-only
     `__Host-rb_invite` cookie (30 min) and answers a **body-less 303** to the
     clean `/invite`; failures 303 to `/invite?e=<reason>`. The raw token never
     stays in the address bar, never appears in a page and never rides on a
@@ -124,7 +130,8 @@ browser ──HTTPS──▶ Caddy (repo.box host)
     are refused before any user, session or grant is created; mistakes the
     person can fix (bad or taken handle, wrong account) never consume it.
     Admin accounts cannot be recipients. The legacy form target
-    `POST /invite/<token>` performs the same redemption with body-less
+    `POST /invite/<app>/<token>` (and legacy `POST /invite/<token>`)
+    performs the same redemption with body-less
     answers.
   * The manage page's **Onboarding links** table shows who each link is for
     (`new: <handle>`, a member, or `anyone`), status, expiry and who used it,

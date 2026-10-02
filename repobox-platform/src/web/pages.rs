@@ -1739,7 +1739,7 @@ pub async fn app_onboard_create(
                     "Send this to {display} only, privately. Opening it creates the repo.box account {handle}, signs their device in, gives them access to {} and opens it. It works once.",
                     app.title
                 ),
-                &format!("{}/invite/{}", s.cfg.public_base, raw),
+                &invite_link(&s.cfg.public_base, &app.name, &raw),
                 tok.expires_at,
                 &back,
             )
@@ -1806,7 +1806,7 @@ pub async fn app_invite_create(
                 &app.name,
                 recipient.as_ref().map(|u| u.name.as_str()).unwrap_or(""),
             );
-            let link = format!("{}/invite/{}", s.cfg.public_base, raw);
+            let link = invite_link(&s.cfg.public_base, &app.name, &raw);
             let intro = match &recipient {
                 Some(r) if user.is_admin() => format!(
                     "Send this to {} only. Opening it signs their device in as {} (if it is not signed in yet), gives them access to {} and opens it. Nobody else can use it.",
@@ -1960,7 +1960,11 @@ pub async fn enrol_post(
 // An onboarding (invitation) link is one hashed, single-use `invite` token
 // bound to one app and, optionally, to one recipient (`tokens.user_id`):
 //
-// * `GET /invite/<token>` checks the token without consuming it, moves it into
+// * Links read `/invite/<app>/<token>`: the app segment only tells the
+//   recipient what the link is for. The token alone decides; a segment that
+//   does not name the token's app is refused like an unknown link, before
+//   anything else happens. Legacy `/invite/<token>` links keep working.
+// * `GET /invite/<app>/<token>` checks the token without consuming it, moves it into
 //   a host-only cookie and answers a body-less 303 to the clean `/invite`, so
 //   the raw token never stays in the address bar, never appears in a page and
 //   never rides on a request whose answer has a body.
@@ -2151,13 +2155,44 @@ fn invite_failed(s: &AppState, user: Option<&User>, fail: InviteFail) -> Respons
     )
 }
 
-/// `GET /invite/<token>`: never consumes, never renders; moves the token into
-/// the host-only cookie and redirects to the clean URL.
+/// The onboarding link handed to a recipient. The app name is descriptive
+/// only; see [`invite_ctx_for`].
+pub fn invite_link(public_base: &str, app: &str, raw: &str) -> String {
+    format!("{}/invite/{app}/{raw}", public_base.trim_end_matches('/'))
+}
+
+/// [`invite_ctx`] for a request URI that may name the app. A name that is not
+/// the token's own app is refused exactly like an unknown token, so a
+/// tampered path learns nothing and changes nothing.
+fn invite_ctx_for(s: &AppState, app: Option<&str>, raw: &str) -> Result<InviteCtx, InviteFail> {
+    let ctx = invite_ctx(s, raw)?;
+    match app {
+        Some(name) if name != ctx.app.name => {
+            Err(InviteFail::Link(crate::store::RedeemError::Unknown))
+        }
+        _ => Ok(ctx),
+    }
+}
+
+/// `GET /invite/<app>/<token>`: see [`invite_get`].
+pub async fn invite_get_named(
+    State(s): State<S>,
+    Path((app, raw)): Path<(String, String)>,
+) -> Response {
+    invite_handoff(&s, Some(&app), &raw)
+}
+
+/// `GET /invite/<token>` (legacy links): never consumes, never renders; moves
+/// the token into the host-only cookie and redirects to the clean URL.
 pub async fn invite_get(State(s): State<S>, Path(raw): Path<String>) -> Response {
-    match invite_ctx(&s, &raw) {
+    invite_handoff(&s, None, &raw)
+}
+
+fn invite_handoff(s: &AppState, app: Option<&str>, raw: &str) -> Response {
+    match invite_ctx_for(s, app, raw) {
         Ok(_) => see_other(
             "/invite",
-            &[set_cookie(super::INVITE_COOKIE, &raw, INVITE_COOKIE_TTL)],
+            &[set_cookie(super::INVITE_COOKIE, raw, INVITE_COOKIE_TTL)],
         ),
         Err(fail) => see_other(
             &format!("/invite?e={}", fail.code()),
@@ -2525,14 +2560,35 @@ pub async fn invite_post(
     f: Result<Form<InviteForm>, axum::extract::rejection::FormRejection>,
 ) -> Response {
     let f = f.map(|Form(f)| f).unwrap_or_default();
-    let keep = || set_cookie(super::INVITE_COOKIE, &raw, INVITE_COOKIE_TTL);
-    if !same_origin(&s, &headers) {
-        return match invite_ctx(&s, &raw) {
-            Ok(_) => see_other("/invite", &[keep()]),
-            Err(fail) => see_other(&format!("/invite?e={}", fail.code()), &[]),
-        };
+    invite_post_to(&s, &headers, None, &raw, &f)
+}
+
+/// `POST /invite/<app>/<token>`: as [`invite_post`], after the app check.
+pub async fn invite_post_named(
+    State(s): State<S>,
+    headers: HeaderMap,
+    Path((app, raw)): Path<(String, String)>,
+    f: Result<Form<InviteForm>, axum::extract::rejection::FormRejection>,
+) -> Response {
+    let f = f.map(|Form(f)| f).unwrap_or_default();
+    invite_post_to(&s, &headers, Some(&app), &raw, &f)
+}
+
+fn invite_post_to(
+    s: &AppState,
+    headers: &HeaderMap,
+    app: Option<&str>,
+    raw: &str,
+    f: &InviteForm,
+) -> Response {
+    let keep = || set_cookie(super::INVITE_COOKIE, raw, INVITE_COOKIE_TTL);
+    if let Err(fail) = invite_ctx_for(s, app, raw) {
+        return see_other(&format!("/invite?e={}", fail.code()), &[]);
     }
-    match redeem_invite(&s, &headers, &raw, &f) {
+    if !same_origin(s, headers) {
+        return see_other("/invite", &[keep()]);
+    }
+    match redeem_invite(s, headers, raw, f) {
         Redeemed::Done(mut r) => {
             if r.status() == StatusCode::INTERNAL_SERVER_ERROR {
                 r = see_other("/invite?e=invalid", &[]);
