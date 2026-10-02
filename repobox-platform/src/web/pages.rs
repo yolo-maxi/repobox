@@ -307,6 +307,47 @@ pub fn partition_directory<'a>(
     (yours, others)
 }
 
+/// The quick filters on the "Your apps" line: `None` is "All".
+const YOUR_APPS_FILTERS: [(Option<Visibility>, &str); 4] = [
+    (None, "All"),
+    (Some(Visibility::Private), "Private"),
+    (Some(Visibility::PublicListed), "Public · listed"),
+    (Some(Visibility::PublicUnlisted), "Public · unlisted"),
+];
+
+/// Narrow the user's own apps to one visibility (`?show=`). It only ever
+/// removes cards from the access list `partition_directory` produced, keeping
+/// its order, so a filter can never reveal an app the user cannot open.
+pub fn filter_your_apps<'a>(yours: &[&'a App], show: Option<Visibility>) -> Vec<&'a App> {
+    yours
+        .iter()
+        .copied()
+        .filter(|a| show.is_none_or(|v| a.visibility == v))
+        .collect()
+}
+
+fn your_apps_filters(yours: &[&App], show: Option<Visibility>) -> String {
+    let mut nav =
+        String::from("<nav class=\"filters\" aria-label=\"Filter your apps by visibility\">");
+    for (v, label) in YOUR_APPS_FILTERS {
+        let href = match v {
+            None => "/".to_string(),
+            Some(v) => format!("/?show={}", v.as_str()),
+        };
+        let current = if v == show {
+            " aria-current=\"page\""
+        } else {
+            ""
+        };
+        nav.push_str(&format!(
+            "<a href=\"{href}\"{current}>{label} <span class=\"n\">{}</span></a>",
+            filter_your_apps(yours, v).len()
+        ));
+    }
+    nav.push_str("</nav>");
+    nav
+}
+
 fn section(body: &mut String, id: &str, heading: &str, count: usize, sub: &str, cards: &str) {
     body.push_str(&format!(
         "<section class=\"section\" aria-labelledby=\"{id}\"><div class=\"section-head\"><h2 id=\"{id}\">{heading} <span class=\"count\">{count}</span></h2><p class=\"sub\">{sub}</p></div>{cards}</section>"
@@ -356,25 +397,39 @@ pub async fn index(State(s): State<S>, headers: HeaderMap, Query(q): Q) -> Respo
             ));
             let (yours, others) = partition_directory(&s.store, u, &apps);
             let manages_any = yours.iter().any(|a| s.store.can_manage(u, a));
-            let cards: Vec<String> = yours
+            let show = q.get("show").and_then(|v| Visibility::parse(v));
+            let cards: Vec<String> = filter_your_apps(&yours, show)
                 .iter()
                 .map(|a| app_card(a, domain, true, s.store.can_manage(u, a)))
                 .collect();
-            section(
-                &mut body,
-                "your-apps",
-                "Your apps",
-                cards.len(),
-                if u.is_admin() {
-                    "As a platform admin you can open and manage every registered app."
-                } else {
-                    "Apps you own or have been granted access to."
-                },
-                &grid(
+            let sub = if u.is_admin() {
+                "As a platform admin you can open and manage every registered app."
+            } else {
+                "Apps you own or have been granted access to."
+            };
+            let cards = match show {
+                _ if yours.is_empty() => grid(
                     &cards,
                     "Nothing yet. An app owner can send you an invitation link or grant your handle directly.",
                 ),
-            );
+                Some(v) => grid(
+                    &cards,
+                    &format!(
+                        "None of your apps are {}. <a href=\"/\">Show all</a>",
+                        v.label().to_lowercase()
+                    ),
+                ),
+                None => grid(&cards, ""),
+            };
+            let filters = if yours.is_empty() {
+                String::new()
+            } else {
+                your_apps_filters(&yours, show)
+            };
+            body.push_str(&format!(
+                "<section class=\"section\" aria-labelledby=\"your-apps\"><div class=\"section-head\"><div class=\"head-row\"><h2 id=\"your-apps\">Your apps <span class=\"count\">{}</span></h2>{filters}</div><p class=\"sub\">{sub}</p></div>{cards}</section>",
+                yours.len()
+            ));
             if !others.is_empty() {
                 let cards: Vec<String> = others
                     .iter()

@@ -91,6 +91,14 @@ table.sessions td.actions{text-align:right}
 @media (max-width:600px){.table-wrap:has(table.sessions){overflow:visible}table.sessions thead{display:none}table.sessions tr{display:block;padding:10px 0;border-bottom:1px solid var(--border)}table.sessions tr:last-child{border-bottom:0}table.sessions td{display:block;padding:2px 0;border:0;white-space:normal}table.sessions td.primary{color:var(--heading);font-weight:600;padding-bottom:4px}table.sessions td[data-label]::before{content:attr(data-label) ": ";color:var(--dim);font-size:.82rem}table.sessions td.actions{text-align:left;padding-top:8px}}
 .section-head{margin:0 0 12px}
 .section-head h2{margin:0}
+.section-head .head-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filters a{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;border:1px solid var(--border);color:var(--text);font-size:.84rem;white-space:nowrap;line-height:1.4}
+.filters a:hover{border-color:var(--accent);text-decoration:none}
+.filters a:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.filters a .n{font-family:var(--mono);font-size:.78rem;color:var(--dim)}
+.filters a[aria-current]{background:var(--accent);border-color:var(--accent);color:#0a1628;font-weight:600}
+.filters a[aria-current] .n{color:#0a1628}
 .section-head .sub{color:var(--dim);font-size:.9rem;margin:2px 0 0}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-width:0}

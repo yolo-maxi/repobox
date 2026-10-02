@@ -611,6 +611,104 @@ async fn directory_puts_your_apps_before_other_apps() {
 }
 
 #[tokio::test]
+async fn your_apps_quick_filters_only_narrow_the_access_list() {
+    let h = H::new();
+    let hosts = |sec: &str| -> Vec<String> {
+        sec.match_indices(".repo.box</div>")
+            .map(|(i, _)| {
+                let start = sec[..i].rfind('>').unwrap() + 1;
+                sec[start..i].to_string()
+            })
+            .collect()
+    };
+    let owner = h.auth_cookie(&h.owner);
+    // Owner holds all four apps; each filter keeps directory (name) order.
+    for (show, want) in [
+        (
+            "",
+            vec![
+                "demo-listed",
+                "demo-private",
+                "demo-unlisted",
+                "other-private",
+            ],
+        ),
+        ("private", vec!["demo-private", "other-private"]),
+        ("public_listed", vec!["demo-listed"]),
+        ("public_unlisted", vec!["demo-unlisted"]),
+        (
+            "bogus",
+            vec![
+                "demo-listed",
+                "demo-private",
+                "demo-unlisted",
+                "other-private",
+            ],
+        ),
+    ] {
+        let path = if show.is_empty() {
+            "/".to_string()
+        } else {
+            format!("/?show={show}")
+        };
+        let (st, _, body) = h.get(&path, Some(&owner)).await;
+        assert_eq!(st, StatusCode::OK);
+        let (yours, _) = sections(&body);
+        let yours = yours.unwrap();
+        assert_eq!(hosts(yours), want, "{show}");
+        assert_eq!(yours.matches("Manage</a>").count(), want.len(), "{show}");
+        // Heading count stays the access-list total; the chips carry per-filter counts.
+        assert!(yours.contains("Your apps <span class=\"count\">4</span>"));
+        assert_eq!(yours.matches("aria-current=\"page\"").count(), 1);
+        let current = match show {
+            "private" => "Private <span class=\"n\">2</span>",
+            "public_listed" => "Public · listed <span class=\"n\">1</span>",
+            "public_unlisted" => "Public · unlisted <span class=\"n\">1</span>",
+            _ => "All <span class=\"n\">4</span>",
+        };
+        assert!(
+            yours.contains(&format!("aria-current=\"page\">{current}")),
+            "{show}"
+        );
+    }
+    // bob holds one private grant: filters never surface other apps, and the
+    // "Other apps" section is the same whatever the filter.
+    let bob = h.auth_cookie(&h.bob);
+    let (_, _, all) = h.get("/", Some(&bob)).await;
+    let other_all = sections(&all).1.unwrap().to_string();
+    for show in ["private", "public_listed", "public_unlisted"] {
+        let (_, _, body) = h.get(&format!("/?show={show}"), Some(&bob)).await;
+        let (yours, others) = sections(&body);
+        assert_eq!(others.unwrap(), other_all, "{show}");
+        assert!(!body.contains("demo-unlisted"), "{show}");
+        assert!(!body.contains("other-private"), "{show}");
+        let yours = yours.unwrap();
+        assert!(!yours.contains("demo-listed.repo.box"), "{show}");
+        if show == "private" {
+            assert_eq!(hosts(yours), vec!["demo-private"]);
+        } else {
+            assert!(hosts(yours).is_empty());
+            assert!(yours.contains("None of your apps are public"), "{show}");
+        }
+    }
+    // eve has no apps: no filter bar, the usual empty state.
+    let (_, _, body) = h
+        .get("/?show=public_listed", Some(&h.auth_cookie(&h.eve)))
+        .await;
+    let (yours, others) = sections(&body);
+    assert!(yours.unwrap().contains("Nothing yet"));
+    assert!(!body.contains("class=\"filters\""));
+    assert!(others.unwrap().contains("demo-listed.repo.box"));
+    // Anonymous directory ignores the parameter entirely.
+    for show in ["private", "public_unlisted"] {
+        let (_, _, body) = h.get(&format!("/?show={show}"), None).await;
+        let (_, _, plain) = h.get("/", None).await;
+        assert_eq!(body, plain);
+        assert!(!body.contains("demo-private") && !body.contains("demo-unlisted"));
+    }
+}
+
+#[tokio::test]
 async fn public_unlisted_stays_absent_unless_in_the_access_list() {
     let h = H::new();
     for cookie in [
