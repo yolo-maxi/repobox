@@ -49,6 +49,8 @@ p.lead{color:var(--dim);margin:0 0 20px;max-width:64ch}
 .btn[disabled]{opacity:.5;cursor:not-allowed}
 form.inline{display:inline}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+#onboard{scroll-margin-top:88px}
+@media (max-width:760px){#onboard{scroll-margin-top:176px}}
 .stack{display:flex;flex-direction:column;gap:12px}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
 .panel+.panel{margin-top:14px}
