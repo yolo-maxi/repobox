@@ -76,8 +76,10 @@ browser ──HTTPS──▶ Caddy (repo.box host)
     clean `/invite`; failures 303 to `/invite?e=<reason>`. The raw token never
     stays in the address bar, never appears in a page and never rides on a
     request whose answer has a body (the Caddy log rule of the launch code).
-    Onboarding responses are `no-store` and `Referrer-Policy: no-referrer`
-    (the edge sets its own policy only as a default, `?Referrer-Policy`).
+    Onboarding responses are `no-store` and `Referrer-Policy: same-origin`
+    (no Referer to any other origin; not `no-referrer`, under which browsers
+    send `Origin: null` on the form POST and the CSRF check refuses it). The
+    edge sets its own policy only as a default (`?Referrer-Policy`).
   * `GET /invite` says exactly what continuing does on this device; GET never
     consumes, so link previews cannot burn it.
   * `POST /invite` (same-origin) re-validates, consumes atomically, then:
@@ -560,7 +562,7 @@ whole change and installs nothing.
    unknown handles refused as recipients; app off, revoked, expired,
    recipient disabled and creator no longer managing → refused with no
    user/session/grant; token never in a page, Location or body;
-   `no-store` + `no-referrer`), owner/admin-only management, CSRF,
+   `no-store` + `same-origin` referrer policy), owner/admin-only management, CSRF,
    directory partitioning (Your apps before Other apps, admin/owner/grantee/
    anonymous views), public-unlisted absent unless in the access list, access
    counting only on allowed requests (denials, disabled, replay and the
@@ -593,10 +595,15 @@ whole change and installs nothing.
    with the generated routes (proves the strip + forward_auth + copy_headers
    mechanics, host-only/HttpOnly cookies, no secrets in logs), plus the
    onboarding chain (`app invite --for carol --create-user` → 0600 file →
-   body-less 303 to `/invite` → `no-referrer` survives the edge → stranger
+   body-less 303 to `/invite` → `same-origin` policy survives the edge → stranger
    refused → one POST → launcher → launch code → gate → `whoami` shows carol
    with exactly one grant → replay/app-off/revoked refused → no onboarding
-   token or `/invite/` path in any log, body-less under abrupt clients),
+   token or `/invite/` path in any log, body-less under abrupt clients; with
+   Playwright's Chromium installed, the same chain in a real browser through
+   a local CONNECT proxy to this Caddy: link → clean `/invite` → one click →
+   `https://demo-private.repo.box/` as `dave`, no token or `rb_launch` in any
+   later URL. That browser step is what caught `no-referrer` making Chromium
+   send `Origin: null` on the form POST),
    plus opens:
    curl's `*/*` requests through the launch flow leave zero opens, one
    browser-style page load then a second one in the same visit plus an

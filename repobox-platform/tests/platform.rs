@@ -1588,10 +1588,11 @@ async fn device_enrolment_link_is_single_use_and_post_only() {
 
 const INVITE_COOKIE: &str = "__Host-rb_invite";
 
-/// Every answer on the onboarding path is uncached and sends no Referer.
+/// Every answer on the onboarding path is uncached and sends no Referer to
+/// another origin (`same-origin` keeps `Origin` on the form POST).
 fn assert_invite_headers(hd: &HeaderMap) {
     assert_eq!(hdr(hd, "cache-control"), Some("no-store"));
-    assert_eq!(hdr(hd, "referrer-policy"), Some("no-referrer"));
+    assert_eq!(hdr(hd, "referrer-policy"), Some("same-origin"));
 }
 
 /// All Set-Cookie values of a response.

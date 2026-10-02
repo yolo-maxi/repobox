@@ -1924,11 +1924,14 @@ fn invite_ctx(s: &AppState, raw: &str) -> Result<InviteCtx, InviteFail> {
     })
 }
 
-/// Headers every onboarding response carries: never cached, never a Referer.
+/// Headers every onboarding response carries: never cached, and no Referer
+/// to any other origin. `same-origin`, not `no-referrer`: under `no-referrer`
+/// browsers send `Origin: null` on the form POST, which the CSRF check
+/// (rightly) refuses.
 fn invite_headers(resp: &mut Response) {
     let h = resp.headers_mut();
     h.insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
-    h.insert("referrer-policy", "no-referrer".parse().unwrap());
+    h.insert("referrer-policy", "same-origin".parse().unwrap());
 }
 
 /// A body-less 303 with any number of cookies.

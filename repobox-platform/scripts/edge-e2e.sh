@@ -13,7 +13,9 @@
 #   - disable via CLI -> 404 immediately, no re-render
 #   - onboarding link: one URL takes a brand-new device from nothing to a
 #     signed-in, granted app session on a clean app URL; strangers, replays
-#     and disabled apps are refused; the token never reaches a log
+#     and disabled apps are refused; the token never reaches a log; and, when
+#     Playwright's Chromium is installed, the same chain in a real browser
+#     (through a CONNECT proxy to this Caddy, so Origin/cookies are real)
 #   - the same-origin AI endpoint (/_repo_box/ai/v1/*): reserved before the
 #     origin, gate + session required, forged headers stripped, policy and
 #     limits enforced, real broker with the bridge secret in front of a fake
@@ -237,7 +239,7 @@ expect "token moved into a host-only cookie" "$(command grep -c '__Host-rb_invit
 page=$(curl -s "${R[@]}" -b "$CJ" -D "$W/invite.h" "$A/invite")
 expect "page greets the recipient" "$(echo "$page" | command grep -c 'Welcome, <strong>Carol</strong>')" 1
 expect "page carries no token" "$(echo "$page" | command grep -c -- "$ORAW")" 0
-expect "page: no-referrer survives the edge" "$(command grep -ci '^referrer-policy: no-referrer' "$W/invite.h")" 1
+expect "page: same-origin referrer policy survives the edge" "$(command grep -ci '^referrer-policy: same-origin' "$W/invite.h")" 1
 expect "other pages keep the edge default policy" "$(curl -s "${R[@]}" -D - -o /dev/null "$A/" | command grep -ci '^referrer-policy: strict-origin-when-cross-origin')" 1
 BOBC=$(awk '/__Host-rb_auth/ {print $7}' "$JAR")
 expect "stranger signed in (bob) -> refused" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' -H "Cookie: __Host-rb_invite=$ORAW; __Host-rb_auth=$BOBC" "$A/invite")" 403
@@ -264,10 +266,81 @@ O2=$(head -1 "$W/open.url"); O2=${O2#https://auth.repo.box}
 "$P" --db "$DB" app disable demo-private >/dev/null
 expect "app disabled -> link refused" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "$A$O2")" "303 $A/invite?e=app_off"
 "$P" --db "$DB" app enable demo-private >/dev/null
-O2ID=$("$P" --db "$DB" app invites demo-private | awk '$2=="anyone" && $3=="active" {print $1; exit}')
+O2ID=$("$P" --db "$DB" app invites demo-private | awk '$2=="anyone" && $3=="active" && !f {print $1; f=1}')
 "$P" --db "$DB" app invite-revoke demo-private --id "$O2ID" >/dev/null
 expect "revoked link refused" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "$A$O2")" "303 $A/invite?e=revoked"
 expect "app host anonymous + spoofed identity still 401" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' -H 'X-RepoBox-User: carol' -H 'X-RepoBox-Auth: session' "$PRIV/")" 401
+
+CHROME="${E2E_CHROME:-$HOME/.cache/ms-playwright/chromium-1148/chrome-linux/chrome}"
+if [[ -x "$CHROME" ]] && NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-calendar/node_modules}" node -e 'require("playwright")' 2>/dev/null; then
+  echo "== onboarding link in a real browser (Chromium through Caddy)"
+  "$P" --db "$DB" app invite demo-private --for dave --create-user --display-name Dave --out "$W/dave.url" >/dev/null
+  # Chromium talks to the real https://*.repo.box URLs (port 443) through a
+  # CONNECT proxy that tunnels every :443 to this Caddy, so Origin, cookies
+  # and the cross-host launch hop behave exactly as in production.
+  cat > "$W/connect_proxy.py" <<'PY'
+import socket, sys, threading
+listen, target = int(sys.argv[1]), int(sys.argv[2])
+def pipe(a, b):
+    try:
+        while (d := a.recv(65536)):
+            b.sendall(d)
+    except OSError:
+        pass
+    finally:
+        for s in (a, b):
+            try: s.shutdown(socket.SHUT_RDWR)
+            except OSError: pass
+def handle(c):
+    head = b""
+    while b"\r\n\r\n" not in head:
+        d = c.recv(4096)
+        if not d: return c.close()
+        head += d
+    line = head.split(b"\r\n")[0].split()
+    if len(line) < 2 or line[0] != b"CONNECT" or not line[1].endswith(b":443"):
+        c.sendall(b"HTTP/1.1 403 Forbidden\r\n\r\n"); return c.close()
+    u = socket.create_connection(("127.0.0.1", target))
+    c.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+    threading.Thread(target=pipe, args=(c, u), daemon=True).start()
+    pipe(u, c)
+srv = socket.socket(); srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+srv.bind(("127.0.0.1", listen)); srv.listen(64)
+while True:
+    conn, _ = srv.accept()
+    threading.Thread(target=handle, args=(conn,), daemon=True).start()
+PY
+  python3 "$W/connect_proxy.py" 3934 "$HTTPS" >"$W/proxy.log" 2>&1 &
+  PX=$!
+  sleep 0.5
+  cat > "$W/browser.js" <<'JS'
+const { chromium } = require('playwright');
+const [chrome, file] = process.argv.slice(2);
+const link = require('fs').readFileSync(file, 'utf8').split('\n')[0];
+const raw = link.split('/').pop();
+(async () => {
+  const b = await chromium.launch({ executablePath: chrome, proxy: { server: 'http://127.0.0.1:3934' } });
+  const ctx = await b.newContext({ ignoreHTTPSErrors: true });
+  const page = await ctx.newPage();
+  const seen = [];
+  page.on('framenavigated', f => { if (f === page.mainFrame()) seen.push(f.url()); });
+  await page.goto(link);
+  const clean = page.url() === 'https://auth.repo.box/invite';
+  await page.click('button:has-text("Open Private demo")');
+  await page.waitForURL(u => u.hostname === 'demo-private.repo.box', { timeout: 15000 }).catch(() => {});
+  const landed = page.url() === 'https://demo-private.repo.box/';
+  const who = landed && (await page.textContent('body')).includes('dave');
+  const tokenFree = seen.slice(1).every(u => !u.includes(raw) && !u.includes('rb_launch'));
+  console.log(`${+clean}${+landed}${+who}${+tokenFree}`);
+  await b.close();
+})().catch(e => { console.log('error ' + String(e.message).split('\n')[0].replace(/[A-Za-z0-9_-]{43}/g, '<redacted>')); process.exit(1); });
+JS
+  expect "browser: link -> clean /invite -> one click -> app as dave, clean URLs" "$(NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-calendar/node_modules}" node "$W/browser.js" "$CHROME" "$W/dave.url")" 1111
+  expect "browser: dave holds exactly the intended grant" "$("$P" --db "$DB" app show demo-private | command grep -c '^  - dave ')" 1
+  kill $PX 2>/dev/null || true
+else
+  echo "== (skipped: no Chromium/Playwright for the real-browser onboarding check)"
+fi
 
 echo "== revocation / disable"
 "$P" --db "$DB" app revoke demo-private --user bob >/dev/null

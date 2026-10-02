@@ -5,8 +5,8 @@ auth.repo.box {
 	header {
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
-		# `?`: a default only, so the control plane's no-referrer on the
-		# onboarding-link pages survives.
+		# `?`: a default only, so the control plane's own policy on the
+		# onboarding-link pages (same-origin) survives.
 		?Referrer-Policy "strict-origin-when-cross-origin"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		-Server
