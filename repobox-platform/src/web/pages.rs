@@ -1618,7 +1618,7 @@ fn onboard_panel(s: &AppState, app: &App, base: &str) -> String {
             .to_string()
     };
     format!(
-        "<section class=\"panel\" id=\"onboard\" aria-labelledby=\"onboard-h\" style=\"margin-bottom:14px\"><h3 id=\"onboard-h\">Onboard new user</h3><p class=\"muted\">For someone without a repo.box account. You get one private signup link, shown once: opening it creates their account, signs their device in, gives them access to {} only and opens it. Single use, expires after {} hours.</p>{}</section>",
+        "<section class=\"panel\" id=\"onboard\" aria-labelledby=\"onboard-h\" style=\"margin-bottom:14px;scroll-margin-top:88px\"><h3 id=\"onboard-h\">Onboard new user</h3><p class=\"muted\">For someone without a repo.box account. You get one private signup link, shown once: opening it creates their account, signs their device in, gives them access to {} only and opens it. Single use, expires after {} hours.</p>{}</section>",
         esc(&app.title),
         s.cfg.invite_ttl / 3600,
         form
