@@ -1316,6 +1316,51 @@ revoke it. CLI equivalent (same backend):
 * Known limit: a scanner that runs JavaScript in a full browser could
   complete a buttonless link; plain previewers and non-JS scanners cannot.
 
+## Deployment record (2026-10-04, pio-radio migration)
+
+* Scope (Fran): migrate the legacy token-cookie static app `pio-radio.repo.box`
+  to the platform; `pio-radio2.repo.box` explicitly out of scope and untouched.
+* Review: the bundle has no login/password/token code of its own (only
+  React-DOM input-type tables), so `--identity platform` is accurate.
+* Registry (22:19 UTC, DB backup `platform-20261004T221954Z-pre-pio-radio.db`):
+  `app register pio-radio --title "Pio Radio" --owner fran --kind static
+  --target /var/www/repo.box/subdomains/pio-radio --visibility private
+  --identity platform --no-ai`; `app grant pio-radio --user shio` (existing
+  member; her live Android device session is unchanged, no link issued).
+* Caddy: `SKIP_TESTS=1 CADDY_DRY_RUN=1 RETIRE_HOSTS=pio-radio.repo.box
+  deploy.sh` (validate OK, retire lines 248–278; rendered diff = the new
+  pio-radio route only), then the same without the dry run at 22:21 UTC
+  (same code as live `33d366f`; HEAD differs only in docs). Backups
+  `Caddyfile.pre-repobox-platform-20261004T222113Z` +
+  `apps.caddy.pre-repobox-platform-20261004T222113Z`. Caddyfile now defines
+  no `pio-radio.repo.box` (33 lines removed, 0 added); `apps.caddy` defines
+  it once; the `pio-radio2.repo.box` block hash is identical before/after.
+  Sweep: all as expected except the pre-existing `fieldwork-deck` /
+  `fieldwork-write` root 404s.
+* Live (external HTTPS from Hetzner): anonymous and forged-`X-RepoBox-*`
+  requests to `/`, `/sw.js`, `/reader/hp-3.json`, `/audio/3.m4b` → 401; old
+  `?token=` and `pio_radio_preview` cookie → 401, no Set-Cookie. Anonymous
+  launcher `auth.repo.box/pio-radio` → 401 sign-in page with no code.
+  Disposable member `rbtest-pio-1004222231` (granted, enrolled via 0600
+  file): enrol GET 200 / POST 303 / replay 410; launcher → `?rb_launch=`;
+  gate 302, empty body, clean `https://pio-radio.repo.box/`; host-only
+  HttpOnly Secure app cookie; replay without session 303 `launch_error=used`.
+  With the app session: `/` 200 (manifest link), `/sw.js` 200, `/library.json`
+  200, `/reader/hp-3.json` 200 `application/json` 654983 B (valid JSON),
+  `Range: bytes=330131961-330132984` on `/audio/3.m4b` (symlink into
+  `/media/pio-radio`) → `206 audio/x-m4b`, `Content-Range: bytes
+  330131961-330132984/660263922`, 1024 B; `*.map` 404. After revoke 401.
+  Journal (platform + caddy) since the test and Caddy file logs: 0
+  `rb_launch=` / enrol-token hits. Cleanup: test users
+  (`rbtest-pio-10042222` from a run with a link-parsing bug,
+  `rbtest-pio-shape-2222`, `rbtest-pio-1004222231`) disabled, link files
+  shredded. No browser playback test.
+* Behaviour differences vs the legacy block, accepted: no `try_files …
+  /index.html` SPA fallback (the app is a single index), no `encode`,
+  `.webmanifest` is served without a Content-Type (as before, Caddy has no
+  mapping). Rollback: `caddy-apply.py rollback` with the two backups above,
+  then `app remove pio-radio`.
+
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
 
 Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
