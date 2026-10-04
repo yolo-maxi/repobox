@@ -1357,8 +1357,8 @@ revoke it. CLI equivalent (same backend):
   shredded. No browser playback test.
 * Behaviour differences vs the legacy block, accepted: no `try_files …
   /index.html` SPA fallback (the app is a single index), no `encode`,
-  `.webmanifest` is served without a Content-Type (as before, Caddy has no
-  mapping). Rollback: `caddy-apply.py rollback` with the two backups above,
+  `.webmanifest` is served without a Content-Type header (legacy behaviour
+  for that file not measured). Rollback: `caddy-apply.py rollback` with the two backups above,
   then `app remove pio-radio`.
 
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
