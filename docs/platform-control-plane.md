@@ -1416,6 +1416,49 @@ revoke it. CLI equivalent (same backend):
   for that file not measured). Rollback: `caddy-apply.py rollback` with the two backups above,
   then `app remove pio-radio`.
 
+## Deployment record (2026-10-07, installable auth.repo.box + explicit signup press)
+
+* Commit `1d4db82`: auth.repo.box as an installable PWA (see "auth.repo.box
+  as an installable app (PWA)") and, per Fran's addendum in the same
+  release, signup links that need an explicit **Continue to <App>** press
+  (no script, `confirm=1` required, loaded-but-unclicked pages consume
+  nothing). Caddy routes untouched; deployed with `NO_CADDY=1` at
+  23:54 UTC, DB backup `platform-20261007T235452Z.db`. Live sha256
+  `408bd7211fd7b1dc…` = local build. Sweep (now also manifest, worker,
+  maskable icon, offline page, missing-asset 404, `/api/session`): only the
+  pre-existing fieldwork-deck/-write origin 404s.
+* Gates: fmt, clippy `-D warnings`, 108 tests (new `tests/pwa.rs` 7; the
+  signup test now proves repeated loads and a same-origin POST without
+  `confirm` leave the link active and create nobody), edge E2E 151/151
+  incl. a Chromium PWA section (registration/control, zero installability
+  errors, manifest parse, cache = exact static shell after signed-in
+  browsing, stale `rb-auth-*` cache dropped and unrelated caches kept,
+  install UI dismissed/accepted/appinstalled, byte-changed worker replaces
+  the cache, real network loss via the CONNECT proxy -> 503 offline page
+  styled from cache with nothing private, simulated standalone + revoke
+  -> signed-out directory, iOS hint + remembered dismissal, 390 px no
+  overflow) and the onboarding browser check (link loads, networkidle +
+  4 s, no POST, link active, then the press lands in the app).
+* External headers: manifest `application/manifest+json` `no-cache`;
+  `/sw.js` `text/javascript` `no-store`; icons `image/png` /
+  `image/svg+xml` `max-age=86400`; `/` and other HTML `no-store`;
+  `/assets/nope.css` and `/favicon.ico` 404 `text/plain`; all `nosniff`.
+  Live worker version `14ccf290da19`.
+* Live (Playwright Chromium, real TLS, 1280 and 390 px, disposable
+  `rbtest-pwa-*`/`rbtest-new-*-10072355`): 17/17 per width — worker
+  controls the page, installable, cache only the shell, no install action
+  without an offer, dismissed state announced, revoke via `user logout` ->
+  resumed page shows the Public directory; signup link on demo-private
+  loaded + idle 5 s with no POST and the link `active`, page `<h1>Private
+  demo</h1>` with no account wording and one external script, press ->
+  demo-private.repo.box, link `used`, replay -> `e=used`. Journal since
+  23:50 UTC: 0 `/invite/` and 0 `rb_launch=` hits. Probe users disabled,
+  grants revoked, link files shredded.
+* Not verified live: a real `beforeinstallprompt` (headless Chromium does
+  not fire one; the UI is driven by a synthetic event, installability by
+  CDP), a real iOS device, and offline on production (proved locally with
+  real network loss).
+
 ## Study Diary conversion (2026-09-17, reference for the identity policy)
 
 Scope, per Fran's decision: Study Diary (`study-diary.repo.box`, proxy
