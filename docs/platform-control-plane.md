@@ -72,14 +72,18 @@ browser ──HTTPS──▶ Caddy (repo.box host)
   user** (button at the top, panel `#onboard`), enters the new person's
   global repo.box **handle** and **display name** (the only fields an
   account has; role is always member) and gets one private **signup link**,
-  shown once. Opening it on a not-yet-signed-in device shows only a neutral
-  "Opening <app>…" transition that submits itself (same-origin POST, after
-  the page has loaded; a `<noscript>` button otherwise) and creates that
+  shown once. Opening it on a not-yet-signed-in device shows a neutral page
+  that names only the product (`<h1>HushBench</h1>`, no account wording, no
+  token) with one explicit **Continue to <App>** button, and nothing
+  happens until the person presses it: no script submits the form, and the
+  POST must carry the button's `confirm=1` (a same-origin POST without it
+  answers `/invite?err=confirm` and consumes nothing). The press creates the
   `auth.repo.box` account, signs the device in (30 d), adds the grant for
-  this one app and lands them in the app, with no click. GETs never consume
-  the link, so previews and non-JS scanners cannot use it (a scanner that
-  runs JavaScript in a real browser could; that is inherent to any
-  buttonless flow). A signed-in device is still refused. The account is created
+  this one app and lands them in the app. GETs never consume the link, and
+  since 2026-10-07 neither does a full browser that loads the page and runs
+  its scripts without clicking (Fran suspected Instagram/Telegram link
+  previews of completing the earlier auto-submitting page). A signed-in
+  device is still refused. The account is created
   only when the link is used (schema 8: `tokens.new_user_name`,
   `tokens.new_display_name`), so a signup link can never be pointed at an
   existing account, and member owners may create them. The handle must be
@@ -433,6 +437,57 @@ not create.
   `publisher release ID` (with the deploy log),
   `publisher remove-app NAME [--purge-data] --yes`. `routes render`
   excludes publisher apps, and `app remove` refuses them.
+
+## auth.repo.box as an installable app (PWA)
+
+The control-plane UI itself is the install target (not the apps behind the
+launcher; gate pages on app hosts carry no manifest, worker or install UI).
+Everything is served by the control plane (`src/web/pwa.rs`), so Caddy
+routes are unchanged.
+
+* `/manifest.webmanifest` (`application/manifest+json`, `no-cache`): `id`,
+  `start_url` and `scope` are `/`, `display: standalone`, name
+  "repo.box auth", short name "repo.box", theme and background `#0a1628`
+  (the UI's `--bg`). Icons under `/assets/icons/`: `icon.svg`,
+  `icon-192/512.png` (any), `maskable-192/512.png` (full bleed, mark inside
+  the 80 % safe zone), `apple-touch-icon.png` (180, also at
+  `/apple-touch-icon.png`). The mark is the existing auth brand dot (navy
+  field, ring, glowing cyan core); sources `repobox-platform/assets/pwa/*.svg`,
+  PNGs rendered by `scripts/pwa-icons.js` (Playwright Chromium).
+* `/sw.js` (`text/javascript`, `no-store`; registered with scope `/` and
+  `updateViaCache: 'none'`). Its cache name carries a content hash of the
+  stylesheet, page script, offline page, icons, manifest and worker
+  (`rb-auth-shell-<12 hex>`), so any shell change ships a byte-different
+  worker that installs, takes over (`skipWaiting` + `clients.claim`) and
+  deletes the older `rb-auth-*` caches. It precaches **only** the static
+  shell (`/assets/app.css`, `/assets/pwa.js`, `/assets/offline.html`, four
+  icons) and never writes anything else to a cache: navigations always go
+  to the network (offline: the static offline page with status 503, never a
+  copy of a page), and API calls, POSTs, redirects, launch codes, invite
+  tokens and cookies are not intercepted at all.
+* Every HTML response from the control plane now carries
+  `Cache-Control: no-store` unless it chose a policy, so neither the HTTP
+  cache nor the back button replays a signed-in page.
+* Unknown `/assets/*` and `/favicon.ico` are plain-text 404s, never an HTML
+  page.
+* `/assets/pwa.js` registers the worker and drives the install UI: the
+  header **Install app** button exists hidden and is shown only after the
+  browser fires `beforeinstallprompt` (captured with `preventDefault`).
+  Pressing it calls `prompt()` once; accepted, dismissed and `appinstalled`
+  each hide it and announce the outcome in a polite live region; the
+  account page's "Install on this device" panel states the current case
+  (installed app, offered, dismissed, installed, iOS, or "this browser has
+  not offered to install"). On iOS (outside the installed app) a dismissible
+  bar says: tap Share, then Add to Home Screen; no page can open a native
+  iOS install prompt, so none is pretended.
+* Revoked or expired devices: pages rendered for a signed-in device carry
+  `data-session="<user id>"`; when the page comes back into view (resume,
+  bfcache restore, back online) the script asks `GET /api/session`
+  (`{"signed_in", "user_id"}`, `no-store`, same-origin) and, if the session
+  is gone or is another user's, replaces the page with `/`, which renders
+  the normal signed-out directory. If the check cannot reach the network
+  inside the installed app, it shows the offline page instead of leaving
+  the old page up.
 
 ## Local development
 
@@ -1458,8 +1513,16 @@ records. No link was generated or sent; no email flow exists.
   App sessions created before schema 3 carry no device link, so revoking a
   device does not cascade to them; they still expire within 24 h and can be
   ended individually.
-* A revoked session is refused on its next request; a page already rendered
-  in the browser stays on screen until it reloads or fetches.
+* A revoked session is refused on its next request. A page already rendered
+  in the browser re-checks the session when it comes back into view, but a
+  page that stays continuously visible keeps showing until it reloads or
+  fetches (there is no polling).
+* PWA: installation is the browser's decision. Chromium browsers offer it
+  (Install app appears only then); Firefox desktop does not install web
+  apps; iOS needs Share -> Add to Home Screen by hand. The installed app
+  needs the network for everything except its offline notice. A new worker
+  takes over on the next navigation after a deploy, so a page open across a
+  deploy may keep the previous stylesheet until it reloads.
 * Role changes (member ↔ admin) are CLI-only; the UI creates users, toggles
   enabled, issues device links.
 * The directory lives on `auth.repo.box` (+ `/api/directory`); the main

@@ -176,6 +176,12 @@ check https://auth.repo.box/healthz 200
 check https://auth.repo.box/ 200
 check https://auth.repo.box/gate/verify 404
 check https://auth.repo.box/docs 200
+check https://auth.repo.box/manifest.webmanifest 200
+check https://auth.repo.box/sw.js 200
+check https://auth.repo.box/assets/icons/maskable-512.png 200
+check https://auth.repo.box/assets/offline.html 200
+check https://auth.repo.box/assets/no-such-asset.js 404
+check https://auth.repo.box/api/session 200
 check https://auth.repo.box/api/platform/v1 200
 check https://auth.repo.box/api/platform/v1/openapi.json 200
 check https://auth.repo.box/api/platform/v1/skill.md 200

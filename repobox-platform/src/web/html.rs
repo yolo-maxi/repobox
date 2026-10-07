@@ -30,15 +30,33 @@ pub struct Shell<'a> {
 }
 
 pub fn page(shell: &Shell<'_>, body: &str) -> String {
-    let (brand_href, stylesheet) = match shell.standalone {
+    // Gate pages on app hosts get no manifest, worker or install action:
+    // only auth.repo.box itself is the installable app.
+    let (brand_href, head, install, ios_hint) = match shell.standalone {
         Some(base) => (
             format!("{base}/"),
-            format!("<style>{}</style>", super::css::CSS),
+            format!(
+                "<link rel=\"icon\" href=\"{FAVICON_DATA}\">\n<style>{}</style>",
+                super::css::CSS
+            ),
+            "",
+            "",
         ),
         None => (
             "/".to_string(),
-            "<link rel=\"stylesheet\" href=\"/assets/app.css\">".to_string(),
+            format!(
+                "{}\n<link rel=\"stylesheet\" href=\"/assets/app.css\">",
+                super::pwa::head_tags()
+            ),
+            super::pwa::HEADER_INSTALL,
+            super::pwa::IOS_HINT,
         ),
+    };
+    // The user id the page was rendered for; the page script compares it with
+    // `/api/session` when the page comes back into view.
+    let session = match (shell.standalone, shell.user) {
+        (None, Some(u)) => format!(" data-session=\"{}\"", u.id),
+        _ => String::new(),
     };
     let nav = if shell.standalone.is_some() {
         String::new()
@@ -89,15 +107,15 @@ pub fn page(shell: &Shell<'_>, body: &str) -> String {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>{title} · auth.repo.box</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230a1628'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%234fc3f7'/%3E%3C/svg%3E">
-{stylesheet}
+{head}
 </head>
-<body>
+<body{session}>
 <header class="top"><div class="wrap">
 <a class="brand" href="{brand_href}"><span class="dot"></span>repo.box <small>/ auth</small></a>
 <nav class="main">{nav}</nav>
-{who}
+{install}{who}
 </div></header>
+{ios_hint}
 <main><div class="wrap">
 {body}
 </div></main>
@@ -106,9 +124,12 @@ pub fn page(shell: &Shell<'_>, body: &str) -> String {
 </html>"#,
         title = esc(shell.title),
         brand_href = brand_href,
-        stylesheet = stylesheet,
     )
 }
+
+/// The pre-PWA inline favicon, kept for gate pages on app hosts, where
+/// `/assets/*` belongs to the app.
+const FAVICON_DATA: &str = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230a1628'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%234fc3f7'/%3E%3C/svg%3E";
 
 pub fn initial(name: &str) -> String {
     name.chars()

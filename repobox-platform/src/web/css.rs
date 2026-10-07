@@ -54,7 +54,7 @@ form.inline{display:inline}
 .stack{display:flex;flex-direction:column;gap:12px}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
 .panel+.panel{margin-top:14px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.two>.panel+.panel{margin-top:0}
 @media (max-width:760px){.two{grid-template-columns:1fr}}
 label{display:block;font-size:.85rem;color:var(--dim);margin-bottom:4px}
 input[type=text],select{width:100%;padding:9px 11px;border-radius:9px;border:1px solid var(--border);background:var(--bg);color:var(--heading);font:inherit;font-size:.95rem}
@@ -113,5 +113,12 @@ pre.code{background:var(--bg);border:1px solid var(--border);border-radius:10px;
 .docs h2{scroll-margin-top:72px}.docs .mono,.docs code{overflow-wrap:anywhere}.docs .kv{margin:0 0 8px}.docs p{max-width:78ch}
 ul.notes{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:.93rem}
 .right{margin-left:auto}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+#pwa-install[hidden],.pwa-ios[hidden]{display:none}
+.pwa-ios{border-bottom:1px solid var(--border);background:var(--surface);font-size:.9rem}
+.pwa-ios .wrap{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:8px;padding-bottom:8px}
+.pwa-ios strong{color:var(--heading)}
+.pwa-ios .btn{white-space:nowrap;flex:0 0 auto}
+@media (display-mode:standalone){header.top{padding-top:env(safe-area-inset-top)}}
 @media (max-width:600px){main{padding-top:18px}h1{font-size:1.4rem}.card{padding:14px}header.top .wrap{gap:8px}.who{margin-left:auto}nav.main{order:3;width:100%;margin-left:0}.stats{grid-template-columns:1fr 1fr;gap:10px}.stat{padding:12px}.stat .value{font-size:1.6rem}table.days td:nth-child(3){width:auto}.bar{min-width:56px}table.days td,table.days th{padding-left:6px;padding-right:6px}}
 "#;

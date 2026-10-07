@@ -2965,7 +2965,7 @@ async fn owner_onboards_a_new_user_from_the_manage_page() {
     assert_eq!(st, StatusCode::OK);
     assert_eq!(hdr(&hd, "cache-control"), Some("no-store"));
     assert!(body.contains("Signup link for Gianluca R"));
-    assert!(body.contains("creates the repo.box account gianluca"));
+    assert!(body.contains("pressing it creates the repo.box account gianluca"));
     let raw = extract_link(&body, "https://auth.repo.box/invite/demo-private/");
     // No account yet; the handle is reserved by the live link.
     assert!(h.state.store.user_by_name("gianluca").unwrap().is_none());
@@ -3009,15 +3009,15 @@ async fn owner_onboards_a_new_user_from_the_manage_page() {
     assert_eq!(hdr(&hd, "location"), Some("/invite"));
     assert_eq!(h.invite_status(&raw), "active");
     assert!(h.state.store.user_by_name("gianluca").unwrap().is_none());
-    // The new person's device: a neutral transition that submits itself once
-    // loaded; no confirmation click, no account language, no token.
+    // The new person's device: a neutral page naming only the product, with
+    // an explicit button and no script that could submit it.
     let (st, hd, page) = h.get("/invite", Some(&ic)).await;
     assert_eq!(st, StatusCode::OK);
     assert_invite_headers(&hd);
-    assert!(page.contains("<h1>Opening Private demo…</h1>"));
-    assert!(page.contains("<form id=\"rb-go\" method=\"post\" action=\"/invite\">"));
-    assert!(page.contains("addEventListener('load',go"));
-    assert!(page.contains("<noscript><button"), "works without JS");
+    assert!(page.contains("<h1>Private demo</h1>"));
+    assert!(page.contains(
+        "<form method=\"post\" action=\"/invite\"><button class=\"btn primary\" type=\"submit\" name=\"confirm\" value=\"1\">Continue to Private demo</button></form>"
+    ));
     for gone in [
         "Create account",
         "account",
@@ -3025,19 +3025,40 @@ async fn owner_onboards_a_new_user_from_the_manage_page() {
         "Gianluca",
         "gianluca",
         "invited you",
+        "rb-go",
+        ".submit(",
+        "addEventListener('load'",
+        "<noscript>",
     ] {
         assert!(!page.contains(gone), "{gone}");
     }
     assert!(!page.contains(&raw));
-    // After a retry redirect it waits for a click instead of looping.
-    let (_, _, page) = h.get("/invite?err=sign_out_first", Some(&ic)).await;
+    // Loading the page (any number of times) without pressing the button
+    // leaves the link active and creates nobody, and so does a same-origin
+    // POST that lacks the button's value (a crawler that submits forms).
+    for _ in 0..3 {
+        let (st, _, _) = h.get("/invite", Some(&ic)).await;
+        assert_eq!(st, StatusCode::OK);
+    }
+    let (st, hd, body) = h.post("/invite", Some(&ic), "", true).await;
+    assert_eq!((st, body.as_str()), (StatusCode::SEE_OTHER, ""));
+    assert_eq!(hdr(&hd, "location"), Some("/invite?err=confirm"));
+    assert_eq!(h.invite_status(&raw), "active");
+    assert!(h.state.store.user_by_name("gianluca").unwrap().is_none());
+    assert!(set_cookies(&hd).iter().all(|c| !c.starts_with(AUTH_COOKIE)));
+    let (_, _, page) = h.get("/invite?err=confirm", Some(&ic)).await;
+    assert!(page.contains("Nothing has happened yet. Press the button to continue."));
     assert!(page.contains("Continue to Private demo"));
-    assert!(!page.contains("<script>"));
+    // No inline script; the one external script (the PWA shell) never submits.
+    assert_eq!(page.matches("<script").count(), 1);
+    assert!(page.contains("<script src=\"/assets/pwa.js\" defer></script>"));
+    assert!(!repobox_platform::web::pwa::SCRIPT.contains("submit"));
+    // The explicit press.
     let (st, hd, body) = h
         .post(
             "/invite",
             Some(&ic),
-            "name=mallory&display_name=Mallory",
+            "name=mallory&display_name=Mallory&confirm=1",
             true,
         )
         .await;

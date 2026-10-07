@@ -9,6 +9,7 @@ pub mod gate;
 pub mod html;
 pub mod pages;
 pub mod publisher;
+pub mod pwa;
 
 use std::sync::Arc;
 
@@ -95,6 +96,17 @@ pub fn router(state: S) -> Router {
     Router::new()
         .route("/", get(pages::index))
         .route("/assets/app.css", get(pages::css))
+        // Installable-app shell (see `pwa`): manifest, worker, script,
+        // offline page and icons. Unknown `/assets/*` is a plain 404.
+        .route(pwa::MANIFEST_PATH, get(pwa::manifest))
+        .route(pwa::SW_PATH, get(pwa::sw))
+        .route(pwa::SCRIPT_PATH, get(pwa::script))
+        .route(pwa::OFFLINE_PATH, get(pwa::offline))
+        .route("/assets/icons/{file}", get(pwa::icon_file))
+        .route("/assets/{*rest}", any(pwa::asset_missing))
+        .route("/apple-touch-icon.png", get(pwa::apple_touch_icon))
+        .route("/favicon.ico", any(pwa::asset_missing))
+        .route(pwa::SESSION_PATH, get(pwa::session))
         .route("/healthz", get(pages::healthz))
         // These public Android endpoints are intentionally outside the
         // identity and private-app launch-code surfaces. Keep them before the
@@ -238,7 +250,25 @@ pub fn router(state: S) -> Router {
         )
         .route("/{name}", get(pages::launch))
         .fallback(pages::not_found)
+        .layer(axum::middleware::map_response(html_no_store))
         .with_state(state)
+}
+
+/// Rendered pages carry identity and one-time links, so no HTML from the
+/// control plane is ever stored by a browser or proxy cache (and so the back
+/// button or a resumed installed app cannot replay a signed-in page). Pages
+/// that already chose a policy (the static offline page) keep it.
+async fn html_no_store(mut resp: Response) -> Response {
+    let is_html = resp
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("text/html"));
+    if is_html && !resp.headers().contains_key(header::CACHE_CONTROL) {
+        resp.headers_mut()
+            .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
+    }
+    resp
 }
 
 // ------------------------------------------------------------------ helpers

@@ -620,6 +620,9 @@ pub async fn me(State(s): State<S>, headers: HeaderMap, Query(q): Q) -> Response
     body.push_str("<div class=\"two\"><div class=\"panel\"><h3>Sign in another device</h3><p class=\"muted\">Creates a single-use link, valid for 7 days, that signs in whichever device opens it as you. Send it over a channel you trust; it is shown once.</p><form method=\"post\" action=\"/me/enrol-device\"><button class=\"btn primary\" type=\"submit\">Create device link</button></form></div>");
     body.push_str("<div class=\"panel\"><h3>Sign out here</h3><p class=\"muted\">Ends the session on this device, together with the app sessions this device launched. Other devices stay signed in.</p><form method=\"post\" action=\"/logout\"><button class=\"btn danger\" type=\"submit\">Sign out this device</button></form></div></div>");
     body.push_str(&session_tables(&s, &user, Some(sess.id), "/me/sessions"));
+    body.push_str("<div class=\"section\">");
+    body.push_str(super::pwa::INSTALL_PANEL);
+    body.push_str("</div>");
     let sh = shell(&s, "Account", Some(&user), "me");
     html(StatusCode::OK, page(&sh, &body))
 }
@@ -1736,7 +1739,7 @@ pub async fn app_onboard_create(
                 &user,
                 &format!("Signup link for {display}"),
                 &format!(
-                    "Send this to {display} only, privately. Opening it creates the repo.box account {handle}, signs their device in, gives them access to {} and opens it. It works once.",
+                    "Send this to {display} only, privately. Opening it shows a page with a Continue to {} button; pressing it creates the repo.box account {handle}, signs their device in, gives them access and opens the app. It works once.",
                     app.title
                 ),
                 &invite_link(&s.cfg.public_base, &app.name, &raw),
@@ -2207,6 +2210,9 @@ pub struct InviteForm {
     pub name: String,
     #[serde(default)]
     pub display_name: String,
+    /// The value of the explicit "Continue to <App>" button on a signup link.
+    #[serde(default)]
+    pub confirm: String,
 }
 
 /// Problems a person can fix without a new link (the token is not consumed).
@@ -2217,6 +2223,8 @@ enum InviteRetry {
     WrongUser,
     SignInFirst,
     SignOutFirst,
+    /// A signup link POSTed without the button's `confirm` value.
+    Confirm,
 }
 
 impl InviteRetry {
@@ -2227,6 +2235,7 @@ impl InviteRetry {
             InviteRetry::WrongUser => "wrong_user",
             InviteRetry::SignInFirst => "sign_in_first",
             InviteRetry::SignOutFirst => "sign_out_first",
+            InviteRetry::Confirm => "confirm",
         }
     }
 
@@ -2237,6 +2246,7 @@ impl InviteRetry {
             "wrong_user" => InviteRetry::WrongUser,
             "sign_in_first" => InviteRetry::SignInFirst,
             "sign_out_first" => InviteRetry::SignOutFirst,
+            "confirm" => InviteRetry::Confirm,
             _ => return None,
         })
     }
@@ -2255,6 +2265,7 @@ impl InviteRetry {
             InviteRetry::SignOutFirst => {
                 "This link creates a new account, and this device is already signed in as someone. Sign out on this device first, then open the link again."
             }
+            InviteRetry::Confirm => "Nothing has happened yet. Press the button to continue.",
             InviteRetry::SignInFirst => {
                 "This link does not sign a device in. Sign this device in as the person it is for, then open the link again."
             }
@@ -2285,31 +2296,23 @@ pub async fn invite_page(State(s): State<S>, headers: HeaderMap, Query(q): Q) ->
         Err(fail) => return invite_failed(&s, current.as_ref(), fail),
     };
     let app = &ctx.app;
-    // A named signup link opened on a not-yet-signed-in device: no
-    // confirmation step, just a neutral transition that POSTs itself once the
-    // page has really loaded (link previews and scanners only GET, and GET
-    // never consumes). After a retry redirect it waits for a click instead,
-    // so a refusal can never loop.
+    // A named signup link opened on a not-yet-signed-in device: a neutral
+    // page that names only the product, and nothing happens until the person
+    // presses the button. No script submits it: link previews and crawlers
+    // in chat apps run enough of a browser to load a page (and once ran the
+    // old auto-submit), so the explicit press is the consent, and the POST
+    // must carry the button's `confirm` value (see `redeem_invite`).
     if ctx.signup.is_some() && current.is_none() {
-        let auto = !q.contains_key("err");
-        let title = format!("Opening {}…", app.title);
+        let note = if q.contains_key("err") {
+            "<p class=\"flash err\">Nothing has happened yet. Press the button to continue.</p>"
+        } else {
+            ""
+        };
         let body = format!(
-            "<div class=\"status-page\"><h1>{title}</h1><form id=\"rb-go\" method=\"post\" action=\"/invite\">{button}</form></div>{script}",
-            title = esc(&title),
-            button = if auto {
-                format!(
-                    "<noscript><button class=\"btn primary\" type=\"submit\">Continue to {t}</button></noscript><button class=\"btn primary\" type=\"submit\" id=\"rb-go-later\" hidden>Continue to {t}</button>",
-                    t = esc(&app.title)
-                )
-            } else {
-                format!(
-                    "<button class=\"btn primary\" type=\"submit\">Continue to {}</button>",
-                    esc(&app.title)
-                )
-            },
-            script = if auto { INVITE_AUTO_JS } else { "" },
+            "<div class=\"status-page\"><h1>{t}</h1>{note}<p>Your link to {t} is ready. It works once, on this device.</p><form method=\"post\" action=\"/invite\"><button class=\"btn primary\" type=\"submit\" name=\"confirm\" value=\"1\">Continue to {t}</button></form></div>",
+            t = esc(&app.title),
         );
-        let sh = shell(&s, &title, None, "");
+        let sh = shell(&s, &app.title, None, "");
         let mut resp = html(StatusCode::OK, page(&sh, &body));
         invite_headers(&mut resp);
         return resp;
@@ -2409,22 +2412,6 @@ pub async fn invite_page(State(s): State<S>, headers: HeaderMap, Query(q): Q) ->
     resp
 }
 
-/// Submits the signup handoff form once, only after the document has fully
-/// loaded (and, if prerendered, only once it is actually shown). If the
-/// submit has not navigated away after a few seconds, a plain button appears.
-const INVITE_AUTO_JS: &str = r#"<script>
-(function(){
-var f=document.getElementById('rb-go');if(!f)return;var sent=false;
-function go(){if(sent)return;sent=true;f.submit();}
-function ready(){
-  if(document.prerendering){document.addEventListener('prerenderingchange',ready,{once:true});return;}
-  if(document.readyState==='complete')go();else window.addEventListener('load',go,{once:true});
-}
-ready();
-setTimeout(function(){var b=document.getElementById('rb-go-later');if(b)b.hidden=false;},6000);
-})();
-</script>"#;
-
 enum Redeemed {
     Done(Response),
     Retry(InviteRetry),
@@ -2447,6 +2434,7 @@ fn redeem_invite(s: &AppState, headers: &HeaderMap, raw: &str, f: &InviteForm) -
     let who = if let Some((name, dn)) = &ctx.signup {
         match current {
             Some(_) => return Redeemed::Retry(InviteRetry::SignOutFirst),
+            None if f.confirm != "1" => return Redeemed::Retry(InviteRetry::Confirm),
             None => Who::Join(name.clone(), dn.clone()),
         }
     } else {

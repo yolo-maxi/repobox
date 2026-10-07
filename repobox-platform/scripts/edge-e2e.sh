@@ -16,7 +16,14 @@
 #     and disabled apps are refused; the token never reaches a log; and, when
 #     Playwright's Chromium is installed, the same chain in a real browser
 #     (through a CONNECT proxy to this Caddy, so Origin/cookies are real),
-#     starting from the owner's manage page: "Onboard new user"
+#     starting from the owner's manage page: "Onboard new user"; a page
+#     that loads (scripts run, no click) consumes nothing, only the explicit
+#     "Continue to <App>" press does
+#   - auth.repo.box as an installable PWA: manifest/worker/icon headers, plain
+#     404 for missing assets, and in Chromium registration, installability,
+#     install-prompt UI states, versioned cache + update, offline shell (real
+#     network loss via the CONNECT proxy), revocation in a standalone window,
+#     iOS guidance
 #   - the same-origin AI endpoint (/_repo_box/ai/v1/*): reserved before the
 #     origin, gate + session required, forged headers stripped, policy and
 #     limits enforced, real broker with the bridge secret in front of a fake
@@ -67,6 +74,19 @@ auth.repo.box {
 	}
 	handle /gate/* {
 		respond 404
+	}
+	# Test-only: when \$W/swnext/sw.js exists it replaces the worker, so the
+	# browser check can ship a "new release" and watch the update.
+	@swnext {
+		path /sw.js
+		file {
+			root $W/swnext
+		}
+	}
+	handle @swnext {
+		root * $W/swnext
+		header Cache-Control "no-store"
+		file_server
 	}
 	handle {
 		request_header -X-RepoBox-*
@@ -135,6 +155,15 @@ dir=$(curl -s "${R[@]}" "$A/api/directory")
 expect "directory lists demo-listed" "$(echo "$dir" | command grep -c '"demo-listed"')" 1
 expect "directory omits demo-unlisted" "$(echo "$dir" | command grep -c 'demo-unlisted')" 0
 expect "directory omits demo-private" "$(echo "$dir" | command grep -c 'demo-private')" 0
+
+echo "== PWA shell over the edge"
+hdrs() { curl -s "${R[@]}" -o /dev/null -D - "$A$1" | tr -d '\r' | awk -F': ' -v k="$2" 'tolower($1)==k {print $2}'; }
+expect "manifest content type" "$(hdrs /manifest.webmanifest content-type)" application/manifest+json
+expect "worker: javascript, never stored" "$(hdrs /sw.js content-type) | $(hdrs /sw.js cache-control)" "text/javascript; charset=utf-8 | no-store"
+expect "maskable icon is a PNG" "$(hdrs /assets/icons/maskable-512.png content-type)" image/png
+expect "HTML pages are never stored" "$(hdrs / cache-control)" no-store
+expect "missing asset -> plain 404, not HTML" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{content_type}' "$A/assets/nope.js")" "404 text/plain; charset=utf-8"
+expect "app host has no manifest of its own (gated)" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$PRIV/manifest.webmanifest")" 401
 
 echo "== enrol bob on this 'device'"
 "$P" --db "$DB" user enrol bob --out "$W/bob.url" >/dev/null
@@ -242,8 +271,9 @@ expect "tampered segment POST -> refused, nothing consumed" "$(curl -s "${R[@]}"
 expect "open link -> body-less 303 to the clean /invite" "$(curl -s "${R[@]}" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' "$A$OPATH")" "303 0 $A/invite"
 expect "token moved into a host-only cookie" "$(command grep -c '__Host-rb_invite' "$CJ")" 1
 page=$(curl -s "${R[@]}" -b "$CJ" -D "$W/invite.h" "$A/invite")
-expect "page is only the neutral transition" "$(echo "$page" | command grep -c '<h1>Opening Private demo…</h1>')/$(echo "$page" | command grep -ci 'account\|carol')" "1/0"
-expect "page auto-submits after load (no confirmation click)" "$(echo "$page" | command grep -c "addEventListener('load',go")" 1
+expect "page is neutral and names only the product" "$(echo "$page" | command grep -c '<h1>Private demo</h1>')/$(echo "$page" | command grep -ci 'account\|carol')" "1/0"
+expect "page waits for an explicit 'Continue to' press" "$(echo "$page" | command grep -c 'name="confirm" value="1">Continue to Private demo</button>')" 1
+expect "page has no inline script, nothing submits itself" "$(echo "$page" | command grep -c '<script>')/$(echo "$page" | command grep -c 'submit()')" "0/0"
 for i in 1 2 3; do curl -s "${R[@]}" -b "$W/preview$i.jar" -c "$W/preview$i.jar" -o /dev/null -L "$A$OPATH"; done
 expect "previews/scanners (GET + follow, no JS) consume nothing" "$("$P" --db "$DB" app invites demo-private | awk '$2=="new:carol" {print $3}')/$("$P" --db "$DB" user list | command grep -c '^carol ')" "active/0"
 expect "POST without same-origin evidence -> nothing consumed" "$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST "$A/invite")" "303 $A/invite"
@@ -254,8 +284,9 @@ BOBC=$(awk '/__Host-rb_auth/ {print $7}' "$JAR")
 expect "stranger signed in (bob) -> refused" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' -H "Cookie: __Host-rb_invite=$ORAW; __Host-rb_auth=$BOBC" "$A/invite")" 403
 expect "stranger POST -> nothing consumed" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' -H "Cookie: __Host-rb_invite=$ORAW; __Host-rb_auth=$BOBC" "$A/invite")" "303 $A/invite?err=sign_out_first"
 expect "cross-site POST -> nothing consumed" "$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://evil.example' "$A/invite")" "303 $A/invite"
-expect "link still active" "$("$P" --db "$DB" app invites demo-private | awk '$2=="new:carol" {print $3}')" active
-expect "auto-submitted POST: account created, signed in, granted -> launcher" "$(curl -s "${R[@]}" -b "$CJ" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' "$A/invite")" "303 0 $A/demo-private"
+expect "same-origin POST without the button press -> nothing consumed" "$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{http_code} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' "$A/invite")" "303 $A/invite?err=confirm"
+expect "link still active, no account" "$("$P" --db "$DB" app invites demo-private | awk '$2=="new:carol" {print $3}')/$("$P" --db "$DB" user list | command grep -c '^carol ')" "active/0"
+expect "button press: account created, signed in, granted -> launcher" "$(curl -s "${R[@]}" -b "$CJ" -c "$CJ" -o /dev/null -w '%{http_code} %{size_download} %{redirect_url}' -X POST -H 'Origin: https://auth.repo.box' --data 'confirm=1' "$A/invite")" "303 0 $A/demo-private"
 expect "device cookie set, invite cookie gone" "$(command grep -c '__Host-rb_auth' "$CJ")/$(command grep -c '__Host-rb_invite' "$CJ")" "1/0"
 OLOC=$(curl -s "${R[@]}" -b "$CJ" -o /dev/null -w '%{redirect_url}' "$A/demo-private")
 case "$OLOC" in https://demo-private.repo.box/?rb_launch=*) printf '  ok   %-55s %s\n' "launcher mints the launch code" "(code elided)";; *) echo "  FAIL launcher: $OLOC"; fail=1;; esac
@@ -288,8 +319,18 @@ if [[ -x "$CHROME" ]] && NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-c
   # CONNECT proxy that tunnels every :443 to this Caddy, so Origin, cookies
   # and the cross-host launch hop behave exactly as in production.
   cat > "$W/connect_proxy.py" <<'PY'
-import socket, sys, threading
-listen, target = int(sys.argv[1]), int(sys.argv[2])
+import os, socket, sys, threading, time
+listen, target, down = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
+live = set()  # while the file `down` exists the "network" is gone: no new
+              # tunnels, and open ones are cut (a real outage, which also
+              # reaches service-worker fetches, unlike browser offline mode)
+def cutter():
+    while True:
+        if os.path.exists(down):
+            for s in list(live):
+                try: s.shutdown(socket.SHUT_RDWR)
+                except OSError: pass
+        time.sleep(0.1)
 def pipe(a, b):
     try:
         while (d := a.recv(65536)):
@@ -298,6 +339,7 @@ def pipe(a, b):
         pass
     finally:
         for s in (a, b):
+            live.discard(s)
             try: s.shutdown(socket.SHUT_RDWR)
             except OSError: pass
 def handle(c):
@@ -307,28 +349,34 @@ def handle(c):
         if not d: return c.close()
         head += d
     line = head.split(b"\r\n")[0].split()
-    if len(line) < 2 or line[0] != b"CONNECT" or not line[1].endswith(b":443"):
+    if os.path.exists(down) or len(line) < 2 or line[0] != b"CONNECT" or not line[1].endswith(b":443"):
         c.sendall(b"HTTP/1.1 403 Forbidden\r\n\r\n"); return c.close()
     u = socket.create_connection(("127.0.0.1", target))
+    live.update((c, u))
     c.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
     threading.Thread(target=pipe, args=(c, u), daemon=True).start()
     pipe(u, c)
+threading.Thread(target=cutter, daemon=True).start()
 srv = socket.socket(); srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 srv.bind(("127.0.0.1", listen)); srv.listen(64)
 while True:
     conn, _ = srv.accept()
     threading.Thread(target=handle, args=(conn,), daemon=True).start()
 PY
-  python3 "$W/connect_proxy.py" 3934 "$HTTPS" >"$W/proxy.log" 2>&1 &
+  python3 "$W/connect_proxy.py" 3934 "$HTTPS" "$W/network-down" >"$W/proxy.log" 2>&1 &
   PX=$!
   sleep 0.5
   cat > "$W/browser.js" <<'JS'
 // The owner's exact flow: sign in, open the app's manage page, "Onboard new
 // user", enter handle + display name, take the one link; then the new
-// person opens it in a fresh browser and lands in the app with no click.
+// person opens it in a fresh browser, sees a page naming only the product,
+// and nothing happens until they press "Continue to <App>".
 const { chromium } = require('playwright');
-const [chrome, franFile] = process.argv.slice(2);
+const { execFileSync } = require('child_process');
+const [chrome, franFile, bin, db] = process.argv.slice(2);
 const franLink = require('fs').readFileSync(franFile, 'utf8').split('\n')[0];
+const linkState = () => execFileSync(bin, ['--db', db, 'app', 'invites', 'demo-private']).toString()
+  .split('\n').filter(l => l.includes('new:dave')).map(l => l.trim().split(/\s+/)[2])[0];
 (async () => {
   const b = await chromium.launch({ executablePath: chrome, proxy: { server: 'http://127.0.0.1:3934' } });
   const owner = await (await b.newContext({ ignoreHTTPSErrors: true })).newPage();
@@ -336,7 +384,7 @@ const franLink = require('fs').readFileSync(franFile, 'utf8').split('\n')[0];
   await owner.click('button[type=submit]');
   await owner.waitForURL(u => u.pathname === '/');
   await owner.goto('https://auth.repo.box/apps/demo-private');
-  await owner.click('a:has-text("Onboard new user")');
+  await owner.click('a.btn:has-text("Onboard new user")');
   await owner.fill('#onboard-name', 'dave');
   await owner.fill('#onboard-dn', 'Dave');
   await owner.click('button:has-text("Create signup link")');
@@ -345,24 +393,176 @@ const franLink = require('fs').readFileSync(franFile, 'utf8').split('\n')[0];
   const raw = link.split('/').pop();
   const page = await (await b.newContext({ ignoreHTTPSErrors: true })).newPage();
   const seen = [];
-  let posts = 0, transition = null;
+  let posts = 0;
   page.on('framenavigated', f => { if (f === page.mainFrame()) seen.push(f.url()); });
   page.on('request', r => { if (r.method() === 'POST' && r.url() === 'https://auth.repo.box/invite') posts++; });
-  page.on('response', async r => { if (r.request().method() === 'GET' && r.url() === 'https://auth.repo.box/invite') transition = await r.text().catch(() => ''); });
-  await page.goto(link, { waitUntil: 'commit' });
+  // A full browser (JS, load event, idle network) that does not click: what a
+  // chat app's link preview can do. It must change nothing.
+  await page.goto(link, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(4000);
+  const html = await page.content();
+  const waits = page.url() === 'https://auth.repo.box/invite' && posts === 0 && linkState() === 'active'
+    && html.includes('<h1>Private demo</h1>') && !/account|dave/i.test(await page.textContent('main'));
+  await page.click('button:has-text("Continue to Private demo")');
   await page.waitForURL(u => u.hostname === 'demo-private.repo.box', { timeout: 15000 }).catch(() => {});
-  const clean = seen.includes('https://auth.repo.box/invite') && posts === 1 && !!transition
-    && transition.includes('<h1>Opening Private demo…</h1>') && !/account|dave/i.test(transition);
-  const landed = page.url() === 'https://demo-private.repo.box/';
+  const landed = page.url() === 'https://demo-private.repo.box/' && posts === 1 && linkState() === 'used';
   const who = landed && (await page.textContent('body')).includes('dave');
   const tokenFree = seen.slice(1).every(u => !u.includes(raw) && !u.includes('rb_launch'));
-  console.log(`${+shown}${+clean}${+landed}${+who}${+tokenFree}`);
+  console.log(`${+shown}${+waits}${+landed}${+who}${+tokenFree}`);
   await b.close();
 })().catch(e => { console.log('error ' + String(e.message).split('\n')[0].replace(/[A-Za-z0-9_-]{43}/g, '<redacted>')); process.exit(1); });
 JS
-  expect "browser: owner page 'Onboard new user' -> link -> no click -> app as dave" "$(NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-calendar/node_modules}" node "$W/browser.js" "$CHROME" "$W/fran.url")" 11111
+  expect "browser: owner 'Onboard new user' -> link loads, waits (nothing consumed) -> 'Continue to' -> app as dave" "$(NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-calendar/node_modules}" node "$W/browser.js" "$CHROME" "$W/fran.url" "$P" "$DB")" 11111
   expect "browser: dave's account exists as a member" "$("$P" --db "$DB" user list | awk '$1=="dave" {print $2, $3}')" "member active"
   expect "browser: dave holds exactly the intended grant" "$("$P" --db "$DB" app show demo-private | command grep -c '^  - dave ')/$("$P" --db "$DB" app show demo-unlisted | command grep -c '^  - dave ')" "1/0"
+  echo "== auth.repo.box as an installed app (Chromium through Caddy)"
+  "$P" --db "$DB" user enrol fran --out "$W/fran-pwa.url" >/dev/null
+  SHELL_JSON=$(curl -s "${R[@]}" "$A/sw.js" | sed -n 's/^const SHELL = \(.*\);$/\1/p')
+  mkdir -p "$W/shots"
+  cat > "$W/pwa.js" <<'JS'
+// Registration, installability, the install-prompt UI states, the versioned
+// cache and its update, offline behaviour, and revocation in a standalone
+// window. Prints one line per check; exits 1 on any failure.
+const { chromium } = require('playwright');
+const fs = require('fs');
+const { execFileSync } = require('child_process');
+const [chrome, linkFile, bin, db, w, shellJson] = process.argv.slice(2);
+const link = fs.readFileSync(linkFile, 'utf8').split('\n')[0];
+const SHELL = JSON.parse(shellJson).slice().sort();
+let bad = 0;
+setTimeout(() => { console.log('  FAIL browser/pwa: overall timeout'); console.log('pwa-fail'); process.exit(1); }, 150000);
+const check = (label, ok, info = '') => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} browser/pwa: ${label}${ok ? '' : ' ' + info}`); if (!ok) bad++; };
+const A = 'https://auth.repo.box';
+const cacheMap = (p) => p.evaluate(async () => {
+  const out = {};
+  for (const k of await caches.keys()) out[k] = (await (await caches.open(k)).keys()).map(r => new URL(r.url).pathname).sort();
+  return out;
+});
+const shellCaches = (m) => Object.keys(m).filter(k => k.startsWith('rb-auth-'));
+(async () => {
+  // Service workers refuse untrusted TLS even with ignoreHTTPSErrors; the test
+  // Caddy's local CA is not installed, so this browser ignores cert errors.
+  const b = await chromium.launch({ executablePath: chrome, proxy: { server: 'http://127.0.0.1:3934' }, args: ['--ignore-certificate-errors'] });
+  const ctx = await b.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 860 } });
+  ctx.setDefaultTimeout(15000);
+  const page = await ctx.newPage();
+  // Leftovers of an older release (and someone else's cache) before any worker.
+  await page.goto(A + '/assets/offline.html');
+  await page.evaluate(async () => {
+    await (await caches.open('rb-auth-shell-000000000000')).put('/assets/app.css', new Response('old'));
+    await (await caches.open('unrelated')).put('/x', new Response('x'));
+  });
+  await page.goto(link);
+  await page.click('button[type=submit]');
+  await page.waitForURL(u => u.pathname === '/');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  const controlled = await page.waitForFunction(() => !!navigator.serviceWorker.controller && document.documentElement.dataset.sw === 'registered').then(() => true, () => false);
+  check('worker registered and controls the page', controlled);
+  const reg = await page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return { scope: r.scope, url: r.active.scriptURL, via: r.updateViaCache }; });
+  check('scope / and updateViaCache none', reg.scope === A + '/' && reg.url === A + '/sw.js' && reg.via === 'none', JSON.stringify(reg));
+  const cdp = await ctx.newCDPSession(page);
+  const inst = await cdp.send('Page.getInstallabilityErrors');
+  check('Chromium reports no installability errors', inst.installabilityErrors.length === 0, JSON.stringify(inst.installabilityErrors));
+  const man = await cdp.send('Page.getAppManifest');
+  check('manifest parses without errors', man.errors.length === 0 && man.url === A + '/manifest.webmanifest', JSON.stringify(man.errors));
+  // Browse signed-in pages; the caches must still hold only the static shell.
+  for (const p of ['/me', '/apps/demo-private', '/docs', '/']) await page.goto(A + p);
+  await page.evaluate(() => fetch('/api/session').then(r => r.json()));
+  let m = await cacheMap(page);
+  const cur = shellCaches(m);
+  check('one versioned shell cache, old release dropped, others untouched', cur.length === 1 && 'unrelated' in m, JSON.stringify(Object.keys(m)));
+  check('cache holds exactly the static shell (no pages, no API)', JSON.stringify(m[cur[0]]) === JSON.stringify(SHELL), JSON.stringify(m[cur[0]]));
+  // Install prompt UI.
+  check('no install action until the browser offers one', await page.isHidden('#pwa-install'));
+  const fire = (outcome) => page.evaluate((o) => {
+    window.__prompts = 0;
+    const e = new Event('beforeinstallprompt', { cancelable: true });
+    e.prompt = () => { window.__prompts++; return Promise.resolve(); };
+    e.userChoice = Promise.resolve({ outcome: o, platform: 'web' });
+    window.dispatchEvent(e);
+    return e.defaultPrevented;
+  }, outcome);
+  await page.goto(A + '/me');
+  check('/me states the not-offered case honestly', (await page.textContent('#pwa-state')).includes('has not offered'));
+  check('captured prompt: default prevented, Install app shown', (await fire('dismissed')) && await page.isVisible('#pwa-install'));
+  check('Install app is a named, focusable button', await page.evaluate(() => { const b = document.getElementById('pwa-install'); b.focus(); return document.activeElement === b && b.tagName === 'BUTTON' && b.textContent === 'Install app'; }));
+  await page.click('#pwa-install');
+  await page.waitForFunction(() => document.documentElement.dataset.pwa === 'dismissed');
+  check('dismissed: prompt shown once, button gone, announced', await page.evaluate(() => window.__prompts === 1 && document.getElementById('pwa-install').hidden && document.getElementById('pwa-status').textContent.includes('dismissed')));
+  await fire('accepted');
+  await page.click('#pwa-install');
+  await page.waitForFunction(() => document.documentElement.dataset.pwa === 'accepted');
+  check('accepted: button gone, announced', await page.isHidden('#pwa-install') && (await page.textContent('#pwa-status')).includes('Installing'));
+  await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+  check('appinstalled: installed state', (await page.textContent('#pwa-state')).includes('is installed'));
+  await page.screenshot({ path: w + '/shots/desktop-me.png', fullPage: true });
+  // A new release: a byte-different worker replaces the cache.
+  const sw = await page.evaluate(() => fetch('/sw.js', { cache: 'no-store' }).then(r => r.text()));
+  fs.mkdirSync(w + '/swnext', { recursive: true });
+  fs.writeFileSync(w + '/swnext/sw.js', sw.replace(/const VERSION = '[0-9a-f]+';/, "const VERSION = 'e2e-next';"));
+  await page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); await r.update(); });
+  // Poll gently: an every-frame Cache Storage poll starves the installing
+  // worker in headless Chromium.
+  for (let i = 0; i < 30; i++) {
+    await page.waitForTimeout(500);
+    if (await page.evaluate(async () => JSON.stringify((await caches.keys()).filter(k => k.startsWith('rb-auth-'))) === '["rb-auth-shell-e2e-next"]')) break;
+  }
+  m = await cacheMap(page);
+  const regInfo = await page.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return { active: r.active && r.active.state, waiting: !!r.waiting, installing: !!r.installing }; });
+  check('update: new version cached, previous version deleted', JSON.stringify(shellCaches(m)) === '["rb-auth-shell-e2e-next"]' && JSON.stringify(m['rb-auth-shell-e2e-next']) === JSON.stringify(SHELL), JSON.stringify({ m, regInfo }));
+  fs.rmSync(w + '/swnext', { recursive: true });
+  // Offline (the network is really gone, see connect_proxy.py): the honest
+  // offline page from the cached shell, never the signed-in page.
+  fs.writeFileSync(w + '/network-down', '');
+  await page.waitForTimeout(500);
+  for (const p of ['/', '/me']) {
+    const r = await page.goto(A + p);
+    const body = await page.content();
+    check(`offline ${p}: 503 offline page, styled from cache, nothing private`, r.status() === 503 && body.includes('You are offline') && !body.includes('data-session') && !body.includes('fran')
+      && await page.evaluate(() => getComputedStyle(document.body).backgroundColor) === 'rgb(10, 22, 40)', `${r.status()}`);
+  }
+  await page.screenshot({ path: w + '/shots/desktop-offline.png' });
+  fs.rmSync(w + '/network-down');
+  // Installed (standalone) window, then the device is revoked elsewhere.
+  // Chromium cannot emulate display-mode, so the media query is simulated.
+  await ctx.addInitScript(() => {
+    const mm = window.matchMedia.bind(window);
+    window.matchMedia = (q) => /display-mode:\s*standalone/.test(q)
+      ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : mm(q);
+  });
+  await page.goto(A + '/');
+  check('standalone (simulated display-mode): recognised, no install action', await page.evaluate(() => document.documentElement.dataset.pwa === 'standalone') && await page.isHidden('#pwa-install'));
+  const before = await page.evaluate(() => document.body.dataset.session || '');
+  execFileSync(bin, ['--db', db, 'user', 'logout', 'fran']);
+  // The app comes back into view (resumed, not reloaded).
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForFunction(() => !document.body.dataset.session, null, { timeout: 10000 }).catch(() => {});
+  check('revoked while in the background: resumes into the signed-out directory', !!before && (await page.textContent('h1')) === 'Public directory' && !(await page.content()).includes('Hello,'));
+  const me = await page.goto(A + '/me');
+  check('revoked: /me answers the normal sign-in-required page', me.status() === 401 && (await page.textContent('h1')).includes('not signed in'));
+  // iOS: explicit Add to Home Screen guidance, no fake install button.
+  const ios = await b.newContext({ ignoreHTTPSErrors: true, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2,
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
+  const ip = await ios.newPage();
+  await ip.goto(A + '/');
+  check('iOS: Share -> Add to Home Screen hint shown, no Install button', await ip.isVisible('#pwa-ios') && (await ip.textContent('#pwa-ios')).includes('Add to Home Screen') && await ip.isHidden('#pwa-install'));
+  await ip.screenshot({ path: w + '/shots/ios-home.png' });
+  await ip.click('#pwa-ios-close');
+  await ip.reload();
+  check('iOS: hint dismissal remembered', await ip.isHidden('#pwa-ios'));
+  const mob = await (await b.newContext({ ignoreHTTPSErrors: true, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage();
+  await mob.goto(A + '/');
+  check('mobile: no horizontal scroll', await mob.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  await mob.screenshot({ path: w + '/shots/mobile-home.png' });
+  await b.close();
+  console.log(bad ? `pwa-fail ${bad}` : 'pwa-pass');
+  process.exit(bad ? 1 : 0);
+})().catch(e => { console.log('  FAIL browser/pwa: error ' + String(e.message).split('\n')[0].replace(/[A-Za-z0-9_-]{43}/g, '<redacted>')); console.log('pwa-fail'); process.exit(1); });
+JS
+  PWA_OUT=$(NODE_PATH="${E2E_NODE_PATH:-$HOME/idea-products/nomad-calendar/node_modules}" node "$W/pwa.js" "$CHROME" "$W/fran-pwa.url" "$P" "$DB" "$W" "$SHELL_JSON" 2>&1 | tee "$W/pwa.out" || true)
+  echo "$PWA_OUT" | command grep -v '^pwa-'
+  expect "browser: installable PWA checks" "$(echo "$PWA_OUT" | tail -1)" pwa-pass
   kill $PX 2>/dev/null || true
 else
   echo "== (skipped: no Chromium/Playwright for the real-browser onboarding check)"
