@@ -268,6 +268,10 @@ mod tests {
         let mut a = app("vibe-games", AppKind::Proxy, "127.0.0.1:3218");
         a.agent_handoff_v1 = true;
         let out = render(&[a.clone()], &cfg()).unwrap();
+        assert_eq!(
+            out,
+            include_str!("../tests/snapshots/agent-handoff-v1.caddy")
+        );
         let cap = out.find("handle @agent_claim").unwrap();
         let gate = out.find("forward_auth").unwrap();
         assert!(cap < gate);
