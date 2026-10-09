@@ -122,6 +122,7 @@ pub fn router(state: S) -> Router {
         )
         .route("/api/directory", get(pages::api_directory))
         .route("/gate/verify", get(gate::verify))
+        .route("/gate/agent-handoff-v1", get(gate::agent_handoff_v1))
         // Platform AI endpoint, reached only through an app route
         // (`/_repo_box/ai/v1/*` rewritten by Caddy); `/gate/*` is 404 on
         // auth.repo.box itself.

@@ -13,6 +13,9 @@ vibe-games.repo.box {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		-Server
 	}
+	handle_errors {
+		respond "" 503
+	}
 	route {
 		request_header -X-RepoBox-*
 		request_header -X-Fizmo-Anon-Capability
@@ -28,6 +31,11 @@ vibe-games.repo.box {
 			request_header -Referer
 			request_header -X-Forwarded-Uri
 			request_header X-Fizmo-Anon-Capability 1
+			forward_auth 127.0.0.1:3230 {
+				uri /gate/agent-handoff-v1
+				header_up X-RepoBox-Gate 1
+				header_up X-RepoBox-Gate-App vibe-games
+			}
 			request_header X-Fizmo-Claim {http.request.uri.path}
 			rewrite * /agent/h/claim
 			reverse_proxy 127.0.0.1:3218
@@ -43,6 +51,11 @@ vibe-games.repo.box {
 			request_header -Referer
 			request_header -X-Forwarded-Uri
 			request_header X-Fizmo-Anon-Capability 1
+			forward_auth 127.0.0.1:3230 {
+				uri /gate/agent-handoff-v1
+				header_up X-RepoBox-Gate 1
+				header_up X-RepoBox-Gate-App vibe-games
+			}
 			reverse_proxy 127.0.0.1:3218
 		}
 		handle {

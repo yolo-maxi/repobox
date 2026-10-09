@@ -1034,7 +1034,7 @@ impl Store {
         let now = self.now();
         let conn = self.lock();
         let n = conn.execute(
-            "UPDATE apps SET enabled = ?2, updated_at = ?3 WHERE id = ?1",
+            "UPDATE apps SET enabled = ?2, agent_handoff_v1 = CASE WHEN ?2 = 0 THEN 0 ELSE agent_handoff_v1 END, updated_at = ?3 WHERE id = ?1",
             params![id, enabled as i64, now],
         )?;
         if n == 0 {
@@ -2469,6 +2469,31 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn disabling_parent_clears_anonymous_capability_atomically() {
+        let (s, _) = store_with_clock();
+        let owner = s.create_user("owner", "Owner", Role::Member).unwrap();
+        let app = s
+            .create_app(
+                "vibe-games",
+                "Fizmo",
+                "",
+                owner.id,
+                AppKind::Proxy,
+                "127.0.0.1:3218",
+                Visibility::Private,
+                IdentityContract::Platform,
+            )
+            .unwrap();
+        s.set_agent_handoff_v1(&app, true).unwrap();
+        assert!(s.app_by_id(app.id).unwrap().agent_handoff_v1);
+        s.set_app_enabled(app.id, false).unwrap();
+        let disabled = s.app_by_id(app.id).unwrap();
+        assert!(!disabled.enabled && !disabled.agent_handoff_v1);
+        s.set_app_enabled(app.id, true).unwrap();
+        assert!(!s.app_by_id(app.id).unwrap().agent_handoff_v1);
     }
 
     #[test]

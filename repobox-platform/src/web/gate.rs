@@ -165,6 +165,23 @@ pub fn is_document_navigation(method: &str, uri: &str, headers: &HeaderMap) -> b
     true
 }
 
+/// Live switch for the one anonymous surface on the private parent app.
+/// Caddy checks this on every request, so disabling the app or capability
+/// closes even a route that has not yet been re-rendered.
+pub async fn agent_handoff_v1(State(s): State<S>, headers: HeaderMap) -> Response {
+    let allowed = hdr(&headers, GATE_MARKER_HEADER) == Some("1")
+        && hdr(&headers, GATE_APP_HEADER) == Some("vibe-games")
+        && matches!(s.store.app_by_name("vibe-games"), Ok(Some(app))
+            if app.enabled && app.agent_handoff_v1 && app.kind == crate::model::AppKind::Proxy
+                && app.visibility == Visibility::Private && app.identity.is_platform()
+                && app.publisher_id.is_none());
+    if allowed {
+        StatusCode::NO_CONTENT.into_response()
+    } else {
+        StatusCode::NOT_FOUND.into_response()
+    }
+}
+
 pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
     let shell = Shell {
         title: "Gate",

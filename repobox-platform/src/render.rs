@@ -156,6 +156,11 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
         );
         out.push_str("\t\t-Server\n");
         out.push_str("\t}\n");
+        if app.agent_handoff_v1 {
+            // A proxy failure otherwise reaches Caddy's http.log.error with
+            // the original claim URI, even after the upstream rewrite.
+            out.push_str("\thandle_errors {\n\t\trespond \"\" 503\n\t}\n");
+        }
         out.push_str("\troute {\n");
         out.push_str("\t\trequest_header -X-RepoBox-*\n");
         if app.agent_handoff_v1 {
@@ -167,6 +172,7 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
             out.push_str("\t\t\troute {\n");
             out.push_str("\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization\n\t\t\trequest_header -Referer\n");
             out.push_str("\t\t\trequest_header -X-Forwarded-Uri\n\t\t\trequest_header X-Fizmo-Anon-Capability 1\n");
+            out.push_str(&format!("\t\t\tforward_auth {} {{\n\t\t\t\turi /gate/agent-handoff-v1\n\t\t\t\theader_up {GATE_MARKER_HEADER} 1\n\t\t\t\theader_up {GATE_APP_HEADER} vibe-games\n\t\t\t}}\n", cfg.gate));
             out.push_str("\t\t\trequest_header X-Fizmo-Claim {http.request.uri.path}\n");
             out.push_str("\t\t\trewrite * /agent/h/claim\n");
             out.push_str(&format!("\t\t\treverse_proxy {target}\n"));
@@ -176,6 +182,7 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
             out.push_str("\t\thandle @agent_handoff {\n");
             out.push_str("\t\t\theader Referrer-Policy \"no-referrer\"\n\t\t\theader Cache-Control \"no-store\"\n\t\t\theader X-Robots-Tag \"noindex\"\n");
             out.push_str("\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization\n\t\t\trequest_header -Referer\n\t\t\trequest_header -X-Forwarded-Uri\n\t\t\trequest_header X-Fizmo-Anon-Capability 1\n");
+            out.push_str(&format!("\t\t\tforward_auth {} {{\n\t\t\t\turi /gate/agent-handoff-v1\n\t\t\t\theader_up {GATE_MARKER_HEADER} 1\n\t\t\t\theader_up {GATE_APP_HEADER} vibe-games\n\t\t\t}}\n", cfg.gate));
             out.push_str(&format!("\t\t\treverse_proxy {target}\n"));
             out.push_str("\t\t}\n");
             out.push_str("\t\thandle {\n");
@@ -278,6 +285,8 @@ mod tests {
         assert!(out.contains("path /agent/h/*"));
         assert!(out.contains("path /agent/guide.txt /agent/guide.json /api/handoff/v1/agent/status /api/handoff/v1/agent/draft"));
         assert!(out.contains("rewrite * /agent/h/claim"));
+        assert!(out.contains("uri /gate/agent-handoff-v1"));
+        assert!(out.contains("handle_errors {\n\t\trespond \"\" 503"));
         assert!(out.contains("request_header -Cookie\n\t\t\trequest_header -Authorization"));
         assert!(out.contains("request_header -X-RepoBox-*"));
         assert!(!out.contains("path /api/handoff/v1/*"));
