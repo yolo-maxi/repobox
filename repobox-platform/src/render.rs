@@ -59,6 +59,16 @@ pub const AI_GATE_PREFIX: &str = "/gate/ai";
 pub const RESERVED_MATCH: &str = "/_repo_box/*";
 
 pub fn validate_for_render(app: &App, cfg: &RenderConfig) -> Result<(), String> {
+    if app.agent_handoff_v1
+        && (app.name != "vibe-games"
+            || app.kind != AppKind::Proxy
+            || app.visibility != Visibility::Private
+            || !app.identity.is_platform()
+            || app.publisher_id.is_some()
+            || !app.enabled)
+    {
+        return Err("agent-handoff-v1 is only valid on enabled, private, platform-identity vibe-games proxy".into());
+    }
     validate_app_name(&app.name).map_err(|e| format!("app '{}': {e}", app.name))?;
     let target =
         validate_target(app.kind, &app.target).map_err(|e| format!("app '{}': {e}", app.name))?;
@@ -138,7 +148,9 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
         out.push_str(&format!("{} {{\n", app.host(&cfg.domain)));
         out.push_str("\theader {\n");
         out.push_str("\t\tX-Content-Type-Options \"nosniff\"\n");
-        out.push_str("\t\tReferrer-Policy \"strict-origin-when-cross-origin\"\n");
+        if !app.agent_handoff_v1 {
+            out.push_str("\t\tReferrer-Policy \"strict-origin-when-cross-origin\"\n");
+        }
         out.push_str(
             "\t\tStrict-Transport-Security \"max-age=31536000; includeSubDomains; preload\"\n",
         );
@@ -146,6 +158,29 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
         out.push_str("\t}\n");
         out.push_str("\troute {\n");
         out.push_str("\t\trequest_header -X-RepoBox-*\n");
+        out.push_str("\t\trequest_header -X-Fizmo-Anon-Capability\n");
+        out.push_str("\t\trequest_header -X-Fizmo-Claim\n");
+        if app.agent_handoff_v1 {
+            out.push_str("\t\t@agent_claim path /agent/h/*\n");
+            out.push_str("\t\thandle @agent_claim {\n");
+            out.push_str("\t\t\theader Referrer-Policy \"no-referrer\"\n\t\t\theader Cache-Control \"no-store\"\n\t\t\theader X-Robots-Tag \"noindex\"\n");
+            out.push_str("\t\t\troute {\n");
+            out.push_str("\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization\n\t\t\trequest_header -Referer\n");
+            out.push_str("\t\t\trequest_header -X-Forwarded-Uri\n\t\t\trequest_header X-Fizmo-Anon-Capability 1\n");
+            out.push_str("\t\t\trequest_header X-Fizmo-Claim {http.request.uri.path}\n");
+            out.push_str("\t\t\trewrite * /agent/h/claim\n");
+            out.push_str(&format!("\t\t\treverse_proxy {target}\n"));
+            out.push_str("\t\t\t}\n");
+            out.push_str("\t\t}\n");
+            out.push_str("\t\t@agent_handoff path /agent/guide.txt /agent/guide.json /api/handoff/v1/agent/status /api/handoff/v1/agent/draft\n");
+            out.push_str("\t\thandle @agent_handoff {\n");
+            out.push_str("\t\t\theader Referrer-Policy \"no-referrer\"\n\t\t\theader Cache-Control \"no-store\"\n\t\t\theader X-Robots-Tag \"noindex\"\n");
+            out.push_str("\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization\n\t\t\trequest_header -Referer\n\t\t\trequest_header -X-Forwarded-Uri\n\t\t\trequest_header X-Fizmo-Anon-Capability 1\n");
+            out.push_str(&format!("\t\t\treverse_proxy {target}\n"));
+            out.push_str("\t\t}\n");
+            out.push_str("\t\thandle {\n");
+            out.push_str("\t\t\theader Referrer-Policy \"strict-origin-when-cross-origin\"\n");
+        }
         out.push_str(&format!("\t\tforward_auth {} {{\n", cfg.gate));
         out.push_str("\t\t\turi /gate/verify\n");
         out.push_str(&format!(
@@ -187,6 +222,9 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
             }
         }
         out.push_str("\t\t}\n");
+        if app.agent_handoff_v1 {
+            out.push_str("\t\t}\n");
+        }
         out.push_str("\t}\n");
         out.push_str("}\n");
     }
@@ -211,6 +249,7 @@ mod tests {
             created_at: 0,
             updated_at: 0,
             identity: IdentityContract::Platform,
+            agent_handoff_v1: false,
             ai: crate::model::AiPolicy::private_default(),
             publisher_id: None,
         }
@@ -222,6 +261,24 @@ mod tests {
             gate: "127.0.0.1:3230".into(),
             apps_roots: vec!["/srv/repobox-platform/apps".into()],
         }
+    }
+
+    #[test]
+    fn agent_handoff_is_a_fixed_parent_app_surface_before_auth() {
+        let mut a = app("vibe-games", AppKind::Proxy, "127.0.0.1:3218");
+        a.agent_handoff_v1 = true;
+        let out = render(&[a.clone()], &cfg()).unwrap();
+        let cap = out.find("handle @agent_claim").unwrap();
+        let gate = out.find("forward_auth").unwrap();
+        assert!(cap < gate);
+        assert!(out.contains("path /agent/h/*"));
+        assert!(out.contains("path /agent/guide.txt /agent/guide.json /api/handoff/v1/agent/status /api/handoff/v1/agent/draft"));
+        assert!(out.contains("rewrite * /agent/h/claim"));
+        assert!(out.contains("request_header -Cookie\n\t\t\trequest_header -Authorization"));
+        assert!(out.contains("request_header -X-RepoBox-*"));
+        assert!(!out.contains("path /api/handoff/v1/*"));
+        a.name = "other".into();
+        assert!(render(&[a], &cfg()).is_err());
     }
 
     #[test]

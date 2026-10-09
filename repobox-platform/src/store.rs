@@ -217,6 +217,7 @@ CREATE TABLE IF NOT EXISTS apps (
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     identity TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending')),
+    agent_handoff_v1 INTEGER NOT NULL DEFAULT 0 CHECK (agent_handoff_v1 IN (0, 1)),
     ai_enabled INTEGER NOT NULL DEFAULT 0,
     ai_provider TEXT NOT NULL DEFAULT 'chatmock',
     ai_default_model TEXT NOT NULL DEFAULT 'gpt-5.6-terra',
@@ -387,7 +388,7 @@ CREATE TABLE IF NOT EXISTS publisher_releases (
     finished_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS publisher_releases_app ON publisher_releases(app_name, created_at);
-INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '8');
+INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '9');
 "#;
 
 /// Columns added after the first release. `CREATE TABLE IF NOT EXISTS` does
@@ -443,10 +444,15 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
     // when it is used; the handle is not taken until then).
     ("tokens", "new_user_name", "TEXT"),
     ("tokens", "new_display_name", "TEXT"),
+    (
+        "apps",
+        "agent_handoff_v1",
+        "INTEGER NOT NULL DEFAULT 0 CHECK (agent_handoff_v1 IN (0, 1))",
+    ),
 ];
 
 /// Current schema version (also written to `meta`).
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 9;
 
 /// AI usage counters (requests per app, user and UTC day) are kept this long.
 pub const AI_USAGE_RETENTION_DAYS: i64 = 90;
@@ -1034,6 +1040,26 @@ impl Store {
         if n == 0 {
             return Err(StoreError::NotFound);
         }
+        Ok(())
+    }
+
+    /// Fixed-route, audited capability. Operators cannot configure a path.
+    pub fn set_agent_handoff_v1(&self, app: &App, enabled: bool) -> Result<()> {
+        if enabled
+            && (app.name != "vibe-games"
+                || app.kind != AppKind::Proxy
+                || app.visibility != Visibility::Private
+                || !app.identity.is_platform()
+                || app.publisher_id.is_some()
+                || !app.enabled)
+        {
+            return Err(StoreError::Invalid("agent-handoff-v1 requires the enabled private vibe-games parent app, platform identity, and a loopback proxy".into()));
+        }
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE apps SET agent_handoff_v1 = ?2, updated_at = ?3 WHERE id = ?1",
+            params![app.id, enabled as i64, self.now()],
+        )?;
         Ok(())
     }
 
@@ -2061,7 +2087,7 @@ impl Store {
     }
 }
 
-const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy, publisher_id FROM apps";
+const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy, publisher_id, agent_handoff_v1 FROM apps";
 
 const SERVICE_SELECT: &str = "SELECT id, name, owner_id, scopes, apps, created_at, expires_at, revoked_at, last_used_at FROM service_tokens";
 const REQUEST_SELECT: &str = "SELECT id, name, title, description, kind, target, visibility, owner_id, service_token_id, note, status, created_at, decided_at, decision_note FROM app_requests";
@@ -2221,6 +2247,7 @@ fn row_app(r: &Row<'_>) -> rusqlite::Result<App> {
             public_policy: r.get(20)?,
         },
         publisher_id: r.get(21)?,
+        agent_handoff_v1: r.get::<_, i64>(22)? != 0,
     })
 }
 
@@ -2949,7 +2976,7 @@ mod tests {
                     ",\n    identity TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending'))",
                     "",
                 )
-                .replace("'schema_version', '8'", "'schema_version', '2'")
+                .replace("'schema_version', '9'", "'schema_version', '2'")
                 .lines()
                 .filter(|l| !l.trim_start().starts_with("ai_"))
                 .collect::<Vec<_>>()
@@ -3004,7 +3031,7 @@ mod tests {
                     |r| r.get(0),
                 )
                 .unwrap();
-            assert_eq!(v, "8");
+            assert_eq!(v, "9");
             assert!(has("apps", "ai_enabled") && has("apps", "ai_public_policy"));
             assert!(has("apps", "publisher_id"));
         }

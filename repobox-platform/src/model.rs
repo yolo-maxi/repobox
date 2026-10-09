@@ -190,6 +190,8 @@ pub struct App {
     pub created_at: i64,
     pub updated_at: i64,
     pub identity: IdentityContract,
+    /// Audited, fixed-route anonymous handoff surface on this private parent app.
+    pub agent_handoff_v1: bool,
     pub ai: AiPolicy,
     /// Set when an external publisher created the app: only that publisher
     /// can see or change it through the publisher API, and its route is

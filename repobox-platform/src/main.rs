@@ -229,6 +229,17 @@ enum UserCmd {
 
 #[derive(Subcommand)]
 enum AppCmd {
+    /// Fixed anonymous handoff paths on the existing private vibe-games app.
+    AgentHandoff {
+        name: String,
+        #[arg(long, conflicts_with = "disable", required_unless_present = "disable")]
+        enable: bool,
+        #[arg(long)]
+        disable: bool,
+        /// Auditable review of the deployed origin and claim validation.
+        #[arg(long)]
+        review_note: Option<String>,
+    },
     /// Register an app (or update its route fields with --replace-route)
     Register {
         name: String,
@@ -887,6 +898,35 @@ fn need_app(store: &Store, name: &str) -> Result<model::App, Box<dyn std::error:
 
 fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>> {
     match cmd {
+        AppCmd::AgentHandoff {
+            name,
+            enable,
+            disable: _,
+            review_note,
+        } => {
+            let a = need_app(store, &name)?;
+            if enable && review_note.as_deref().is_none_or(|s| s.trim().len() < 16) {
+                return Err(
+                    "--review-note must identify the reviewed origin and claim validation".into(),
+                );
+            }
+            store.set_agent_handoff_v1(&a, enable)?;
+            store.audit(
+                None,
+                "app.agent_handoff_v1",
+                &a.name,
+                &format!(
+                    "{}; {}",
+                    if enable { "enable" } else { "disable" },
+                    review_note.unwrap_or_default()
+                ),
+            );
+            println!(
+                "agent-handoff-v1 {} for {}; render/apply routes next",
+                if enable { "enabled" } else { "disabled" },
+                a.name
+            );
+        }
         AppCmd::Register {
             name,
             title,
@@ -999,6 +1039,7 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                             "name": a.name, "title": a.title, "kind": a.kind.as_str(), "target": a.target,
                             "visibility": a.visibility.as_str(), "enabled": a.enabled, "owner_id": a.owner_id,
                             "identity": a.identity.as_str(),
+                            "agent_handoff_v1": a.agent_handoff_v1,
                             "ai": a.ai.to_json(),
                             "publisher": a.publisher_id.is_some(),
                             "live": a.publisher_id.is_none() || store.live_release(&a.name).ok().flatten().is_some(),
@@ -1046,6 +1087,14 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
             println!("owner:       {} ({})", owner.name, owner.display_name);
             println!("visibility:  {}", a.visibility.as_str());
             println!("enabled:     {}", a.enabled);
+            println!(
+                "agent-handoff-v1: {} (fixed anonymous paths; origin-enforced claims)",
+                if a.agent_handoff_v1 {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            );
             println!(
                 "identity:    {} — {}",
                 a.identity.as_str(),

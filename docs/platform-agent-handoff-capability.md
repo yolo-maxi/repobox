@@ -1,0 +1,9 @@
+# Parent-app agent handoff capability
+
+`app agent-handoff vibe-games --enable --review-note '<reviewed origin and release>'` is the only registry declaration. It is audited and stored on the existing `vibe-games` row, schema 9. It requires the enabled private, platform-identity, operator-managed loopback proxy. No operator-supplied path or generic public prefix exists. `app show` and JSON `app list` expose the declaration.
+
+The generated `apps.caddy` renders the anonymous blocks before the normal whole-host `forward_auth`. Only `/agent/h/*`, `/agent/guide.txt`, `/agent/guide.json`, `/api/handoff/v1/agent/status`, and `/api/handoff/v1/agent/draft` enter them. Every other path follows the existing gate. Before the anonymous origin, Caddy removes cookies, Authorization, Referer, X-Forwarded-Uri and every client X-RepoBox header; it injects no platform identity. A separate edge marker is injected after stripping client copies. For claim fetches it forwards the original path only in a private edge header and rewrites the upstream URI to `/agent/h/claim`; this keeps claim-bearing URIs out of reverse-proxy warnings.
+
+The Fizmo origin uses the same `127.0.0.1:3218` service and durable SQLite under `/home/fran/services/vibe-games/data/`. Claims and agent bearers are persisted as SHA-256 verifiers only, one claim is burned by an atomic SQLite update, and each bearer is scoped to its creator's link. The creator APIs remain private and key records by `X-RepoBox-User-Id`. The guide is non-secret. Agent operations use `X-Fizmo-Capability`, since the anonymous edge strips Authorization.
+
+Rollback: `app agent-handoff vibe-games --disable`, render routes with both allowed static roots, then use `caddy-apply.py apply` with the generated apps file. Restore the pre-release binary/database and Caddy backup only if necessary. Disable the capability before stopping the Fizmo origin.

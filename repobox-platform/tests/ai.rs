@@ -1150,7 +1150,7 @@ async fn route_preview_release_and_registration_requests() {
     );
     let (st, _, v) = api(&h, "GET", "/api/platform/v1/release", Some(&t), None).await;
     assert_eq!(st, StatusCode::OK);
-    assert_eq!(v["schema_version"], "8");
+    assert_eq!(v["schema_version"], "9");
     assert_eq!(v["ai_broker"]["reachable"], true);
     assert!(!v.to_string().contains(SECRET));
     // Registration is only a request.
