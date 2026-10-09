@@ -158,9 +158,9 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
         out.push_str("\t}\n");
         out.push_str("\troute {\n");
         out.push_str("\t\trequest_header -X-RepoBox-*\n");
-        out.push_str("\t\trequest_header -X-Fizmo-Anon-Capability\n");
-        out.push_str("\t\trequest_header -X-Fizmo-Claim\n");
         if app.agent_handoff_v1 {
+            out.push_str("\t\trequest_header -X-Fizmo-Anon-Capability\n");
+            out.push_str("\t\trequest_header -X-Fizmo-Claim\n");
             out.push_str("\t\t@agent_claim path /agent/h/*\n");
             out.push_str("\t\thandle @agent_claim {\n");
             out.push_str("\t\t\theader Referrer-Policy \"no-referrer\"\n\t\t\theader Cache-Control \"no-store\"\n\t\t\theader X-Robots-Tag \"noindex\"\n");
