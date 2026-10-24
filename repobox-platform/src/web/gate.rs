@@ -182,6 +182,25 @@ pub async fn agent_handoff_v1(State(s): State<S>, headers: HeaderMap) -> Respons
     }
 }
 
+/// Live switch for an app's anonymous live-page lane. Caddy asks on every lane
+/// request, so disabling the app or the lane closes it even before routes are
+/// re-rendered. Only the app named by the generated route is consulted; nothing
+/// about the visitor or the path is read here.
+pub async fn live_pages_v1(State(s): State<S>, headers: HeaderMap) -> Response {
+    let app_name = hdr(&headers, GATE_APP_HEADER).unwrap_or("");
+    let allowed = hdr(&headers, GATE_MARKER_HEADER) == Some("1")
+        && validate_app_name(app_name).is_ok()
+        && matches!(s.store.app_by_name(app_name), Ok(Some(app))
+            if app.enabled && app.live_pages_v1 && app.kind == crate::model::AppKind::Proxy
+                && app.visibility == Visibility::Private && app.identity.is_platform()
+                && app.publisher_id.is_none());
+    if allowed {
+        StatusCode::NO_CONTENT.into_response()
+    } else {
+        StatusCode::NOT_FOUND.into_response()
+    }
+}
+
 pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
     let shell = Shell {
         title: "Gate",

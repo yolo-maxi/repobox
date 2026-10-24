@@ -192,6 +192,11 @@ pub struct App {
     pub identity: IdentityContract,
     /// Audited, fixed-route anonymous handoff surface on this private parent app.
     pub agent_handoff_v1: bool,
+    /// Audited anonymous GET lane for the app's published live pages: the canonical
+    /// `/{handle}/{pageName}` address, its `/live/…` data, frame and media, and the
+    /// hashed assets its host page loads. The origin decides what is published; the
+    /// lane only lets those exact path shapes reach it without a platform session.
+    pub live_pages_v1: bool,
     pub ai: AiPolicy,
     /// Set when an external publisher created the app: only that publisher
     /// can see or change it through the publisher API, and its route is

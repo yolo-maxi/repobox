@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS apps (
     updated_at INTEGER NOT NULL,
     identity TEXT NOT NULL DEFAULT 'pending' CHECK (identity IN ('platform', 'pending')),
     agent_handoff_v1 INTEGER NOT NULL DEFAULT 0 CHECK (agent_handoff_v1 IN (0, 1)),
+    live_pages_v1 INTEGER NOT NULL DEFAULT 0 CHECK (live_pages_v1 IN (0, 1)),
     ai_enabled INTEGER NOT NULL DEFAULT 0,
     ai_provider TEXT NOT NULL DEFAULT 'chatmock',
     ai_default_model TEXT NOT NULL DEFAULT 'gpt-5.6-terra',
@@ -449,10 +450,16 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "agent_handoff_v1",
         "INTEGER NOT NULL DEFAULT 0 CHECK (agent_handoff_v1 IN (0, 1))",
     ),
+    // Schema 10: the anonymous live-page lane of a private platform app.
+    (
+        "apps",
+        "live_pages_v1",
+        "INTEGER NOT NULL DEFAULT 0 CHECK (live_pages_v1 IN (0, 1))",
+    ),
 ];
 
 /// Current schema version (also written to `meta`).
-pub const SCHEMA_VERSION: i64 = 9;
+pub const SCHEMA_VERSION: i64 = 10;
 
 /// AI usage counters (requests per app, user and UTC day) are kept this long.
 pub const AI_USAGE_RETENTION_DAYS: i64 = 90;
@@ -1034,7 +1041,7 @@ impl Store {
         let now = self.now();
         let conn = self.lock();
         let n = conn.execute(
-            "UPDATE apps SET enabled = ?2, agent_handoff_v1 = CASE WHEN ?2 = 0 THEN 0 ELSE agent_handoff_v1 END, updated_at = ?3 WHERE id = ?1",
+            "UPDATE apps SET enabled = ?2, agent_handoff_v1 = CASE WHEN ?2 = 0 THEN 0 ELSE agent_handoff_v1 END, live_pages_v1 = CASE WHEN ?2 = 0 THEN 0 ELSE live_pages_v1 END, updated_at = ?3 WHERE id = ?1",
             params![id, enabled as i64, now],
         )?;
         if n == 0 {
@@ -1058,6 +1065,28 @@ impl Store {
         let conn = self.lock();
         conn.execute(
             "UPDATE apps SET agent_handoff_v1 = ?2, updated_at = ?3 WHERE id = ?1",
+            params![app.id, enabled as i64, self.now()],
+        )?;
+        Ok(())
+    }
+
+    /// Audited anonymous lane for an app's published live pages. Operators cannot
+    /// configure a path: the lane shape is fixed, and the origin decides per request
+    /// what is published. Only an enabled, private, platform-identity loopback proxy
+    /// that is not publisher-deployed can carry it.
+    pub fn set_live_pages_v1(&self, app: &App, enabled: bool) -> Result<()> {
+        if enabled
+            && (app.kind != AppKind::Proxy
+                || app.visibility != Visibility::Private
+                || !app.identity.is_platform()
+                || app.publisher_id.is_some()
+                || !app.enabled)
+        {
+            return Err(StoreError::Invalid("live-pages-v1 requires an enabled, private, platform-identity loopback proxy app that is not publisher-deployed".into()));
+        }
+        let conn = self.lock();
+        conn.execute(
+            "UPDATE apps SET live_pages_v1 = ?2, updated_at = ?3 WHERE id = ?1",
             params![app.id, enabled as i64, self.now()],
         )?;
         Ok(())
@@ -2087,7 +2116,7 @@ impl Store {
     }
 }
 
-const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy, publisher_id, agent_handoff_v1 FROM apps";
+const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy, publisher_id, agent_handoff_v1, live_pages_v1 FROM apps";
 
 const SERVICE_SELECT: &str = "SELECT id, name, owner_id, scopes, apps, created_at, expires_at, revoked_at, last_used_at FROM service_tokens";
 const REQUEST_SELECT: &str = "SELECT id, name, title, description, kind, target, visibility, owner_id, service_token_id, note, status, created_at, decided_at, decision_note FROM app_requests";
@@ -2248,6 +2277,7 @@ fn row_app(r: &Row<'_>) -> rusqlite::Result<App> {
         },
         publisher_id: r.get(21)?,
         agent_handoff_v1: r.get::<_, i64>(22)? != 0,
+        live_pages_v1: r.get::<_, i64>(23)? != 0,
     })
 }
 
@@ -2494,6 +2524,49 @@ mod tests {
         assert!(!disabled.enabled && !disabled.agent_handoff_v1);
         s.set_app_enabled(app.id, true).unwrap();
         assert!(!s.app_by_id(app.id).unwrap().agent_handoff_v1);
+    }
+
+    #[test]
+    fn live_pages_lane_needs_a_private_platform_proxy_and_dies_with_disable() {
+        let (s, _) = store_with_clock();
+        let owner = s.create_user("owner", "Owner", Role::Member).unwrap();
+        let app = s
+            .create_app(
+                "fieldwork",
+                "Fieldwork",
+                "",
+                owner.id,
+                AppKind::Proxy,
+                "127.0.0.1:4110",
+                Visibility::Private,
+                IdentityContract::Platform,
+            )
+            .unwrap();
+        assert!(!app.live_pages_v1);
+        s.set_live_pages_v1(&app, true).unwrap();
+        assert!(s.app_by_id(app.id).unwrap().live_pages_v1);
+        s.set_app_enabled(app.id, false).unwrap();
+        let disabled = s.app_by_id(app.id).unwrap();
+        assert!(!disabled.enabled && !disabled.live_pages_v1);
+        assert!(s.set_live_pages_v1(&disabled, true).is_err());
+        s.set_app_enabled(app.id, true).unwrap();
+        assert!(!s.app_by_id(app.id).unwrap().live_pages_v1);
+        let public = s
+            .create_app(
+                "fieldwork-deck",
+                "Deck links",
+                "",
+                owner.id,
+                AppKind::Proxy,
+                "127.0.0.1:4110",
+                Visibility::PublicUnlisted,
+                IdentityContract::Pending,
+            )
+            .unwrap();
+        assert!(s.set_live_pages_v1(&public, true).is_err());
+        s.set_live_pages_v1(&s.app_by_id(app.id).unwrap(), true).unwrap();
+        s.set_live_pages_v1(&s.app_by_id(app.id).unwrap(), false).unwrap();
+        assert!(!s.app_by_id(app.id).unwrap().live_pages_v1);
     }
 
     #[test]

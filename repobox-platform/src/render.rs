@@ -57,6 +57,16 @@ pub const AI_PUBLIC_PREFIX: &str = "/_repo_box/ai";
 pub const AI_GATE_PREFIX: &str = "/gate/ai";
 /// Everything else under the reserved prefix is refused at the edge.
 pub const RESERVED_MATCH: &str = "/_repo_box/*";
+/// The live-pages lane (`live_pages_v1`): the canonical published address
+/// `/{handle}/{pageName}` (a repo.box handle, then a lowercase hyphenated page
+/// name), the page's own data under `/live/{handle}/{pageName}/` (page.json,
+/// revision, frame, media/<id>) and hashed build assets. Brace quantifiers are
+/// avoided on purpose (the Caddyfile treats `{…}` as placeholders); lengths are
+/// checked by the origin, which also refuses reserved first segments.
+pub const LIVE_PAGES_PATH_REGEXP: &str = r"^(?:/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*|/live/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*/(?:page\.json|revision|frame|media/[a-f0-9-]+)|/assets/[A-Za-z0-9_.-]+\.(?:js|css|woff2|woff|ttf))$";
+/// Paths the lane never carries even when the shape matches: the platform's
+/// reserved prefix, API prefixes and the private app's own entry bundles.
+pub const LIVE_PAGES_EXCLUDED_PATHS: &str = "/api/* /v1/* /_repo_box/* /assets/index-* /assets/share-*";
 
 pub fn validate_for_render(app: &App, cfg: &RenderConfig) -> Result<(), String> {
     if app.agent_handoff_v1
@@ -68,6 +78,18 @@ pub fn validate_for_render(app: &App, cfg: &RenderConfig) -> Result<(), String> 
             || !app.enabled)
     {
         return Err("agent-handoff-v1 is only valid on enabled, private, platform-identity vibe-games proxy".into());
+    }
+    if app.live_pages_v1
+        && (app.kind != AppKind::Proxy
+            || app.visibility != Visibility::Private
+            || !app.identity.is_platform()
+            || app.publisher_id.is_some()
+            || !app.enabled)
+    {
+        return Err(format!(
+            "app '{}': live-pages-v1 is only valid on an enabled, private, platform-identity proxy",
+            app.name
+        ));
     }
     validate_app_name(&app.name).map_err(|e| format!("app '{}': {e}", app.name))?;
     let target =
@@ -185,7 +207,30 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
             out.push_str(&format!("\t\t\tforward_auth {} {{\n\t\t\t\turi /gate/agent-handoff-v1\n\t\t\t\theader_up {GATE_MARKER_HEADER} 1\n\t\t\t\theader_up {GATE_APP_HEADER} vibe-games\n\t\t\t}}\n", cfg.gate));
             out.push_str(&format!("\t\t\treverse_proxy {target}\n"));
             out.push_str("\t\t}\n");
+        }
+        if app.live_pages_v1 {
+            // Published live pages: anonymous GET/HEAD for the canonical page
+            // address, its data/frame/media and the hashed assets its host page
+            // loads. The control plane is asked on every request (fail closed when
+            // the app or the lane is switched off); cookies and credentials never
+            // reach the origin on this lane, and the origin enforces the exact
+            // allowlist (reserved first segments and unpublished pages are refused
+            // there). Nothing else on the host changes.
+            out.push_str("\t\t@live_pages {\n");
+            out.push_str("\t\t\tmethod GET HEAD\n");
+            out.push_str(&format!("\t\t\tpath_regexp {LIVE_PAGES_PATH_REGEXP}\n"));
+            out.push_str(&format!("\t\t\tnot path {LIVE_PAGES_EXCLUDED_PATHS}\n"));
+            out.push_str("\t\t}\n");
+            out.push_str("\t\thandle @live_pages {\n");
+            out.push_str("\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization\n\t\t\trequest_header -X-Forwarded-Uri\n");
+            out.push_str(&format!("\t\t\tforward_auth {} {{\n\t\t\t\turi /gate/live-pages-v1\n\t\t\t\theader_up {GATE_MARKER_HEADER} 1\n\t\t\t\theader_up {GATE_APP_HEADER} {}\n\t\t\t}}\n", cfg.gate, app.name));
+            out.push_str(&format!("\t\t\treverse_proxy {target} {{\n\t\t\t\theader_up X-RepoBox-Auth anonymous\n\t\t\t\theader_up X-RepoBox-App {}\n\t\t\t}}\n", app.name));
+            out.push_str("\t\t}\n");
+        }
+        if app.agent_handoff_v1 || app.live_pages_v1 {
             out.push_str("\t\thandle {\n");
+        }
+        if app.agent_handoff_v1 {
             out.push_str("\t\t\theader Referrer-Policy \"strict-origin-when-cross-origin\"\n");
         }
         out.push_str(&format!("\t\tforward_auth {} {{\n", cfg.gate));
@@ -229,7 +274,7 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
             }
         }
         out.push_str("\t\t}\n");
-        if app.agent_handoff_v1 {
+        if app.agent_handoff_v1 || app.live_pages_v1 {
             out.push_str("\t\t}\n");
         }
         out.push_str("\t}\n");
@@ -257,6 +302,7 @@ mod tests {
             updated_at: 0,
             identity: IdentityContract::Platform,
             agent_handoff_v1: false,
+            live_pages_v1: false,
             ai: crate::model::AiPolicy::private_default(),
             publisher_id: None,
         }
@@ -292,6 +338,62 @@ mod tests {
         assert!(!out.contains("path /api/handoff/v1/*"));
         a.name = "other".into();
         assert!(render(&[a], &cfg()).is_err());
+    }
+
+    #[test]
+    fn live_pages_lane_is_an_anonymous_get_surface_before_auth() {
+        let mut a = app("fieldwork", AppKind::Proxy, "127.0.0.1:4110");
+        a.live_pages_v1 = true;
+        let out = render(&[a.clone()], &cfg()).unwrap();
+        assert_eq!(out, include_str!("../tests/snapshots/live-pages-v1.caddy"));
+        let strip = out.find("request_header -X-RepoBox-*").unwrap();
+        let lane = out.find("handle @live_pages").unwrap();
+        let gate = out.find("uri /gate/verify").unwrap();
+        assert!(strip < lane && lane < gate);
+        assert!(out.contains("method GET HEAD"));
+        assert!(out.contains(&format!("path_regexp {LIVE_PAGES_PATH_REGEXP}")));
+        assert!(out.contains("not path /api/* /v1/* /_repo_box/* /assets/index-* /assets/share-*"));
+        assert!(out.contains("uri /gate/live-pages-v1"));
+        assert!(out.contains("header_up X-RepoBox-Gate-App fieldwork"));
+        assert!(out.contains("request_header -Cookie\n\t\t\trequest_header -Authorization"));
+        assert!(out.contains("header_up X-RepoBox-Auth anonymous"));
+        // The rest of the host stays behind the normal gate, in a sibling handle.
+        assert!(out.contains("\t\t}\n\t\thandle {\n\t\tforward_auth 127.0.0.1:3230 {\n\t\t\turi /gate/verify"));
+        assert!(!out.contains("copy_headers X-RepoBox-User X-RepoBox-User-Id X-RepoBox-Role X-RepoBox-Auth X-RepoBox-App\n\t\t\theader_up X-RepoBox-Gate 1\n\t\t\theader_up X-RepoBox-Gate-App fieldwork\n\t\t}\n\t\thandle @live_pages"));
+        let re = regex_lite_check(LIVE_PAGES_PATH_REGEXP);
+        for ok in ["/fran/notes-on-rivers", "/john.doe/intro", "/live/fran/rivers/page.json", "/live/fran/rivers/revision", "/live/fran/rivers/frame", "/live/fran/rivers/media/0f8fad5b-d9cb-469f-a165-70867728950e", "/assets/live-CpFRovq4.js", "/assets/deck-V3G11p-6.css", "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"] {
+            assert!(re(ok), "{ok} should match the lane");
+        }
+        for no in ["/", "/fran", "/fran/Page", "/fran/a/b", "/fran/rivers/", "/live/fran/rivers/other", "/assets/index-abc.js.map", "/assets/icon.svg", "/api/studio/x", "/sw.js"] {
+            assert!(!re(no), "{no} should not match the lane");
+        }
+        a.visibility = Visibility::PublicUnlisted;
+        assert!(render(&[a.clone()], &cfg()).is_err());
+        a.visibility = Visibility::Private;
+        a.enabled = false;
+        assert!(render(&[a], &cfg()).is_err());
+    }
+
+    /// A tiny matcher for the lane regexp in tests: the pattern uses only classes,
+    /// groups, alternation, `*`, `+` and anchors, which `regex`-free std cannot run,
+    /// so the test mirrors the grammar by hand through Go-compatible semantics.
+    fn regex_lite_check(pattern: &str) -> impl Fn(&str) -> bool {
+        assert!(pattern.starts_with("^(?:") && pattern.ends_with(")$"));
+        move |path: &str| {
+            let handle = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
+            let name = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+            let parts: Vec<&str> = path.split('/').collect();
+            match parts.as_slice() {
+                ["", "assets", file] => {
+                    let (stem, ext) = file.rsplit_once('.').unwrap_or(("", ""));
+                    !stem.is_empty() && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')) && matches!(ext, "js" | "css" | "woff2" | "woff" | "ttf")
+                }
+                ["", h, p] => handle(h) && name(p),
+                ["", "live", h, p, file] => handle(h) && name(p) && matches!(*file, "page.json" | "revision" | "frame"),
+                ["", "live", h, p, "media", id] => handle(h) && name(p) && !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase() || c == '-'),
+                _ => false,
+            }
+        }
     }
 
     #[test]

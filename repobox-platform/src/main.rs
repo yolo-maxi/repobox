@@ -240,6 +240,19 @@ enum AppCmd {
         #[arg(long)]
         review_note: Option<String>,
     },
+    /// Anonymous GET lane for the published live pages of a private platform app
+    /// (`/{handle}/{pageName}`, its `/live/…` data and hashed assets; the origin
+    /// decides what is published). Audited; render/apply routes afterwards.
+    LivePages {
+        name: String,
+        #[arg(long, conflicts_with = "disable", required_unless_present = "disable")]
+        enable: bool,
+        #[arg(long)]
+        disable: bool,
+        /// Auditable review of the origin's public allowlist and fail-closed behaviour.
+        #[arg(long)]
+        review_note: Option<String>,
+    },
     /// Register an app (or update its route fields with --replace-route)
     Register {
         name: String,
@@ -927,6 +940,35 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 a.name
             );
         }
+        AppCmd::LivePages {
+            name,
+            enable,
+            disable: _,
+            review_note,
+        } => {
+            let a = need_app(store, &name)?;
+            if enable && review_note.as_deref().is_none_or(|s| s.trim().len() < 16) {
+                return Err(
+                    "--review-note must identify the reviewed origin allowlist and fail-closed check".into(),
+                );
+            }
+            store.set_live_pages_v1(&a, enable)?;
+            store.audit(
+                None,
+                "app.live_pages_v1",
+                &a.name,
+                &format!(
+                    "{}; {}",
+                    if enable { "enable" } else { "disable" },
+                    review_note.unwrap_or_default()
+                ),
+            );
+            println!(
+                "live-pages-v1 {} for {}; render/apply routes next",
+                if enable { "enabled" } else { "disabled" },
+                a.name
+            );
+        }
         AppCmd::Register {
             name,
             title,
@@ -1040,6 +1082,7 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                             "visibility": a.visibility.as_str(), "enabled": a.enabled, "owner_id": a.owner_id,
                             "identity": a.identity.as_str(),
                             "agent_handoff_v1": a.agent_handoff_v1,
+                            "live_pages_v1": a.live_pages_v1,
                             "ai": a.ai.to_json(),
                             "publisher": a.publisher_id.is_some(),
                             "live": a.publisher_id.is_none() || store.live_release(&a.name).ok().flatten().is_some(),
@@ -1094,6 +1137,10 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 } else {
                     "disabled"
                 }
+            );
+            println!(
+                "live-pages-v1: {} (anonymous GET lane for published pages; origin-enforced allowlist)",
+                if a.live_pages_v1 { "enabled" } else { "disabled" }
             );
             println!(
                 "identity:    {} — {}",
