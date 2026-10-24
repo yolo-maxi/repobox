@@ -18,8 +18,8 @@ fieldwork.repo.box {
 		request_header -X-RepoBox-*
 		@live_pages {
 			method GET HEAD
-			path_regexp ^(?:/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*|/live/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*/(?:page\.json|revision|frame|media/[a-f0-9-]+)|/assets/[A-Za-z0-9_.-]+\.(?:js|css|woff2|woff|ttf))$
-			not path /api/* /v1/* /_repo_box/* /assets/index-* /assets/share-*
+			path_regexp ^(?:/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*|/live/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*/(?:page\.json|revision|frame|media/[a-f0-9-]+)|/live/-/assets/[A-Za-z0-9_.-]+\.(?:js|css|woff2|woff|ttf|svg|png))$
+			not path /api/* /v1/* /_repo_box/*
 		}
 		handle @live_pages {
 			request_header -Cookie

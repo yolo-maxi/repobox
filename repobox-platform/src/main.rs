@@ -241,7 +241,8 @@ enum AppCmd {
         review_note: Option<String>,
     },
     /// Anonymous GET lane for the published live pages of a private platform app
-    /// (`/{handle}/{pageName}`, its `/live/…` data and hashed assets; the origin
+    /// (`/{handle}/{pageName}`, its `/live/…` data and the live host's own files under
+    /// `/live/-/assets/`, never the app's `/assets/`; the origin
     /// decides what is published). Audited; render/apply routes afterwards.
     LivePages {
         name: String,

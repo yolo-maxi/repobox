@@ -60,13 +60,15 @@ pub const RESERVED_MATCH: &str = "/_repo_box/*";
 /// The live-pages lane (`live_pages_v1`): the canonical published address
 /// `/{handle}/{pageName}` (a repo.box handle, then a lowercase hyphenated page
 /// name), the page's own data under `/live/{handle}/{pageName}/` (page.json,
-/// revision, frame, media/<id>) and hashed build assets. Brace quantifiers are
+/// revision, frame, media/<id>) and the live host page's own build files under
+/// `/live/-/assets/` ("-" is never a handle). The app's own `/assets/` stays behind
+/// the gate: a signed-in browser's chunk requests must keep their cookie. Brace quantifiers are
 /// avoided on purpose (the Caddyfile treats `{…}` as placeholders); lengths are
 /// checked by the origin, which also refuses reserved first segments.
-pub const LIVE_PAGES_PATH_REGEXP: &str = r"^(?:/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*|/live/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*/(?:page\.json|revision|frame|media/[a-f0-9-]+)|/assets/[A-Za-z0-9_.-]+\.(?:js|css|woff2|woff|ttf))$";
+pub const LIVE_PAGES_PATH_REGEXP: &str = r"^(?:/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*|/live/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*/(?:page\.json|revision|frame|media/[a-f0-9-]+)|/live/-/assets/[A-Za-z0-9_.-]+\.(?:js|css|woff2|woff|ttf|svg|png))$";
 /// Paths the lane never carries even when the shape matches: the platform's
-/// reserved prefix, API prefixes and the private app's own entry bundles.
-pub const LIVE_PAGES_EXCLUDED_PATHS: &str = "/api/* /v1/* /_repo_box/* /assets/index-* /assets/share-*";
+/// reserved prefix and the API prefixes.
+pub const LIVE_PAGES_EXCLUDED_PATHS: &str = "/api/* /v1/* /_repo_box/*";
 
 pub fn validate_for_render(app: &App, cfg: &RenderConfig) -> Result<(), String> {
     if app.agent_handoff_v1
@@ -210,7 +212,7 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
         }
         if app.live_pages_v1 {
             // Published live pages: anonymous GET/HEAD for the canonical page
-            // address, its data/frame/media and the hashed assets its host page
+            // address, its data/frame/media and the live host page's own files under /live/-/assets/ that the host page
             // loads. The control plane is asked on every request (fail closed when
             // the app or the lane is switched off); cookies and credentials never
             // reach the origin on this lane, and the origin enforces the exact
@@ -352,7 +354,7 @@ mod tests {
         assert!(strip < lane && lane < gate);
         assert!(out.contains("method GET HEAD"));
         assert!(out.contains(&format!("path_regexp {LIVE_PAGES_PATH_REGEXP}")));
-        assert!(out.contains("not path /api/* /v1/* /_repo_box/* /assets/index-* /assets/share-*"));
+        assert!(out.contains("not path /api/* /v1/* /_repo_box/*\n"));
         assert!(out.contains("uri /gate/live-pages-v1"));
         assert!(out.contains("header_up X-RepoBox-Gate-App fieldwork"));
         assert!(out.contains("request_header -Cookie\n\t\t\trequest_header -Authorization"));
@@ -361,10 +363,10 @@ mod tests {
         assert!(out.contains("\t\t}\n\t\thandle {\n\t\tforward_auth 127.0.0.1:3230 {\n\t\t\turi /gate/verify"));
         assert!(!out.contains("copy_headers X-RepoBox-User X-RepoBox-User-Id X-RepoBox-Role X-RepoBox-Auth X-RepoBox-App\n\t\t\theader_up X-RepoBox-Gate 1\n\t\t\theader_up X-RepoBox-Gate-App fieldwork\n\t\t}\n\t\thandle @live_pages"));
         let re = regex_lite_check(LIVE_PAGES_PATH_REGEXP);
-        for ok in ["/fran/notes-on-rivers", "/john.doe/intro", "/live/fran/rivers/page.json", "/live/fran/rivers/revision", "/live/fran/rivers/frame", "/live/fran/rivers/media/0f8fad5b-d9cb-469f-a165-70867728950e", "/assets/live-CpFRovq4.js", "/assets/deck-V3G11p-6.css", "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2"] {
+        for ok in ["/fran/notes-on-rivers", "/john.doe/intro", "/live/fran/rivers/page.json", "/live/fran/rivers/revision", "/live/fran/rivers/frame", "/live/fran/rivers/media/0f8fad5b-d9cb-469f-a165-70867728950e", "/live/-/assets/live-CpFRovq4.js", "/live/-/assets/deck-V3G11p-6.css", "/live/-/assets/inter-latin-wght-normal-Dx4kXJAl.woff2", "/live/-/assets/icon-Bx1.svg"] {
             assert!(re(ok), "{ok} should match the lane");
         }
-        for no in ["/", "/fran", "/fran/Page", "/fran/a/b", "/fran/rivers/", "/live/fran/rivers/other", "/assets/index-abc.js.map", "/assets/icon.svg", "/api/studio/x", "/sw.js"] {
+        for no in ["/", "/fran", "/fran/Page", "/fran/a/b", "/fran/rivers/", "/live/fran/rivers/other", "/assets/live-CpFRovq4.js", "/assets/DeckStudio-CRaZYjHe.js", "/assets/index-abc.js", "/live/-/assets/index-abc.js.map", "/live/-/live.html", "/live/-/assets/a/b.js", "/api/studio/x", "/sw.js"] {
             assert!(!re(no), "{no} should not match the lane");
         }
         a.visibility = Visibility::PublicUnlisted;
@@ -384,9 +386,9 @@ mod tests {
             let name = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
             let parts: Vec<&str> = path.split('/').collect();
             match parts.as_slice() {
-                ["", "assets", file] => {
+                ["", "live", "-", "assets", file] => {
                     let (stem, ext) = file.rsplit_once('.').unwrap_or(("", ""));
-                    !stem.is_empty() && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')) && matches!(ext, "js" | "css" | "woff2" | "woff" | "ttf")
+                    !stem.is_empty() && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')) && matches!(ext, "js" | "css" | "woff2" | "woff" | "ttf" | "svg" | "png")
                 }
                 ["", h, p] => handle(h) && name(p),
                 ["", "live", h, p, file] => handle(h) && name(p) && matches!(*file, "page.json" | "revision" | "frame"),
