@@ -399,8 +399,18 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
         return disabled_page(&shell);
     }
 
-    // 2./3. Private apps require a session; public apps do not.
-    if app.visibility == Visibility::Private && session.is_none() {
+    // 2./3. Private apps require a session; public apps do not. One exception:
+    // on an app with the live-pages lane, a GET/HEAD for a lane-shaped path
+    // from a browser without a valid session (e.g. a stale app cookie, which
+    // keeps it off the cookie-less lane) is allowed through anonymously, exactly
+    // as the lane would have sent it. The origin decides what such a path is.
+    let lane_anonymous = session.is_none()
+        && app.visibility == Visibility::Private
+        && app.live_pages_v1
+        && (method == "GET" || method == "HEAD")
+        && !reserved
+        && crate::render::is_live_pages_path(clean_uri.split('?').next().unwrap_or("/"));
+    if app.visibility == Visibility::Private && session.is_none() && !lane_anonymous {
         if reserved {
             return AiError::new(
                 StatusCode::UNAUTHORIZED,
@@ -429,7 +439,9 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
         (Some((_, user)), Visibility::Private) => Some(user.id),
         _ => None,
     };
-    if let Err(e) = s.store.record_access(app.id, counted_user) {
+    if !lane_anonymous
+        && let Err(e) = s.store.record_access(app.id, counted_user)
+    {
         tracing::warn!("access count for {} failed: {e}", app.name);
     }
     // An *open* is narrower than a counted request: a signed-in person's
@@ -455,6 +467,9 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
             put(h, "X-RepoBox-User", &user.name);
             put(h, "X-RepoBox-User-Id", &user.id.to_string());
             put(h, "X-RepoBox-Role", user.role.as_str());
+        }
+        None if lane_anonymous => {
+            put(h, "X-RepoBox-Auth", "anonymous");
         }
         None => {
             put(h, "X-RepoBox-Auth", "public");

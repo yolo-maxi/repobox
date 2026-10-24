@@ -381,6 +381,11 @@ pub fn redirect_with_cookie(location: &str, cookie: String) -> Response {
 }
 
 /// Only ever redirect to a local absolute path (never protocol-relative).
+/// The in-app path a launch lands on. Anything that is not a plain same-host
+/// path falls back to `/`: another origin or a protocol-relative path (open
+/// redirect), a fragment (the launch code appended after it would never reach
+/// the gate), or a query that already carries a launch code (the launcher's
+/// own code must be the only one in the address).
 pub fn safe_next(next: Option<&str>) -> String {
     match next {
         Some(n)
@@ -388,12 +393,21 @@ pub fn safe_next(next: Option<&str>) -> String {
                 && !n.starts_with("//")
                 && !n.starts_with("/\\")
                 && n.len() < 2048
-                && !n.chars().any(|c| c.is_control() || c.is_whitespace()) =>
+                && !n.contains('#')
+                && !n.chars().any(|c| c.is_control() || c.is_whitespace())
+                && !carries_launch_code(n) =>
         {
             n.to_string()
         }
         _ => "/".to_string(),
     }
+}
+
+fn carries_launch_code(path: &str) -> bool {
+    path.split_once('?').is_some_and(|(_, q)| {
+        q.split('&')
+            .any(|pair| pair.split_once('=').map(|(k, _)| k).unwrap_or(pair) == LAUNCH_PARAM)
+    })
 }
 
 pub fn urlencode(s: &str) -> String {
@@ -407,4 +421,30 @@ pub fn urlencode(s: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod next_tests {
+    use super::safe_next;
+
+    #[test]
+    fn only_plain_same_host_paths_survive() {
+        assert_eq!(safe_next(Some("/motion/0f8fad5b-d9cb-469f-a165-70867728950e")), "/motion/0f8fad5b-d9cb-469f-a165-70867728950e");
+        assert_eq!(safe_next(Some("/invite?token=abc")), "/invite?token=abc");
+        for bad in [
+            "//evil.example/",
+            "/\\evil.example/",
+            "https://evil.example/",
+            "/page#frag",
+            "/page?rb_launch=forged",
+            "/page?a=1&rb_launch",
+            "/page?a=1&rb_launch=x&b=2",
+            "/pa ge",
+            "page",
+            "",
+        ] {
+            assert_eq!(safe_next(Some(bad)), "/", "{bad}");
+        }
+        assert_eq!(safe_next(None), "/");
+    }
 }

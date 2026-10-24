@@ -68,6 +68,29 @@ pub const RESERVED_MATCH: &str = "/_repo_box/*";
 pub const LIVE_PAGES_PATH_REGEXP: &str = r"^(?:/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*|/live/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9-]*/(?:page\.json|revision|frame|media/[a-f0-9-]+)|/live/-/assets/[A-Za-z0-9_.-]+\.(?:js|css|woff2|woff|ttf|svg|png))$";
 /// Paths the lane never carries even when the shape matches: the platform's
 /// reserved prefix and the API prefixes.
+/// Whether `path` (no query) has the shape the anonymous live-pages lane carries: `LIVE_PAGES_PATH_REGEXP` minus
+/// `LIVE_PAGES_EXCLUDED_PATHS`, exactly as Caddy matches it. The gate uses it to let a browser without a valid session
+/// through anonymously on such a path (a stale app cookie keeps it off the cookie-less lane). Kept in step with the regexp
+/// by the render test.
+pub fn is_live_pages_path(path: &str) -> bool {
+    if LIVE_PAGES_EXCLUDED_PATHS.split(' ').any(|glob| path.starts_with(glob.trim_end_matches('*'))) {
+        return false;
+    }
+    let handle = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
+    let name = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    let parts: Vec<&str> = path.split('/').collect();
+    match parts.as_slice() {
+        ["", "live", "-", "assets", file] => {
+            let (stem, ext) = file.rsplit_once('.').unwrap_or(("", ""));
+            !stem.is_empty() && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')) && matches!(ext, "js" | "css" | "woff2" | "woff" | "ttf" | "svg" | "png")
+        }
+        ["", h, p] => handle(h) && name(p),
+        ["", "live", h, p, file] => handle(h) && name(p) && matches!(*file, "page.json" | "revision" | "frame"),
+        ["", "live", h, p, "media", id] => handle(h) && name(p) && !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase() || c == '-'),
+        _ => false,
+    }
+}
+
 pub const LIVE_PAGES_EXCLUDED_PATHS: &str = "/api/* /v1/* /_repo_box/*";
 
 pub fn validate_for_render(app: &App, cfg: &RenderConfig) -> Result<(), String> {
@@ -218,10 +241,18 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
             // reach the origin on this lane, and the origin enforces the exact
             // allowlist (reserved first segments and unpublished pages are refused
             // there). Nothing else on the host changes.
+            // A browser that holds an app session, or arrives with a launch code, never
+            // takes the lane: the lane strips cookies and redeems nothing, and its path
+            // shape also fits private routes of the app (`/motion/<id>`, `/decks/<id>`),
+            // which a signed-in or launching person must reach through the normal gate.
+            // Without a session the gate itself allows lane-shaped paths anonymously
+            // (gate::verify), so a stale cookie cannot block a public page either.
             out.push_str("\t\t@live_pages {\n");
             out.push_str("\t\t\tmethod GET HEAD\n");
             out.push_str(&format!("\t\t\tpath_regexp {LIVE_PAGES_PATH_REGEXP}\n"));
             out.push_str(&format!("\t\t\tnot path {LIVE_PAGES_EXCLUDED_PATHS}\n"));
+            out.push_str(&format!("\t\t\tnot header Cookie *{}=*\n", crate::web::APP_COOKIE));
+            out.push_str(&format!("\t\t\tnot query {}=*\n", crate::web::LAUNCH_PARAM));
             out.push_str("\t\t}\n");
             out.push_str("\t\thandle @live_pages {\n");
             out.push_str("\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization\n\t\t\trequest_header -X-Forwarded-Uri\n");
@@ -354,7 +385,7 @@ mod tests {
         assert!(strip < lane && lane < gate);
         assert!(out.contains("method GET HEAD"));
         assert!(out.contains(&format!("path_regexp {LIVE_PAGES_PATH_REGEXP}")));
-        assert!(out.contains("not path /api/* /v1/* /_repo_box/*\n"));
+        assert!(out.contains("not path /api/* /v1/* /_repo_box/*\n\t\t\tnot header Cookie *__Host-rb_app=*\n\t\t\tnot query rb_launch=*\n\t\t}"));
         assert!(out.contains("uri /gate/live-pages-v1"));
         assert!(out.contains("header_up X-RepoBox-Gate-App fieldwork"));
         assert!(out.contains("request_header -Cookie\n\t\t\trequest_header -Authorization"));
@@ -362,11 +393,11 @@ mod tests {
         // The rest of the host stays behind the normal gate, in a sibling handle.
         assert!(out.contains("\t\t}\n\t\thandle {\n\t\tforward_auth 127.0.0.1:3230 {\n\t\t\turi /gate/verify"));
         assert!(!out.contains("copy_headers X-RepoBox-User X-RepoBox-User-Id X-RepoBox-Role X-RepoBox-Auth X-RepoBox-App\n\t\t\theader_up X-RepoBox-Gate 1\n\t\t\theader_up X-RepoBox-Gate-App fieldwork\n\t\t}\n\t\thandle @live_pages"));
-        let re = regex_lite_check(LIVE_PAGES_PATH_REGEXP);
+        let re = |p: &str| is_live_pages_path(p);
         for ok in ["/fran/notes-on-rivers", "/john.doe/intro", "/live/fran/rivers/page.json", "/live/fran/rivers/revision", "/live/fran/rivers/frame", "/live/fran/rivers/media/0f8fad5b-d9cb-469f-a165-70867728950e", "/live/-/assets/live-CpFRovq4.js", "/live/-/assets/deck-V3G11p-6.css", "/live/-/assets/inter-latin-wght-normal-Dx4kXJAl.woff2", "/live/-/assets/icon-Bx1.svg"] {
             assert!(re(ok), "{ok} should match the lane");
         }
-        for no in ["/", "/fran", "/fran/Page", "/fran/a/b", "/fran/rivers/", "/live/fran/rivers/other", "/assets/live-CpFRovq4.js", "/assets/DeckStudio-CRaZYjHe.js", "/assets/index-abc.js", "/live/-/assets/index-abc.js.map", "/live/-/live.html", "/live/-/assets/a/b.js", "/api/studio/x", "/sw.js"] {
+        for no in ["/", "/fran", "/fran/Page", "/api/studio", "/v1/mcp", "/_repo_box/ai", "/fran/a/b", "/fran/rivers/", "/live/fran/rivers/other", "/assets/live-CpFRovq4.js", "/assets/DeckStudio-CRaZYjHe.js", "/assets/index-abc.js", "/live/-/assets/index-abc.js.map", "/live/-/live.html", "/live/-/assets/a/b.js", "/api/studio/x", "/sw.js"] {
             assert!(!re(no), "{no} should not match the lane");
         }
         a.visibility = Visibility::PublicUnlisted;
@@ -374,28 +405,6 @@ mod tests {
         a.visibility = Visibility::Private;
         a.enabled = false;
         assert!(render(&[a], &cfg()).is_err());
-    }
-
-    /// A tiny matcher for the lane regexp in tests: the pattern uses only classes,
-    /// groups, alternation, `*`, `+` and anchors, which `regex`-free std cannot run,
-    /// so the test mirrors the grammar by hand through Go-compatible semantics.
-    fn regex_lite_check(pattern: &str) -> impl Fn(&str) -> bool {
-        assert!(pattern.starts_with("^(?:") && pattern.ends_with(")$"));
-        move |path: &str| {
-            let handle = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
-            let name = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
-            let parts: Vec<&str> = path.split('/').collect();
-            match parts.as_slice() {
-                ["", "live", "-", "assets", file] => {
-                    let (stem, ext) = file.rsplit_once('.').unwrap_or(("", ""));
-                    !stem.is_empty() && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')) && matches!(ext, "js" | "css" | "woff2" | "woff" | "ttf" | "svg" | "png")
-                }
-                ["", h, p] => handle(h) && name(p),
-                ["", "live", h, p, file] => handle(h) && name(p) && matches!(*file, "page.json" | "revision" | "frame"),
-                ["", "live", h, p, "media", id] => handle(h) && name(p) && !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase() || c == '-'),
-                _ => false,
-            }
-        }
     }
 
     #[test]
