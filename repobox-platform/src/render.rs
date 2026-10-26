@@ -70,7 +70,7 @@ pub const LIVE_PAGES_PATH_REGEXP: &str = r"^(?:/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-
 /// reserved prefix and the API prefixes.
 /// Whether `path` (no query) has the shape the anonymous live-pages lane carries: `LIVE_PAGES_PATH_REGEXP` minus
 /// `LIVE_PAGES_EXCLUDED_PATHS`, exactly as Caddy matches it. The gate uses it to let a browser without a valid session
-/// through anonymously on such a path (a stale app cookie keeps it off the cookie-less lane). Kept in step with the regexp
+/// through anonymously on such a path (any cookie keeps a request off the cookie-less lane). Kept in step with the regexp
 /// by the render test.
 pub fn is_live_pages_path(path: &str) -> bool {
     if LIVE_PAGES_EXCLUDED_PATHS.split(' ').any(|glob| path.starts_with(glob.trim_end_matches('*'))) {
@@ -89,6 +89,18 @@ pub fn is_live_pages_path(path: &str) -> bool {
         ["", "live", h, p, "media", id] => handle(h) && name(p) && !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase() || c == '-'),
         _ => false,
     }
+}
+
+/// The one write a live page accepts from an anonymous browser: `POST /live/{handle}/{pageName}/gate`, the page's own
+/// email gate (the origin bounds and rate-limits it, and answers with a host-only cookie). It is never on the cookie-less
+/// lane: the gate lets it through anonymously (gate::verify) so the browser's cookies reach the origin unchanged.
+pub fn is_live_pages_gate_path(path: &str) -> bool {
+    if LIVE_PAGES_EXCLUDED_PATHS.split(' ').any(|glob| path.starts_with(glob.trim_end_matches('*'))) {
+        return false;
+    }
+    let handle = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
+    let name = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    matches!(path.split('/').collect::<Vec<_>>().as_slice(), ["", "live", h, p, "gate"] if handle(h) && name(p))
 }
 
 pub const LIVE_PAGES_EXCLUDED_PATHS: &str = "/api/* /v1/* /_repo_box/*";
@@ -241,17 +253,20 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
             // reach the origin on this lane, and the origin enforces the exact
             // allowlist (reserved first segments and unpublished pages are refused
             // there). Nothing else on the host changes.
-            // A browser that holds an app session, or arrives with a launch code, never
-            // takes the lane: the lane strips cookies and redeems nothing, and its path
+            // A browser that carries any cookie, or arrives with a launch code, never
+            // takes the lane: the lane strips cookies and redeems nothing, its path
             // shape also fits private routes of the app (`/motion/<id>`, `/decks/<id>`),
-            // which a signed-in or launching person must reach through the normal gate.
-            // Without a session the gate itself allows lane-shaped paths anonymously
-            // (gate::verify), so a stale cookie cannot block a public page either.
+            // which a signed-in or launching person must reach through the normal gate,
+            // and a visitor's own live-page cookie (the origin's email-gate grant) must
+            // reach the origin intact. Without a session the gate itself allows
+            // lane-shaped GET/HEAD paths and the page's gate POST anonymously
+            // (gate::verify), with the request's cookies forwarded as they are, so a
+            // stale cookie cannot block a public page and a grant is honoured.
             out.push_str("\t\t@live_pages {\n");
             out.push_str("\t\t\tmethod GET HEAD\n");
             out.push_str(&format!("\t\t\tpath_regexp {LIVE_PAGES_PATH_REGEXP}\n"));
             out.push_str(&format!("\t\t\tnot path {LIVE_PAGES_EXCLUDED_PATHS}\n"));
-            out.push_str(&format!("\t\t\tnot header Cookie *{}=*\n", crate::web::APP_COOKIE));
+            out.push_str("\t\t\tnot header Cookie *\n");
             out.push_str(&format!("\t\t\tnot query {}=*\n", crate::web::LAUNCH_PARAM));
             out.push_str("\t\t}\n");
             out.push_str("\t\thandle @live_pages {\n");
@@ -385,7 +400,14 @@ mod tests {
         assert!(strip < lane && lane < gate);
         assert!(out.contains("method GET HEAD"));
         assert!(out.contains(&format!("path_regexp {LIVE_PAGES_PATH_REGEXP}")));
-        assert!(out.contains("not path /api/* /v1/* /_repo_box/*\n\t\t\tnot header Cookie *__Host-rb_app=*\n\t\t\tnot query rb_launch=*\n\t\t}"));
+        assert!(out.contains("not path /api/* /v1/* /_repo_box/*\n\t\t\tnot header Cookie *\n\t\t\tnot query rb_launch=*\n\t\t}"));
+        assert!(!out.contains("method GET HEAD POST") && !out.contains("/gate$"));
+        for ok in ["/live/fran/notes-on-rivers/gate", "/live/john.doe/intro/gate"] {
+            assert!(is_live_pages_gate_path(ok) && !is_live_pages_path(ok), "{ok}");
+        }
+        for no in ["/live/fran/notes/gate/", "/live/fran/notes/page.json", "/fran/notes/gate", "/live/fran/Notes/gate", "/live/-/assets/gate", "/api/live/fran/notes/gate", "/live/fran/notes/gate/x", "/gate"] {
+            assert!(!is_live_pages_gate_path(no), "{no}");
+        }
         assert!(out.contains("uri /gate/live-pages-v1"));
         assert!(out.contains("header_up X-RepoBox-Gate-App fieldwork"));
         assert!(out.contains("request_header -Cookie\n\t\t\trequest_header -Authorization"));

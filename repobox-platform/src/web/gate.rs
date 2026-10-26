@@ -400,16 +400,20 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
     }
 
     // 2./3. Private apps require a session; public apps do not. One exception:
-    // on an app with the live-pages lane, a GET/HEAD for a lane-shaped path
-    // from a browser without a valid session (e.g. a stale app cookie, which
-    // keeps it off the cookie-less lane) is allowed through anonymously, exactly
-    // as the lane would have sent it. The origin decides what such a path is.
+    // on an app with the live-pages lane, a GET/HEAD for a lane-shaped path, or
+    // a POST to a page's own gate path (`/live/{handle}/{page}/gate`, the
+    // origin's email gate), from a browser without a valid session (any cookie,
+    // such as a stale app cookie or the origin's own grant cookie, keeps it off
+    // the cookie-less lane) is allowed through anonymously, exactly as the lane
+    // would have sent it, with its cookies intact. The origin decides what such
+    // a path is.
+    let lane_path = clean_uri.split('?').next().unwrap_or("/");
     let lane_anonymous = session.is_none()
         && app.visibility == Visibility::Private
         && app.live_pages_v1
-        && (method == "GET" || method == "HEAD")
         && !reserved
-        && crate::render::is_live_pages_path(clean_uri.split('?').next().unwrap_or("/"));
+        && (((method == "GET" || method == "HEAD") && crate::render::is_live_pages_path(lane_path))
+            || (method == "POST" && crate::render::is_live_pages_gate_path(lane_path)));
     if app.visibility == Visibility::Private && session.is_none() && !lane_anonymous {
         if reserved {
             return AiError::new(

@@ -1673,6 +1673,18 @@ async fn live_pages_paths_pass_the_gate_anonymously_only_without_a_session() {
     assert_eq!(h.gate("demo-private", "/secret", None, &[]).await.0, StatusCode::UNAUTHORIZED);
     assert_eq!(h.gate("demo-private", "/api/studio", None, &[]).await.0, StatusCode::UNAUTHORIZED);
     assert_eq!(h.gate_req("demo-private", "POST", "/fran/notes", None, &[]).await.0, StatusCode::UNAUTHORIZED);
+    // The page's own email gate: an anonymous POST passes (cookies untouched), nothing else on that path does.
+    let (st, hd, _) = h.gate_req("demo-private", "POST", "/live/fran/notes/gate", None, &[]).await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(hdr(&hd, "x-repobox-auth"), Some("anonymous"));
+    assert!(hdr(&hd, "x-repobox-user").is_none());
+    let (st, hd, _) = h.gate_req("demo-private", "POST", "/live/fran/notes/gate", Some("__Host-fw_lpv=lpg_stale-or-forged"), &[]).await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(hdr(&hd, "x-repobox-auth"), Some("anonymous"));
+    assert_eq!(h.gate_req("demo-private", "GET", "/live/fran/notes/gate", None, &[]).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(h.gate_req("demo-private", "POST", "/live/fran/notes/page.json", None, &[]).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(h.gate_req("demo-private", "POST", "/api/live/fran/notes/gate", None, &[]).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(h.gate_req("demo-private", "PUT", "/live/fran/notes/gate", None, &[]).await.0, StatusCode::UNAUTHORIZED);
     // A real session on the same path keeps its identity.
     let code = h.mint(&h.bob, "demo-private").await;
     let (_, hd, _) = h.navigate("demo-private", &format!("/?rb_launch={code}"), None).await;
