@@ -87,7 +87,9 @@ class H(BaseHTTPRequestHandler):
             extra = [("Set-Cookie", "__Host-kodu=sess; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=2592000")] if "renew=1" in q else []
             return self.send(200, b"APP " + path.encode(), [("Content-Type", "text/html")] + extra)
         if path == "/" and "plain=1" not in q:
-            clear = [("Set-Cookie", "__Host-kodu=; Path=/; Secure; HttpOnly; Max-Age=0")] if "__Host-kodu=" in cookie else []
+            # The app contract: failed root answers set no cookie. `transport=1` is a fixture
+            # that proves the edge would still carry one through.
+            clear = [("Set-Cookie", "__Host-kodu=; Path=/; Secure; HttpOnly; Max-Age=0")] if "transport=1" in q else []
             return self.send(401, b"ROOT401", [("X-Kodu-Auth", "anonymous-root"), ("Content-Type", "text/html")] + clear)
         return self.send(401, b'{"error":"sign in","login":"/login/"}', [("Content-Type", "application/json")])
     do_GET = do_POST = do_HEAD = handle_one
@@ -124,7 +126,12 @@ expect "GET / -> 200 landing (app's marked root 401 intercepted)" "$(echo "$H" |
 expect "edge added the shared secret on that request" "$(last "['edge_ok']")" True
 expect "landing keeps private no-cache + Vary: Cookie" "$(echo "$H" | hdr cache-control) $(echo "$H" | hdr vary | command grep -c -x Cookie)" "private, no-cache 1"
 H=$(curl -s "${R[@]}" -D - -o /dev/null -b '__Host-kodu=stale' "$K/")
-expect "stale cookie on / -> landing AND the app's cookie clear is kept" "$(echo "$H" | head -1 | awk '{print $2}') $(echo "$H" | hdr set-cookie | command grep -c 'Max-Age=0')" "200 1"
+expect "stale cookie on / -> landing, no Set-Cookie added by the edge" "$(echo "$H" | head -1 | awk '{print $2}') $(echo "$H" | hdr set-cookie | wc -l | tr -d ' ')" "200 0"
+H=$(curl -s "${R[@]}" -I -b '__Host-kodu=stale' "$K/")
+expect "HEAD / anonymous -> landing 200, no Set-Cookie" "$(echo "$H" | head -1 | awk '{print $2}') $(echo "$H" | hdr set-cookie | wc -l | tr -d ' ')" "200 0"
+H=$(curl -s "${R[@]}" -D - -o /dev/null "$K/?transport=1")
+expect "cookie transport: an upstream Set-Cookie on the marked 401 is carried" "$(echo "$H" | head -1 | awk '{print $2}') $(echo "$H" | hdr set-cookie | command grep -c 'Max-Age=0')" "200 1"
+expect "/icon.svg is not public (app decides; fixture 401)" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$K/icon.svg")" 401
 expect "unmarked 401 on / passes through (no landing)" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$K/?plain=1")" 401
 expect "POST / 401 passes through" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' -X POST "$K/")" 401
 expect "GET /notes/x anonymous -> app's 401 with login hint" "$(curl -s "${R[@]}" "$K/notes/x" | command grep -c '"login":"/login/"')" 1
