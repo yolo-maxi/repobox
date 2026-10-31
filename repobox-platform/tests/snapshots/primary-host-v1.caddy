@@ -75,6 +75,20 @@ kodu.work {
 			method GET HEAD
 			path /_landing/*
 		}
+		@landing_media {
+			method GET HEAD
+			path_regexp ^/[a-z0-9][a-z0-9-]*\.mp4$
+			file {
+				root /srv/kodu.work/current
+			}
+		}
+		handle @landing_media {
+			request_header -Cookie
+			request_header -Authorization
+			import /srv/kodu.work/headers.caddy
+			root * /srv/kodu.work/current
+			file_server
+		}
 		handle @landing_files {
 			request_header -Cookie
 			request_header -Authorization

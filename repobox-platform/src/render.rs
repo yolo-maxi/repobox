@@ -51,6 +51,8 @@ pub const GATE_APP_HEADER: &str = "X-RepoBox-Gate-App";
 pub const GATE_PRIMARY_HOST_HEADER: &str = "X-RepoBox-Gate-Primary-Host";
 /// The landing's own files on a primary host: GET/HEAD, no cookie, no gate.
 pub const LANDING_FILES_MATCH: &str = "/_landing/*";
+/// Public media published with the landing: a top-level `.mp4` that exists in the release.
+pub const LANDING_MEDIA_REGEXP: &str = r"^/[a-z0-9][a-z0-9-]*\.mp4$";
 
 /// Caddy path matcher for the AI endpoint on every app host.
 pub const AI_ROUTE_MATCH: &str = "/_repo_box/ai/v1/*";
@@ -468,6 +470,14 @@ fn render_primary_host(out: &mut String, app: &App, host: &str, target: &str, cf
         let headers = landing_headers_file(host);
         out.push_str("\t\t@landing_files {\n\t\t\tmethod GET HEAD\n");
         out.push_str(&format!("\t\t\tpath {LANDING_FILES_MATCH}\n\t\t}}\n"));
+        // Public media published with the landing (e.g. /hackathon.mp4): only a
+        // top-level .mp4 that exists in the landing release, GET/HEAD, no cookie.
+        out.push_str(&format!("\t\t@landing_media {{\n\t\t\tmethod GET HEAD\n\t\t\tpath_regexp {LANDING_MEDIA_REGEXP}\n\t\t\tfile {{\n\t\t\t\troot {root}\n\t\t\t}}\n\t\t}}\n"));
+        out.push_str("\t\thandle @landing_media {\n");
+        out.push_str("\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization\n");
+        out.push_str(&format!("\t\t\timport {headers}\n"));
+        out.push_str(&format!("\t\t\troot * {root}\n\t\t\tfile_server\n"));
+        out.push_str("\t\t}\n");
         out.push_str("\t\thandle @landing_files {\n");
         out.push_str("\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization\n");
         out.push_str(&format!("\t\t\timport {headers}\n"));
@@ -615,15 +625,18 @@ mod tests {
         let gate = extra.find("uri /gate/verify").unwrap();
         let origin = extra.find("reverse_proxy 127.0.0.1:4110").unwrap();
         assert!(strip < files && files < gate && gate < origin);
-        assert!(extra.contains("path /_landing/*\n\t\t}\n\t\thandle @landing_files {\n\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization"));
+        assert!(extra.contains("handle @landing_files {\n\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization"));
         // The landing document only answers a 401 for GET/HEAD /; other 401s are the gate's own.
         assert!(extra.contains("@no_session status 401"));
         assert!(extra.contains("method GET HEAD\n\t\t\t\t\t\tpath /\n"));
         assert!(extra.contains("copy_response_headers\n\t\t\t\t\t\tcopy_response"));
         assert_eq!(
             extra.matches("import /srv/kodu.work/headers.caddy").count(),
-            2
+            3
         );
+        assert!(extra.contains(
+            "path_regexp ^/[a-z0-9][a-z0-9-]*\\.mp4$\n\t\t\tfile {\n\t\t\t\troot /srv/kodu.work/current"
+        ));
         // Without a landing: same gate route, no landing surface at all.
         let mut bare = a.clone();
         bare.landing_root = None;

@@ -41,6 +41,7 @@ if "$P" --db "$DB" app primary-host fieldwork --host "$HOST" --landing >/dev/nul
 # The rendered route reads /srv/<host>/…; point those paths at this run's copy.
 mkdir -p "$W/srv/$HOST"
 cp -r "$LANDING_DIR" "$W/srv/$HOST/current"
+head -c 4096 /dev/urandom > "$W/srv/$HOST/current/hackathon.mp4"
 python3 deploy/landing-headers.py "$LANDING_HEADERS" "$W/srv/$HOST/headers.caddy" >/dev/null
 sed -i "s#/srv/$HOST/#$W/srv/$HOST/#g" "$W/apps.caddy"
 
@@ -119,6 +120,9 @@ expect "GET /$asset -> 200" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' 
 if [[ -n "$immutable" ]]; then
   expect "landing asset cache is immutable" "$(curl -s "${R[@]}" -D - -o /dev/null "$K/$immutable" | hdr cache-control)" "public, max-age=31536000, immutable"
 fi
+expect "GET /hackathon.mp4 (with cookie) -> 200 video/mp4" "$(curl -s "${R[@]}" -b 'a=1' -o /dev/null -w '%{http_code} %{content_type}' "$K/hackathon.mp4")" "200 video/mp4"
+expect "range on /hackathon.mp4 -> 206" "$(curl -s "${R[@]}" -r 1000-1999 -o /dev/null -w '%{http_code} %{size_download}' "$K/hackathon.mp4")" "206 1000"
+expect "missing /other.mp4 -> gate 401" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$K/other.mp4")" 401
 expect "GET /_landing/nope -> 404" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' "$K/_landing/nope")" 404
 expect "POST / -> gate 401 (no landing, no origin)" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' -X POST "$K/")" 401
 expect "POST /_landing/x -> gate 401" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code}' -X POST "$K/_landing/x")" 401
