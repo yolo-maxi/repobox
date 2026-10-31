@@ -85,7 +85,7 @@ kodu.work {
 		handle @landing_media {
 			request_header -Cookie
 			request_header -Authorization
-			import /srv/kodu.work/headers.caddy
+			header Cache-Control "public, max-age=86400"
 			root * /srv/kodu.work/current
 			file_server
 		}

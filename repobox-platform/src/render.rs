@@ -475,7 +475,8 @@ fn render_primary_host(out: &mut String, app: &App, host: &str, target: &str, cf
         out.push_str(&format!("\t\t@landing_media {{\n\t\t\tmethod GET HEAD\n\t\t\tpath_regexp {LANDING_MEDIA_REGEXP}\n\t\t\tfile {{\n\t\t\t\troot {root}\n\t\t\t}}\n\t\t}}\n"));
         out.push_str("\t\thandle @landing_media {\n");
         out.push_str("\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization\n");
-        out.push_str(&format!("\t\t\timport {headers}\n"));
+        // Not the landing's CSP: a top-level video view must be allowed to play.
+        out.push_str("\t\t\theader Cache-Control \"public, max-age=86400\"\n");
         out.push_str(&format!("\t\t\troot * {root}\n\t\t\tfile_server\n"));
         out.push_str("\t\t}\n");
         out.push_str("\t\thandle @landing_files {\n");
@@ -632,7 +633,7 @@ mod tests {
         assert!(extra.contains("copy_response_headers\n\t\t\t\t\t\tcopy_response"));
         assert_eq!(
             extra.matches("import /srv/kodu.work/headers.caddy").count(),
-            3
+            2
         );
         assert!(extra.contains(
             "path_regexp ^/[a-z0-9][a-z0-9-]*\\.mp4$\n\t\t\tfile {\n\t\t\t\troot /srv/kodu.work/current"
