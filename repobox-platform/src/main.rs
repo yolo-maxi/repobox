@@ -254,6 +254,24 @@ enum AppCmd {
         #[arg(long)]
         review_note: Option<String>,
     },
+    /// Audited primary host outside the platform domain (`primary-host-v1`, e.g.
+    /// kodu.work): the launcher sends people there, `<name>.repo.box` keeps
+    /// working. --landing serves the static landing at /srv/<host>/current to a
+    /// browser without an app session. Render/apply routes afterwards.
+    PrimaryHost {
+        name: String,
+        #[arg(long, conflicts_with = "clear", required_unless_present = "clear")]
+        host: Option<String>,
+        #[arg(long, conflicts_with = "clear")]
+        landing: bool,
+        #[arg(long)]
+        clear: bool,
+        /// Auditable review: DNS/TLS owner and the private-boundary check.
+        #[arg(long)]
+        review_note: Option<String>,
+        #[arg(long, default_value = "repo.box")]
+        domain: String,
+    },
     /// Register an app (or update its route fields with --replace-route)
     Register {
         name: String,
@@ -941,6 +959,42 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 a.name
             );
         }
+        AppCmd::PrimaryHost {
+            name,
+            host,
+            landing,
+            clear: _,
+            review_note,
+            domain,
+        } => {
+            let a = need_app(store, &name)?;
+            if host.is_some() && review_note.as_deref().is_none_or(|s| s.trim().len() < 16) {
+                return Err(
+                    "--review-note must identify the DNS/TLS owner and the private-boundary check"
+                        .into(),
+                );
+            }
+            store.set_primary_host(&a, host.as_deref(), landing, &domain)?;
+            let after = need_app(store, &name)?;
+            store.audit(
+                None,
+                "app.primary_host_v1",
+                &a.name,
+                &format!(
+                    "{} -> {}; landing {}; {}",
+                    a.primary_host.as_deref().unwrap_or("none"),
+                    after.primary_host.as_deref().unwrap_or("none"),
+                    after.landing_root.as_deref().unwrap_or("none"),
+                    review_note.unwrap_or_default()
+                ),
+            );
+            println!(
+                "primary host of {}: {} (landing {}); render/apply routes next",
+                a.name,
+                after.primary_host.as_deref().unwrap_or("none"),
+                after.landing_root.as_deref().unwrap_or("none")
+            );
+        }
         AppCmd::LivePages {
             name,
             enable,
@@ -1084,6 +1138,7 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                             "identity": a.identity.as_str(),
                             "agent_handoff_v1": a.agent_handoff_v1,
                             "live_pages_v1": a.live_pages_v1,
+                            "primary_host": a.primary_host, "landing_root": a.landing_root,
                             "ai": a.ai.to_json(),
                             "publisher": a.publisher_id.is_some(),
                             "live": a.publisher_id.is_none() || store.live_release(&a.name).ok().flatten().is_some(),
@@ -1141,7 +1196,16 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
             );
             println!(
                 "live-pages-v1: {} (anonymous GET lane for published pages; origin-enforced allowlist)",
-                if a.live_pages_v1 { "enabled" } else { "disabled" }
+                if a.live_pages_v1 {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            );
+            println!(
+                "primary host: {} (landing {})",
+                a.primary_host.as_deref().unwrap_or("none"),
+                a.landing_root.as_deref().unwrap_or("none")
             );
             println!(
                 "identity:    {} — {}",

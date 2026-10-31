@@ -19,7 +19,7 @@ use super::html::{Shell, status_page};
 use super::{APP_COOKIE, LAUNCH_PARAM, S, html, set_cookie, urlencode};
 use crate::ai::AiError;
 use crate::model::{RESERVED_PATH_PREFIX, Visibility, validate_app_name};
-use crate::render::{GATE_APP_HEADER, GATE_MARKER_HEADER};
+use crate::render::{GATE_APP_HEADER, GATE_MARKER_HEADER, GATE_PRIMARY_HOST_HEADER};
 use crate::store::{RedeemError, SessionKind, TokenKind};
 
 fn hdr<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
@@ -408,11 +408,17 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
     // would have sent it, with its cookies intact. The origin decides what such
     // a path is.
     let lane_path = clean_uri.split('?').next().unwrap_or("/");
+    // The primary host (`primary-host-v1`) never carries the lane: live pages
+    // stay on `<name>.<domain>`, and the primary host's own route is the only
+    // one that sets this header (browser `X-RepoBox-*` is stripped first).
+    let primary_host = hdr(&headers, GATE_PRIMARY_HOST_HEADER) == Some("1");
     let lane_anonymous = session.is_none()
+        && !primary_host
         && app.visibility == Visibility::Private
         && app.live_pages_v1
         && !reserved
-        && (((method == "GET" || method == "HEAD") && crate::render::is_live_pages_path(lane_path))
+        && (((method == "GET" || method == "HEAD")
+            && crate::render::is_live_pages_path(lane_path))
             || (method == "POST" && crate::render::is_live_pages_gate_path(lane_path)));
     if app.visibility == Visibility::Private && session.is_none() && !lane_anonymous {
         if reserved {
@@ -443,9 +449,7 @@ pub async fn verify(State(s): State<S>, headers: HeaderMap) -> Response {
         (Some((_, user)), Visibility::Private) => Some(user.id),
         _ => None,
     };
-    if !lane_anonymous
-        && let Err(e) = s.store.record_access(app.id, counted_user)
-    {
+    if !lane_anonymous && let Err(e) = s.store.record_access(app.id, counted_user) {
         tracing::warn!("access count for {} failed: {e}", app.name);
     }
     // An *open* is narrower than a counted request: a signed-in person's

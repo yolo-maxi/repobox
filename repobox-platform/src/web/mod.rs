@@ -429,7 +429,10 @@ mod next_tests {
 
     #[test]
     fn only_plain_same_host_paths_survive() {
-        assert_eq!(safe_next(Some("/motion/0f8fad5b-d9cb-469f-a165-70867728950e")), "/motion/0f8fad5b-d9cb-469f-a165-70867728950e");
+        assert_eq!(
+            safe_next(Some("/motion/0f8fad5b-d9cb-469f-a165-70867728950e")),
+            "/motion/0f8fad5b-d9cb-469f-a165-70867728950e"
+        );
         assert_eq!(safe_next(Some("/invite?token=abc")), "/invite?token=abc");
         for bad in [
             "//evil.example/",

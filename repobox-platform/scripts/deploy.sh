@@ -218,6 +218,14 @@ while read -r name vis enabled; do
     [[ "$code" == "401" ]] || fail=1
   fi
 done < <(printf '%s' "$apps_json" | python3 -c 'import json,sys; [print(a["name"], a["visibility"], str(a["enabled"]).lower()) for a in json.load(sys.stdin) if a.get("live", True)]')
+# primary-host-v1: anonymous / is the landing (200) when the app has one, any
+# other anonymous path is the gate's 401, spoofed identity never changes it.
+while read -r host landing; do
+  if [[ "$landing" == "yes" ]]; then check "https://$host/" 200; else check "https://$host/" 401; fi
+  check "https://$host/api/me" 401
+  code=$(curl -s -o /dev/null -w '%{http_code}' -H 'X-RepoBox-User: fran' -H 'X-RepoBox-User-Id: 1' -H 'X-RepoBox-Role: admin' -H 'X-RepoBox-Auth: session' "https://$host/api/me" || true)
+  printf '  %-45s %s (want 401, spoofed identity)\n' "https://$host/api/me" "$code"; [[ "$code" == "401" ]] || fail=1
+done < <(printf '%s' "$apps_json" | python3 -c 'import json,sys; [print(a["primary_host"], "yes" if a.get("landing_root") else "no") for a in json.load(sys.stdin) if a.get("primary_host") and a.get("enabled")]')
 dir=$(curl -s https://auth.repo.box/api/directory)
 echo "  directory: $dir"
 while read -r name vis enabled; do

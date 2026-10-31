@@ -1076,6 +1076,8 @@ pub fn render_published(states: &[AppState], cfg: &RenderConfig) -> Result<Strin
                 identity: IdentityContract::Platform,
                 agent_handoff_v1: false,
                 live_pages_v1: false,
+                primary_host: None,
+                landing_root: None,
                 ai: AiPolicy::private_default(),
                 publisher_id: Some(0),
             })

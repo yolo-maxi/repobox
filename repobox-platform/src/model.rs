@@ -197,6 +197,13 @@ pub struct App {
     /// hashed assets its host page loads. The origin decides what is published; the
     /// lane only lets those exact path shapes reach it without a platform session.
     pub live_pages_v1: bool,
+    /// Audited primary host outside the platform domain (`primary-host-v1`,
+    /// e.g. `kodu.work`). The launcher sends signed-in people there; the
+    /// `<name>.<domain>` host keeps working (live pages, existing links).
+    pub primary_host: Option<String>,
+    /// Static public landing shown on the primary host to a browser without a
+    /// valid app session: `/srv/<primary_host>/current`. `None`: no landing.
+    pub landing_root: Option<String>,
     pub ai: AiPolicy,
     /// Set when an external publisher created the app: only that publisher
     /// can see or change it through the publisher API, and its route is
@@ -209,8 +216,65 @@ impl App {
         format!("{}.{}", self.name, domain)
     }
     pub fn url(&self, domain: &str) -> String {
-        format!("https://{}/", self.host(domain))
+        format!("https://{}/", self.launch_host(domain))
     }
+    /// Where the launcher sends a person: the primary host when one is set.
+    pub fn launch_host(&self, domain: &str) -> String {
+        self.primary_host
+            .clone()
+            .unwrap_or_else(|| self.host(domain))
+    }
+    /// Every host this app answers on (the platform host first).
+    pub fn hosts(&self, domain: &str) -> Vec<String> {
+        let mut v = vec![self.host(domain)];
+        if let Some(h) = &self.primary_host {
+            v.push(h.clone());
+        }
+        v
+    }
+}
+
+/// A primary host is a lowercase DNS name of 2-4 labels outside the platform
+/// domain (`kodu.work`, `app.example.com`). It is written verbatim into the
+/// Caddyfile, so the character set is strict.
+pub fn validate_primary_host(host: &str, domain: &str) -> Result<(), String> {
+    if host.len() > 253 || host.is_empty() {
+        return Err("primary host must be 1-253 characters".into());
+    }
+    let labels: Vec<&str> = host.split('.').collect();
+    if !(2..=4).contains(&labels.len()) {
+        return Err("primary host must have 2-4 DNS labels".into());
+    }
+    for l in &labels {
+        if l.is_empty()
+            || l.len() > 63
+            || l.starts_with('-')
+            || l.ends_with('-')
+            || !l
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        {
+            return Err("primary host labels may only contain a-z, 0-9 and inner '-'".into());
+        }
+    }
+    if labels
+        .last()
+        .is_some_and(|t| t.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return Err("primary host must be a DNS name, not an address".into());
+    }
+    if host == domain || host.ends_with(&format!(".{domain}")) {
+        return Err(format!("primary host must be outside {domain}"));
+    }
+    if labels[0] == "www" {
+        return Err("primary host may not start with www (www.<apex> is redirected)".into());
+    }
+    Ok(())
+}
+
+/// The only landing root a primary host may use.
+pub fn landing_root_for(host: &str) -> String {
+    format!("/srv/{host}/current")
 }
 
 // -------------------------------------------------------------------- AI

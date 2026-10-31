@@ -45,6 +45,12 @@ pub const IDENTITY_HEADERS: &[&str] = &[
 /// Header that marks a request as coming from Caddy's forward_auth hop.
 pub const GATE_MARKER_HEADER: &str = "X-RepoBox-Gate";
 pub const GATE_APP_HEADER: &str = "X-RepoBox-Gate-App";
+/// Set (`1`) by the generated route of an app's primary host (`primary-host-v1`).
+/// The gate then never opens the anonymous live-pages lane: on the primary host a
+/// browser without a session sees the landing or the sign-in answer, nothing else.
+pub const GATE_PRIMARY_HOST_HEADER: &str = "X-RepoBox-Gate-Primary-Host";
+/// The landing's own files on a primary host: GET/HEAD, no cookie, no gate.
+pub const LANDING_FILES_MATCH: &str = "/_landing/*";
 
 /// Caddy path matcher for the AI endpoint on every app host.
 pub const AI_ROUTE_MATCH: &str = "/_repo_box/ai/v1/*";
@@ -73,20 +79,51 @@ pub const LIVE_PAGES_PATH_REGEXP: &str = r"^(?:/[a-z0-9][a-z0-9._-]*/[a-z0-9][a-
 /// through anonymously on such a path (any cookie keeps a request off the cookie-less lane). Kept in step with the regexp
 /// by the render test.
 pub fn is_live_pages_path(path: &str) -> bool {
-    if LIVE_PAGES_EXCLUDED_PATHS.split(' ').any(|glob| path.starts_with(glob.trim_end_matches('*'))) {
+    if LIVE_PAGES_EXCLUDED_PATHS
+        .split(' ')
+        .any(|glob| path.starts_with(glob.trim_end_matches('*')))
+    {
         return false;
     }
-    let handle = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
-    let name = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    let handle = |s: &str| {
+        !s.is_empty()
+            && s.chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+            && s.chars().all(|c| {
+                c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-')
+            })
+    };
+    let name = |s: &str| {
+        !s.is_empty()
+            && s.chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+            && s.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    };
     let parts: Vec<&str> = path.split('/').collect();
     match parts.as_slice() {
         ["", "live", "-", "assets", file] => {
             let (stem, ext) = file.rsplit_once('.').unwrap_or(("", ""));
-            !stem.is_empty() && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')) && matches!(ext, "js" | "css" | "woff2" | "woff" | "ttf" | "svg" | "png")
+            !stem.is_empty()
+                && stem
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+                && matches!(ext, "js" | "css" | "woff2" | "woff" | "ttf" | "svg" | "png")
         }
         ["", h, p] => handle(h) && name(p),
-        ["", "live", h, p, file] => handle(h) && name(p) && matches!(*file, "page.json" | "revision" | "frame"),
-        ["", "live", h, p, "media", id] => handle(h) && name(p) && !id.is_empty() && id.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase() || c == '-'),
+        ["", "live", h, p, file] => {
+            handle(h) && name(p) && matches!(*file, "page.json" | "revision" | "frame")
+        }
+        ["", "live", h, p, "media", id] => {
+            handle(h)
+                && name(p)
+                && !id.is_empty()
+                && id
+                    .chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase() || c == '-')
+        }
         _ => false,
     }
 }
@@ -95,11 +132,29 @@ pub fn is_live_pages_path(path: &str) -> bool {
 /// email gate (the origin bounds and rate-limits it, and answers with a host-only cookie). It is never on the cookie-less
 /// lane: the gate lets it through anonymously (gate::verify) so the browser's cookies reach the origin unchanged.
 pub fn is_live_pages_gate_path(path: &str) -> bool {
-    if LIVE_PAGES_EXCLUDED_PATHS.split(' ').any(|glob| path.starts_with(glob.trim_end_matches('*'))) {
+    if LIVE_PAGES_EXCLUDED_PATHS
+        .split(' ')
+        .any(|glob| path.starts_with(glob.trim_end_matches('*')))
+    {
         return false;
     }
-    let handle = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-'));
-    let name = |s: &str| !s.is_empty() && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    let handle = |s: &str| {
+        !s.is_empty()
+            && s.chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+            && s.chars().all(|c| {
+                c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '_' | '-')
+            })
+    };
+    let name = |s: &str| {
+        !s.is_empty()
+            && s.chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+            && s.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    };
     matches!(path.split('/').collect::<Vec<_>>().as_slice(), ["", "live", h, p, "gate"] if handle(h) && name(p))
 }
 
@@ -153,6 +208,47 @@ pub fn validate_for_render(app: &App, cfg: &RenderConfig) -> Result<(), String> 
 
 /// Apps that are private without the platform identity contract: they keep
 /// serving, but the manifest and the renderer call them out.
+/// The response headers of the landing build, installed beside the release
+/// (`/srv/<host>/headers.caddy`, generated from that build's headers file).
+pub fn landing_headers_file(host: &str) -> String {
+    format!("/srv/{host}/headers.caddy")
+}
+
+fn validate_primary_host_for_render(app: &App, cfg: &RenderConfig) -> Result<(), String> {
+    let Some(host) = &app.primary_host else {
+        return if app.landing_root.is_some() {
+            Err(format!(
+                "app '{}' has a landing root but no primary host",
+                app.name
+            ))
+        } else {
+            Ok(())
+        };
+    };
+    crate::model::validate_primary_host(host, &cfg.domain)
+        .map_err(|e| format!("app '{}': {e}", app.name))?;
+    if app.kind != AppKind::Proxy
+        || app.visibility != Visibility::Private
+        || !app.identity.is_platform()
+        || app.publisher_id.is_some()
+    {
+        return Err(format!(
+            "app '{}': primary-host-v1 needs a private platform-identity proxy app",
+            app.name
+        ));
+    }
+    if let Some(root) = &app.landing_root
+        && *root != crate::model::landing_root_for(host)
+    {
+        return Err(format!(
+            "app '{}': landing root must be {}",
+            app.name,
+            crate::model::landing_root_for(host)
+        ));
+    }
+    Ok(())
+}
+
 pub fn pending_private(apps: &[App]) -> Vec<&App> {
     let mut v: Vec<&App> = apps
         .iter()
@@ -176,10 +272,17 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
     let mut sorted: Vec<&App> = apps.iter().collect();
     sorted.sort_by(|a, b| a.name.cmp(&b.name));
     let mut seen = std::collections::HashSet::new();
+    let mut seen_hosts = std::collections::HashSet::new();
     for app in &sorted {
         validate_for_render(app, cfg)?;
+        validate_primary_host_for_render(app, cfg)?;
         if !seen.insert(app.name.as_str()) {
             return Err(format!("duplicate app name '{}'", app.name));
+        }
+        if let Some(h) = &app.primary_host
+            && !seen_hosts.insert(h.clone())
+        {
+            return Err(format!("primary host '{h}' is used by two apps"));
         }
     }
 
@@ -327,8 +430,103 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
         }
         out.push_str("\t}\n");
         out.push_str("}\n");
+        if let Some(host) = &app.primary_host {
+            render_primary_host(&mut out, app, host, &target, cfg);
+        }
     }
     Ok(out)
+}
+
+/// `primary-host-v1`: the app on its own domain. Same strip -> gate -> inject ->
+/// serve shape as the platform host, with three differences:
+/// * the gate is told it is the primary host, so the anonymous live-pages lane
+///   never opens here (live pages stay on `<name>.<domain>`);
+/// * with a landing root, `/_landing/*` (GET/HEAD) is served from it with cookies
+///   and credentials stripped and without asking the gate (static files only), and
+///   a gate 401 (no valid app session) for GET/HEAD `/` is answered with the
+///   landing document instead of the sign-in page; every other 401 is the gate's
+///   own answer. The origin never sees a request the gate did not allow;
+/// * `www.<host>` redirects to the bare host.
+fn render_primary_host(out: &mut String, app: &App, host: &str, target: &str, cfg: &RenderConfig) {
+    out.push('\n');
+    out.push_str(&format!(
+        "# primary host: {} -> {} (landing: {})\n",
+        app.name,
+        host,
+        app.landing_root.as_deref().unwrap_or("none")
+    ));
+    out.push_str(&format!("{host} {{\n"));
+    out.push_str("\theader {\n");
+    out.push_str("\t\tX-Content-Type-Options \"nosniff\"\n");
+    out.push_str("\t\tReferrer-Policy \"strict-origin-when-cross-origin\"\n");
+    out.push_str("\t\tStrict-Transport-Security \"max-age=31536000\"\n");
+    out.push_str("\t\t-Server\n");
+    out.push_str("\t}\n");
+    out.push_str("\troute {\n");
+    out.push_str("\t\trequest_header -X-RepoBox-*\n");
+    if let Some(root) = &app.landing_root {
+        let headers = landing_headers_file(host);
+        out.push_str("\t\t@landing_files {\n\t\t\tmethod GET HEAD\n");
+        out.push_str(&format!("\t\t\tpath {LANDING_FILES_MATCH}\n\t\t}}\n"));
+        out.push_str("\t\thandle @landing_files {\n");
+        out.push_str("\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization\n");
+        out.push_str(&format!("\t\t\timport {headers}\n"));
+        out.push_str(&format!("\t\t\troot * {root}\n\t\t\tfile_server\n"));
+        out.push_str("\t\t}\n");
+    }
+    out.push_str("\t\thandle {\n");
+    out.push_str(&format!("\t\t\tforward_auth {} {{\n", cfg.gate));
+    out.push_str("\t\t\t\turi /gate/verify\n");
+    out.push_str(&format!(
+        "\t\t\t\tcopy_headers {}\n",
+        IDENTITY_HEADERS.join(" ")
+    ));
+    out.push_str(&format!("\t\t\t\theader_up {GATE_MARKER_HEADER} 1\n"));
+    out.push_str(&format!(
+        "\t\t\t\theader_up {GATE_APP_HEADER} {}\n",
+        app.name
+    ));
+    out.push_str(&format!("\t\t\t\theader_up {GATE_PRIMARY_HOST_HEADER} 1\n"));
+    if let Some(root) = &app.landing_root {
+        let headers = landing_headers_file(host);
+        out.push_str("\t\t\t\t@no_session status 401\n");
+        out.push_str("\t\t\t\thandle_response @no_session {\n");
+        out.push_str("\t\t\t\t\t@landing_doc {\n\t\t\t\t\t\tmethod GET HEAD\n\t\t\t\t\t\tpath /\n\t\t\t\t\t}\n");
+        out.push_str("\t\t\t\t\thandle @landing_doc {\n");
+        out.push_str(&format!("\t\t\t\t\t\timport {headers}\n"));
+        // `/` is the landing or the app depending on the session: never shared.
+        out.push_str("\t\t\t\t\t\theader Cache-Control \"private, no-cache\"\n\t\t\t\t\t\theader Vary Cookie\n");
+        out.push_str(&format!(
+            "\t\t\t\t\t\troot * {root}\n\t\t\t\t\t\tfile_server\n"
+        ));
+        out.push_str("\t\t\t\t\t}\n");
+        out.push_str("\t\t\t\t\thandle {\n\t\t\t\t\t\tcopy_response_headers\n\t\t\t\t\t\tcopy_response\n\t\t\t\t\t}\n");
+        out.push_str("\t\t\t\t}\n");
+    }
+    out.push_str("\t\t\t}\n");
+    out.push_str(&format!("\t\t\thandle {AI_ROUTE_MATCH} {{\n"));
+    out.push_str(&format!(
+        "\t\t\t\turi replace {AI_PUBLIC_PREFIX}/ {AI_GATE_PREFIX}/ 1\n"
+    ));
+    out.push_str(&format!("\t\t\t\treverse_proxy {} {{\n", cfg.gate));
+    out.push_str(&format!("\t\t\t\t\theader_up {GATE_MARKER_HEADER} 1\n"));
+    out.push_str(&format!(
+        "\t\t\t\t\theader_up {GATE_APP_HEADER} {}\n",
+        app.name
+    ));
+    out.push_str("\t\t\t\t}\n\t\t\t}\n");
+    out.push_str(&format!(
+        "\t\t\thandle {RESERVED_MATCH} {{\n\t\t\t\trespond 404\n\t\t\t}}\n"
+    ));
+    out.push_str(&format!(
+        "\t\t\thandle {{\n\t\t\t\treverse_proxy {target}\n\t\t\t}}\n"
+    ));
+    out.push_str("\t\t}\n");
+    out.push_str("\t}\n");
+    out.push_str("}\n");
+    out.push_str(&format!(
+        "\nwww.{host} {{\n\tredir https://{host}{{uri}} permanent\n}}\n"
+    ));
 }
 
 #[cfg(test)]
@@ -351,6 +549,8 @@ mod tests {
             identity: IdentityContract::Platform,
             agent_handoff_v1: false,
             live_pages_v1: false,
+            primary_host: None,
+            landing_root: None,
             ai: crate::model::AiPolicy::private_default(),
             publisher_id: None,
         }
@@ -389,6 +589,92 @@ mod tests {
     }
 
     #[test]
+    fn primary_host_serves_the_landing_only_on_a_gate_401_and_never_opens_the_lane() {
+        let mut a = app("fieldwork", AppKind::Proxy, "127.0.0.1:4110");
+        a.live_pages_v1 = true;
+        a.primary_host = Some("kodu.work".into());
+        a.landing_root = Some("/srv/kodu.work/current".into());
+        let out = render(&[a.clone()], &cfg()).unwrap();
+        assert_eq!(
+            out,
+            include_str!("../tests/snapshots/primary-host-v1.caddy")
+        );
+        // The platform host is unchanged and still carries the lane.
+        let mut plain = a.clone();
+        plain.primary_host = None;
+        plain.landing_root = None;
+        let base = render(&[plain], &cfg()).unwrap();
+        assert!(out.starts_with(&base));
+        let extra = &out[base.len()..];
+        assert!(extra.contains("\nkodu.work {\n"));
+        assert!(extra.contains("\nwww.kodu.work {\n\tredir https://kodu.work{uri} permanent\n}\n"));
+        assert!(!extra.contains("live_pages") && !extra.contains("/gate/live-pages-v1"));
+        assert!(extra.contains("header_up X-RepoBox-Gate-Primary-Host 1"));
+        let strip = extra.find("request_header -X-RepoBox-*").unwrap();
+        let files = extra.find("handle @landing_files").unwrap();
+        let gate = extra.find("uri /gate/verify").unwrap();
+        let origin = extra.find("reverse_proxy 127.0.0.1:4110").unwrap();
+        assert!(strip < files && files < gate && gate < origin);
+        assert!(extra.contains("path /_landing/*\n\t\t}\n\t\thandle @landing_files {\n\t\t\trequest_header -Cookie\n\t\t\trequest_header -Authorization"));
+        // The landing document only answers a 401 for GET/HEAD /; other 401s are the gate's own.
+        assert!(extra.contains("@no_session status 401"));
+        assert!(extra.contains("method GET HEAD\n\t\t\t\t\t\tpath /\n"));
+        assert!(extra.contains("copy_response_headers\n\t\t\t\t\t\tcopy_response"));
+        assert_eq!(
+            extra.matches("import /srv/kodu.work/headers.caddy").count(),
+            2
+        );
+        // Without a landing: same gate route, no landing surface at all.
+        let mut bare = a.clone();
+        bare.landing_root = None;
+        let out = render(&[bare], &cfg()).unwrap();
+        assert!(
+            out.contains("kodu.work {") && !out.contains("_landing") && !out.contains("status 401")
+        );
+    }
+
+    #[test]
+    fn primary_host_rejects_unsafe_input() {
+        let mut a = app("fieldwork", AppKind::Proxy, "127.0.0.1:4110");
+        for bad in [
+            "kodu.repo.box",
+            "repo.box",
+            "Kodu.work",
+            "kodu",
+            "kodu.work.",
+            "www.kodu.work",
+            "1.2.3.4",
+            "ko du.work",
+            "kodu.work\n}",
+            "-x.work",
+        ] {
+            a.primary_host = Some(bad.into());
+            a.landing_root = None;
+            assert!(render(&[a.clone()], &cfg()).is_err(), "{bad}");
+        }
+        a.primary_host = Some("kodu.work".into());
+        a.landing_root = Some("/srv/other/current".into());
+        assert!(render(&[a.clone()], &cfg()).is_err());
+        a.primary_host = None;
+        a.landing_root = Some("/srv/kodu.work/current".into());
+        assert!(render(&[a.clone()], &cfg()).is_err());
+        let mut b = app("other", AppKind::Proxy, "127.0.0.1:4111");
+        b.primary_host = Some("kodu.work".into());
+        a.primary_host = Some("kodu.work".into());
+        a.landing_root = None;
+        assert!(
+            render(&[a.clone(), b], &cfg()).is_err(),
+            "one host, two apps"
+        );
+        let mut st = app("site", AppKind::Static, "/var/www/repo.box/subdomains/site");
+        st.primary_host = Some("site.example".into());
+        assert!(
+            render(&[st], &cfg()).is_err(),
+            "static apps cannot have one"
+        );
+    }
+
+    #[test]
     fn live_pages_lane_is_an_anonymous_get_surface_before_auth() {
         let mut a = app("fieldwork", AppKind::Proxy, "127.0.0.1:4110");
         a.live_pages_v1 = true;
@@ -402,10 +688,25 @@ mod tests {
         assert!(out.contains(&format!("path_regexp {LIVE_PAGES_PATH_REGEXP}")));
         assert!(out.contains("not path /api/* /v1/* /_repo_box/*\n\t\t\tnot header Cookie *\n\t\t\tnot query rb_launch=*\n\t\t}"));
         assert!(!out.contains("method GET HEAD POST") && !out.contains("/gate$"));
-        for ok in ["/live/fran/notes-on-rivers/gate", "/live/john.doe/intro/gate"] {
-            assert!(is_live_pages_gate_path(ok) && !is_live_pages_path(ok), "{ok}");
+        for ok in [
+            "/live/fran/notes-on-rivers/gate",
+            "/live/john.doe/intro/gate",
+        ] {
+            assert!(
+                is_live_pages_gate_path(ok) && !is_live_pages_path(ok),
+                "{ok}"
+            );
         }
-        for no in ["/live/fran/notes/gate/", "/live/fran/notes/page.json", "/fran/notes/gate", "/live/fran/Notes/gate", "/live/-/assets/gate", "/api/live/fran/notes/gate", "/live/fran/notes/gate/x", "/gate"] {
+        for no in [
+            "/live/fran/notes/gate/",
+            "/live/fran/notes/page.json",
+            "/fran/notes/gate",
+            "/live/fran/Notes/gate",
+            "/live/-/assets/gate",
+            "/api/live/fran/notes/gate",
+            "/live/fran/notes/gate/x",
+            "/gate",
+        ] {
             assert!(!is_live_pages_gate_path(no), "{no}");
         }
         assert!(out.contains("uri /gate/live-pages-v1"));
@@ -413,13 +714,44 @@ mod tests {
         assert!(out.contains("request_header -Cookie\n\t\t\trequest_header -Authorization"));
         assert!(out.contains("header_up X-RepoBox-Auth anonymous"));
         // The rest of the host stays behind the normal gate, in a sibling handle.
-        assert!(out.contains("\t\t}\n\t\thandle {\n\t\tforward_auth 127.0.0.1:3230 {\n\t\t\turi /gate/verify"));
+        assert!(out.contains(
+            "\t\t}\n\t\thandle {\n\t\tforward_auth 127.0.0.1:3230 {\n\t\t\turi /gate/verify"
+        ));
         assert!(!out.contains("copy_headers X-RepoBox-User X-RepoBox-User-Id X-RepoBox-Role X-RepoBox-Auth X-RepoBox-App\n\t\t\theader_up X-RepoBox-Gate 1\n\t\t\theader_up X-RepoBox-Gate-App fieldwork\n\t\t}\n\t\thandle @live_pages"));
         let re = |p: &str| is_live_pages_path(p);
-        for ok in ["/fran/notes-on-rivers", "/john.doe/intro", "/live/fran/rivers/page.json", "/live/fran/rivers/revision", "/live/fran/rivers/frame", "/live/fran/rivers/media/0f8fad5b-d9cb-469f-a165-70867728950e", "/live/-/assets/live-CpFRovq4.js", "/live/-/assets/deck-V3G11p-6.css", "/live/-/assets/inter-latin-wght-normal-Dx4kXJAl.woff2", "/live/-/assets/icon-Bx1.svg"] {
+        for ok in [
+            "/fran/notes-on-rivers",
+            "/john.doe/intro",
+            "/live/fran/rivers/page.json",
+            "/live/fran/rivers/revision",
+            "/live/fran/rivers/frame",
+            "/live/fran/rivers/media/0f8fad5b-d9cb-469f-a165-70867728950e",
+            "/live/-/assets/live-CpFRovq4.js",
+            "/live/-/assets/deck-V3G11p-6.css",
+            "/live/-/assets/inter-latin-wght-normal-Dx4kXJAl.woff2",
+            "/live/-/assets/icon-Bx1.svg",
+        ] {
             assert!(re(ok), "{ok} should match the lane");
         }
-        for no in ["/", "/fran", "/fran/Page", "/api/studio", "/v1/mcp", "/_repo_box/ai", "/fran/a/b", "/fran/rivers/", "/live/fran/rivers/other", "/assets/live-CpFRovq4.js", "/assets/DeckStudio-CRaZYjHe.js", "/assets/index-abc.js", "/live/-/assets/index-abc.js.map", "/live/-/live.html", "/live/-/assets/a/b.js", "/api/studio/x", "/sw.js"] {
+        for no in [
+            "/",
+            "/fran",
+            "/fran/Page",
+            "/api/studio",
+            "/v1/mcp",
+            "/_repo_box/ai",
+            "/fran/a/b",
+            "/fran/rivers/",
+            "/live/fran/rivers/other",
+            "/assets/live-CpFRovq4.js",
+            "/assets/DeckStudio-CRaZYjHe.js",
+            "/assets/index-abc.js",
+            "/live/-/assets/index-abc.js.map",
+            "/live/-/live.html",
+            "/live/-/assets/a/b.js",
+            "/api/studio/x",
+            "/sw.js",
+        ] {
             assert!(!re(no), "{no} should not match the lane");
         }
         a.visibility = Visibility::PublicUnlisted;

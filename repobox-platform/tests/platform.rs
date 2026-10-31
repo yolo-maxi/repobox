@@ -1615,13 +1615,26 @@ async fn launcher_deep_links_land_on_private_routes_only() {
     let bob = h.auth_cookie(&h.bob);
     let id = "0f8fad5b-d9cb-469f-a165-70867728950e";
     // A grantee's deep link: the code is appended to exactly the requested path.
-    let (st, hd, _) = h.get(&format!("/demo-private?next=/motion/{id}"), Some(&bob)).await;
+    let (st, hd, _) = h
+        .get(&format!("/demo-private?next=/motion/{id}"), Some(&bob))
+        .await;
     assert_eq!(st, StatusCode::FOUND);
     let loc = hdr(&hd, "location").unwrap();
-    assert!(loc.starts_with(&format!("https://demo-private.repo.box/motion/{id}?rb_launch=")), "{loc}");
+    assert!(
+        loc.starts_with(&format!(
+            "https://demo-private.repo.box/motion/{id}?rb_launch="
+        )),
+        "{loc}"
+    );
     // The gate redeems it and lands on the clean path, code gone.
     let code = loc.split("rb_launch=").nth(1).unwrap();
-    let (st, hd, _) = h.navigate("demo-private", &format!("/motion/{id}?rb_launch={code}"), None).await;
+    let (st, hd, _) = h
+        .navigate(
+            "demo-private",
+            &format!("/motion/{id}?rb_launch={code}"),
+            None,
+        )
+        .await;
     assert_eq!(st, StatusCode::FOUND);
     assert_eq!(hdr(&hd, "location"), Some(format!("/motion/{id}").as_str()));
     assert!(hdr(&hd, "set-cookie").is_some());
@@ -1629,17 +1642,41 @@ async fn launcher_deep_links_land_on_private_routes_only() {
     let frag = format!("/motion/{id}%23frag");
     let smuggled = format!("/motion/{id}%3Frb_launch%3Dforged");
     let smuggled_mid = format!("/motion/{id}%3Fa%3D1%26rb_launch%3Dforged%26b%3D2");
-    for bad in ["//evil.example/motion/x", "https://evil.example/", frag.as_str(), smuggled.as_str(), smuggled_mid.as_str()] {
-        let (st, hd, _) = h.get(&format!("/demo-private?next={bad}"), Some(&bob)).await;
+    for bad in [
+        "//evil.example/motion/x",
+        "https://evil.example/",
+        frag.as_str(),
+        smuggled.as_str(),
+        smuggled_mid.as_str(),
+    ] {
+        let (st, hd, _) = h
+            .get(&format!("/demo-private?next={bad}"), Some(&bob))
+            .await;
         assert_eq!(st, StatusCode::FOUND, "{bad}");
         let loc = hdr(&hd, "location").unwrap();
-        assert!(loc.starts_with("https://demo-private.repo.box/?rb_launch="), "{bad} -> {loc}");
+        assert!(
+            loc.starts_with("https://demo-private.repo.box/?rb_launch="),
+            "{bad} -> {loc}"
+        );
         assert_eq!(loc.matches("rb_launch=").count(), 1, "{bad} -> {loc}");
-        assert!(!loc.contains("forged") && !loc.contains('#'), "{bad} -> {loc}");
+        assert!(
+            !loc.contains("forged") && !loc.contains('#'),
+            "{bad} -> {loc}"
+        );
     }
     // Without a grant (eve) or anonymous: no code for any path, the usual 403 / 401 pages.
-    assert_eq!(h.get(&format!("/demo-private?next=/motion/{id}"), Some(&h.auth_cookie(&h.eve))).await.0, StatusCode::FORBIDDEN);
-    let (st, hd, _) = h.get(&format!("/demo-private?next=/motion/{id}"), None).await;
+    assert_eq!(
+        h.get(
+            &format!("/demo-private?next=/motion/{id}"),
+            Some(&h.auth_cookie(&h.eve))
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    let (st, hd, _) = h
+        .get(&format!("/demo-private?next=/motion/{id}"), None)
+        .await;
     assert_eq!(st, StatusCode::UNAUTHORIZED);
     assert!(hdr(&hd, "location").is_none());
     // With the lane on, `next` is treated no differently: the code travels to the gate, which the lane never bypasses
@@ -1647,9 +1684,16 @@ async fn launcher_deep_links_land_on_private_routes_only() {
     let app = h.state.store.app_by_name("demo-private").unwrap().unwrap();
     h.state.store.set_live_pages_v1(&app, true).unwrap();
     for path in [format!("/motion/{id}"), "/fran/field-notes".to_string()] {
-        let (st, hd, _) = h.get(&format!("/demo-private?next={path}"), Some(&bob)).await;
+        let (st, hd, _) = h
+            .get(&format!("/demo-private?next={path}"), Some(&bob))
+            .await;
         assert_eq!(st, StatusCode::FOUND, "{path}");
-        assert!(hdr(&hd, "location").unwrap().starts_with(&format!("https://demo-private.repo.box{path}?rb_launch=")), "{path}");
+        assert!(
+            hdr(&hd, "location")
+                .unwrap()
+                .starts_with(&format!("https://demo-private.repo.box{path}?rb_launch=")),
+            "{path}"
+        );
     }
 }
 
@@ -1658,43 +1702,131 @@ async fn live_pages_paths_pass_the_gate_anonymously_only_without_a_session() {
     let h = H::new();
     let app = h.state.store.app_by_name("demo-private").unwrap().unwrap();
     // Lane off: a private app's two-segment path is private like everything else.
-    assert_eq!(h.gate("demo-private", "/fran/notes", None, &[]).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        h.gate("demo-private", "/fran/notes", None, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
     h.state.store.set_live_pages_v1(&app, true).unwrap();
     // Lane on, no session: lane-shaped GET/HEAD paths pass as anonymous (no identity), nothing else does.
-    for path in ["/fran/notes", "/live/fran/notes/page.json", "/live/-/assets/live-abc.js", "/motion/0f8fad5b-d9cb-469f-a165-70867728950e?x=1"] {
+    for path in [
+        "/fran/notes",
+        "/live/fran/notes/page.json",
+        "/live/-/assets/live-abc.js",
+        "/motion/0f8fad5b-d9cb-469f-a165-70867728950e?x=1",
+    ] {
         let (st, hd, _) = h.gate("demo-private", path, None, &[]).await;
         assert_eq!(st, StatusCode::OK, "{path}");
         assert_eq!(hdr(&hd, "x-repobox-auth"), Some("anonymous"), "{path}");
-        assert!(hdr(&hd, "x-repobox-user").is_none() && hdr(&hd, "x-repobox-user-id").is_none(), "{path}");
+        assert!(
+            hdr(&hd, "x-repobox-user").is_none() && hdr(&hd, "x-repobox-user-id").is_none(),
+            "{path}"
+        );
     }
-    let (st, hd, _) = h.gate("demo-private", "/fran/notes", Some("__Host-rb_app=stale-or-forged"), &[]).await;
+    let (st, hd, _) = h
+        .gate(
+            "demo-private",
+            "/fran/notes",
+            Some("__Host-rb_app=stale-or-forged"),
+            &[],
+        )
+        .await;
     assert_eq!(st, StatusCode::OK);
     assert_eq!(hdr(&hd, "x-repobox-auth"), Some("anonymous"));
-    assert_eq!(h.gate("demo-private", "/secret", None, &[]).await.0, StatusCode::UNAUTHORIZED);
-    assert_eq!(h.gate("demo-private", "/api/studio", None, &[]).await.0, StatusCode::UNAUTHORIZED);
-    assert_eq!(h.gate_req("demo-private", "POST", "/fran/notes", None, &[]).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        h.gate("demo-private", "/secret", None, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.gate("demo-private", "/api/studio", None, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.gate_req("demo-private", "POST", "/fran/notes", None, &[])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
     // The page's own email gate: an anonymous POST passes (cookies untouched), nothing else on that path does.
-    let (st, hd, _) = h.gate_req("demo-private", "POST", "/live/fran/notes/gate", None, &[]).await;
+    let (st, hd, _) = h
+        .gate_req("demo-private", "POST", "/live/fran/notes/gate", None, &[])
+        .await;
     assert_eq!(st, StatusCode::OK);
     assert_eq!(hdr(&hd, "x-repobox-auth"), Some("anonymous"));
     assert!(hdr(&hd, "x-repobox-user").is_none());
-    let (st, hd, _) = h.gate_req("demo-private", "POST", "/live/fran/notes/gate", Some("__Host-fw_lpv=lpg_stale-or-forged"), &[]).await;
+    let (st, hd, _) = h
+        .gate_req(
+            "demo-private",
+            "POST",
+            "/live/fran/notes/gate",
+            Some("__Host-fw_lpv=lpg_stale-or-forged"),
+            &[],
+        )
+        .await;
     assert_eq!(st, StatusCode::OK);
     assert_eq!(hdr(&hd, "x-repobox-auth"), Some("anonymous"));
-    assert_eq!(h.gate_req("demo-private", "GET", "/live/fran/notes/gate", None, &[]).await.0, StatusCode::UNAUTHORIZED);
-    assert_eq!(h.gate_req("demo-private", "POST", "/live/fran/notes/page.json", None, &[]).await.0, StatusCode::UNAUTHORIZED);
-    assert_eq!(h.gate_req("demo-private", "POST", "/api/live/fran/notes/gate", None, &[]).await.0, StatusCode::UNAUTHORIZED);
-    assert_eq!(h.gate_req("demo-private", "PUT", "/live/fran/notes/gate", None, &[]).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        h.gate_req("demo-private", "GET", "/live/fran/notes/gate", None, &[])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.gate_req(
+            "demo-private",
+            "POST",
+            "/live/fran/notes/page.json",
+            None,
+            &[]
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.gate_req(
+            "demo-private",
+            "POST",
+            "/api/live/fran/notes/gate",
+            None,
+            &[]
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        h.gate_req("demo-private", "PUT", "/live/fran/notes/gate", None, &[])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
     // A real session on the same path keeps its identity.
     let code = h.mint(&h.bob, "demo-private").await;
-    let (_, hd, _) = h.navigate("demo-private", &format!("/?rb_launch={code}"), None).await;
-    let cookie = hdr(&hd, "set-cookie").unwrap().split(';').next().unwrap().to_string();
-    let (st, hd, _) = h.gate("demo-private", "/fran/notes", Some(&cookie), &[]).await;
+    let (_, hd, _) = h
+        .navigate("demo-private", &format!("/?rb_launch={code}"), None)
+        .await;
+    let cookie = hdr(&hd, "set-cookie")
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_string();
+    let (st, hd, _) = h
+        .gate("demo-private", "/fran/notes", Some(&cookie), &[])
+        .await;
     assert_eq!(st, StatusCode::OK);
     assert_eq!(hdr(&hd, "x-repobox-auth"), Some("session"));
     assert_eq!(hdr(&hd, "x-repobox-user"), Some("bob"));
     // Anonymous lane passes are not counted as accesses.
-    assert_eq!(h.state.store.app_by_name("demo-private").unwrap().unwrap().id, app.id);
+    assert_eq!(
+        h.state
+            .store
+            .app_by_name("demo-private")
+            .unwrap()
+            .unwrap()
+            .id,
+        app.id
+    );
 }
 
 fn extract_link(body: &str, prefix: &str) -> String {

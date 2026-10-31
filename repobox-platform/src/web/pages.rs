@@ -546,7 +546,11 @@ pub async fn launch(
     }
     let Some((sess, user)) = current else {
         if app.visibility.is_public() {
-            return redirect(&format!("https://{}{}", app.host(&s.cfg.domain), next));
+            return redirect(&format!(
+                "https://{}{}",
+                app.launch_host(&s.cfg.domain),
+                next
+            ));
         }
         let sh = shell(&s, &app.title, None, "");
         return html(
@@ -572,7 +576,11 @@ pub async fn launch(
     }
     if !allowed {
         // Public app, no grant: open it without an identity.
-        return redirect(&format!("https://{}{}", app.host(&s.cfg.domain), next));
+        return redirect(&format!(
+            "https://{}{}",
+            app.launch_host(&s.cfg.domain),
+            next
+        ));
     }
     let (code, _) = match s
         .store
@@ -585,7 +593,7 @@ pub async fn launch(
     let sep = if next.contains('?') { '&' } else { '?' };
     let location = format!(
         "https://{}{}{}{}={}",
-        app.host(&s.cfg.domain),
+        app.launch_host(&s.cfg.domain),
         next,
         sep,
         super::LAUNCH_PARAM,

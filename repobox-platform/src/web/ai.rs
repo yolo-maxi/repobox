@@ -95,12 +95,13 @@ fn authorise(s: &S, headers: &HeaderMap, method: &Method) -> Result<(App, User),
     // Same-origin only.
     // Scheme and host must match; the port is not compared (production is
     // 443 only, and the local edge test runs Caddy on a high port).
-    let host = app.host(&s.cfg.domain);
+    let hosts = app.hosts(&s.cfg.domain);
     if let Some(o) = hdr(headers, "origin")
-        && o.strip_prefix("https://")
+        && !o
+            .strip_prefix("https://")
             .map(|rest| rest.trim_end_matches('/'))
             .map(|rest| rest.split_once(':').map_or(rest, |(h, _)| h))
-            != Some(host.as_str())
+            .is_some_and(|h| hosts.iter().any(|x| x == h))
     {
         return Err(AiError::new(
             StatusCode::FORBIDDEN,

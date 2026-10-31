@@ -456,10 +456,13 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "live_pages_v1",
         "INTEGER NOT NULL DEFAULT 0 CHECK (live_pages_v1 IN (0, 1))",
     ),
+    // Schema 11: audited primary host outside the platform domain + its landing.
+    ("apps", "primary_host", "TEXT"),
+    ("apps", "landing_root", "TEXT"),
 ];
 
 /// Current schema version (also written to `meta`).
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 11;
 
 /// AI usage counters (requests per app, user and UTC day) are kept this long.
 pub const AI_USAGE_RETENTION_DAYS: i64 = 90;
@@ -1088,6 +1091,56 @@ impl Store {
         conn.execute(
             "UPDATE apps SET live_pages_v1 = ?2, updated_at = ?3 WHERE id = ?1",
             params![app.id, enabled as i64, self.now()],
+        )?;
+        Ok(())
+    }
+
+    /// Audited primary host (`primary-host-v1`). Only an enabled, private,
+    /// platform-identity loopback proxy that is not publisher-deployed can
+    /// carry one; a host belongs to at most one app. `None` clears it.
+    pub fn set_primary_host(
+        &self,
+        app: &App,
+        host: Option<&str>,
+        landing: bool,
+        domain: &str,
+    ) -> Result<()> {
+        let (host, landing_root) = match host {
+            None => (None, None),
+            Some(h) => {
+                crate::model::validate_primary_host(h, domain).map_err(StoreError::Invalid)?;
+                if app.kind != AppKind::Proxy
+                    || app.visibility != Visibility::Private
+                    || !app.identity.is_platform()
+                    || app.publisher_id.is_some()
+                    || !app.enabled
+                {
+                    return Err(StoreError::Invalid("primary-host-v1 requires an enabled, private, platform-identity loopback proxy app that is not publisher-deployed".into()));
+                }
+                (
+                    Some(h.to_string()),
+                    landing.then(|| crate::model::landing_root_for(h)),
+                )
+            }
+        };
+        let conn = self.lock();
+        if let Some(h) = &host {
+            let taken: Option<String> = conn
+                .query_row(
+                    "SELECT name FROM apps WHERE primary_host = ?1 AND id != ?2",
+                    params![h, app.id],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            if let Some(other) = taken {
+                return Err(StoreError::Invalid(format!(
+                    "{h} is already the primary host of {other}"
+                )));
+            }
+        }
+        conn.execute(
+            "UPDATE apps SET primary_host = ?2, landing_root = ?3, updated_at = ?4 WHERE id = ?1",
+            params![app.id, host, landing_root, self.now()],
         )?;
         Ok(())
     }
@@ -2116,7 +2169,7 @@ impl Store {
     }
 }
 
-const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy, publisher_id, agent_handoff_v1, live_pages_v1 FROM apps";
+const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy, publisher_id, agent_handoff_v1, live_pages_v1, primary_host, landing_root FROM apps";
 
 const SERVICE_SELECT: &str = "SELECT id, name, owner_id, scopes, apps, created_at, expires_at, revoked_at, last_used_at FROM service_tokens";
 const REQUEST_SELECT: &str = "SELECT id, name, title, description, kind, target, visibility, owner_id, service_token_id, note, status, created_at, decided_at, decision_note FROM app_requests";
@@ -2278,6 +2331,8 @@ fn row_app(r: &Row<'_>) -> rusqlite::Result<App> {
         publisher_id: r.get(21)?,
         agent_handoff_v1: r.get::<_, i64>(22)? != 0,
         live_pages_v1: r.get::<_, i64>(23)? != 0,
+        primary_host: r.get(24)?,
+        landing_root: r.get(25)?,
     })
 }
 
@@ -2527,6 +2582,55 @@ mod tests {
     }
 
     #[test]
+    fn primary_host_is_audited_unique_and_private_only() {
+        let (s, _) = store_with_clock();
+        let owner = s.create_user("owner", "Owner", Role::Member).unwrap();
+        let mk = |n: &str, port: u16, vis| {
+            s.create_app(
+                n,
+                n,
+                "",
+                owner.id,
+                AppKind::Proxy,
+                &format!("127.0.0.1:{port}"),
+                vis,
+                IdentityContract::Platform,
+            )
+            .unwrap()
+        };
+        let app = mk("fieldwork", 4110, Visibility::Private);
+        s.set_primary_host(&app, Some("kodu.work"), true, "repo.box")
+            .unwrap();
+        let got = s.app_by_id(app.id).unwrap();
+        assert_eq!(got.primary_host.as_deref(), Some("kodu.work"));
+        assert_eq!(got.landing_root.as_deref(), Some("/srv/kodu.work/current"));
+        assert_eq!(got.launch_host("repo.box"), "kodu.work");
+        assert_eq!(got.host("repo.box"), "fieldwork.repo.box");
+        assert_eq!(
+            got.hosts("repo.box"),
+            vec!["fieldwork.repo.box".to_string(), "kodu.work".into()]
+        );
+        let other = mk("other", 4111, Visibility::Private);
+        assert!(
+            s.set_primary_host(&other, Some("kodu.work"), false, "repo.box")
+                .is_err()
+        );
+        assert!(
+            s.set_primary_host(&other, Some("x.repo.box"), false, "repo.box")
+                .is_err()
+        );
+        let public = mk("pub", 4112, Visibility::PublicUnlisted);
+        assert!(
+            s.set_primary_host(&public, Some("pub.example"), false, "repo.box")
+                .is_err()
+        );
+        s.set_primary_host(&got, None, false, "repo.box").unwrap();
+        let cleared = s.app_by_id(app.id).unwrap();
+        assert!(cleared.primary_host.is_none() && cleared.landing_root.is_none());
+        assert_eq!(cleared.launch_host("repo.box"), "fieldwork.repo.box");
+    }
+
+    #[test]
     fn live_pages_lane_needs_a_private_platform_proxy_and_dies_with_disable() {
         let (s, _) = store_with_clock();
         let owner = s.create_user("owner", "Owner", Role::Member).unwrap();
@@ -2564,8 +2668,10 @@ mod tests {
             )
             .unwrap();
         assert!(s.set_live_pages_v1(&public, true).is_err());
-        s.set_live_pages_v1(&s.app_by_id(app.id).unwrap(), true).unwrap();
-        s.set_live_pages_v1(&s.app_by_id(app.id).unwrap(), false).unwrap();
+        s.set_live_pages_v1(&s.app_by_id(app.id).unwrap(), true)
+            .unwrap();
+        s.set_live_pages_v1(&s.app_by_id(app.id).unwrap(), false)
+            .unwrap();
         assert!(!s.app_by_id(app.id).unwrap().live_pages_v1);
     }
 
