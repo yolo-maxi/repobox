@@ -1078,6 +1078,7 @@ pub fn render_published(states: &[AppState], cfg: &RenderConfig) -> Result<Strin
                 live_pages_v1: false,
                 primary_host: None,
                 landing_root: None,
+                primary_resolver_app: false,
                 ai: AiPolicy::private_default(),
                 publisher_id: Some(0),
             })

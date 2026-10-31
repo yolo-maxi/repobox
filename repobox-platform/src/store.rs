@@ -459,10 +459,16 @@ const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
     // Schema 11: audited primary host outside the platform domain + its landing.
     ("apps", "primary_host", "TEXT"),
     ("apps", "landing_root", "TEXT"),
+    // Schema 12: who resolves identity on the primary host ('gate' default, 'app').
+    (
+        "apps",
+        "primary_resolver",
+        "TEXT NOT NULL DEFAULT 'gate' CHECK (primary_resolver IN ('gate', 'app'))",
+    ),
 ];
 
 /// Current schema version (also written to `meta`).
-pub const SCHEMA_VERSION: i64 = 11;
+pub const SCHEMA_VERSION: i64 = 12;
 
 /// AI usage counters (requests per app, user and UTC day) are kept this long.
 pub const AI_USAGE_RETENTION_DAYS: i64 = 90;
@@ -1105,6 +1111,19 @@ impl Store {
         landing: bool,
         domain: &str,
     ) -> Result<()> {
+        self.set_primary_host_with(app, host, landing, false, domain)
+    }
+
+    /// Like `set_primary_host`, choosing who resolves identity on the primary host:
+    /// the platform gate (default) or the app's own resolver (`resolver_app`).
+    pub fn set_primary_host_with(
+        &self,
+        app: &App,
+        host: Option<&str>,
+        landing: bool,
+        resolver_app: bool,
+        domain: &str,
+    ) -> Result<()> {
         let (host, landing_root) = match host {
             None => (None, None),
             Some(h) => {
@@ -1139,8 +1158,14 @@ impl Store {
             }
         }
         conn.execute(
-            "UPDATE apps SET primary_host = ?2, landing_root = ?3, updated_at = ?4 WHERE id = ?1",
-            params![app.id, host, landing_root, self.now()],
+            "UPDATE apps SET primary_host = ?2, landing_root = ?3, primary_resolver = ?4, updated_at = ?5 WHERE id = ?1",
+            params![
+                app.id,
+                host,
+                landing_root,
+                if resolver_app && host.is_some() { "app" } else { "gate" },
+                self.now()
+            ],
         )?;
         Ok(())
     }
@@ -2169,7 +2194,7 @@ impl Store {
     }
 }
 
-const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy, publisher_id, agent_handoff_v1, live_pages_v1, primary_host, landing_root FROM apps";
+const APP_SELECT: &str = "SELECT id, name, title, description, owner_id, kind, target, visibility, enabled, created_at, updated_at, identity, ai_enabled, ai_provider, ai_default_model, ai_models, ai_max_input_chars, ai_max_output_tokens, ai_user_daily_requests, ai_app_daily_requests, ai_public_policy, publisher_id, agent_handoff_v1, live_pages_v1, primary_host, landing_root, primary_resolver FROM apps";
 
 const SERVICE_SELECT: &str = "SELECT id, name, owner_id, scopes, apps, created_at, expires_at, revoked_at, last_used_at FROM service_tokens";
 const REQUEST_SELECT: &str = "SELECT id, name, title, description, kind, target, visibility, owner_id, service_token_id, note, status, created_at, decided_at, decision_note FROM app_requests";
@@ -2333,6 +2358,7 @@ fn row_app(r: &Row<'_>) -> rusqlite::Result<App> {
         live_pages_v1: r.get::<_, i64>(23)? != 0,
         primary_host: r.get(24)?,
         landing_root: r.get(25)?,
+        primary_resolver_app: r.get::<_, String>(26)? == "app",
     })
 }
 
@@ -2627,6 +2653,21 @@ mod tests {
         s.set_primary_host(&got, None, false, "repo.box").unwrap();
         let cleared = s.app_by_id(app.id).unwrap();
         assert!(cleared.primary_host.is_none() && cleared.landing_root.is_none());
+        s.set_primary_host_with(&cleared, Some("kodu.work"), true, true, "repo.box")
+            .unwrap();
+        let app_mode = s.app_by_id(app.id).unwrap();
+        assert!(app_mode.primary_resolver_app);
+        assert_eq!(
+            app_mode.launch_host("repo.box"),
+            "fieldwork.repo.box",
+            "device launches stay on the platform host"
+        );
+        s.set_primary_host(&app_mode, Some("kodu.work"), true, "repo.box")
+            .unwrap();
+        assert!(
+            !s.app_by_id(app.id).unwrap().primary_resolver_app,
+            "gate is the default"
+        );
         assert_eq!(cleared.launch_host("repo.box"), "fieldwork.repo.box");
     }
 

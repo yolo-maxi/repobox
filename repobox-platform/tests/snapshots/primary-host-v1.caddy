@@ -73,7 +73,7 @@ fieldwork.repo.box {
 	}
 }
 
-# primary host: fieldwork -> kodu.work (landing: /srv/kodu.work/current)
+# primary host: fieldwork -> kodu.work (landing: /srv/kodu.work/current; identity: platform gate)
 kodu.work {
 	encode {
 		zstd

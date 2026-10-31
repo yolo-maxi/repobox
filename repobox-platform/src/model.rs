@@ -204,6 +204,9 @@ pub struct App {
     /// Static public landing shown on the primary host to a browser without a
     /// valid app session: `/srv/<primary_host>/current`. `None`: no landing.
     pub landing_root: Option<String>,
+    /// `true`: the primary host's identity comes from the app's own resolver
+    /// (Kodu mode), not from the platform gate. Off unless an operator sets it.
+    pub primary_resolver_app: bool,
     pub ai: AiPolicy,
     /// Set when an external publisher created the app: only that publisher
     /// can see or change it through the publisher API, and its route is
@@ -220,6 +223,11 @@ impl App {
     }
     /// Where the launcher sends a person: the primary host when one is set.
     pub fn launch_host(&self, domain: &str) -> String {
+        // With the app resolver on the primary host, the platform session (device
+        // sign-in) no longer applies there: the launcher keeps using the platform host.
+        if self.primary_resolver_app {
+            return self.host(domain);
+        }
         self.primary_host
             .clone()
             .unwrap_or_else(|| self.host(domain))
@@ -270,6 +278,12 @@ pub fn validate_primary_host(host: &str, domain: &str) -> Result<(), String> {
         return Err("primary host may not start with www (www.<apex> is redirected)".into());
     }
     Ok(())
+}
+
+/// The root-only Caddy snippet that injects the shared edge secret for an app
+/// resolver primary host (`header_up X-Kodu-Edge "<secret>"`).
+pub fn edge_secret_snippet_for(host: &str) -> String {
+    format!("/etc/caddy/repobox-platform/secrets/{host}.edge.caddy")
 }
 
 /// The only landing root a primary host may use.

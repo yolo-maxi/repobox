@@ -266,6 +266,11 @@ enum AppCmd {
         landing: bool,
         #[arg(long)]
         clear: bool,
+        /// Who resolves identity on the primary host: `gate` (platform session,
+        /// default) or `app` (the app's own resolver, Kodu mode; needs the edge
+        /// secret snippet, see deploy/primary-host-edge-secret.py).
+        #[arg(long, default_value = "gate", value_parser = ["gate", "app"])]
+        resolver: String,
         /// Auditable review: DNS/TLS owner and the private-boundary check.
         #[arg(long)]
         review_note: Option<String>,
@@ -964,6 +969,7 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
             host,
             landing,
             clear: _,
+            resolver,
             review_note,
             domain,
         } => {
@@ -974,17 +980,28 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                         .into(),
                 );
             }
-            store.set_primary_host(&a, host.as_deref(), landing, &domain)?;
+            store.set_primary_host_with(
+                &a,
+                host.as_deref(),
+                landing,
+                resolver == "app",
+                &domain,
+            )?;
             let after = need_app(store, &name)?;
             store.audit(
                 None,
                 "app.primary_host_v1",
                 &a.name,
                 &format!(
-                    "{} -> {}; landing {}; {}",
+                    "{} -> {}; landing {}; resolver {}; {}",
                     a.primary_host.as_deref().unwrap_or("none"),
                     after.primary_host.as_deref().unwrap_or("none"),
                     after.landing_root.as_deref().unwrap_or("none"),
+                    if after.primary_resolver_app {
+                        "app"
+                    } else {
+                        "gate"
+                    },
                     review_note.unwrap_or_default()
                 ),
             );
@@ -1138,7 +1155,7 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                             "identity": a.identity.as_str(),
                             "agent_handoff_v1": a.agent_handoff_v1,
                             "live_pages_v1": a.live_pages_v1,
-                            "primary_host": a.primary_host, "landing_root": a.landing_root,
+                            "primary_host": a.primary_host, "landing_root": a.landing_root, "primary_resolver": if a.primary_resolver_app { "app" } else { "gate" },
                             "ai": a.ai.to_json(),
                             "publisher": a.publisher_id.is_some(),
                             "live": a.publisher_id.is_none() || store.live_release(&a.name).ok().flatten().is_some(),
@@ -1203,9 +1220,14 @@ fn app_cmd(store: &Store, cmd: AppCmd) -> Result<(), Box<dyn std::error::Error>>
                 }
             );
             println!(
-                "primary host: {} (landing {})",
+                "primary host: {} (landing {}; identity: {})",
                 a.primary_host.as_deref().unwrap_or("none"),
-                a.landing_root.as_deref().unwrap_or("none")
+                a.landing_root.as_deref().unwrap_or("none"),
+                if a.primary_resolver_app {
+                    "app resolver"
+                } else {
+                    "platform gate"
+                }
             );
             println!(
                 "identity:    {} — {}",

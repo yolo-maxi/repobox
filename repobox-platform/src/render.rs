@@ -52,6 +52,8 @@ pub const GATE_PRIMARY_HOST_HEADER: &str = "X-RepoBox-Gate-Primary-Host";
 /// Compression for an app with a primary host (both its hosts): text, scripts, styles,
 /// JSON and SVG only. Event streams, media and images are never encoded.
 pub const COMPRESS_BLOCK: &str = "\tencode {\n\t\tzstd\n\t\tgzip\n\t\tmatch {\n\t\t\theader Content-Type text/html*\n\t\t\theader Content-Type text/css*\n\t\t\theader Content-Type text/javascript*\n\t\t\theader Content-Type application/javascript*\n\t\t\theader Content-Type application/json*\n\t\t\theader Content-Type image/svg+xml*\n\t\t}\n\t}\n";
+/// Paths never public on an app-resolver primary host (answered 404 at the edge).
+pub const APP_RESOLVER_BLOCKED: &str = "/api/health /api/health/* /_repo_box/*";
 /// The landing's own files on a primary host: GET/HEAD, no cookie, no gate.
 pub const LANDING_FILES_MATCH: &str = "/_landing/*";
 /// Public media published with the landing: a top-level `.mp4` that exists in the release.
@@ -458,10 +460,15 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
 fn render_primary_host(out: &mut String, app: &App, host: &str, target: &str, cfg: &RenderConfig) {
     out.push('\n');
     out.push_str(&format!(
-        "# primary host: {} -> {} (landing: {})\n",
+        "# primary host: {} -> {} (landing: {}; identity: {})\n",
         app.name,
         host,
-        app.landing_root.as_deref().unwrap_or("none")
+        app.landing_root.as_deref().unwrap_or("none"),
+        if app.primary_resolver_app {
+            "app resolver"
+        } else {
+            "platform gate"
+        }
     ));
     out.push_str(&format!("{host} {{\n"));
     out.push_str(COMPRESS_BLOCK);
@@ -473,6 +480,11 @@ fn render_primary_host(out: &mut String, app: &App, host: &str, target: &str, cf
     out.push_str("\t}\n");
     out.push_str("\troute {\n");
     out.push_str("\t\trequest_header -X-RepoBox-*\n");
+    if app.primary_resolver_app {
+        // Only the edge's own trust headers: the browser's X-Kodu-Claim and
+        // X-Kodu-Csrf must reach the app.
+        out.push_str("\t\trequest_header -X-Kodu-Edge\n\t\trequest_header -X-Kodu-Edge-Proof\n");
+    }
     if let Some(root) = &app.landing_root {
         let headers = landing_headers_file(host);
         out.push_str("\t\t@landing_files {\n\t\t\tmethod GET HEAD\n");
@@ -491,6 +503,10 @@ fn render_primary_host(out: &mut String, app: &App, host: &str, target: &str, cf
         out.push_str(&format!("\t\t\timport {headers}\n"));
         out.push_str(&format!("\t\t\troot * {root}\n\t\t\tfile_server\n"));
         out.push_str("\t\t}\n");
+    }
+    if app.primary_resolver_app {
+        render_app_resolver(out, app, host, target);
+        return;
     }
     out.push_str("\t\thandle {\n");
     out.push_str(&format!("\t\t\tforward_auth {} {{\n", cfg.gate));
@@ -547,6 +563,43 @@ fn render_primary_host(out: &mut String, app: &App, host: &str, target: &str, cf
     ));
 }
 
+/// The app-resolver half of a primary host (Kodu mode): no platform gate. Every
+/// request (WebSocket upgrades included) goes to the app with the shared edge secret
+/// from a root-only snippet; the app's resolver is the only identity source. Only a
+/// 401 that the app marks `X-Kodu-Auth: anonymous-root`, on GET/HEAD `/`, becomes
+/// the landing (keeping the app's Set-Cookie, e.g. a stale-cookie clear); every
+/// other answer, renewals included, passes through unchanged. `/api/health` and
+/// the platform prefix are not public here.
+fn render_app_resolver(out: &mut String, app: &App, host: &str, target: &str) {
+    let secret = crate::model::edge_secret_snippet_for(host);
+    out.push_str(&format!("\t\t@not_public path {APP_RESOLVER_BLOCKED}\n"));
+    out.push_str("\t\thandle @not_public {\n\t\t\trespond 404\n\t\t}\n");
+    out.push_str("\t\thandle {\n");
+    out.push_str(&format!("\t\t\treverse_proxy {target} {{\n"));
+    out.push_str(&format!("\t\t\t\timport {secret}\n"));
+    if let Some(root) = &app.landing_root {
+        let headers = landing_headers_file(host);
+        out.push_str("\t\t\t\t@anonymous_root {\n\t\t\t\t\tstatus 401\n\t\t\t\t\theader X-Kodu-Auth anonymous-root\n\t\t\t\t}\n");
+        out.push_str("\t\t\t\thandle_response @anonymous_root {\n");
+        out.push_str("\t\t\t\t\t@landing_doc {\n\t\t\t\t\t\tmethod GET HEAD\n\t\t\t\t\t\tpath /\n\t\t\t\t\t}\n");
+        out.push_str("\t\t\t\t\thandle @landing_doc {\n");
+        out.push_str("\t\t\t\t\t\tcopy_response_headers {\n\t\t\t\t\t\t\tinclude Set-Cookie\n\t\t\t\t\t\t}\n");
+        out.push_str(&format!("\t\t\t\t\t\timport {headers}\n"));
+        out.push_str("\t\t\t\t\t\theader Cache-Control \"private, no-cache\"\n\t\t\t\t\t\theader Vary Cookie\n");
+        out.push_str(&format!(
+            "\t\t\t\t\t\troot * {root}\n\t\t\t\t\t\tfile_server\n"
+        ));
+        out.push_str("\t\t\t\t\t}\n");
+        out.push_str("\t\t\t\t\thandle {\n\t\t\t\t\t\tcopy_response_headers\n\t\t\t\t\t\tcopy_response\n\t\t\t\t\t}\n");
+        out.push_str("\t\t\t\t}\n");
+    }
+    out.push_str("\t\t\t}\n\t\t}\n");
+    out.push_str("\t}\n}\n");
+    out.push_str(&format!(
+        "\nwww.{host} {{\n\tredir https://{host}{{uri}} permanent\n}}\n"
+    ));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -569,6 +622,7 @@ mod tests {
             live_pages_v1: false,
             primary_host: None,
             landing_root: None,
+            primary_resolver_app: false,
             ai: crate::model::AiPolicy::private_default(),
             publisher_id: None,
         }
@@ -657,6 +711,45 @@ mod tests {
         assert!(
             out.contains("kodu.work {") && !out.contains("_landing") && !out.contains("status 401")
         );
+    }
+
+    #[test]
+    fn app_resolver_primary_host_has_no_gate_and_lands_only_the_marked_root_401() {
+        let mut a = app("fieldwork", AppKind::Proxy, "127.0.0.1:4110");
+        a.live_pages_v1 = true;
+        a.primary_host = Some("kodu.work".into());
+        a.landing_root = Some("/srv/kodu.work/current".into());
+        a.primary_resolver_app = true;
+        let out = render(&[a.clone()], &cfg()).unwrap();
+        assert_eq!(
+            out,
+            include_str!("../tests/snapshots/primary-host-app-resolver.caddy")
+        );
+        let i = out.find("\nkodu.work {").unwrap();
+        let k = &out[i..];
+        assert!(
+            !k.contains("forward_auth") && !k.contains("/gate/"),
+            "no platform gate on the app-resolver host"
+        );
+        assert!(k.contains("request_header -X-RepoBox-*\n\t\trequest_header -X-Kodu-Edge\n\t\trequest_header -X-Kodu-Edge-Proof\n"));
+        assert!(
+            !k.contains("-X-Kodu-Claim") && !k.contains("-X-Kodu-Csrf") && !k.contains("-X-Kodu-*")
+        );
+        assert!(k.contains("@not_public path /api/health /api/health/* /_repo_box/*"));
+        assert!(k.contains("import /etc/caddy/repobox-platform/secrets/kodu.work.edge.caddy"));
+        assert!(k.contains("status 401\n\t\t\t\t\theader X-Kodu-Auth anonymous-root"));
+        assert!(k.contains("copy_response_headers {\n\t\t\t\t\t\t\tinclude Set-Cookie"));
+        // Landing files and media keep their static, cookie-less handling.
+        let files = k.find("handle @landing_files").unwrap();
+        let proxy = k.find("reverse_proxy 127.0.0.1:4110").unwrap();
+        assert!(files < proxy);
+        // The platform host itself is unchanged.
+        let mut gate = a.clone();
+        gate.primary_resolver_app = false;
+        let g = render(&[gate], &cfg()).unwrap();
+        let c = out.find("\n# primary host").unwrap();
+        assert_eq!(&out[..c], &g[..g.find("\n# primary host").unwrap()]);
+        assert_eq!(a.launch_host("repo.box"), "fieldwork.repo.box");
     }
 
     #[test]
