@@ -77,8 +77,9 @@ class H(BaseHTTPRequestHandler):
         ident = {k: v for k, v in self.headers.items() if k.lower().startswith("x-repobox-")}
         with open(LOG, "a") as f:
             f.write(json.dumps({"path": self.path.split("?")[0], "auth": ident.get("X-RepoBox-Auth"), "cookie": "Cookie" in self.headers}) + "\n")
-        b = ("ORIGIN " + json.dumps(ident, sort_keys=True)).encode()
-        self.send_response(200); self.send_header("Content-Type", "text/plain"); self.send_header("Content-Length", str(len(b))); self.end_headers()
+        b = ("ORIGIN " + json.dumps(ident, sort_keys=True) + " " + "x" * 4000).encode()
+        ctype = "text/javascript" if self.path.startswith("/assets/") else "text/event-stream" if self.path.startswith("/events") else "text/plain"
+        self.send_response(200); self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(b))); self.end_headers()
         if self.command != "HEAD": self.wfile.write(b)
     do_GET = do_POST = do_HEAD = handle_one
 HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
@@ -159,7 +160,10 @@ expect "gate redeems on $HOST -> clean redirect" "$(curl -s "${R[@]}" -c "$AJAR"
 expect "app cookie is host-only on $HOST" "$(awk -v h="$HOST" '($1==h || $1=="#HttpOnly_"h) && $2=="FALSE" && $6 ~ /^__Host-rb_app/' "$AJAR" | wc -l | tr -d ' ')" 1
 body=$(curl -s "${R[@]}" -b "$AJAR" "$K/")
 expect "signed-in / reaches the origin" "${body%% *}" ORIGIN
-expect "origin sees gate identity (id 1, session)" "$(echo "${body#ORIGIN }" | python3 -c 'import json,sys; d={k.lower():v for k,v in json.load(sys.stdin).items()}; print(d.get("x-repobox-user-id"), d.get("x-repobox-auth"), d.get("x-repobox-app"))')" "1 session fieldwork"
+expect "origin sees gate identity (id 1, session)" "$(echo "${body#ORIGIN }" | python3 -c 'import json,sys; d={k.lower():v for k,v in json.JSONDecoder().raw_decode(sys.stdin.read())[0].items()}; print(d.get("x-repobox-user-id"), d.get("x-repobox-auth"), d.get("x-repobox-app"))')" "1 session fieldwork"
+expect "signed-in /assets/app.js is compressed (zstd or gzip)" "$(curl -s "${R[@]}" -b "$AJAR" -H 'Accept-Encoding: zstd, gzip' -D - -o /dev/null "$K/assets/app.js" | hdr content-encoding | command grep -c -E '^(zstd|gzip)$')" 1
+expect "event stream is never compressed" "$(curl -s "${R[@]}" -b "$AJAR" -H 'Accept-Encoding: zstd, gzip' -D - -o /dev/null "$K/events" | hdr content-encoding | wc -l | tr -d ' ')" 0
+expect "video is never compressed" "$(curl -s "${R[@]}" -H 'Accept-Encoding: zstd, gzip' -D - -o /dev/null "$K/hackathon.mp4" | hdr content-encoding | wc -l | tr -d ' ')" 0
 expect "signed-in /api/me reaches the origin" "$(curl -s "${R[@]}" -b "$AJAR" "$K/api/me" | cut -c1-6)" ORIGIN
 expect "kodu.work cookie does not open fieldwork.repo.box" "$(curl -s "${R[@]}" -b "$AJAR" -o /dev/null -w '%{http_code}' "$FW/")" 401
 expect "code replay -> body-less redirect to launcher" "$(curl -s "${R[@]}" -o /dev/null -w '%{http_code} %{size_download}' "$K/?rb_launch=$CODE")" "303 0"

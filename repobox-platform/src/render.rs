@@ -49,6 +49,9 @@ pub const GATE_APP_HEADER: &str = "X-RepoBox-Gate-App";
 /// The gate then never opens the anonymous live-pages lane: on the primary host a
 /// browser without a session sees the landing or the sign-in answer, nothing else.
 pub const GATE_PRIMARY_HOST_HEADER: &str = "X-RepoBox-Gate-Primary-Host";
+/// Compression for an app with a primary host (both its hosts): text, scripts, styles,
+/// JSON and SVG only. Event streams, media and images are never encoded.
+pub const COMPRESS_BLOCK: &str = "\tencode {\n\t\tzstd\n\t\tgzip\n\t\tmatch {\n\t\t\theader Content-Type text/html*\n\t\t\theader Content-Type text/css*\n\t\t\theader Content-Type text/javascript*\n\t\t\theader Content-Type application/javascript*\n\t\t\theader Content-Type application/json*\n\t\t\theader Content-Type image/svg+xml*\n\t\t}\n\t}\n";
 /// The landing's own files on a primary host: GET/HEAD, no cookie, no gate.
 pub const LANDING_FILES_MATCH: &str = "/_landing/*";
 /// Public media published with the landing: a top-level `.mp4` that exists in the release.
@@ -310,6 +313,9 @@ pub fn render(apps: &[App], cfg: &RenderConfig) -> Result<String, String> {
         // rendered file doubles as the publish manifest operators review.
         out.push_str(&format!("# identity: {}\n", identity_note(app)));
         out.push_str(&format!("{} {{\n", app.host(&cfg.domain)));
+        if app.primary_host.is_some() {
+            out.push_str(COMPRESS_BLOCK);
+        }
         out.push_str("\theader {\n");
         out.push_str("\t\tX-Content-Type-Options \"nosniff\"\n");
         if !app.agent_handoff_v1 {
@@ -458,6 +464,7 @@ fn render_primary_host(out: &mut String, app: &App, host: &str, target: &str, cf
         app.landing_root.as_deref().unwrap_or("none")
     ));
     out.push_str(&format!("{host} {{\n"));
+    out.push_str(COMPRESS_BLOCK);
     out.push_str("\theader {\n");
     out.push_str("\t\tX-Content-Type-Options \"nosniff\"\n");
     out.push_str("\t\tReferrer-Policy \"strict-origin-when-cross-origin\"\n");
@@ -615,8 +622,13 @@ mod tests {
         plain.primary_host = None;
         plain.landing_root = None;
         let base = render(&[plain], &cfg()).unwrap();
-        assert!(out.starts_with(&base));
-        let extra = &out[base.len()..];
+        // The platform host gains only the compression block.
+        assert!(!base.contains("encode {"));
+        assert_eq!(out.matches("encode {").count(), 2);
+        assert!(!COMPRESS_BLOCK.contains("event-stream") && !COMPRESS_BLOCK.contains("video"));
+        let out_plain_host = out.replacen(COMPRESS_BLOCK, "", 1);
+        assert!(out_plain_host.starts_with(&base));
+        let extra = &out_plain_host[base.len()..];
         assert!(extra.contains("\nkodu.work {\n"));
         assert!(extra.contains("\nwww.kodu.work {\n\tredir https://kodu.work{uri} permanent\n}\n"));
         assert!(!extra.contains("live_pages") && !extra.contains("/gate/live-pages-v1"));

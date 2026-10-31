@@ -8,6 +8,18 @@
 # app: fieldwork (proxy -> 127.0.0.1:4110)
 # identity: platform (gate-injected identity only; no app login)
 fieldwork.repo.box {
+	encode {
+		zstd
+		gzip
+		match {
+			header Content-Type text/html*
+			header Content-Type text/css*
+			header Content-Type text/javascript*
+			header Content-Type application/javascript*
+			header Content-Type application/json*
+			header Content-Type image/svg+xml*
+		}
+	}
 	header {
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
@@ -63,6 +75,18 @@ fieldwork.repo.box {
 
 # primary host: fieldwork -> kodu.work (landing: /srv/kodu.work/current)
 kodu.work {
+	encode {
+		zstd
+		gzip
+		match {
+			header Content-Type text/html*
+			header Content-Type text/css*
+			header Content-Type text/javascript*
+			header Content-Type application/javascript*
+			header Content-Type application/json*
+			header Content-Type image/svg+xml*
+		}
+	}
 	header {
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
